@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🚛 จัดคิวส่งสินค้า</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #1c2128;
+      --border: #21262d;
+      --border2: #30363d;
+      --accent: #f0a500;
+      --accent-dim: rgba(240,165,0,0.12);
+      --accent-glow: rgba(240,165,0,0.25);
+      --success: #2ea043;
+      --success-dim: rgba(46,160,67,0.12);
+      --warning: #d29922;
+      --warning-dim: rgba(210,153,34,0.12);
+      --danger: #da3633;
+      --danger-dim: rgba(218,54,51,0.12);
+      --blue: #388bfd;
+      --blue-dim: rgba(56,139,253,0.12);
+      --purple: #a371f7;
+      --text: #e6edf3;
+      --text2: #8b949e;
+      --text3: #484f58;
+      --radius: 12px;
+      --shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Sarabun', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    /* ── LOADING ── */
+    .loading-screen {
+      position: fixed; inset: 0;
+      background: var(--bg);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.6s ease, visibility 0.6s;
+    }
+    .loading-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+    .loading-truck {
+      font-size: 64px;
+      animation: truckBounce 1s ease-in-out infinite alternate;
+      margin-bottom: 24px;
+    }
+    @keyframes truckBounce {
+      from { transform: translateY(0) rotate(-2deg); }
+      to   { transform: translateY(-8px) rotate(2deg); }
+    }
+    .loading-title { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }
+    .loading-sub { font-size: 14px; color: var(--text2); margin: 8px 0 32px; }
+    .loading-bar-wrap {
+      width: 200px; height: 4px;
+      background: var(--border2); border-radius: 2px; overflow: hidden;
+    }
+    .loading-bar {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, var(--accent), #fbbf24);
+      border-radius: 2px;
+      animation: loadBar 2s ease forwards;
+    }
+    @keyframes loadBar { from { width:0% } to { width:100% } }
+
+    /* ── HEADER ── */
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex; align-items: center;
+      justify-content: space-between;
+      height: 60px;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .header-logo { display: flex; align-items: center; gap: 12px; }
+    .logo-box {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent), #fbbf24);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; box-shadow: 0 2px 8px var(--accent-glow);
+    }
+    .logo-title { font-size: 16px; font-weight: 700; }
+    .logo-sub { font-size: 11px; color: var(--text2); }
+    .header-actions { display: flex; align-items: center; gap: 12px; }
+    .date-chip {
+      background: var(--surface2); border: 1px solid var(--border2);
+      border-radius: 20px; padding: 4px 14px;
+      font-size: 13px; color: var(--text2);
+    }
+    .live-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 0 3px var(--success-dim);
+      animation: livePulse 2s infinite;
+    }
+    @keyframes livePulse {
+      0%,100% { box-shadow: 0 0 0 3px var(--success-dim); }
+      50%      { box-shadow: 0 0 0 6px transparent; }
+    }
+
+    /* ── BUTTONS ── */
+    .btn {
+      padding: 7px 14px; border-radius: 8px;
+      font-family: 'Sarabun', sans-serif; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all 0.18s; border: none;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-primary:hover { background: #fbbf24; transform: translateY(-1px); box-shadow: 0 4px 12px var(--accent-glow); }
+    .btn-ghost { background: none; border: 1px solid var(--border2); color: var(--text2); }
+    .btn-ghost:hover { border-color: var(--text2); color: var(--text); }
+    .btn-danger-ghost { background: var(--danger-dim); border: 1px solid var(--danger); color: var(--danger); }
+    .btn-danger-ghost:hover { background: rgba(218,54,51,0.25); }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+    /* ── TABS ── */
+    .tabs {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 0 24px; display: flex; gap: 2px;
+    }
+    .tab {
+      padding: 12px 18px; border: none; background: none;
+      color: var(--text2); font-family: 'Sarabun', sans-serif;
+      font-size: 14px; font-weight: 500; cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.18s;
+      display: flex; align-items: center; gap: 7px;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .chip {
+      background: var(--accent-dim); color: var(--accent);
+      border-radius: 10px; padding: 1px 8px;
+      font-size: 11px; font-weight: 700;
+    }
+    .chip.blue { background: var(--blue-dim); color: var(--blue); }
+
+    /* ── MAIN ── */
+    .main { padding: 24px; max-width: 1440px; margin: 0 auto; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── STATS ── */
+    .stats-row {
+      display: grid; grid-template-columns: repeat(4,1fr); gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px;
+      display: flex; align-items: center; gap: 16px;
+      animation: fadeUp 0.4s ease both;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .stat-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+    .stat-card:nth-child(1) { animation-delay: 0.05s; }
+    .stat-card:nth-child(2) { animation-delay: 0.10s; }
+    .stat-card:nth-child(3) { animation-delay: 0.15s; }
+    .stat-card:nth-child(4) { animation-delay: 0.20s; }
+    @keyframes fadeUp {
+      from { opacity:0; transform: translateY(14px); }
+      to   { opacity:1; transform: translateY(0); }
+    }
+    .stat-icon {
+      width: 48px; height: 48px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; flex-shrink: 0;
+    }
+    .stat-icon.amber  { background: var(--accent-dim); }
+    .stat-icon.green  { background: var(--success-dim); }
+    .stat-icon.blue   { background: var(--blue-dim); }
+    .stat-icon.purple { background: rgba(163,113,247,0.12); }
+    .stat-num { font-size: 30px; font-weight: 800; line-height: 1; letter-spacing: -1px; }
+    .stat-lbl { font-size: 12px; color: var(--text2); margin-top: 4px; }
+
+    /* ── SECTION HEADER ── */
+    .sec-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .sec-title { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+
+    /* ── TRUCK GRID ── */
+    .truck-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+      gap: 16px;
+    }
+    .truck-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+      transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+      animation: fadeUp 0.4s ease both;
+    }
+    .truck-card:hover {
+      border-color: var(--border2); transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+    .truck-head {
+      padding: 16px; display: flex; align-items: center; gap: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .truck-ava {
+      width: 44px; height: 44px; border-radius: 10px;
+      background: var(--surface2); border: 1px solid var(--border2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; flex-shrink: 0;
+    }
+    .truck-name-main { font-weight: 700; font-size: 14px; }
+    .truck-plate-tag {
+      display: inline-flex; align-items: center;
+      background: var(--bg); border: 1px solid var(--border2);
+      border-radius: 4px; padding: 2px 8px;
+      font-size: 13px; font-weight: 700; color: var(--accent);
+      letter-spacing: 0.5px; margin-top: 3px;
+    }
+    .truck-type-pill {
+      margin-left: auto; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 20px;
+      padding: 3px 10px; font-size: 11px; color: var(--text2);
+      white-space: nowrap;
+    }
+    .truck-body { padding: 14px 16px; }
+    .cap-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+    .cap-label { font-size: 11px; color: var(--text3); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .progress-track { height: 5px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 3px; transition: width 0.7s cubic-bezier(0.34,1.56,0.64,1); }
+    .fill-green  { background: linear-gradient(90deg, var(--success), #4ade80); }
+    .fill-amber  { background: linear-gradient(90deg, var(--warning), #fbbf24); }
+    .fill-red    { background: linear-gradient(90deg, var(--danger),  #f87171); }
+    .cap-nums { display: flex; justify-content: space-between; font-size: 11px; color: var(--text2); margin-top: 4px; }
+    .cap-nums strong { color: var(--text); font-size: 12px; }
+    .truck-foot {
+      display: flex; align-items: center; justify-content: space-between;
+      padding-top: 10px; border-top: 1px solid var(--border);
+    }
+    .bill-counter { font-size: 13px; color: var(--text2); }
+    .bill-counter strong { color: var(--text); font-size: 17px; }
+    .expand-toggle {
+      background: none; border: 1px solid var(--border2); border-radius: 6px;
+      color: var(--text3); padding: 4px 10px; font-size: 11px;
+      cursor: pointer; font-family: 'Sarabun', sans-serif;
+      transition: all 0.15s;
+    }
+    .expand-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Bill detail inside truck card */
+    .bill-detail { display: none; padding: 0 14px 14px; }
+    .bill-detail.open { display: block; }
+    .bill-row-mini {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 10px; background: var(--surface2); border-radius: 7px; margin-bottom: 5px;
+      font-size: 12px;
+    }
+    .bill-ref-mini { font-weight: 700; color: var(--accent); min-width: 88px; }
+    .bill-cust-mini { flex: 1; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bill-wt-mini { color: var(--text3); }
+
+    /* ── QUEUE TAB ── */
+    .queue-layout { display: grid; grid-template-columns: 1fr 360px; gap: 20px; align-items: start; }
+
+    /* Panel */
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .panel-head {
+      padding: 14px 18px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .panel-title { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+
+    /* Filter bar */
+    .filter-bar {
+      padding: 10px 14px; border-bottom: 1px solid var(--border);
+      display: flex; gap: 8px; flex-wrap: wrap;
+    }
+    .filter-input, .filter-select {
+      background: var(--surface2); border: 1px solid var(--border2);
+      border-radius: 7px; color: var(--text); padding: 7px 11px;
+      font-family: 'Sarabun', sans-serif; font-size: 13px;
+    }
+    .filter-input { flex: 1; min-width: 180px; }
+    .filter-input::placeholder { color: var(--text3); }
+    .filter-input:focus, .filter-select:focus { outline: none; border-color: var(--accent); }
+    .filter-select { cursor: pointer; }
+
+    /* Bill list in queue */
+    .bill-scroll { max-height: 580px; overflow-y: auto; }
+    .bill-scroll::-webkit-scrollbar { width: 3px; }
+    .bill-scroll::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+    .q-bill {
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      cursor: pointer; transition: background 0.13s;
+      display: grid; grid-template-columns: 22px 1fr auto; gap: 12px; align-items: center;
+    }
+    .q-bill:hover { background: var(--surface2); }
+    .q-bill.is-assigned { opacity: 0.45; }
+    .q-bill.is-assigned:hover { opacity: 0.7; }
+    .q-cb {
+      width: 18px; height: 18px; border-radius: 4px;
+      border: 2px solid var(--border2); display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; flex-shrink: 0; transition: all 0.13s;
+    }
+    .q-cb.checked { background: var(--accent); border-color: var(--accent); color: #000; }
+    .q-ref { font-weight: 700; font-size: 14px; }
+    .q-cust { font-size: 12px; color: var(--text2); margin-top: 1px; }
+    .q-tags { display: flex; gap: 5px; margin-top: 4px; flex-wrap: wrap; }
+    .tag {
+      display: inline-block; border-radius: 4px; padding: 1px 7px;
+      font-size: 11px; font-weight: 500;
+    }
+    .tag-blue { background: var(--blue-dim); color: var(--blue); }
+    .tag-amber { background: var(--accent-dim); color: var(--accent); }
+    .q-meta { text-align: right; }
+    .q-wt { font-size: 13px; font-weight: 700; }
+    .q-vol { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+    /* Right side truck selector */
+    .t-scroll { max-height: 260px; overflow-y: auto; }
+    .t-scroll::-webkit-scrollbar { width: 3px; }
+    .t-scroll::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+    .t-item {
+      padding: 11px 16px; border-bottom: 1px solid var(--border);
+      cursor: pointer; transition: background 0.13s;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .t-item:hover { background: var(--surface2); }
+    .t-item.active { background: var(--accent-dim); border-left: 3px solid var(--accent); }
+    .t-item-name { font-size: 13px; font-weight: 700; }
+    .t-item-plate { font-size: 11px; color: var(--accent); margin-top: 1px; }
+    .t-item-pct { margin-left: auto; text-align: right; font-size: 12px; color: var(--text3); }
+
+    /* Selected truck panel */
+    .truck-cap-section { padding: 14px 16px 0; }
+    .cap-row-label {
+      display: flex; justify-content: space-between;
+      font-size: 12px; color: var(--text2); margin-bottom: 5px;
+    }
+    .cap-row-label strong { color: var(--text); }
+
+    .warn-banner {
+      display: none; margin: 10px 14px 0;
+      background: var(--warning-dim); border: 1px solid var(--warning);
+      border-radius: 8px; padding: 9px 13px;
+      font-size: 13px; color: var(--warning);
+      align-items: center; gap: 7px;
+    }
+    .warn-banner.show { display: flex; }
+
+    .over-banner {
+      display: none; margin: 10px 14px 0;
+      background: var(--danger-dim); border: 1px solid var(--danger);
+      border-radius: 8px; padding: 9px 13px;
+      font-size: 13px; color: var(--danger);
+      align-items: center; gap: 7px;
+    }
+    .over-banner.show { display: flex; }
+
+    .assigned-area { padding: 14px; border-top: 1px solid var(--border); }
+    .asgn-bill {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px; background: var(--surface2);
+      border-radius: 7px; margin-bottom: 6px;
+    }
+    .asgn-ref { font-size: 13px; font-weight: 700; }
+    .asgn-cust { flex: 1; font-size: 11px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .asgn-wt { font-size: 11px; color: var(--text3); }
+    .rm-btn {
+      background: none; border: none; color: var(--text3);
+      cursor: pointer; font-size: 14px; padding: 2px 5px;
+      transition: color 0.13s; line-height: 1;
+    }
+    .rm-btn:hover { color: var(--danger); }
+
+    /* Empty state */
+    .empty { text-align: center; padding: 48px 24px; color: var(--text3); }
+    .empty .ei { font-size: 36px; margin-bottom: 10px; }
+    .empty p { font-size: 13px; line-height: 1.7; }
+
+    /* Toast */
+    .toasts {
+      position: fixed; bottom: 20px; right: 20px; z-index: 9998;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .toast {
+      background: var(--surface); border: 1px solid var(--border2);
+      border-radius: 10px; padding: 11px 16px; font-size: 13px;
+      box-shadow: var(--shadow); display: flex; align-items: center; gap: 8px;
+      animation: toastIn 0.3s ease;
+    }
+    .toast.success { border-left: 3px solid var(--success); }
+    .toast.warning { border-left: 3px solid var(--warning); }
+    .toast.error   { border-left: 3px solid var(--danger); }
+    @keyframes toastIn {
+      from { transform: translateX(110%); opacity: 0; }
+      to   { transform: translateX(0);    opacity: 1; }
+    }
+
+    /* Responsive */
+    @media (max-width: 1000px) { .queue-layout { grid-template-columns: 1fr; } }
+    @media (max-width: 768px) {
+      .stats-row { grid-template-columns: 1fr 1fr; }
+      .main { padding: 12px; }
+      .header { padding: 0 12px; }
+    }
+    @media (max-width: 480px) {
+      .stats-row { grid-template-columns: 1fr 1fr; }
+      .logo-sub, .date-chip { display: none; }
+    }
+    @media print {
+      .header, .tabs, .no-print { display: none !important; }
+      body { background: #fff; color: #000; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Loading -->
+<div class="loading-screen" id="loadingScreen">
+  <div class="loading-truck">🚛</div>
+  <div class="loading-title">จัดคิวส่งสินค้า</div>
+  <div class="loading-sub">กำลังดึงข้อมูลจาก Google Sheets...</div>
+  <div class="loading-bar-wrap"><div class="loading-bar"></div></div>
+</div>
+
+<!-- Toasts -->
+<div class="toasts" id="toastContainer"></div>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-logo">
+    <div class="logo-box">🚛</div>
+    <div>
+      <div class="logo-title">จัดคิวส่งสินค้า</div>
+      <div class="logo-sub">ระบบจัดการส่งสินค้า</div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <div class="date-chip" id="dateBadge">—</div>
+    <div class="live-dot" id="liveDot" title="เชื่อมต่อแล้ว"></div>
+    <button class="btn btn-ghost btn-sm no-print" onclick="refreshData()">🔄 รีเฟรช</button>
+    <button class="btn btn-primary btn-sm no-print" onclick="printAll()">🖨️ พิมพ์ใบงาน</button>
+  </div>
+</header>
+
+<!-- Tabs -->
+<nav class="tabs">
+  <button class="tab active" onclick="switchTab('overview',this)">
+    📊 ภาพรวม <span class="chip" id="chipOverview">—</span>
+  </button>
+  <button class="tab" onclick="switchTab('queue',this)">
+    📋 จัดคิว <span class="chip blue" id="chipQueue">—</span>
+  </button>
+</nav>
+
+<!-- Main -->
+<main class="main">
+
+  <!-- ===== OVERVIEW ===== -->
+  <div class="tab-panel active" id="tab-overview">
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-icon amber">📦</div>
+        <div><div class="stat-num" id="stTotal">—</div><div class="stat-lbl">บิลทั้งหมด</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon green">✅</div>
+        <div><div class="stat-num" id="stDone">—</div><div class="stat-lbl">จัดแล้ว</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon blue">⏳</div>
+        <div><div class="stat-num" id="stPend">—</div><div class="stat-lbl">ยังไม่จัด</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon purple">🚛</div>
+        <div><div class="stat-num" id="stTrucks">—</div><div class="stat-lbl">รถมีงาน / ทั้งหมด</div></div>
+      </div>
+    </div>
+
+    <div class="sec-header">
+      <div class="sec-title">🚛 รถทั้งหมด <span style="font-size:13px;font-weight:400;color:var(--text2)" id="truckSubtitle"></span></div>
+    </div>
+    <div class="truck-grid" id="truckGrid">
+      <!-- filled by JS -->
+    </div>
+  </div>
+
+  <!-- ===== QUEUE ===== -->
+  <div class="tab-panel" id="tab-queue">
+    <div class="queue-layout">
+
+      <!-- Left: Bills -->
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">📋 รายการบิล</div>
+          <span id="billCntLabel" style="font-size:13px;color:var(--text2)">0 บิล</span>
+        </div>
+        <div class="filter-bar">
+          <input class="filter-input" id="searchQ" placeholder="🔍 ค้นหาเลขบิล, ชื่อร้าน, รหัส..." oninput="filterBills()">
+          <select class="filter-select" id="fRoute" onchange="filterBills()">
+            <option value="">ทุกรูท</option>
+          </select>
+          <select class="filter-select" id="fDay" onchange="filterBills()">
+            <option value="">ทุกวัน</option>
+            <option value="จ">จันทร์</option>
+            <option value="อ">อังคาร</option>
+            <option value="พ">พุธ</option>
+            <option value="พฤ">พฤหัส</option>
+            <option value="ศ">ศุกร์</option>
+            <option value="ส">เสาร์</option>
+          </select>
+          <select class="filter-select" id="fStatus" onchange="filterBills()">
+            <option value="">ทุกสถานะ</option>
+            <option value="un">ยังไม่จัด</option>
+            <option value="done">จัดแล้ว</option>
+          </select>
+        </div>
+        <div class="bill-scroll" id="billList">
+          <div class="empty"><div class="ei">📦</div><p>กำลังโหลดข้อมูล...</p></div>
+        </div>
+      </div>
+
+      <!-- Right: Truck + assigned -->
+      <div>
+        <div class="panel" style="margin-bottom:14px;">
+          <div class="panel-head">
+            <div class="panel-title">🚛 เลือกรถ</div>
+          </div>
+          <div class="t-scroll" id="truckSelectList"></div>
+        </div>
+
+        <div class="panel" id="truckDetailPanel" style="display:none;">
+          <div class="panel-head">
+            <div class="panel-title" id="selTruckTitle">—</div>
+            <button class="btn btn-danger-ghost btn-sm" onclick="clearQueue()">🗑 ล้าง</button>
+          </div>
+          <div class="truck-cap-section" id="truckCapBars"></div>
+          <div class="warn-banner" id="warnBanner"><span>⚠️</span><span id="warnTxt"></span></div>
+          <div class="over-banner" id="overBanner"><span>🚨</span><span id="overTxt"></span></div>
+          <div class="assigned-area" id="assignedList">
+            <div class="empty" style="padding:24px 0;"><p>ยังไม่มีบิล<br><small>คลิกบิลทางซ้ายเพื่อเพิ่ม</small></p></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ──────────────────────────────────────────
+// CONSTANTS
+// ──────────────────────────────────────────
+const SHEET_ID = '1OvXga8M0XuUEMYqWPj_AIcBHTEI_vA_WXXNJpqUk0aQ';
+
+const TRUCKS = [
+  { id:1,  driver:'มนัส รักษาวงศ์',         plate:'806893', type:'6 ล้อ HINO',       maxW:9580,  maxV:23.6, e:'🚛' },
+  { id:2,  driver:'มนัส รักษาวงศ์',         plate:'806613', type:'6 ล้อ ISUZU CNG',  maxW:10660, maxV:18.5, e:'🚛' },
+  { id:3,  driver:'นำชัย ทองคำประสาท',      plate:'807181', type:'6 ล้อ HINO',       maxW:9150,  maxV:29.4, e:'🚛' },
+  { id:4,  driver:'จักรกฤษณ์ ศรีนวลสด',    plate:'807210', type:'6 ล้อ ISUZU',      maxW:8780,  maxV:31.3, e:'🚛' },
+  { id:5,  driver:'จาตุพจน์ เงินยวง',       plate:'808425', type:'6 ล้อ HINO',       maxW:8845,  maxV:31.3, e:'🚛' },
+  { id:6,  driver:'ประสงค์ คำคุ้ม',         plate:'806991', type:'10 ล้อ HINO',      maxW:14200, maxV:40.8, e:'🚚' },
+  { id:7,  driver:'ขันติ บุญเฉลียว',        plate:'805865', type:'12 ล้อ HINO',      maxW:18000, maxV:36.5, e:'🚚' },
+  { id:8,  driver:'บุญเปรม โสวจันทร์',      plate:'807482', type:'12 ล้อ ISUZU',     maxW:19000, maxV:40.8, e:'🚚' },
+  { id:9,  driver:'ภราดร สวนน้อย',          plate:'บฉ1693', type:'4 ล้อจัมโบ้',     maxW:4000,  maxV:10.6, e:'🚐' },
+  { id:10, driver:'อุทัย อยู่ประเสริฐ',     plate:'บจ9541', type:'4 ล้อจัมโบ้',     maxW:4000,  maxV:9.9,  e:'🚐' },
+];
+
+// ──────────────────────────────────────────
+// STATE
+// ──────────────────────────────────────────
+let bills      = [];   // [{ref,arCode,arName,date,district,province,route,days,totalW,totalV,items}]
+let products   = {};   // {skuName: {w,v}}
+let routeMap   = {};   // {arCode: {route,days}}
+let billMap    = {};   // {ref: bill}
+let queue      = {};   // {truckId: [ref,...]}
+let selTruckId = null;
+
+// ──────────────────────────────────────────
+// CSV FETCH
+// ──────────────────────────────────────────
+const csvURL = s =>
+  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(s)}`;
+
+async function fetchSheet(name) {
+  const r = await fetch(csvURL(name));
+  if (!r.ok) throw new Error('Fetch failed: ' + name);
+  return parseCSV(await r.text());
+}
+
+function parseCSV(txt) {
+  const lines = txt.split('\n').filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const headers = parseLine(lines[0]);
+  return lines.slice(1).map(line => {
+    const v = parseLine(line);
+    const o = {};
+    headers.forEach((h,i) => o[h.trim()] = (v[i] || '').trim());
+    return o;
+  });
+}
+
+function parseLine(line) {
+  const res = []; let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { if (inQ && line[i+1]==='"') { cur+='"'; i++; } else inQ=!inQ; }
+    else if (c === ',' && !inQ) { res.push(cur); cur = ''; }
+    else cur += c;
+  }
+  res.push(cur);
+  return res;
+}
+
+// ──────────────────────────────────────────
+// LOAD
+// ──────────────────────────────────────────
+async function loadData() {
+  try {
+    const saved = localStorage.getItem('tms_queue');
+    if (saved) queue = JSON.parse(saved);
+
+    const [billData, productData, routeData] = await Promise.all([
+      fetchSheet('Bill DS'),
+      fetchSheet('Product'),
+      fetchSheet('Route'),
+    ]);
+
+    // Products
+    products = {};
+    productData.forEach(p => {
+      const name = p['ชื่อสินค้า'] || p['SKU_NAME'] || '';
+      const w = parseFloat(p['นน. EA'] || p['น้ำหนัก EA'] || 0);
+      const v = parseFloat(p['ปริมาตร EA (ลิตร)'] || p['ปริมาตร EA'] || 0) / 1000;
+      if (name) products[name] = { w, v };
+    });
+
+    // Routes
+    routeMap = {};
+    routeData.forEach(r => {
+      const code  = r['รหัสร้านค้า'] || r['AR_CODE'] || '';
+      const route = r['ชื่อสายจด']   || r['สาย']    || '';
+      const days  = r['วันส่ง']       || '';
+      if (code) routeMap[code] = { route, days };
+    });
+
+    // Bills
+    billMap = {};
+    billData.forEach(b => {
+      const ref     = b['DI_REF']        || '';
+      const arCode  = b['AR_CODE']       || '';
+      const arName  = b['AR_NAME']       || '';
+      const sku     = b['SKU_NAME']      || '';
+      const ea      = parseFloat(b['EA'] || 0);
+      const date    = b['DI_DATE']       || '';
+      const dist    = b['ADDB_DISTRICT'] || '';
+      const prov    = b['ADDB_PROVINCE'] || '';
+      if (!ref) return;
+      if (!billMap[ref]) {
+        const ri = routeMap[arCode] || {};
+        billMap[ref] = { ref, arCode, arName, date, dist, prov,
+          route: ri.route||'—', days: ri.days||'—',
+          items: [], totalW: 0, totalV: 0 };
+      }
+      const pr = products[sku] || { w:0, v:0 };
+      billMap[ref].items.push({ sku, ea, w: pr.w*ea, v: pr.v*ea });
+      billMap[ref].totalW += pr.w * ea;
+      billMap[ref].totalV += pr.v * ea;
+    });
+
+    bills = Object.values(billMap);
+
+    // UI
+    const now = new Date();
+    document.getElementById('dateBadge').textContent =
+      now.toLocaleDateString('th-TH', { day:'numeric', month:'short', year:'numeric' });
+
+    updateStats();
+    renderTruckGrid();
+    renderTruckSelectList();
+    populateRouteFilter();
+    renderBillList();
+
+    showToast('โหลดข้อมูลสำเร็จ — ' + bills.length + ' บิล', 'success');
+  } catch(e) {
+    console.error(e);
+    showToast('โหลดข้อมูลไม่สำเร็จ: ' + e.message, 'error');
+    document.getElementById('liveDot').style.background = '#da3633';
+    document.getElementById('liveDot').style.boxShadow = '0 0 0 3px rgba(218,54,51,0.15)';
+  } finally {
+    document.getElementById('loadingScreen').classList.add('hidden');
+  }
+}
+
+function refreshData() {
+  document.getElementById('loadingScreen').classList.remove('hidden');
+  loadData();
+}
+
+// ──────────────────────────────────────────
+// HELPERS
+// ──────────────────────────────────────────
+function assignedSet() { return new Set(Object.values(queue).flat()); }
+
+function truckLoad(id) {
+  const refs = queue[id] || [];
+  let w=0, v=0;
+  refs.forEach(ref => { const b = billMap[ref]; if(b){ w+=b.totalW; v+=b.totalV; } });
+  return { w, v, n: refs.length };
+}
+
+function fillClass(pct) {
+  return pct>=100 ? 'fill-red' : pct>=75 ? 'fill-amber' : 'fill-green';
+}
+
+function saveQ() { localStorage.setItem('tms_queue', JSON.stringify(queue)); }
+
+// ──────────────────────────────────────────
+// STATS
+// ──────────────────────────────────────────
+function updateStats() {
+  const asgn   = assignedSet().size;
+  const total  = bills.length;
+  const active = TRUCKS.filter(t => (queue[t.id]||[]).length > 0).length;
+
+  document.getElementById('stTotal').textContent  = total;
+  document.getElementById('stDone').textContent   = asgn;
+  document.getElementById('stPend').textContent   = total - asgn;
+  document.getElementById('stTrucks').textContent = active + '/' + TRUCKS.length;
+  document.getElementById('chipOverview').textContent = total;
+  document.getElementById('chipQueue').textContent    = (total-asgn) + ' ค้าง';
+  document.getElementById('truckSubtitle').textContent = active + ' คันมีงาน';
+}
+
+// ──────────────────────────────────────────
+// TRUCK GRID
+// ──────────────────────────────────────────
+function renderTruckGrid() {
+  document.getElementById('truckGrid').innerHTML = TRUCKS.map((t,i) => {
+    const l = truckLoad(t.id);
+    const wP = Math.min(100, (l.w/t.maxW)*100);
+    const vP = Math.min(100, (l.v/t.maxV)*100);
+    const refs = queue[t.id] || [];
+    return `
+    <div class="truck-card" style="animation-delay:${i*0.04}s">
+      <div class="truck-head">
+        <div class="truck-ava">${t.e}</div>
+        <div>
+          <div class="truck-name-main">${t.driver}</div>
+          <div class="truck-plate-tag">${t.plate}</div>
+        </div>
+        <div class="truck-type-pill">${t.type}</div>
+      </div>
+      <div class="truck-body">
+        <div class="cap-grid">
+          <div>
+            <div class="cap-label">น้ำหนัก</div>
+            <div class="progress-track"><div class="progress-fill ${fillClass(wP)}" style="width:${wP}%"></div></div>
+            <div class="cap-nums"><strong>${l.w.toFixed(0)} kg</strong><span>/ ${t.maxW.toLocaleString()}</span></div>
+          </div>
+          <div>
+            <div class="cap-label">ปริมาตร</div>
+            <div class="progress-track"><div class="progress-fill ${fillClass(vP)}" style="width:${vP}%"></div></div>
+            <div class="cap-nums"><strong>${l.v.toFixed(2)} m³</strong><span>/ ${t.maxV}</span></div>
+          </div>
+        </div>
+        <div class="truck-foot">
+          <div class="bill-counter"><strong>${refs.length}</strong> บิล</div>
+          ${refs.length>0
+            ? `<button class="expand-toggle" onclick="toggleDetail(event,${t.id})">▼ ดูบิล</button>`
+            : `<span style="font-size:11px;color:var(--text3)">ยังไม่มีบิล</span>`}
+        </div>
+      </div>
+      ${refs.length>0 ? `
+      <div class="bill-detail" id="bd-${t.id}">
+        ${refs.map(ref => {
+          const b = billMap[ref];
+          if (!b) return '';
+          return `<div class="bill-row-mini">
+            <span class="bill-ref-mini">${b.ref}</span>
+            <span class="bill-cust-mini">${b.arName}</span>
+            <span class="bill-wt-mini">${b.totalW.toFixed(0)} kg</span>
+          </div>`;
+        }).join('')}
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function toggleDetail(e, id) {
+  e.stopPropagation();
+  const el = document.getElementById('bd-'+id);
+  if (!el) return;
+  el.classList.toggle('open');
+  e.target.textContent = el.classList.contains('open') ? '▲ ซ่อน' : '▼ ดูบิล';
+}
+
+// ──────────────────────────────────────────
+// BILL LIST (Queue tab)
+// ──────────────────────────────────────────
+function populateRouteFilter() {
+  const sel = document.getElementById('fRoute');
+  const routes = [...new Set(bills.map(b => b.route).filter(r => r && r!=='—'))].sort();
+  routes.forEach(r => {
+    const o = document.createElement('option');
+    o.value = r; o.textContent = r; sel.appendChild(o);
+  });
+}
+
+function filterBills() {
+  const q    = document.getElementById('searchQ').value.toLowerCase();
+  const rt   = document.getElementById('fRoute').value;
+  const day  = document.getElementById('fDay').value;
+  const st   = document.getElementById('fStatus').value;
+  const asgn = assignedSet();
+
+  const res = bills.filter(b => {
+    if (q && !b.ref.toLowerCase().includes(q) && !b.arName.toLowerCase().includes(q) && !b.arCode.toLowerCase().includes(q)) return false;
+    if (rt && b.route !== rt) return false;
+    if (day && !b.days.includes(day)) return false;
+    if (st==='un'   && asgn.has(b.ref)) return false;
+    if (st==='done' && !asgn.has(b.ref)) return false;
+    return true;
+  });
+  renderBillListItems(res);
+}
+
+function renderBillList() { filterBills(); }
+
+function renderBillListItems(list) {
+  const container = document.getElementById('billList');
+  const asgn = assignedSet();
+  document.getElementById('billCntLabel').textContent = list.length + ' บิล';
+
+  if (!list.length) {
+    container.innerHTML = '<div class="empty"><div class="ei">🔍</div><p>ไม่พบบิลที่ตรงกัน</p></div>';
+    return;
+  }
+
+  container.innerHTML = list.map(b => {
+    const isAsgn = asgn.has(b.ref);
+    const truckEntry = isAsgn ? Object.entries(queue).find(([,refs]) => refs.includes(b.ref)) : null;
+    const trk = truckEntry ? TRUCKS.find(t => t.id == truckEntry[0]) : null;
+    return `<div class="q-bill ${isAsgn?'is-assigned':''}" onclick="toggleAssign('${b.ref}')">
+      <div class="q-cb ${isAsgn?'checked':''}">${isAsgn?'✓':''}</div>
+      <div>
+        <div class="q-ref">${b.ref}</div>
+        <div class="q-cust">${b.arCode} · ${b.arName}</div>
+        <div class="q-tags">
+          ${b.route!=='—' ? `<span class="tag tag-blue">${b.route}</span>` : ''}
+          ${b.days !=='—' ? `<span class="tag tag-amber">${b.days}</span>` : ''}
+          ${trk ? `<span class="tag" style="background:rgba(46,160,67,.12);color:#4ade80;">→ ${trk.plate}</span>` : ''}
+        </div>
+      </div>
+      <div class="q-meta">
+        <div class="q-wt">${b.totalW.toFixed(0)} kg</div>
+        <div class="q-vol">${b.totalV.toFixed(3)} m³</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ──────────────────────────────────────────
+// TRUCK SELECT LIST
+// ──────────────────────────────────────────
+function renderTruckSelectList() {
+  document.getElementById('truckSelectList').innerHTML = TRUCKS.map(t => {
+    const l = truckLoad(t.id);
+    const pct = Math.min(100, (l.w/t.maxW)*100).toFixed(0);
+    return `<div class="t-item ${selTruckId===t.id?'active':''}" onclick="selectTruck(${t.id})">
+      <div style="font-size:20px;">${t.e}</div>
+      <div>
+        <div class="t-item-name">${t.driver}</div>
+        <div class="t-item-plate">${t.plate} · ${t.type}</div>
+      </div>
+      <div class="t-item-pct"><div>${pct}%</div><div>${l.n} บิล</div></div>
+    </div>`;
+  }).join('');
+}
+
+function selectTruck(id) {
+  selTruckId = id;
+  renderTruckSelectList();
+  renderTruckDetail();
+  document.getElementById('truckDetailPanel').style.display = 'block';
+}
+
+function renderTruckDetail() {
+  if (!selTruckId) return;
+  const t = TRUCKS.find(x => x.id===selTruckId);
+  const l = truckLoad(t.id);
+  const wP = Math.min(100, (l.w/t.maxW)*100);
+  const vP = Math.min(100, (l.v/t.maxV)*100);
+
+  document.getElementById('selTruckTitle').textContent = `${t.e} ${t.plate} · ${t.driver}`;
+
+  document.getElementById('truckCapBars').innerHTML = `
+    <div style="margin-bottom:12px;">
+      <div class="cap-row-label">
+        <span>⚖️ น้ำหนัก</span>
+        <span><strong>${l.w.toFixed(0)}</strong> / ${t.maxW.toLocaleString()} kg</span>
+      </div>
+      <div class="progress-track"><div class="progress-fill ${fillClass(wP)}" style="width:${wP}%"></div></div>
+    </div>
+    <div style="margin-bottom:6px;">
+      <div class="cap-row-label">
+        <span>📦 ปริมาตร</span>
+        <span><strong>${l.v.toFixed(3)}</strong> / ${t.maxV} m³</span>
+      </div>
+      <div class="progress-track"><div class="progress-fill ${fillClass(vP)}" style="width:${vP}%"></div></div>
+    </div>
+  `;
+
+  const wb = document.getElementById('warnBanner');
+  const ob = document.getElementById('overBanner');
+  wb.classList.remove('show'); ob.classList.remove('show');
+
+  if (wP>=100 || vP>=100) {
+    ob.classList.add('show');
+    document.getElementById('overTxt').textContent =
+      wP>=100 ? `น้ำหนักเกินพิกัด! (${l.w.toFixed(0)} / ${t.maxW} kg)` :
+                `ปริมาตรเกินพิกัด! (${l.v.toFixed(3)} / ${t.maxV} m³)`;
+  } else if (wP>=80 || vP>=80) {
+    wb.classList.add('show');
+    document.getElementById('warnTxt').textContent =
+      wP>=80 ? `น้ำหนักเกิน 80% (${l.w.toFixed(0)} / ${t.maxW} kg)` :
+               `ปริมาตรเกิน 80% (${l.v.toFixed(3)} / ${t.maxV} m³)`;
+  }
+
+  const refs = queue[selTruckId] || [];
+  const el = document.getElementById('assignedList');
+  if (!refs.length) {
+    el.innerHTML = '<div class="empty" style="padding:24px 0;"><p>ยังไม่มีบิล<br><small>คลิกบิลทางซ้ายเพื่อเพิ่ม</small></p></div>';
+  } else {
+    el.innerHTML = refs.map(ref => {
+      const b = billMap[ref]; if (!b) return '';
+      return `<div class="asgn-bill">
+        <div class="asgn-ref">${b.ref}</div>
+        <div class="asgn-cust">${b.arName}</div>
+        <div class="asgn-wt">${b.totalW.toFixed(0)} kg</div>
+        <button class="rm-btn" onclick="removeBill('${ref}')">✕</button>
+      </div>`;
+    }).join('');
+  }
+}
+
+// ──────────────────────────────────────────
+// ASSIGN / REMOVE
+// ──────────────────────────────────────────
+function toggleAssign(ref) {
+  if (!selTruckId) { showToast('กรุณาเลือกรถก่อน ➡️', 'warning'); return; }
+  const asgn = assignedSet();
+  if (asgn.has(ref)) {
+    Object.keys(queue).forEach(id => { queue[id] = queue[id].filter(r => r!==ref); });
+    showToast('ลบบิล ' + ref, 'warning');
+  } else {
+    if (!queue[selTruckId]) queue[selTruckId] = [];
+    queue[selTruckId].push(ref);
+    showToast('เพิ่ม ' + ref + ' แล้ว ✓', 'success');
+  }
+  saveQ(); refresh();
+}
+
+function removeBill(ref) {
+  Object.keys(queue).forEach(id => { queue[id] = queue[id].filter(r => r!==ref); });
+  saveQ(); refresh();
+  showToast('ลบบิลแล้ว', 'warning');
+}
+
+function clearQueue() {
+  if (!selTruckId) return;
+  if (!confirm('ล้างบิลทั้งหมดของรถคันนี้?')) return;
+  queue[selTruckId] = [];
+  saveQ(); refresh();
+  showToast('ล้างบิลแล้ว', 'warning');
+}
+
+function refresh() {
+  updateStats();
+  renderTruckGrid();
+  renderTruckSelectList();
+  renderTruckDetail();
+  filterBills();
+}
+
+// ──────────────────────────────────────────
+// PRINT
+// ──────────────────────────────────────────
+function printAll() {
+  const active = TRUCKS.filter(t => (queue[t.id]||[]).length>0);
+  if (!active.length) { showToast('ยังไม่มีบิลที่จัด', 'warning'); return; }
+
+  const today = new Date().toLocaleDateString('th-TH', { day:'numeric', month:'long', year:'numeric' });
+  const pages = active.map(t => {
+    const refs = queue[t.id]||[];
+    const l = truckLoad(t.id);
+    const rows = refs.map((ref,i) => {
+      const b = billMap[ref]; if (!b) return '';
+      return `<tr>
+        <td>${i+1}</td><td>${b.ref}</td><td>${b.arCode}</td>
+        <td>${b.arName}</td><td>${b.route}</td>
+        <td>${b.totalW.toFixed(0)}</td><td></td>
+      </tr>`;
+    }).join('');
+    return `
+    <div style="page-break-after:always;padding:24px 28px;font-family:'Sarabun',sans-serif;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:16px;border-bottom:2px solid #e2e8f0;">
+        <div>
+          <h2 style="font-size:22px;font-weight:800;margin:0;color:#1a202c;">ใบงานรถส่งสินค้า</h2>
+          <p style="color:#718096;margin:4px 0 0;font-size:13px;">วันที่ ${today}</p>
+        </div>
+        <div style="text-align:right;background:#f7fafc;border:1px solid #e2e8f0;padding:12px 16px;border-radius:10px;">
+          <div style="font-size:22px;font-weight:800;letter-spacing:1px;color:#1a202c;">${t.plate}</div>
+          <div style="font-size:13px;color:#4a5568;margin-top:2px;">${t.driver} · ${t.type}</div>
+          <div style="font-size:12px;color:#718096;margin-top:4px;">น้ำหนักรวม <strong style="color:#e53e3e">${l.w.toFixed(0)}</strong> / ${t.maxW.toLocaleString()} kg</div>
+        </div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#edf2f7;">
+            <th style="border:1px solid #cbd5e0;padding:9px 10px;text-align:center;width:36px;">#</th>
+            <th style="border:1px solid #cbd5e0;padding:9px 10px;">เลขบิล</th>
+            <th style="border:1px solid #cbd5e0;padding:9px 10px;">รหัสร้าน</th>
+            <th style="border:1px solid #cbd5e0;padding:9px 10px;">ชื่อร้านค้า</th>
+            <th style="border:1px solid #cbd5e0;padding:9px 10px;">สาย</th>
+            <th style="border:1px solid #cbd5e0;padding:9px 10px;text-align:right;">น้ำหนัก (kg)</th>
+            <th style="border:1px solid #cbd5e0;padding:9px 10px;width:80px;">เซ็นรับ</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+        <tfoot>
+          <tr style="background:#fffbeb;font-weight:700;">
+            <td colspan="5" style="border:1px solid #cbd5e0;padding:9px 10px;text-align:right;">รวมทั้งหมด</td>
+            <td style="border:1px solid #cbd5e0;padding:9px 10px;text-align:right;">${l.w.toFixed(0)}</td>
+            <td style="border:1px solid #cbd5e0;"></td>
+          </tr>
+        </tfoot>
+      </table>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:40px;">
+        <div style="padding-top:8px;border-top:2px solid #000;text-align:center;font-size:12px;color:#4a5568;">ผู้จัดสินค้า</div>
+        <div style="padding-top:8px;border-top:2px solid #000;text-align:center;font-size:12px;color:#4a5568;">พนักงานขับรถ</div>
+        <div style="padding-top:8px;border-top:2px solid #000;text-align:center;font-size:12px;color:#4a5568;">ผู้รับสินค้า</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <title>ใบงานส่งสินค้า</title>
+    <style>body{margin:0;} @media print{@page{margin:10mm;}}</style>
+  </head><body>${pages}</body></html>`);
+  w.document.close();
+  setTimeout(() => w.print(), 900);
+}
+
+// ──────────────────────────────────────────
+// UI HELPERS
+// ──────────────────────────────────────────
+function switchTab(id, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-'+id).classList.add('active');
+}
+
+function showToast(msg, type='success') {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = 'toast '+type;
+  const icon = type==='success'?'✅':type==='warning'?'⚠️':'❌';
+  t.innerHTML = `${icon} ${msg}`;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+// ──────────────────────────────────────────
+// INIT
+// ──────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', loadData);
+</script>
+</body>
+</html>
