@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>จัดคิวส่งสินค้า</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy-900: #060d1f;
+  --navy-800: #0a1628;
+  --navy-700: #0e1e38;
+  --navy-600: #132447;
+  --navy-500: #1a2e57;
+  --navy-400: #243d6e;
+  --gold-500: #c9a227;
+  --gold-400: #e0b73a;
+  --gold-300: #f0cc6a;
+  --gold-glow: rgba(201,162,39,0.25);
+  --white: #ffffff;
+  --white-90: rgba(255,255,255,0.9);
+  --white-70: rgba(255,255,255,0.7);
+  --white-40: rgba(255,255,255,0.4);
+  --white-15: rgba(255,255,255,0.15);
+  --white-08: rgba(255,255,255,0.08);
+  --white-04: rgba(255,255,255,0.04);
+  --success: #22c55e;
+  --success-dim: rgba(34,197,94,0.15);
+  --warning: #f59e0b;
+  --warning-dim: rgba(245,158,11,0.15);
+  --danger: #ef4444;
+  --danger-dim: rgba(239,68,68,0.15);
+  --r: 12px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Sarabun',sans-serif;background:var(--navy-800);color:var(--white);min-height:100vh;font-size:15px;line-height:1.6;}
+
+/* LOADING */
+.loading-screen{position:fixed;inset:0;background:var(--navy-900);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:opacity .5s,visibility .5s;}
+.loading-screen.gone{opacity:0;visibility:hidden;pointer-events:none;}
+.load-icon{font-size:64px;animation:swing 1.2s ease-in-out infinite alternate;margin-bottom:20px;}
+@keyframes swing{from{transform:translateX(-12px) rotate(-5deg);}to{transform:translateX(12px) rotate(5deg);}}
+.load-title{font-size:24px;font-weight:900;color:var(--gold-400);}
+.load-sub{font-size:13px;color:var(--white-40);margin:6px 0 28px;}
+.load-bar-bg{width:220px;height:3px;background:var(--white-08);border-radius:2px;overflow:hidden;}
+.load-bar-fill{height:100%;background:linear-gradient(90deg,var(--gold-500),var(--gold-300));border-radius:2px;width:0;animation:loadFill 2.2s ease forwards;}
+@keyframes loadFill{to{width:100%;}}
+
+/* MODAL */
+.modal-back{display:none;position:fixed;inset:0;background:rgba(6,13,31,.8);backdrop-filter:blur(4px);z-index:8000;align-items:center;justify-content:center;}
+.modal-back.open{display:flex;}
+.modal-box{background:var(--navy-700);border:1px solid var(--gold-500);border-radius:16px;padding:28px;width:90%;max-width:400px;box-shadow:0 24px 60px rgba(0,0,0,.6),0 0 0 1px var(--gold-glow);animation:popIn .25s cubic-bezier(.34,1.56,.64,1);}
+@keyframes popIn{from{transform:scale(.88);opacity:0;}to{transform:scale(1);opacity:1;}}
+.m-icon{font-size:40px;text-align:center;margin-bottom:10px;}
+.m-title{font-size:18px;font-weight:800;text-align:center;margin-bottom:8px;}
+.m-msg{font-size:14px;color:var(--white-70);text-align:center;line-height:1.7;margin-bottom:18px;}
+.m-detail{background:var(--navy-900);border:1px solid var(--white-08);border-radius:8px;padding:12px;margin-bottom:18px;font-size:13px;display:none;gap:7px;flex-direction:column;}
+.m-detail.show{display:flex;}
+.m-row{display:flex;justify-content:space-between;}
+.m-row .lbl{color:var(--white-40);}
+.m-row .val{font-weight:700;}
+.m-row .val.over{color:var(--danger);}
+.m-btns{display:flex;gap:10px;}
+.m-btns .btn{flex:1;justify-content:center;}
+
+/* TOAST */
+.toasts{position:fixed;bottom:20px;right:20px;z-index:9000;display:flex;flex-direction:column;gap:8px;}
+.toast{background:var(--navy-600);border:1px solid var(--white-15);border-radius:10px;padding:11px 16px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.5);display:flex;align-items:center;gap:8px;animation:toastIn .3s ease;}
+.toast.success{border-left:3px solid var(--success);}
+.toast.warning{border-left:3px solid var(--warning);}
+.toast.error{border-left:3px solid var(--danger);}
+.toast.info{border-left:3px solid var(--gold-500);}
+@keyframes toastIn{from{transform:translateX(110%);opacity:0;}to{transform:translateX(0);opacity:1;}}
+
+/* HEADER */
+.header{background:linear-gradient(90deg,var(--navy-900),var(--navy-700));border-bottom:1px solid var(--white-08);padding:0 24px;height:62px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:500;box-shadow:0 2px 12px rgba(0,0,0,.4);}
+.header::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--gold-500),transparent);}
+.hlogo{display:flex;align-items:center;gap:12px;}
+.hlogo-box{width:38px;height:38px;border-radius:9px;background:linear-gradient(135deg,var(--gold-500),var(--gold-300));display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 8px var(--gold-glow);flex-shrink:0;}
+.hlogo-name{font-size:16px;font-weight:900;}
+.hlogo-sub{font-size:11px;color:var(--white-40);}
+.hright{display:flex;align-items:center;gap:10px;}
+.date-tag{background:var(--white-08);border:1px solid var(--white-15);border-radius:20px;padding:4px 13px;font-size:12px;color:var(--white-70);}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--success);box-shadow:0 0 0 3px var(--success-dim);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 3px var(--success-dim);}50%{box-shadow:0 0 0 6px transparent;}}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;border:none;font-family:'Sarabun',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all .18s;}
+.btn-gold{background:linear-gradient(135deg,var(--gold-500),var(--gold-400));color:var(--navy-900);}
+.btn-gold:hover{background:linear-gradient(135deg,var(--gold-400),var(--gold-300));transform:translateY(-1px);box-shadow:0 4px 14px var(--gold-glow);}
+.btn-outline{background:none;border:1px solid var(--white-15);color:var(--white-70);}
+.btn-outline:hover{border-color:var(--white-40);color:var(--white);}
+.btn-danger{background:var(--danger-dim);border:1px solid var(--danger);color:var(--danger);}
+.btn-danger:hover{background:rgba(239,68,68,.3);}
+.btn-sm{padding:5px 11px;font-size:12px;}
+
+/* TABS */
+.tabs{background:var(--navy-800);border-bottom:1px solid var(--white-08);padding:0 24px;display:flex;}
+.tab{padding:13px 20px;background:none;border:none;color:var(--white-40);font-family:'Sarabun',sans-serif;font-size:14px;font-weight:700;cursor:pointer;border-bottom:2px solid transparent;transition:all .18s;display:flex;align-items:center;gap:7px;}
+.tab:hover{color:var(--white-70);}
+.tab.active{color:var(--gold-400);border-bottom-color:var(--gold-400);}
+.chip{background:var(--gold-glow);color:var(--gold-300);border-radius:10px;padding:1px 8px;font-size:11px;}
+.chip.blue{background:rgba(56,139,253,.15);color:#60a5fa;}
+
+/* MAIN */
+.main{padding:22px;max-width:1440px;margin:0 auto;}
+.tab-panel{display:none;animation:fadeUp .35s ease;}
+.tab-panel.active{display:block;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+
+/* STATS */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;}
+.stat-card{background:linear-gradient(135deg,var(--navy-700),var(--navy-600));border:1px solid var(--white-08);border-radius:var(--r);padding:18px;display:flex;align-items:center;gap:14px;transition:transform .2s,border-color .2s,box-shadow .2s;}
+.stat-card:hover{transform:translateY(-2px);border-color:var(--white-15);box-shadow:0 8px 24px rgba(0,0,0,.35);}
+.stat-icon{width:46px;height:46px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+.si-gold{background:rgba(201,162,39,.2);border:1px solid rgba(201,162,39,.3);}
+.si-green{background:var(--success-dim);border:1px solid rgba(34,197,94,.3);}
+.si-blue{background:rgba(56,139,253,.15);border:1px solid rgba(56,139,253,.3);}
+.si-purple{background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.3);}
+.stat-num{font-size:28px;font-weight:900;letter-spacing:-1px;line-height:1;}
+.stat-lbl{font-size:12px;color:var(--white-40);margin-top:3px;}
+
+/* SEC */
+.sec-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.sec-title{font-size:14px;font-weight:800;display:flex;align-items:center;gap:8px;}
+.gold-bar{width:3px;height:16px;background:var(--gold-500);border-radius:2px;}
+
+/* TRUCK GRID */
+.truck-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;}
+.truck-card{background:linear-gradient(160deg,var(--navy-700),var(--navy-600));border:1px solid var(--white-08);border-radius:var(--r);overflow:hidden;transition:all .22s;}
+.truck-card:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.4);border-color:var(--white-15);}
+.truck-card.full{border-color:var(--danger)!important;box-shadow:0 0 0 1px var(--danger),0 8px 24px rgba(239,68,68,.15);}
+.truck-card.warn{border-color:var(--warning)!important;}
+.truck-head{padding:14px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--white-08);background:linear-gradient(90deg,rgba(201,162,39,.06),transparent);}
+.truck-ava{width:42px;height:42px;border-radius:10px;background:var(--navy-500);border:1px solid var(--white-15);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+.truck-driver{font-weight:800;font-size:13px;}
+.truck-plate{display:inline-flex;align-items:center;background:var(--navy-900);border:1px solid var(--gold-500);border-radius:4px;padding:2px 8px;font-size:13px;font-weight:900;color:var(--gold-400);letter-spacing:1px;margin-top:3px;}
+.truck-type-pill{margin-left:auto;background:var(--white-08);border:1px solid var(--white-15);border-radius:20px;padding:3px 10px;font-size:11px;color:var(--white-40);white-space:nowrap;}
+.full-badge{background:var(--danger);color:#fff;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:800;margin-left:6px;animation:flashBadge 1.5s infinite;}
+@keyframes flashBadge{0%,100%{opacity:1;}50%{opacity:.5;}}
+.truck-body{padding:14px 16px;}
+.cap-row{margin-bottom:10px;}
+.cap-top{display:flex;justify-content:space-between;margin-bottom:5px;font-size:12px;}
+.cap-top .lbl{color:var(--white-40);}
+.cap-top .val{font-weight:700;}
+.cap-top .pct{font-size:11px;font-weight:400;color:var(--white-40);margin-left:4px;}
+.prog-bg{height:6px;background:var(--white-08);border-radius:3px;overflow:hidden;}
+.prog-fill{height:100%;border-radius:3px;transition:width .7s cubic-bezier(.34,1.56,.64,1);}
+.c-green{background:linear-gradient(90deg,#16a34a,#22c55e);}
+.c-amber{background:linear-gradient(90deg,#d97706,#f59e0b);}
+.c-red{background:linear-gradient(90deg,#b91c1c,#ef4444);}
+.truck-foot{display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid var(--white-08);}
+.bill-cnt{font-size:12px;color:var(--white-40);}
+.bill-cnt strong{font-size:18px;font-weight:900;color:var(--white);}
+.expand-btn{background:var(--white-04);border:1px solid var(--white-15);border-radius:6px;color:var(--white-40);padding:4px 10px;font-size:11px;cursor:pointer;font-family:'Sarabun',sans-serif;transition:all .15s;}
+.expand-btn:hover{border-color:var(--gold-500);color:var(--gold-400);}
+.bill-detail-wrap{display:none;padding:0 14px 12px;}
+.bill-detail-wrap.open{display:block;}
+.mini-bill{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--white-04);border-radius:6px;margin-bottom:5px;font-size:12px;}
+.mini-ref{font-weight:800;color:var(--gold-400);min-width:90px;}
+.mini-name{flex:1;color:var(--white-70);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.mini-wt{color:var(--white-40);}
+
+/* QUEUE */
+.q-layout{display:grid;grid-template-columns:1fr 360px;gap:18px;align-items:start;}
+.panel{background:var(--navy-700);border:1px solid var(--white-08);border-radius:var(--r);overflow:hidden;}
+.panel-head{padding:14px 18px;border-bottom:1px solid var(--white-08);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(90deg,rgba(201,162,39,.05),transparent);}
+.panel-title{font-size:14px;font-weight:800;display:flex;align-items:center;gap:8px;}
+.filter-bar{padding:10px 14px;border-bottom:1px solid var(--white-08);display:flex;gap:8px;flex-wrap:wrap;background:var(--white-04);}
+.fi,.fs{background:var(--navy-800);border:1px solid var(--white-15);border-radius:7px;color:var(--white);padding:7px 11px;font-family:'Sarabun',sans-serif;font-size:13px;transition:border-color .15s;}
+.fi{flex:1;min-width:160px;}.fi::placeholder{color:var(--white-40);}
+.fi:focus,.fs:focus{outline:none;border-color:var(--gold-500);}
+.fs{cursor:pointer;}.fs option{background:var(--navy-700);}
+.bill-scroll{max-height:560px;overflow-y:auto;}
+.bill-scroll::-webkit-scrollbar{width:3px;}
+.bill-scroll::-webkit-scrollbar-thumb{background:var(--white-15);border-radius:2px;}
+.q-bill{padding:12px 16px;border-bottom:1px solid var(--white-04);cursor:pointer;transition:background .12s;display:grid;grid-template-columns:20px 1fr auto;gap:12px;align-items:center;}
+.q-bill:hover{background:var(--white-04);}
+.q-bill.assigned{opacity:.5;}
+.q-bill.assigned:hover{opacity:.8;}
+.qcb{width:18px;height:18px;border-radius:4px;border:2px solid var(--white-15);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;flex-shrink:0;transition:all .13s;}
+.qcb.on{background:var(--gold-500);border-color:var(--gold-500);color:var(--navy-900);}
+.q-ref{font-weight:800;font-size:14px;}
+.q-cust{font-size:12px;color:var(--white-40);margin-top:1px;}
+.q-tags{display:flex;gap:5px;margin-top:4px;flex-wrap:wrap;}
+.tag{display:inline-block;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;}
+.tg-blue{background:rgba(56,139,253,.15);color:#60a5fa;}
+.tg-gold{background:rgba(201,162,39,.15);color:var(--gold-300);}
+.tg-green{background:var(--success-dim);color:#4ade80;}
+.q-wt{font-size:14px;font-weight:800;text-align:right;}
+.q-vol{font-size:11px;color:var(--white-40);text-align:right;margin-top:1px;}
+.ts-scroll{max-height:240px;overflow-y:auto;}
+.ts-item{padding:11px 16px;border-bottom:1px solid var(--white-04);cursor:pointer;display:flex;align-items:center;gap:10px;transition:background .12s;}
+.ts-item:hover{background:var(--white-04);}
+.ts-item.active{background:rgba(201,162,39,.1);border-left:3px solid var(--gold-500);}
+.ts-driver{font-size:13px;font-weight:800;}
+.ts-plate{font-size:11px;color:var(--gold-400);margin-top:1px;}
+.ts-right{margin-left:auto;text-align:right;}
+.ts-pct{font-size:12px;font-weight:700;}
+.ts-pct.red{color:var(--danger);}.ts-pct.amber{color:var(--warning);}.ts-pct.green{color:var(--success);}
+.ts-bills{font-size:11px;color:var(--white-40);}
+.full-label{background:var(--danger);color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:4px;}
+.tdet-caps{padding:14px 16px 0;}
+.cap-lbl-row{display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px;}
+.cap-lbl-row .lbl{color:var(--white-40);}.cap-lbl-row .val{font-weight:800;}
+.status-banner{margin:12px 14px 0;border-radius:9px;padding:10px 14px;display:none;align-items:center;gap:8px;font-size:13px;font-weight:600;}
+.status-banner.show{display:flex;}
+.b-ok{background:var(--success-dim);border:1px solid var(--success);color:var(--success);}
+.b-warn{background:var(--warning-dim);border:1px solid var(--warning);color:var(--warning);}
+.b-over{background:var(--danger-dim);border:1px solid var(--danger);color:var(--danger);}
+.b-full{background:var(--danger-dim);border:2px solid var(--danger);color:var(--danger);font-weight:800;animation:flashBadge 1.5s infinite;}
+.asgn-area{padding:12px 14px;border-top:1px solid var(--white-08);}
+.asgn-row{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--white-04);border-radius:7px;margin-bottom:6px;}
+.asgn-ref{font-size:13px;font-weight:800;color:var(--gold-400);min-width:90px;}
+.asgn-name{flex:1;font-size:12px;color:var(--white-70);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.asgn-wt{font-size:11px;color:var(--white-40);}
+.rm-btn{background:none;border:none;color:var(--white-40);cursor:pointer;font-size:15px;padding:2px 6px;transition:color .12s;}
+.rm-btn:hover{color:var(--danger);}
+.empty{text-align:center;padding:44px 20px;color:var(--white-40);}
+.empty .ei{font-size:32px;margin-bottom:10px;}
+.empty p{font-size:13px;line-height:1.8;}
+@media(max-width:1000px){.q-layout{grid-template-columns:1fr;}}
+@media(max-width:700px){.stats-row{grid-template-columns:1fr 1fr;}.main{padding:12px;}}
+@media print{.header,.tabs,.no-print{display:none!important;}body{background:#fff;color:#000;}}
+</style>
+</head>
+<body>
+
+<div class="loading-screen" id="LS">
+  <div class="load-icon">🚛</div>
+  <div class="load-title">จัดคิวส่งสินค้า</div>
+  <div class="load-sub">กำลังดึงข้อมูล Google Sheets…</div>
+  <div class="load-bar-bg"><div class="load-bar-fill"></div></div>
+</div>
+
+<div class="modal-back" id="MB">
+  <div class="modal-box">
+    <div class="m-icon" id="mIcon"></div>
+    <div class="m-title" id="mTitle"></div>
+    <div class="m-msg" id="mMsg"></div>
+    <div class="m-detail" id="mDetail"></div>
+    <div class="m-btns" id="mBtns"></div>
+  </div>
+</div>
+
+<div class="toasts" id="TC"></div>
+
+<header class="header">
+  <div class="hlogo">
+    <div class="hlogo-box">🚛</div>
+    <div>
+      <div class="hlogo-name">จัดคิวส่งสินค้า</div>
+      <div class="hlogo-sub">ระบบจัดการส่งสินค้า</div>
+    </div>
+  </div>
+  <div class="hright">
+    <div class="date-tag" id="dateBadge">—</div>
+    <div class="live-dot" id="liveDot"></div>
+    <button class="btn btn-outline btn-sm no-print" onclick="refreshData()">🔄 รีเฟรช</button>
+    <button class="btn btn-gold btn-sm no-print" onclick="printAll()">🖨️ พิมพ์ใบงาน</button>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab active" onclick="switchTab('overview',this)">📊 ภาพรวม <span class="chip" id="chipOv">—</span></button>
+  <button class="tab" onclick="switchTab('queue',this)">📋 จัดคิว <span class="chip blue" id="chipQ">—</span></button>
+</nav>
+
+<main class="main">
+  <div class="tab-panel active" id="tab-overview">
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-icon si-gold">📦</div><div><div class="stat-num" id="sTotal">—</div><div class="stat-lbl">บิลทั้งหมด</div></div></div>
+      <div class="stat-card"><div class="stat-icon si-green">✅</div><div><div class="stat-num" id="sDone">—</div><div class="stat-lbl">จัดแล้ว</div></div></div>
+      <div class="stat-card"><div class="stat-icon si-blue">⏳</div><div><div class="stat-num" id="sPend">—</div><div class="stat-lbl">ยังไม่จัด</div></div></div>
+      <div class="stat-card"><div class="stat-icon si-purple">🚛</div><div><div class="stat-num" id="sTrk">—</div><div class="stat-lbl">รถมีงาน / ทั้งหมด</div></div></div>
+    </div>
+    <div class="sec-hd">
+      <div class="sec-title"><div class="gold-bar"></div>🚛 รถทั้งหมด <span style="font-weight:400;font-size:13px;color:var(--white-40)" id="truckSub"></span></div>
+    </div>
+    <div class="truck-grid" id="truckGrid"></div>
+  </div>
+
+  <div class="tab-panel" id="tab-queue">
+    <div class="q-layout">
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">📋 รายการบิล</div>
+          <span id="billCntLbl" style="font-size:12px;color:var(--white-40)">0 บิล</span>
+        </div>
+        <div class="filter-bar">
+          <input class="fi" id="searchQ" placeholder="🔍 ค้นหาเลขบิล, ชื่อร้าน…" oninput="filterBills()">
+          <select class="fs" id="fRoute" onchange="filterBills()"><option value="">ทุกรูท</option></select>
+          <select class="fs" id="fStatus" onchange="filterBills()">
+            <option value="">ทุกสถานะ</option>
+            <option value="un">ยังไม่จัด</option>
+            <option value="done">จัดแล้ว</option>
+          </select>
+        </div>
+        <div class="bill-scroll" id="billList"></div>
+      </div>
+      <div>
+        <div class="panel" style="margin-bottom:14px;">
+          <div class="panel-head"><div class="panel-title">🚛 เลือกรถ</div></div>
+          <div class="ts-scroll" id="tsList"></div>
+        </div>
+        <div class="panel" id="tsDP" style="display:none;">
+          <div class="panel-head">
+            <div class="panel-title" id="selTitle">—</div>
+            <button class="btn btn-danger btn-sm" onclick="clearTruck()">🗑 ล้าง</button>
+          </div>
+          <div class="tdet-caps" id="tdetCaps"></div>
+          <div class="status-banner b-ok show" id="banOk"><span>✅</span><span id="banOkTxt">—</span></div>
+          <div class="status-banner b-warn" id="banWarn"><span>⚠️</span><span id="banWarnTxt">—</span></div>
+          <div class="status-banner b-over" id="banOver"><span>🚨</span><span id="banOverTxt">—</span></div>
+          <div class="status-banner b-full" id="banFull"><span>🔴</span><span>รถเต็มแล้ว — ไม่สามารถเพิ่มบิลได้</span></div>
+          <div class="asgn-area" id="asgnArea"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+const SHEET_ID='1OvXga8M0XuUEMYqWPj_AIcBHTEI_vA_WXXNJpqUk0aQ';
+const TRUCKS=[
+  {id:1, driver:'มนัส รักษาวงศ์',       plate:'806893', type:'6 ล้อ HINO',      maxW:9580,  maxV:23.6, e:'🚛'},
+  {id:2, driver:'มนัส รักษาวงศ์',       plate:'806613', type:'6 ล้อ ISUZU CNG', maxW:10660, maxV:18.5, e:'🚛'},
+  {id:3, driver:'นำชัย ทองคำประสาท',    plate:'807181', type:'6 ล้อ HINO',      maxW:9150,  maxV:29.4, e:'🚛'},
+  {id:4, driver:'จักรกฤษณ์ ศรีนวลสด',  plate:'807210', type:'6 ล้อ ISUZU',     maxW:8780,  maxV:31.3, e:'🚛'},
+  {id:5, driver:'จาตุพจน์ เงินยวง',     plate:'808425', type:'6 ล้อ HINO',      maxW:8845,  maxV:31.3, e:'🚛'},
+  {id:6, driver:'ประสงค์ คำคุ้ม',       plate:'806991', type:'10 ล้อ HINO',     maxW:14200, maxV:40.8, e:'🚚'},
+  {id:7, driver:'ขันติ บุญเฉลียว',      plate:'805865', type:'12 ล้อ HINO',     maxW:18000, maxV:36.5, e:'🚚'},
+  {id:8, driver:'บุญเปรม โสวจันทร์',    plate:'807482', type:'12 ล้อ ISUZU',    maxW:19000, maxV:40.8, e:'🚚'},
+  {id:9, driver:'ภราดร สวนน้อย',        plate:'บฉ1693', type:'4 ล้อจัมโบ้',    maxW:4000,  maxV:10.6, e:'🚐'},
+  {id:10,driver:'อุทัย อยู่ประเสริฐ',   plate:'บจ9541', type:'4 ล้อจัมโบ้',    maxW:4000,  maxV:9.9,  e:'🚐'},
+];
+
+let bills=[],billMap={},products={},routeMap={};
+let queue={};
+let selId=null;
+
+const csvURL=s=>`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(s)}`;
+async function fetchSheet(name){const r=await fetch(csvURL(name));if(!r.ok)throw new Error('ดึงข้อมูล '+name+' ไม่ได้');return parseCSV(await r.text());}
+function parseCSV(txt){const lines=txt.split('\n').filter(l=>l.trim());if(lines.length<2)return[];const h=parseLine(lines[0]);return lines.slice(1).map(l=>{const v=parseLine(l),o={};h.forEach((k,i)=>o[k.trim()]=(v[i]||'').trim());return o;});}
+function parseLine(line){const res=[];let cur='',inQ=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ;}else if(c===','&&!inQ){res.push(cur);cur='';}else cur+=c;}res.push(cur);return res;}
+
+async function loadData(){
+  try{
+    const sv=localStorage.getItem('tms_q');if(sv)queue=JSON.parse(sv);
+    const[bd,pd,rd]=await Promise.all([fetchSheet('Bill DS'),fetchSheet('Product'),fetchSheet('Route')]);
+    products={};
+    pd.forEach(p=>{const n=p['ชื่อสินค้า']||p['SKU_NAME']||'';const w=parseFloat(p['นน. EA']||0);const v=parseFloat(p['ปริมาตร EA (ลิตร)']||0)/1000;if(n)products[n]={w,v};});
+    routeMap={};
+    rd.forEach(r=>{const c=r['รหัสร้านค้า']||r['AR_CODE']||'';const route=r['ชื่อสายจด']||r['สาย']||'';const days=r['วันส่ง']||'';if(c)routeMap[c]={route,days};});
+    billMap={};
+    bd.forEach(b=>{
+      const ref=b['DI_REF']||'';const arCode=b['AR_CODE']||'',arName=b['AR_NAME']||'';
+      const sku=b['SKU_NAME']||'',ea=parseFloat(b['EA']||0);
+      const date=b['DI_DATE']||'',dist=b['ADDB_DISTRICT']||'',prov=b['ADDB_PROVINCE']||'';
+      if(!ref)return;
+      if(!billMap[ref]){const ri=routeMap[arCode]||{};billMap[ref]={ref,arCode,arName,date,dist,prov,route:ri.route||'—',days:ri.days||'—',items:[],totalW:0,totalV:0};}
+      const pr=products[sku]||{w:0,v:0};
+      billMap[ref].items.push({sku,ea,w:pr.w*ea,v:pr.v*ea});
+      billMap[ref].totalW+=pr.w*ea;billMap[ref].totalV+=pr.v*ea;
+    });
+    bills=Object.values(billMap);
+    document.getElementById('dateBadge').textContent=new Date().toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'});
+    updateStats();renderTruckGrid();renderTsList();populateRouteFilter();renderBillList();
+    toast('โหลดข้อมูลสำเร็จ — '+bills.length+' บิล','success');
+  }catch(e){
+    console.error(e);toast('โหลดไม่สำเร็จ: '+e.message,'error');
+    document.getElementById('liveDot').style.cssText='background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.2)';
+  }finally{document.getElementById('LS').classList.add('gone');}
+}
+function refreshData(){document.getElementById('LS').classList.remove('gone');loadData();}
+
+function asgnSet(){return new Set(Object.values(queue).flat());}
+function truckLoad(id){const refs=queue[id]||[];let w=0,v=0;refs.forEach(r=>{const b=billMap[r];if(b){w+=b.totalW;v+=b.totalV;}});return{w,v,n:refs.length};}
+function isFull(t){const l=truckLoad(t.id);return l.w>=t.maxW||l.v>=t.maxV;}
+function isNear(t){const l=truckLoad(t.id);return(l.w/t.maxW)>=0.8||(l.v/t.maxV)>=0.8;}
+function cc(p){return p>=100?'c-red':p>=80?'c-amber':'c-green';}
+function saveQ(){localStorage.setItem('tms_q',JSON.stringify(queue));}
+
+function updateStats(){
+  const a=asgnSet().size,tot=bills.length,act=TRUCKS.filter(t=>(queue[t.id]||[]).length>0).length;
+  document.getElementById('sTotal').textContent=tot;
+  document.getElementById('sDone').textContent=a;
+  document.getElementById('sPend').textContent=tot-a;
+  document.getElementById('sTrk').textContent=act+'/'+TRUCKS.length;
+  document.getElementById('chipOv').textContent=tot;
+  document.getElementById('chipQ').textContent=(tot-a)+' ค้าง';
+  document.getElementById('truckSub').textContent=act+' คันมีงาน';
+}
+
+function renderTruckGrid(){
+  document.getElementById('truckGrid').innerHTML=TRUCKS.map((t,i)=>{
+    const l=truckLoad(t.id);
+    const wP=Math.min(100,(l.w/t.maxW)*100),vP=Math.min(100,(l.v/t.maxV)*100);
+    const full=isFull(t),warn=!full&&isNear(t);
+    const refs=queue[t.id]||[];
+    return`<div class="truck-card${full?' full':warn?' warn':''}" style="animation:fadeUp .4s ease ${i*.04}s both">
+      <div class="truck-head">
+        <div class="truck-ava">${t.e}</div>
+        <div><div class="truck-driver">${t.driver}${full?'<span class="full-badge">เต็ม</span>':''}</div><div class="truck-plate">${t.plate}</div></div>
+        <div class="truck-type-pill">${t.type}</div>
+      </div>
+      <div class="truck-body">
+        <div class="cap-row"><div class="cap-top"><span class="lbl">⚖️ น้ำหนัก</span><span class="val">${l.w.toFixed(0)} kg<span class="pct">${wP.toFixed(0)}%</span></span></div><div class="prog-bg"><div class="prog-fill ${cc(wP)}" style="width:${wP}%"></div></div></div>
+        <div class="cap-row"><div class="cap-top"><span class="lbl">📦 ปริมาตร</span><span class="val">${l.v.toFixed(2)} m³<span class="pct">${vP.toFixed(0)}%</span></span></div><div class="prog-bg"><div class="prog-fill ${cc(vP)}" style="width:${vP}%"></div></div></div>
+        <div class="truck-foot"><div class="bill-cnt"><strong>${refs.length}</strong> บิล</div>${refs.length?`<button class="expand-btn" onclick="toggleDetail(event,${t.id})">▼ ดูบิล</button>`:'<span style="font-size:11px;color:var(--white-40)">ว่าง</span>'}</div>
+      </div>
+      ${refs.length?`<div class="bill-detail-wrap" id="bd-${t.id}">${refs.map(r=>{const b=billMap[r];return b?`<div class="mini-bill"><span class="mini-ref">${b.ref}</span><span class="mini-name">${b.arName}</span><span class="mini-wt">${b.totalW.toFixed(0)} kg</span></div>`:''}).join('')}</div>`:''}
+    </div>`;
+  }).join('');
+}
+function toggleDetail(e,id){e.stopPropagation();const el=document.getElementById('bd-'+id);if(!el)return;el.classList.toggle('open');e.target.textContent=el.classList.contains('open')?'▲ ซ่อน':'▼ ดูบิล';}
+
+function renderTsList(){
+  document.getElementById('tsList').innerHTML=TRUCKS.map(t=>{
+    const l=truckLoad(t.id);const wP=Math.min(100,(l.w/t.maxW)*100);const full=isFull(t);
+    const cls=full?'red':wP>=80?'amber':'green';
+    return`<div class="ts-item${selId===t.id?' active':''}" onclick="selectTruck(${t.id})">
+      <span style="font-size:18px">${t.e}</span>
+      <div><div class="ts-driver">${t.driver}${full?'<span class="full-label">เต็ม</span>':''}</div><div class="ts-plate">${t.plate} · ${t.type}</div></div>
+      <div class="ts-right"><div class="ts-pct ${cls}">${wP.toFixed(0)}%</div><div class="ts-bills">${l.n} บิล</div></div>
+    </div>`;
+  }).join('');
+}
+function selectTruck(id){selId=id;renderTsList();renderTruckDetail();document.getElementById('tsDP').style.display='block';}
+
+function renderTruckDetail(){
+  if(!selId)return;
+  const t=TRUCKS.find(x=>x.id===selId);const l=truckLoad(t.id);
+  const wP=Math.min(100,(l.w/t.maxW)*100),vP=Math.min(100,(l.v/t.maxV)*100);
+  const full=wP>=100||vP>=100;
+  document.getElementById('selTitle').textContent=`${t.e} ${t.plate} · ${t.driver}`;
+  document.getElementById('tdetCaps').innerHTML=`
+    <div class="cap-row"><div class="cap-lbl-row"><span class="lbl">⚖️ น้ำหนัก</span><span class="val">${l.w.toFixed(0)} / ${t.maxW.toLocaleString()} kg</span></div><div class="prog-bg"><div class="prog-fill ${cc(wP)}" style="width:${wP}%"></div></div></div>
+    <div class="cap-row" style="margin-top:10px;"><div class="cap-lbl-row"><span class="lbl">📦 ปริมาตร</span><span class="val">${l.v.toFixed(3)} / ${t.maxV} m³</span></div><div class="prog-bg"><div class="prog-fill ${cc(vP)}" style="width:${vP}%"></div></div></div>`;
+  ['banOk','banWarn','banOver','banFull'].forEach(x=>document.getElementById(x).classList.remove('show'));
+  if(full){document.getElementById('banFull').classList.add('show');}
+  else if(wP>=80||vP>=80){
+    document.getElementById('banWarn').classList.add('show');
+    document.getElementById('banWarnTxt').textContent=wP>=80?`น้ำหนักเกิน 80% · เหลือได้อีก ${(t.maxW-l.w).toFixed(0)} kg`:`ปริมาตรเกิน 80% · เหลือได้อีก ${(t.maxV-l.v).toFixed(3)} m³`;
+  }else{
+    document.getElementById('banOk').classList.add('show');
+    document.getElementById('banOkTxt').textContent=`ยังรับได้ ${(t.maxW-l.w).toFixed(0)} kg · ${(t.maxV-l.v).toFixed(3)} m³`;
+  }
+  const refs=queue[selId]||[];
+  document.getElementById('asgnArea').innerHTML=refs.length
+    ?refs.map(ref=>{const b=billMap[ref];return b?`<div class="asgn-row"><div class="asgn-ref">${b.ref}</div><div class="asgn-name">${b.arName}</div><div class="asgn-wt">${b.totalW.toFixed(0)} kg</div><button class="rm-btn" onclick="removeBill('${ref}')">✕</button></div>`:''}).join('')
+    :'<div class="empty" style="padding:20px 0;"><p>ยังไม่มีบิล<br><small>คลิกบิลด้านซ้ายเพื่อเพิ่ม</small></p></div>';
+}
+
+function populateRouteFilter(){
+  const sel=document.getElementById('fRoute');
+  [...new Set(bills.map(b=>b.route).filter(r=>r&&r!=='—'))].sort().forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;sel.appendChild(o);});
+}
+function filterBills(){
+  const q=document.getElementById('searchQ').value.toLowerCase();
+  const rt=document.getElementById('fRoute').value;
+  const st=document.getElementById('fStatus').value;
+  const asgn=asgnSet();
+  const res=bills.filter(b=>{
+    if(q&&!b.ref.toLowerCase().includes(q)&&!b.arName.toLowerCase().includes(q)&&!b.arCode.toLowerCase().includes(q))return false;
+    if(rt&&b.route!==rt)return false;
+    if(st==='un'&&asgn.has(b.ref))return false;
+    if(st==='done'&&!asgn.has(b.ref))return false;
+    return true;
+  });
+  document.getElementById('billCntLbl').textContent=res.length+' บิล';
+  if(!res.length){document.getElementById('billList').innerHTML='<div class="empty"><div class="ei">🔍</div><p>ไม่พบบิลที่ตรงกัน</p></div>';return;}
+  const asgn2=asgnSet();
+  document.getElementById('billList').innerHTML=res.map(b=>{
+    const isA=asgn2.has(b.ref);
+    const te=isA?Object.entries(queue).find(([,refs])=>refs.includes(b.ref)):null;
+    const trk=te?TRUCKS.find(t=>t.id==te[0]):null;
+    return`<div class="q-bill${isA?' assigned':''}" onclick="toggleAssign('${b.ref}')">
+      <div class="qcb${isA?' on':''}">${isA?'✓':''}</div>
+      <div><div class="q-ref">${b.ref}</div><div class="q-cust">${b.arCode} · ${b.arName}</div>
+        <div class="q-tags">
+          ${b.route!=='—'?`<span class="tag tg-blue">${b.route}</span>`:''}
+          ${b.days!=='—'?`<span class="tag tg-gold">${b.days}</span>`:''}
+          ${trk?`<span class="tag tg-green">→ ${trk.plate}</span>`:''}
+        </div>
+      </div>
+      <div><div class="q-wt">${b.totalW.toFixed(0)} kg</div><div class="q-vol">${b.totalV.toFixed(3)} m³</div></div>
+    </div>`;
+  }).join('');
+}
+function renderBillList(){filterBills();}
+
+function toggleAssign(ref){
+  if(!selId){toast('เลือกรถก่อน ➡️','info');return;}
+  const asgn=asgnSet();
+  if(asgn.has(ref)){
+    Object.keys(queue).forEach(id=>{queue[id]=queue[id].filter(r=>r!==ref);});
+    saveQ();refresh();toast('ลบบิล '+ref+' แล้ว','warning');return;
+  }
+  const t=TRUCKS.find(x=>x.id===selId);
+  const l=truckLoad(t.id);
+  const b=billMap[ref];
+  const newW=l.w+(b?b.totalW:0),newV=l.v+(b?b.totalV:0);
+  const wPct=(newW/t.maxW)*100,vPct=(newV/t.maxV)*100;
+  const currFull=isFull(t);
+
+  if(currFull){
+    showModal({icon:'🔴',title:'รถเต็มแล้ว!',
+      msg:`<b>${t.plate}</b> · ${t.driver}<br>น้ำหนัก/ปริมาตรถึงขีดจำกัดแล้ว<br>ต้องการเพิ่มบิลนี้เกินพิกัดหรือไม่?`,
+      detail:`<div class="m-row"><span class="lbl">บิล</span><span class="val">${ref}</span></div>
+        <div class="m-row"><span class="lbl">น้ำหนักใหม่</span><span class="val over">${newW.toFixed(0)} / ${t.maxW.toLocaleString()} kg (${wPct.toFixed(0)}%)</span></div>
+        <div class="m-row"><span class="lbl">ปริมาตรใหม่</span><span class="val over">${newV.toFixed(3)} / ${t.maxV} m³ (${vPct.toFixed(0)}%)</span></div>`,
+      btns:[{label:'❌ ยกเลิก',cls:'btn-outline',action:closeModal},{label:'⚠️ ยืนยัน ยอมรับเกินพิกัด',cls:'btn-danger',action:()=>{doAssign(ref);closeModal();}}]
+    });return;
+  }
+  if(wPct>=100||vPct>=100){
+    showModal({icon:'⚠️',title:'จะเกินพิกัดหลังเพิ่มบิลนี้',
+      msg:`เพิ่มบิล <b>${ref}</b> แล้วรถ <b>${t.plate}</b> จะเกินพิกัด`,
+      detail:`<div class="m-row"><span class="lbl">น้ำหนักหลังเพิ่ม</span><span class="val ${wPct>=100?'over':''}">${newW.toFixed(0)} / ${t.maxW.toLocaleString()} kg (${wPct.toFixed(0)}%)</span></div>
+        <div class="m-row"><span class="lbl">ปริมาตรหลังเพิ่ม</span><span class="val ${vPct>=100?'over':''}">${newV.toFixed(3)} / ${t.maxV} m³ (${vPct.toFixed(0)}%)</span></div>`,
+      btns:[{label:'❌ ยกเลิก',cls:'btn-outline',action:closeModal},{label:'✅ ยืนยันเพิ่ม',cls:'btn-danger',action:()=>{doAssign(ref);closeModal();}}]
+    });return;
+  }
+  if(wPct>=80||vPct>=80) toast(`⚠️ ใกล้เต็ม ${Math.max(wPct,vPct).toFixed(0)}%`,'warning');
+  doAssign(ref);
+}
+function doAssign(ref){if(!queue[selId])queue[selId]=[];queue[selId].push(ref);saveQ();refresh();toast('เพิ่ม '+ref+' ✓','success');}
+function removeBill(ref){Object.keys(queue).forEach(id=>{queue[id]=queue[id].filter(r=>r!==ref);});saveQ();refresh();toast('ลบบิลแล้ว','warning');}
+function clearTruck(){
+  if(!selId)return;
+  const t=TRUCKS.find(x=>x.id===selId);
+  showModal({icon:'🗑️',title:'ล้างบิลทั้งหมด?',msg:`ยืนยันลบบิลทั้งหมดของ <b>${t.plate}</b> · ${t.driver}`,detail:'',
+    btns:[{label:'ยกเลิก',cls:'btn-outline',action:closeModal},{label:'🗑 ยืนยัน',cls:'btn-danger',action:()=>{queue[selId]=[];saveQ();refresh();closeModal();toast('ล้างบิลแล้ว','warning');}}]
+  });
+}
+function refresh(){updateStats();renderTruckGrid();renderTsList();renderTruckDetail();filterBills();}
+
+function showModal({icon,title,msg,detail,btns}){
+  document.getElementById('mIcon').textContent=icon;
+  document.getElementById('mTitle').textContent=title;
+  document.getElementById('mMsg').innerHTML=msg;
+  const d=document.getElementById('mDetail');
+  if(detail){d.innerHTML=detail;d.classList.add('show');}else d.classList.remove('show');
+  const bc=document.getElementById('mBtns');bc.innerHTML='';
+  btns.forEach(b=>{const btn=document.createElement('button');btn.className='btn '+b.cls;btn.textContent=b.label;btn.onclick=b.action;bc.appendChild(btn);});
+  document.getElementById('MB').classList.add('open');
+}
+function closeModal(){document.getElementById('MB').classList.remove('open');}
+document.getElementById('MB').addEventListener('click',function(e){if(e.target===this)closeModal();});
+
+function printAll(){
+  const active=TRUCKS.filter(t=>(queue[t.id]||[]).length>0);
+  if(!active.length){toast('ยังไม่มีบิลที่จัด','info');return;}
+  const today=new Date().toLocaleDateString('th-TH',{day:'numeric',month:'long',year:'numeric'});
+  const pages=active.map(t=>{
+    const refs=queue[t.id]||[];const l=truckLoad(t.id);
+    return`<div style="page-break-after:always;padding:26px 30px;font-family:'Sarabun',sans-serif;">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:14px;border-bottom:2px solid #0a1628;margin-bottom:18px;">
+        <div><h2 style="margin:0;font-size:22px;font-weight:900;color:#0a1628;">ใบงานรถส่งสินค้า</h2><p style="margin:3px 0 0;font-size:13px;color:#4a5568;">${today}</p></div>
+        <div style="text-align:right;background:#f7fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;">
+          <div style="font-size:22px;font-weight:900;letter-spacing:1px;">${t.plate}</div>
+          <div style="font-size:12px;color:#4a5568;margin-top:2px;">${t.driver} · ${t.type}</div>
+          <div style="font-size:12px;color:#e53e3e;margin-top:3px;">น้ำหนัก ${l.w.toFixed(0)} / ${t.maxW.toLocaleString()} kg</div>
+        </div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead><tr style="background:#0a1628;color:#fff;">
+          <th style="padding:9px 10px;text-align:center;width:32px;">#</th>
+          <th style="padding:9px 10px;">เลขบิล</th><th style="padding:9px 10px;">รหัสร้าน</th>
+          <th style="padding:9px 10px;">ชื่อร้านค้า</th><th style="padding:9px 10px;">สาย</th>
+          <th style="padding:9px 10px;text-align:right;">น้ำหนัก (kg)</th><th style="padding:9px 10px;width:80px;">เซ็นรับ</th>
+        </tr></thead>
+        <tbody>${refs.map((ref,i)=>{const b=billMap[ref];if(!b)return'';return`<tr style="${i%2?'background:#f7fafc':''}">
+          <td style="border:1px solid #e2e8f0;padding:8px 10px;text-align:center;">${i+1}</td>
+          <td style="border:1px solid #e2e8f0;padding:8px 10px;font-weight:700;">${b.ref}</td>
+          <td style="border:1px solid #e2e8f0;padding:8px 10px;">${b.arCode}</td>
+          <td style="border:1px solid #e2e8f0;padding:8px 10px;">${b.arName}</td>
+          <td style="border:1px solid #e2e8f0;padding:8px 10px;">${b.route}</td>
+          <td style="border:1px solid #e2e8f0;padding:8px 10px;text-align:right;">${b.totalW.toFixed(0)}</td>
+          <td style="border:1px solid #e2e8f0;"></td></tr>`;}).join('')}</tbody>
+        <tfoot><tr style="background:#fffbeb;font-weight:800;">
+          <td colspan="5" style="border:1px solid #e2e8f0;padding:9px 10px;text-align:right;">รวม</td>
+          <td style="border:1px solid #e2e8f0;padding:9px 10px;text-align:right;">${l.w.toFixed(0)}</td>
+          <td style="border:1px solid #e2e8f0;"></td>
+        </tr></tfoot>
+      </table>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:28px;margin-top:44px;">
+        <div style="border-top:1.5px solid #000;padding-top:6px;text-align:center;font-size:12px;color:#555;">ผู้จัดสินค้า</div>
+        <div style="border-top:1.5px solid #000;padding-top:6px;text-align:center;font-size:12px;color:#555;">พนักงานขับรถ</div>
+        <div style="border-top:1.5px solid #000;padding-top:6px;text-align:center;font-size:12px;color:#555;">ผู้รับสินค้า</div>
+      </div>
+    </div>`;
+  }).join('');
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700;800;900&display=swap" rel="stylesheet"><style>body{margin:0;}@media print{@page{margin:10mm;}}</style></head><body>${pages}</body></html>`);
+  w.document.close();setTimeout(()=>w.print(),900);
+}
+
+function switchTab(id,el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');document.getElementById('tab-'+id).classList.add('active');
+}
+function toast(msg,type='success'){
+  const c=document.getElementById('TC'),t=document.createElement('div');
+  t.className='toast '+type;
+  const i={success:'✅',warning:'⚠️',error:'❌',info:'💡'}[type]||'ℹ️';
+  t.innerHTML=i+' '+msg;c.appendChild(t);setTimeout(()=>t.remove(),3500);
+}
+window.addEventListener('DOMContentLoaded',loadData);
+</script>
+</body>
+</html>
