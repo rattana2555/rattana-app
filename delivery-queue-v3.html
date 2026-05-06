@@ -354,33 +354,42 @@ async function loadData(){
       const cc2=Object.keys(cd[0]);
       console.log('Car ALL columns:', cc2);
 
-      // ── ค้นหาคอลัมน์ด้วย exact match ก่อน แล้วจึง regex ──
+      // หาคอลัมน์ด้วย exact → partial → fallback index
       function findCol(arr, exacts, pattern){
-        for(const ex of exacts){ const f=arr.find(c=>c.trim()===ex); if(f) return f; }
+        for(const ex of exacts){
+          const f=arr.find(c=>c.trim()===ex||c.trim().replace(/\s/g,'')===ex.replace(/\s/g,''));
+          if(f) return f;
+        }
         return arr.find(c=>pattern.test(c.trim()))||'';
       }
 
-      const drvCol  = findCol(cc2, ['ผู้ดูแล-ขับขี่','ขับขี่','คนขับ'], /ผู้ดูแล|ขับขี่|คนขับ|driver/i);
-      const plateCol= findCol(cc2, ['ทะเบียน Final','ทะเบียน'], /ทะเบียน/i);
-      const typeCol = findCol(cc2, ['ประเภทรถ','ประเภท'], /ประเภท/i);
-      const maxWCol = findCol(cc2, ['นน.บรรทุก','นน. บรรทุก','น้ำหนักบรรทุก'], /บรรทุก/i);
-      // ก*ย*ส — ชื่อคอลัมน์มีเครื่องหมาย * จริงๆ
-      const volCol  = findCol(cc2, ['ก*ย*ส','กxยxส','ก×ย×ส'], /ก.ย.ส/i);
+      const drvCol  = findCol(cc2,['ผู้ดูแล-ขับขี่','ขับขี่','ผู้ดูแล'],/ผู้ดูแล|ขับขี่|คนขับ|driver/i);
+      const plateCol= findCol(cc2,['ทะเบียน Final','ทะเบียนFinal','ทะเบียน'],/ทะเบียน/i);
+      const typeCol = findCol(cc2,['ประเภทรถ','ประเภท'],/ประเภท/i);
+      const maxWCol = findCol(cc2,['นน.บรรทุก','นน. บรรทุก'],/บรรทุก/i);
+      // ก*ย*ส อาจถูก parse เป็น "ก*ย*ส" หรือ stripped — ลองทุกรูปแบบ
+      const volCol  = findCol(cc2,['ก*ย*ส','ก *ย*ส','ก * ย * ส'],/ก[^ว]/i) ||
+                      // fallback: หาคอลัมน์ที่มีค่าตัวเลขใหญ่ (ปริมาตรลิตร มักเป็น 5000-50000)
+                      cc2.find(c=>{
+                        const v=parseFloat((cd[0][c]||'').replace(/,/g,''));
+                        return v>=5000&&v<=100000&&c!==maxWCol;
+                      })||'';
 
-      console.log('Car detected →', {drvCol,plateCol,typeCol,maxWCol,volCol});
+      console.log('Car detected →',{drvCol,plateCol,typeCol,maxWCol,volCol});
+      console.log('Car row[0]:', JSON.stringify(cd[0]));
 
       cd.forEach((row,i)=>{
         const plate=(row[plateCol]||'').trim();
-        if(!plate) return; // ข้ามแถวที่ไม่มีทะเบียน
+        if(!plate) return;
         const driver=(row[drvCol]||'').trim();
         const type  =(row[typeCol]||'').trim();
         const maxW  =parseFloat((row[maxWCol]||'0').replace(/,/g,''))||0;
-        // ก*ย*ส หน่วยลิตร → หาร 1000 = m³
-        const rawV  =parseFloat((row[volCol]||'0').replace(/,/g,''))||0;
+        const rawV  =parseFloat((row[volCol] ||'0').replace(/,/g,''))||0;
         const maxV  =parseFloat((rawV/1000).toFixed(3));
+        console.log(`Truck ${i}: plate=${plate} maxW=${maxW} rawV=${rawV} maxV=${maxV}`);
         TRUCKS.push({id:i+1,driver,plate,type,maxW,maxV,e:truckEmoji(type)});
       });
-      console.log('Trucks loaded:',TRUCKS.length, TRUCKS.map(t=>t.plate+' W:'+t.maxW+' V:'+t.maxV));
+      console.log('Total trucks:',TRUCKS.length);
     }
 
     // ── PRODUCT SHEET ──
