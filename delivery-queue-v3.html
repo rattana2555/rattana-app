@@ -352,28 +352,35 @@ async function loadData(){
     TRUCKS.length=0;
     if(cd.length>0){
       const cc2=Object.keys(cd[0]);
-      console.log('Car columns:',cc2);
-      // หาคอลัมน์ที่เกี่ยวข้อง
-      const drvCol =cc2.find(c=>/ผู้ดูแล|ขับขี่|คนขับ|driver/i.test(c))||cc2[0]||'';
-      const plateCol=cc2.find(c=>/ทะเบียน/i.test(c))||'';
-      const typeCol =cc2.find(c=>/ประเภท/i.test(c))||'';
-      const maxWCol =cc2.find(c=>/นน\.บรรทุก|บรรทุก/i.test(c))||'';
-      // คอลัมน์ ก*ย*ส = ปริมาตรรถสุทธิ หน่วยลิตร → /1000 = m³
-      const volCol=cc2.find(c=>/ก[^ว].*ย.*ส|กยส/i.test(c))||cc2.find(c=>/ปริมาตร/i.test(c))||'';
-      console.log('Car cols → drv:'+drvCol+' plate:'+plateCol+' type:'+typeCol+' maxW:'+maxWCol+' vol(ก*ย*ส):'+volCol);
-      console.log('Car row[0]:', JSON.stringify(cd[0]));
+      console.log('Car ALL columns:', cc2);
+
+      // ── ค้นหาคอลัมน์ด้วย exact match ก่อน แล้วจึง regex ──
+      function findCol(arr, exacts, pattern){
+        for(const ex of exacts){ const f=arr.find(c=>c.trim()===ex); if(f) return f; }
+        return arr.find(c=>pattern.test(c.trim()))||'';
+      }
+
+      const drvCol  = findCol(cc2, ['ผู้ดูแล-ขับขี่','ขับขี่','คนขับ'], /ผู้ดูแล|ขับขี่|คนขับ|driver/i);
+      const plateCol= findCol(cc2, ['ทะเบียน Final','ทะเบียน'], /ทะเบียน/i);
+      const typeCol = findCol(cc2, ['ประเภทรถ','ประเภท'], /ประเภท/i);
+      const maxWCol = findCol(cc2, ['นน.บรรทุก','นน. บรรทุก','น้ำหนักบรรทุก'], /บรรทุก/i);
+      // ก*ย*ส — ชื่อคอลัมน์มีเครื่องหมาย * จริงๆ
+      const volCol  = findCol(cc2, ['ก*ย*ส','กxยxส','ก×ย×ส'], /ก.ย.ส/i);
+
+      console.log('Car detected →', {drvCol,plateCol,typeCol,maxWCol,volCol});
+
       cd.forEach((row,i)=>{
-        const plate=(row[plateCol]||'').trim();if(!plate)return;
+        const plate=(row[plateCol]||'').trim();
+        if(!plate) return; // ข้ามแถวที่ไม่มีทะเบียน
         const driver=(row[drvCol]||'').trim();
         const type  =(row[typeCol]||'').trim();
         const maxW  =parseFloat((row[maxWCol]||'0').replace(/,/g,''))||0;
-        // ก*ย*ส หน่วยลิตร → หาร 1000 ได้ m³
+        // ก*ย*ส หน่วยลิตร → หาร 1000 = m³
         const rawV  =parseFloat((row[volCol]||'0').replace(/,/g,''))||0;
         const maxV  =parseFloat((rawV/1000).toFixed(3));
-        if(maxW===0&&maxV===0)return; // ข้ามแถวว่าง
         TRUCKS.push({id:i+1,driver,plate,type,maxW,maxV,e:truckEmoji(type)});
       });
-      console.log('Loaded',TRUCKS.length,'trucks | sample:',TRUCKS[0]);
+      console.log('Trucks loaded:',TRUCKS.length, TRUCKS.map(t=>t.plate+' W:'+t.maxW+' V:'+t.maxV));
     }
 
     // ── PRODUCT SHEET ──
