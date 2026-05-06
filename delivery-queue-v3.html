@@ -322,18 +322,7 @@ body{font-family:'Sarabun',sans-serif;background:var(--navy-800);color:var(--whi
 
 <script>
 const SHEET_ID='1OvXga8M0XuUEMYqWPj_AIcBHTEI_vA_WXXNJpqUk0aQ';
-const TRUCKS=[
-  {id:1, driver:'มนัส รักษาวงศ์',       plate:'806893', type:'6 ล้อ HINO',      maxW:9580,  maxV:23.6, e:'🚛'},
-  {id:2, driver:'มนัส รักษาวงศ์',       plate:'806613', type:'6 ล้อ ISUZU CNG', maxW:10660, maxV:18.5, e:'🚛'},
-  {id:3, driver:'นำชัย ทองคำประสาท',    plate:'807181', type:'6 ล้อ HINO',      maxW:9150,  maxV:29.4, e:'🚛'},
-  {id:4, driver:'จักรกฤษณ์ ศรีนวลสด',  plate:'807210', type:'6 ล้อ ISUZU',     maxW:8780,  maxV:31.3, e:'🚛'},
-  {id:5, driver:'จาตุพจน์ เงินยวง',     plate:'808425', type:'6 ล้อ HINO',      maxW:8845,  maxV:31.3, e:'🚛'},
-  {id:6, driver:'ประสงค์ คำคุ้ม',       plate:'806991', type:'10 ล้อ HINO',     maxW:14200, maxV:40.8, e:'🚚'},
-  {id:7, driver:'ขันติ บุญเฉลียว',      plate:'805865', type:'12 ล้อ HINO',     maxW:18000, maxV:36.5, e:'🚚'},
-  {id:8, driver:'บุญเปรม โสวจันทร์',    plate:'807482', type:'12 ล้อ ISUZU',    maxW:19000, maxV:40.8, e:'🚚'},
-  {id:9, driver:'ภราดร สวนน้อย',        plate:'บฉ1693', type:'4 ล้อจัมโบ้',    maxW:4000,  maxV:10.6, e:'🚐'},
-  {id:10,driver:'อุทัย อยู่ประเสริฐ',   plate:'บจ9541', type:'4 ล้อจัมโบ้',    maxW:4000,  maxV:9.9,  e:'🚐'},
-];
+let TRUCKS=[];  // โหลดจาก Car sheet
 
 let bills=[],billMap={},products={},routeMap={};
 let queue={};
@@ -344,45 +333,101 @@ async function fetchSheet(name){const r=await fetch(csvURL(name));if(!r.ok)throw
 function parseCSV(txt){const lines=txt.split('\n').filter(l=>l.trim());if(lines.length<2)return[];const h=parseLine(lines[0]);return lines.slice(1).map(l=>{const v=parseLine(l),o={};h.forEach((k,i)=>o[k.trim()]=(v[i]||'').trim());return o;});}
 function parseLine(line){const res=[];let cur='',inQ=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ;}else if(c===','&&!inQ){res.push(cur);cur='';}else cur+=c;}res.push(cur);return res;}
 
+function truckEmoji(type){
+  const t=(type||'').toLowerCase();
+  if(t.includes('12')) return '🚚';
+  if(t.includes('10')) return '🚚';
+  if(t.includes('4'))  return '🚐';
+  return '🚛';
+}
+
 async function loadData(){
   try{
     const sv=localStorage.getItem('tms_q');if(sv)queue=JSON.parse(sv);
-    const[bd,pd,rd]=await Promise.all([fetchSheet('Bill DS'),fetchSheet('Product'),fetchSheet('Route')]);
+    const[bd,pd,rd,cd]=await Promise.all([
+      fetchSheet('Bill DS'),fetchSheet('Product'),fetchSheet('Route'),fetchSheet('Car')
+    ]);
+
+    // ── CAR SHEET → สร้าง TRUCKS จาก Sheet จริง ──
+    TRUCKS.length=0;
+    if(cd.length>0){
+      const cc2=Object.keys(cd[0]);
+      console.log('Car columns:',cc2);
+      // หาคอลัมน์ที่เกี่ยวข้อง
+      const drvCol =cc2.find(c=>/ผู้ดูแล|ขับขี่|คนขับ|driver/i.test(c))||cc2[0]||'';
+      const plateCol=cc2.find(c=>/ทะเบียน/i.test(c))||'';
+      const typeCol =cc2.find(c=>/ประเภท/i.test(c))||'';
+      const maxWCol =cc2.find(c=>/นน\.บรรทุก|บรรทุก/i.test(c))||'';
+      const wideCol =cc2.find(c=>/^กว้าง$|ก$/i.test(c.trim()))||cc2.find(c=>/กว้าง/i.test(c))||'';
+      const longCol =cc2.find(c=>/^ยาว$|ย$/i.test(c.trim()))||cc2.find(c=>/ยาว/i.test(c))||'';
+      const highCol =cc2.find(c=>/^สูง$|ส$/i.test(c.trim()))||cc2.find(c=>/สูง/i.test(c))||'';
+      console.log('Car cols → drv:'+drvCol+' plate:'+plateCol+' type:'+typeCol+' maxW:'+maxWCol+' w:'+wideCol+' l:'+longCol+' h:'+highCol);
+      cd.forEach((row,i)=>{
+        const plate=(row[plateCol]||'').trim();if(!plate)return;
+        const driver=(row[drvCol]||'').trim();
+        const type  =(row[typeCol]||'').trim();
+        const maxW  =parseFloat((row[maxWCol]||'').replace(/,/g,''))||0;
+        const wide  =parseFloat(row[wideCol]||0);  // หน่วย m
+        const lon   =parseFloat(row[longCol]||0);
+        const high  =parseFloat(row[highCol]||0);
+        // ถ้าหน่วยเป็น cm (ค่า > 10) ให้หาร 100
+        const w2=wide>10?wide/100:wide;
+        const l2=lon >10?lon /100:lon;
+        const h2=high>10?high/100:high;
+        const maxV=parseFloat((w2*l2*h2).toFixed(3));
+        TRUCKS.push({id:i+1,driver,plate,type,maxW,maxV,e:truckEmoji(type)});
+      });
+      console.log('Loaded',TRUCKS.length,'trucks');
+    }
+
+    // ── PRODUCT SHEET ──
     products={};
-    // ตรวจชื่อคอลัมน์จริงจาก Sheet
     if(pd.length>0){
       const cols=Object.keys(pd[0]);
-      console.log('Product columns:', cols);
-      const volCol=cols.find(c=>/ปริมาตร/i.test(c))||'';
-      const wCol=cols.find(c=>/นน|น้ำหนัก/i.test(c))||'';
-      const nameCol=cols.find(c=>/ชื่อสินค้า|SKU_NAME|ชื่อ/i.test(c))||cols[0]||'';
-      console.log('Using: name='+nameCol+' weight='+wCol+' vol='+volCol);
+      const volCol =cols.find(c=>/ปริมาตร/i.test(c))||'';
+      const wCol   =cols.find(c=>/นน|น้ำหนัก/i.test(c))||'';
+      const nameCol=cols.find(c=>/ชื่อสินค้า|SKU_NAME/i.test(c))||cols[0]||'';
+      console.log('Product → name:'+nameCol+' wt:'+wCol+' vol:'+volCol);
       pd.forEach(p=>{
         const n=p[nameCol]||'';
         const w=parseFloat(p[wCol]||0);
-        // ปริมาตรอาจเป็นลิตรหรือ m³ — ถ้า > 100 ถือว่าเป็นลิตรให้หาร 1000
+        // ปริมาตร EA อยู่ในหน่วยลิตร → แปลงเป็น m³
         const rawV=parseFloat(p[volCol]||0);
-        const v=rawV>100?rawV/1000:rawV;
+        const v=rawV/1000;
         if(n)products[n]={w,v};
       });
     }
+
+    // ── ROUTE SHEET ──
     routeMap={};
-    rd.forEach(r=>{const c=r['รหัสร้านค้า']||r['AR_CODE']||'';const route=r['ชื่อสายจด']||r['สาย']||'';const days=r['วันส่ง']||'';if(c)routeMap[c]={route,days};});
+    rd.forEach(r=>{
+      const c=r['รหัสร้านค้า']||r['AR_CODE']||'';
+      const route=r['ชื่อสายจด']||r['สาย']||'';
+      const days=r['วันส่ง']||'';
+      if(c)routeMap[c]={route,days};
+    });
+
+    // ── BILL DS SHEET ──
     billMap={};
     bd.forEach(b=>{
-      const ref=b['DI_REF']||'';const arCode=b['AR_CODE']||'',arName=b['AR_NAME']||'';
+      const ref=b['DI_REF']||'';if(!ref)return;
+      const arCode=b['AR_CODE']||'',arName=b['AR_NAME']||'';
       const sku=b['SKU_NAME']||'',ea=parseFloat(b['EA']||0);
       const date=b['DI_DATE']||'',dist=b['ADDB_DISTRICT']||'',prov=b['ADDB_PROVINCE']||'';
-      if(!ref)return;
-      if(!billMap[ref]){const ri=routeMap[arCode]||{};billMap[ref]={ref,arCode,arName,date,dist,prov,route:ri.route||'—',days:ri.days||'—',items:[],totalW:0,totalV:0};}
+      if(!billMap[ref]){
+        const ri=routeMap[arCode]||{};
+        billMap[ref]={ref,arCode,arName,date,dist,prov,route:ri.route||'—',days:ri.days||'—',items:[],totalW:0,totalV:0};
+      }
       const pr=products[sku]||{w:0,v:0};
-      billMap[ref].items.push({sku,ea,w:pr.w*ea,v:pr.v*ea});
-      billMap[ref].totalW+=pr.w*ea;billMap[ref].totalV+=pr.v*ea;
+      // น้ำหนัก = EA × นน.EA  |  ปริมาตร = EA × ปริมาตรEA(ลิตร)/1000
+      billMap[ref].totalW+=pr.w*ea;
+      billMap[ref].totalV+=pr.v*ea;
     });
     bills=Object.values(billMap);
+
     document.getElementById('dateBadge').textContent=new Date().toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'});
     updateStats();renderTruckGrid();renderTsList();populateRouteFilter();renderBillList();
-    toast('โหลดข้อมูลสำเร็จ — '+bills.length+' บิล','success');
+    toast('โหลดสำเร็จ — '+bills.length+' บิล · '+TRUCKS.length+' คัน','success');
   }catch(e){
     console.error(e);toast('โหลดไม่สำเร็จ: '+e.message,'error');
     document.getElementById('liveDot').style.cssText='background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.2)';
