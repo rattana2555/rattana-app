@@ -358,26 +358,22 @@ async function loadData(){
       const plateCol=cc2.find(c=>/ทะเบียน/i.test(c))||'';
       const typeCol =cc2.find(c=>/ประเภท/i.test(c))||'';
       const maxWCol =cc2.find(c=>/นน\.บรรทุก|บรรทุก/i.test(c))||'';
-      const wideCol =cc2.find(c=>/^กว้าง$|ก$/i.test(c.trim()))||cc2.find(c=>/กว้าง/i.test(c))||'';
-      const longCol =cc2.find(c=>/^ยาว$|ย$/i.test(c.trim()))||cc2.find(c=>/ยาว/i.test(c))||'';
-      const highCol =cc2.find(c=>/^สูง$|ส$/i.test(c.trim()))||cc2.find(c=>/สูง/i.test(c))||'';
-      console.log('Car cols → drv:'+drvCol+' plate:'+plateCol+' type:'+typeCol+' maxW:'+maxWCol+' w:'+wideCol+' l:'+longCol+' h:'+highCol);
+      // คอลัมน์ ก*ย*ส = ปริมาตรรถสุทธิ หน่วยลิตร → /1000 = m³
+      const volCol=cc2.find(c=>/ก[^ว].*ย.*ส|กยส/i.test(c))||cc2.find(c=>/ปริมาตร/i.test(c))||'';
+      console.log('Car cols → drv:'+drvCol+' plate:'+plateCol+' type:'+typeCol+' maxW:'+maxWCol+' vol(ก*ย*ส):'+volCol);
+      console.log('Car row[0]:', JSON.stringify(cd[0]));
       cd.forEach((row,i)=>{
         const plate=(row[plateCol]||'').trim();if(!plate)return;
         const driver=(row[drvCol]||'').trim();
         const type  =(row[typeCol]||'').trim();
-        const maxW  =parseFloat((row[maxWCol]||'').replace(/,/g,''))||0;
-        const wide  =parseFloat(row[wideCol]||0);  // หน่วย m
-        const lon   =parseFloat(row[longCol]||0);
-        const high  =parseFloat(row[highCol]||0);
-        // ถ้าหน่วยเป็น cm (ค่า > 10) ให้หาร 100
-        const w2=wide>10?wide/100:wide;
-        const l2=lon >10?lon /100:lon;
-        const h2=high>10?high/100:high;
-        const maxV=parseFloat((w2*l2*h2).toFixed(3));
+        const maxW  =parseFloat((row[maxWCol]||'0').replace(/,/g,''))||0;
+        // ก*ย*ส หน่วยลิตร → หาร 1000 ได้ m³
+        const rawV  =parseFloat((row[volCol]||'0').replace(/,/g,''))||0;
+        const maxV  =parseFloat((rawV/1000).toFixed(3));
+        if(maxW===0&&maxV===0)return; // ข้ามแถวว่าง
         TRUCKS.push({id:i+1,driver,plate,type,maxW,maxV,e:truckEmoji(type)});
       });
-      console.log('Loaded',TRUCKS.length,'trucks');
+      console.log('Loaded',TRUCKS.length,'trucks | sample:',TRUCKS[0]);
     }
 
     // ── PRODUCT SHEET ──
