@@ -12,7 +12,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
   <!-- Babel JSX compiler -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
   <!-- Recharts -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.js"></script>
   <!-- Leaflet map -->
@@ -183,6 +183,13 @@
 
   /* ── Main Init: Sheets → then signal Babel ── */
   window._sheetsReady=false;
+  /* ── Babel error detection ── */
+  window.addEventListener('error', function(e) {
+    if(e.message && (e.message.includes('Babel') || e.message.includes('babel') || e.message.includes('SyntaxError'))) {
+      _setLoad('❌ Babel error — ' + e.message.slice(0,60), 65, 'ลองรีโหลดหน้า');
+    }
+  });
+
   (async function initApp(){
     _setLoad('📊 โหลดข้อมูลจาก Google Sheets...',15,'Bill DS + Route sheets');
     try{
@@ -744,7 +751,7 @@ function Toast({msg,type,onClose}){
 
 /* ─── NAV ─── */
 const NAV=[{k:'dashboard',i:'🏠',l:'แดชบอร์ด'},{k:'queue',i:'🚛',l:'จัดคิวรถ'},{k:'bills',i:'📋',l:'บิลสินค้า'},{k:'routes',i:'🗺️',l:'สายส่ง'},{k:'cars',i:'🚐',l:'ฝูงรถ'}];
-function TopNav({active,onSelect}){
+function TopNav({active,onSelect,onKeyClick=()=>{}}){
   return(
     <div style={{background:'#07101F',position:'sticky',top:0,zIndex:200,boxShadow:'0 1px 4px rgba(0,0,0,.12)'}}>
       <div style={{display:'flex',alignItems:'center',padding:'0 20px',height:52}}>
@@ -763,7 +770,19 @@ function TopNav({active,onSelect}){
               <span style={{fontSize:14}}>{n.i}</span><span>{n.l}</span>
             </button>);})}
         </div>
-        <div style={{marginLeft:'auto',fontSize:10,color:'#4A6280',flexShrink:0}}>W1 • {new Date().toLocaleDateString('th-TH')}</div>
+        <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
+          <span style={{fontSize:10,color:'#4A6280'}}>W1 • {new Date().toLocaleDateString('th-TH')}</span>
+          {window.SHEETS_OK
+            ?<span style={{background:'#EAF3DE',color:'#27500A',border:'1px solid #97C45988',borderRadius:20,padding:'2px 9px',fontSize:10,fontWeight:600}}>📊 สด</span>
+            :<span style={{background:'#FEF6EC',color:'#633806',border:'1px solid #FAC77588',borderRadius:20,padding:'2px 9px',fontSize:10}}>Demo</span>
+          }
+          <button className="btn" onClick={onKeyClick}
+            style={{background:getApiKey()?'#EAF3DE':'#FEF6EC',border:`1px solid ${getApiKey()?'#97C459':'#FAC775'}`,
+              borderRadius:20,padding:'3px 10px',fontSize:11,
+              color:getApiKey()?'#27500A':'#854F0B',cursor:'pointer',fontWeight:600}}>
+            🔑 {getApiKey()?'Key ✓':'ใส่ Key'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1634,6 +1653,7 @@ function App(){
   const [mobile,setMobile]=useState(window.innerWidth<768);
   const [assignments,setAssignments]=useState({});
   const [toasts,setToasts]=useState([]);
+  const [showKeyModal,setShowKeyModal]=useState(false);
 
   useEffect(()=>{
     const s=document.createElement('style');s.textContent=css;document.head.appendChild(s);
@@ -1690,7 +1710,12 @@ function App(){
   const sw=mobile?0:0;
   return(
     <div style={{minHeight:'100vh',background:T.bg,color:'#07101F',fontFamily:"'Sarabun',sans-serif"}}>
-      {!mobile&&<TopNav active={tab} onSelect={setTab}/>}
+      {!mobile&&<TopNav active={tab} onSelect={setTab} onKeyClick={()=>setShowKeyModal(true)}/>}
+      {/* Mobile key button */}
+      {mobile&&!getApiKey()&&<div style={{background:'#FEF6EC',borderBottom:'1px solid #FAC775',padding:'8px 14px',display:'flex',alignItems:'center',justifyContent:'space-between',fontSize:12}}>
+        <span style={{color:'#854F0B'}}>⚠️ ยังไม่มี API Key (สำหรับ AI+บันทึก)</span>
+        <button className="btn" onClick={()=>setShowKeyModal(true)} style={{background:'#C9A84C',color:'#fff',borderRadius:6,padding:'4px 10px',fontSize:11,fontWeight:600}}>🔑 ใส่ Key</button>
+      </div>}
       <main style={{padding:mobile?'13px':'20px 24px',paddingBottom:mobile?86:28,minWidth:0,overflowX:'hidden'}}>
         {tab==='dashboard'&&<Dashboard assignments={assignments}/>}
         {tab==='queue'&&<QueuePlanner assignments={assignments} onAssign={handleAssign} onSaveSheet={handleSaveSheet} addToast={addToast}/>}
@@ -1700,23 +1725,13 @@ function App(){
       </main>
       {mobile&&<BottomNav active={tab} onSelect={setTab}/>}
       {toasts.map(t=><Toast key={t.id} msg={t.msg} type={t.type} onClose={()=>rmToast(t.id)}/>)}
+      {showKeyModal&&<ApiKeyModal onDone={k=>{setShowKeyModal(false);if(k)addToast('✅ บันทึก API Key แล้ว','ok');}}/>}
     </div>
   );
 }
 
 
-    /* ── Wrap App to add API key modal + data source badge ── */
-    const _OrigApp = App;
-    function App() {
-      const [showKey, setShowKey] = useState(!getApiKey());
-      const [usingLive] = useState(window.SHEETS_OK && window.LIVE_BILLS?.length > 0);
-      return (
-        <>
-          <_OrigApp/>
-          {showKey && <ApiKeyModal onDone={k=>{if(k){alert('✅ บันทึก API Key แล้ว');}setShowKey(false);}}/>}
-        </>
-      );
-    }
+    /* ── API Key modal integrated into App directly ── */
 
     /* ── Mount ── */
     window._startApp = function() {
