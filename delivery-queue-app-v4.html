@@ -859,10 +859,11 @@ function doAutoAssign(){
       const key=(b.routeCode||b.route||'').trim()||`GEO_${Math.round(bearing(b)/30)*30}`;
       if(!routeGroups[key])routeGroups[key]={
         key, bills:[], routeCode:b.routeCode||b.route||'', days:b.days||'',
-        avgBearing:0, totalW:0
+        avgBearing:0, totalW:0, totalAmt:0, avgAmt:0
       };
       routeGroups[key].bills.push(b);
       routeGroups[key].totalW+=b.totalW;
+      routeGroups[key].totalAmt+=(b.totalAmt||0);
     });
 
     // คำนวณ bearing เฉลี่ยของแต่ละ route group
@@ -872,12 +873,32 @@ function doAutoAssign(){
       g.avgDist=bs.length?bs.reduce((s,b)=>s+dist(b),0)/bs.length:0;
     });
 
-    // เรียง route groups: ไกลก่อน (route ไกล → รถใหญ่), จากนั้นเรียงตาม bearing
-    const groups=Object.values(routeGroups).sort((a,b)=>b.avgDist-a.avgDist||a.avgBearing-b.avgBearing);
+    // ── คำนวณสถิติ route group ──
+    Object.values(routeGroups).forEach(g=>{
+      g.totalAmt=g.bills.reduce((s,b)=>s+b.totalAmt,0);
+      g.avgAmt=g.bills.length?g.totalAmt/g.bills.length:0;
+    });
+
+    // เรียง route groups:
+    // 1. ยอดขายเยอะก่อน (totalAmt สูง → จัดก่อน ได้รถดี)
+    // 2. ถ้ายอดเท่ากัน เรียงตามระยะทาง (ไกล → รถใหญ่)
+    const groups=Object.values(routeGroups).sort((a,b)=>b.totalAmt-a.totalAmt||b.avgDist-a.avgDist);
+
+    // คำนวณ threshold ยอดขาย: ใช้ค่ามัธยฐาน (median) ของ avgAmt เป็น cutoff
+    const sortedAmts=Object.values(routeGroups).map(g=>g.avgAmt).sort((a,b)=>a-b);
+    const AMT_HIGH=sortedAmts[Math.floor(sortedAmts.length*0.6)]||30000; // top 40% = HIGH
+    const AMT_LOW =sortedAmts[Math.floor(sortedAmts.length*0.3)]||5000;  // bottom 30% = LOW
+
+    // รถใหญ่ = 6ล้อขึ้นไป, รถเล็ก = 4ล้อจัมโบ้+กระบะ
+    const bigTruckTypes=new Set(['12 ล้อ','10 ล้อ','6 ล้อ']);
+    const smallTruckTypes=new Set(['4 ล้อจัมโบ้','กระบะ']);
 
     groups.forEach(grp=>{
-      // เรียงบิลใน group ตามระยะทาง (ใกล้→ไกล)
-      const sortedBills=[...grp.bills].sort((a,b)=>dist(a)-dist(b));
+      const isHighValue=grp.avgAmt>=AMT_HIGH;
+      const isLowValue =grp.avgAmt<=AMT_LOW;
+
+      // เรียงบิลใน group: ยอดขายสูงก่อน (เพื่อให้ร้านใหญ่ได้ขึ้นก่อน ไม่ตกรถ)
+      const sortedBills=[...grp.bills].sort((a,b)=>b.totalAmt-a.totalAmt||dist(a)-dist(b));
 
       sortedBills.forEach(b=>{
         if(assigned.has(b.ref))return;
@@ -915,15 +936,27 @@ function doAutoAssign(){
           }
         }
 
-        // 3. fallback: รถที่ว่างที่สุดและรับได้
+        // 3. fallback: เลือกรถตาม ยอดขาย + ระยะทาง
         if(!bestTruck){
-          // สำหรับ route ไกลมาก (>80km) ให้ใช้รถใหญ่ก่อน
-          const filtered=trucks.filter(t=>{
+          let filtered=trucks.filter(t=>{
             if(!fits(t,b))return false;
-            if(bDist>80&&t.type==='กระบะ')return false;
+            if(bDist>80&&t.type==='กระบะ')return false; // ไม่ใช้กระบะไกล
+            // ✅ ร้านยอดขายสูง → รถใหญ่ก่อน (6ล้อขึ้นไป)
+            if(isHighValue&&smallTruckTypes.has(t.type)){
+              // ยอมใช้รถเล็กก็ต่อเมื่อรถใหญ่เต็มทุกคันแล้ว
+              const anyBig=trucks.filter(x=>bigTruckTypes.has(x.type)&&fits(x,b));
+              if(anyBig.length>0)return false;
+            }
+            // ✅ ร้านยอดขายน้อย → รถเล็กก่อน (4ล้อ/กระบะ)
+            if(isLowValue&&bigTruckTypes.has(t.type)){
+              const anySmall=trucks.filter(x=>smallTruckTypes.has(x.type)&&fits(x,b));
+              if(anySmall.length>0)return false;
+            }
             return true;
           });
-          // เลือกรถที่บรรทุกน้อยสุด (% เต็ม)
+          // ถ้าไม่มีรถที่ตรงเงื่อนไข ใช้รถใดก็ได้ที่รับได้
+          if(!filtered.length) filtered=trucks.filter(t=>fits(t,b));
+          // เลือกรถที่บรรทุกน้อยสุด (%)
           bestTruck=filtered.sort((a,b_)=>{
             const pA=a.maxW>0?loads[a.plate].w/a.maxW:1;
             const pB=b_.maxW>0?loads[b_.plate].w/b_.maxW:1;
