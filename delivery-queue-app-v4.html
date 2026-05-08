@@ -10,6 +10,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
   <!-- Recharts -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.js"></script>
+  <!-- Babel (JSX transpiler) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js" defer></script>
   <!-- Leaflet (แผนที่) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -182,6 +184,7 @@
 
   // ── Main init: fetch data → then load Babel → then React renders ──
   (async function initApp() {
+    window._sheetsReady = false;
     _setLoad('📊 กำลังโหลดข้อมูลจาก Google Sheets...', 15, 'Bill DS + Route sheets');
     try {
       const data = await _loadSheetsData();
@@ -194,24 +197,21 @@
       console.warn('Sheets load failed:', e);
     }
 
-    _setLoad(
-      (window.SHEETS_OK ? '✅ ข้อมูลพร้อม — ' : '') + '⚙️ กำลังโหลด Babel...',
-      65, 'JSX compiler (~3MB)'
-    );
-    try {
-      await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js');
-    } catch(e) {
-      _setLoad('❌ โหลด Babel ไม่ได้ — ตรวจสอบอินเทอร์เน็ต', 65, '');
-      return;
+    // Signal Babel script to mount the app
+    _setLoad('⚙️ กำลังเตรียมแอป...', 80, 'รอ Babel compile JSX...');
+    window._sheetsReady = true;
+    if (window._startApp) {
+      window._startApp(); // Babel already compiled, mount now
     }
-
-    _setLoad('⚙️ กำลังเตรียมแอป...', 85, 'กำลัง compile JSX...');
-    // Babel will auto-compile type="text/babel" scripts when loaded
+    // else: Babel will call _startApp when ready
   })();
   </script>
   <!-- ═══ End Sheets Loader ═══ -->
 
   <script type="text/babel" data-presets="react">
+    // ── Called by data loader OR by Babel (whichever finishes last) ──
+    window._startApp = function() {
+
     /* ── Globals จาก CDN ── */
     const { useState, useMemo, useCallback, useEffect, useRef } = React;
     const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } = Recharts;
@@ -1730,6 +1730,13 @@ function App(){
 
     /* ── Mount ── */
     ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+    }; // end _startApp
+
+    // If sheets data already ready → mount immediately; else wait
+    if (window._sheetsReady) {
+      window._startApp();
+    }
+    // Otherwise data loader will call window._startApp() when done
   </script>
 </body>
 </html>
