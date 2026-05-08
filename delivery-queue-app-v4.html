@@ -145,6 +145,8 @@ select,input{font-family:'Sarabun',sans-serif;font-size:15px!important}
 
 /* ── Routes ── */
 .route-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+#routeMap{border:none;outline:none}
+.leaflet-popup-content{font-family:'Sarabun',sans-serif;font-size:12px}
 
 /* ── Print ── */
 @media print{.topnav,.bottom-nav,#toasts,.no-print{display:none!important}body{background:#fff}}
@@ -211,6 +213,7 @@ select,input{font-family:'Sarabun',sans-serif;font-size:15px!important}
       </div>
       <div class="queue-btns no-print">
         <button class="btn btn-auto" id="btn-auto" onclick="doAutoAssign()">⚡ จัดอัตโนมัติ</button>
+        <button class="btn" onclick="doClearAll()" style="background:#FEF2F2;border:1.5px solid #FCA5A5;color:#C62828">🗑 ล้างทั้งหมด</button>
         <button class="btn btn-ai" id="btn-ai" onclick="doAI()">✨ AI แนะนำ</button>
         <button class="btn btn-save" id="btn-save" onclick="doSave()">💾 Keepdata</button>
       </div>
@@ -303,7 +306,27 @@ select,input{font-family:'Sarabun',sans-serif;font-size:15px!important}
 
   <!-- ROUTES -->
   <div class="tab-panel fi" id="tab-routes">
-    <h1 style="font-family:Kanit;font-size:20px;font-weight:600;color:#07101F;margin-bottom:14px">🗺️ สายส่ง</h1>
+    <h1 style="font-family:Kanit;font-size:20px;font-weight:600;color:#07101F;margin-bottom:14px">🗺️ สายส่งและโลเคชัน</h1>
+
+    <!-- Truck filter -->
+    <div style="background:#fff;border:1px solid #E0E5ED;border-radius:12px;padding:12px 16px;margin-bottom:14px">
+      <div style="font-size:11px;color:#6B7A90;margin-bottom:10px;font-weight:500">🚛 เลือกดูโลเคชันรายคัน</div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center" id="mapTruckFilter">
+        <button onclick="filterMap(null,this)"
+          style="padding:6px 14px;border-radius:8px;border:2px solid #07101F;background:#07101F;color:#E4C46E;font-size:12px;font-weight:700;cursor:pointer">
+          🌐 ทั้งหมด
+        </button>
+      </div>
+    </div>
+
+    <!-- Map -->
+    <div style="background:#fff;border:1px solid #E0E5ED;border-radius:12px;overflow:hidden;margin-bottom:14px">
+      <div style="padding:10px 16px;border-bottom:1px solid #E0E5ED;background:#F5F7FA;font-family:Kanit;font-size:13px;font-weight:600;color:#7D6428" id="mapTitle">🗺️ แผนที่โลเคชันทั้งหมด</div>
+      <div id="routeMap" style="height:380px;width:100%"></div>
+    </div>
+
+    <!-- Route cards -->
+    <div style="font-family:Kanit;font-size:13px;font-weight:600;color:#7D6428;margin-bottom:10px">📋 รายการตามสาย</div>
     <div id="routeCards" class="route-cards"></div>
   </div>
 
@@ -698,10 +721,11 @@ function selectTruck(plate){
 function handleBillClick(ref){
   if(selPlate){
     if(queue[ref]===selPlate){
-      delete queue[ref];showToast('ยกเลิกคิวแล้ว','warn');
-    } else {
-      queue[ref]=selPlate;
+      // ไม่ยกเลิกอัตโนมัติ — ใช้ปุ่ม ✕ บนการ์ดแทน
+      showToast('บิลนี้อยู่บนรถ '+selPlate+' แล้ว — กด 🗑 ล้างทั้งคัน เพื่อยกเลิก','warn');
+      return;
     }
+    queue[ref]=selPlate;
     saveQ();renderAll();
   } else {
     toggleSel(ref);
@@ -772,55 +796,107 @@ function doClearTruck(){
 // ══════════════════════════════════════════
 // AUTO-ASSIGN
 // ══════════════════════════════════════════
+function doClearAll(){
+  if(!Object.keys(queue).length){showToast('ยังไม่มีข้อมูลการจัด','warn');return;}
+  if(!confirm('ล้างการจัดรถทั้งหมด?'))return;
+  queue={};selPlate=null;selRefs.clear();
+  saveQ();renderAll();
+  showToast('🗑 ล้างข้อมูลทั้งหมดแล้ว','warn');
+}
+
 function doAutoAssign(){
   const btn=document.getElementById('btn-auto');
   btn.disabled=true;btn.textContent='⏳ กำลังจัด...';
   setTimeout(()=>{
-    // Nearest-neighbour
     const newQ={};
     const loads={};
     TRUCKS.forEach(t=>{loads[t.plate]={w:0,v:0};});
-    const sorted=[...bills].sort((a,b)=>dist(a)-dist(b));
     const assigned=new Set();
+    const routeTruck={};  // routeKey → plate (รถที่รับผิดชอบ route นั้น)
 
-    // Priority: 6ล้อ → 4ล้อจัมโบ้ → 12ล้อ
+    // Priority: 6ล้อ → 4ล้อจัมโบ้ → 12ล้อ, ใหญ่ก่อน
     const priority={'6 ล้อ':1,'4 ล้อจัมโบ้':2,'12 ล้อ':3};
     const trucks=[...TRUCKS].sort((a,b)=>(priority[a.type]||9)-(priority[b.type]||9)||b.maxW-a.maxW);
 
-    trucks.forEach(t=>{
-      const is12=t.type==='12 ล้อ';
-      let improved=true;
-      while(improved){
-        improved=false;
-        const ld=loads[t.plate];
-        const cands=sorted
-          .filter(b=>!assigned.has(b.ref))
-          .filter(b=>(ld.w+b.totalW)<=t.maxW)
-          .filter(b=>t.maxV<=0||(ld.v+b.totalV)<=t.maxV)
-          .filter(b=>!is12||dist(b)>=60)
-          .sort((a,b)=>dist(a)-dist(b));
-        if(!cands.length)break;
-        const nearest=cands[0];
-        const alreadyOn=Object.values(newQ).filter(p=>p===t.plate).length;
-        if(alreadyOn>0&&dist(nearest)>80)break;
-        newQ[nearest.ref]=t.plate;
-        assigned.add(nearest.ref);
-        loads[t.plate].w+=nearest.totalW;
-        loads[t.plate].v+=nearest.totalV;
-        improved=true;
-      }
+    function fits(t,b){
+      const ld=loads[t.plate];
+      return (ld.w+b.totalW)<=t.maxW && (t.maxV<=0||(ld.v+b.totalV)<=t.maxV);
+    }
+    function truckBillsCount(plate){return Object.values(newQ).filter(p=>p===plate).length;}
+
+    // จัดกลุ่ม route+วัน
+    const routeGroups={};
+    bills.forEach(b=>{
+      const key=(b.routeCode||b.route||'__').trim()+'|'+(b.days||'').trim();
+      if(!routeGroups[key])routeGroups[key]={key,bills:[],routeCode:b.routeCode||b.route||'',days:b.days||''};
+      routeGroups[key].bills.push(b);
     });
 
-    // Overflow
-    sorted.filter(b=>!assigned.has(b.ref)).forEach(b=>{
-      const t=trucks.find(t=>(loads[t.plate].w+b.totalW)<=t.maxW&&(t.maxV<=0||(loads[t.plate].v+b.totalV)<=t.maxV));
+    // เรียงกลุ่ม: มีวันส่งก่อน, จากนั้นเรียงตามน้ำหนักรวม (เยอะสุดก่อน)
+    const groups=Object.values(routeGroups).sort((a,b)=>{
+      const hasDayA=a.days?1:0, hasDayB=b.days?1:0;
+      if(hasDayA!==hasDayB)return hasDayB-hasDayA;
+      const wa=a.bills.reduce((s,x)=>s+x.totalW,0);
+      const wb=b.bills.reduce((s,x)=>s+x.totalW,0);
+      return wb-wa;
+    });
+
+    groups.forEach(grp=>{
+      const sortedBills=[...grp.bills].sort((a,b)=>dist(a)-dist(b));
+      sortedBills.forEach(b=>{
+        if(assigned.has(b.ref))return;
+        let bestTruck=null;
+
+        // 1. ถ้า route นี้มีรถที่รับอยู่แล้ว ใช้รถเดิม
+        if(routeTruck[grp.key]){
+          const t=trucks.find(x=>x.plate===routeTruck[grp.key]);
+          if(t&&fits(t,b))bestTruck=t;
+        }
+
+        // 2. หารถที่มี bill วันเดียวกัน / route เดียวกันอยู่แล้ว
+        if(!bestTruck&&(grp.days||grp.routeCode)){
+          bestTruck=trucks.find(t=>{
+            if(!fits(t,b))return false;
+            if(t.type==='12 ล้อ'&&dist(b)<60&&truckBillsCount(t.plate)>0)return false;
+            const onTruck=Object.entries(newQ).filter(([,p])=>p===t.plate).map(([r])=>billMap[r]).filter(Boolean);
+            return onTruck.some(x=>
+              (grp.days&&x.days===grp.days) ||
+              (grp.routeCode&&(x.routeCode||x.route)===grp.routeCode)
+            );
+          });
+        }
+
+        // 3. fallback: รถที่ว่างและรับน้ำหนักได้
+        if(!bestTruck){
+          bestTruck=trucks.find(t=>{
+            if(!fits(t,b))return false;
+            if(t.type==='12 ล้อ'&&dist(b)<60&&truckBillsCount(t.plate)>0)return false;
+            return true;
+          });
+        }
+
+        if(bestTruck){
+          newQ[b.ref]=bestTruck.plate;
+          assigned.add(b.ref);
+          loads[bestTruck.plate].w+=b.totalW;
+          loads[bestTruck.plate].v+=b.totalV;
+          if(!routeTruck[grp.key])routeTruck[grp.key]=bestTruck.plate;
+        }
+      });
+    });
+
+    // Overflow — บิลที่ยังไม่ได้จัด
+    bills.filter(b=>!assigned.has(b.ref)).forEach(b=>{
+      const t=trucks.find(t=>fits(t,b));
       if(t){newQ[b.ref]=t.plate;loads[t.plate].w+=b.totalW;loads[t.plate].v+=b.totalV;}
     });
 
-    queue={...newQ};
+    queue={...newQ};selPlate=null;
     saveQ();renderAll();
     btn.disabled=false;btn.innerHTML='⚡ จัดอัตโนมัติ';
-    showToast(`✅ จัดอัตโนมัติสำเร็จ — ${Object.keys(newQ).length} บิล`,'ok');
+    const cnt=Object.keys(newQ).length;
+    const routeCount=new Set(Object.values(routeTruck)).size;
+    showToast(`✅ จัดอัตโนมัติสำเร็จ ${cnt} บิล — ${routeCount} รูท`,'ok');
   },400);
 }
 
@@ -978,16 +1054,158 @@ function assignBill(ref,dd){
 }
 
 // ══════════════════════════════════════════
-// ROUTES VIEW
+// ROUTES VIEW + LEAFLET MAP
 // ══════════════════════════════════════════
+let leafletMap=null, mapLayers=[], mapFilterPlate=null;
+
+function initMap(){
+  if(leafletMap||!document.getElementById('routeMap'))return;
+  try{
+    leafletMap=L.map('routeMap',{zoomControl:true,scrollWheelZoom:true})
+      .setView([HQ.lat,HQ.lng],11);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
+      maxZoom:19,
+      attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>'
+    }).addTo(leafletMap);
+    setTimeout(()=>leafletMap.invalidateSize(),100);
+  }catch(e){console.warn('Map init error',e);}
+}
+
+function makePinIcon(col,label,size,opacity){
+  const s=size||26,tail=s*0.55;
+  return L.divIcon({
+    html:`<div style="filter:drop-shadow(0 3px 5px rgba(0,0,0,.3));opacity:${opacity||1}">
+      <div style="width:${s}px;height:${s}px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+        background:${col};border:2.5px solid white;position:relative">
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(45deg);
+          color:white;font-weight:700;font-size:${Math.round(s*.44)}px;font-family:'Sarabun',sans-serif;
+          text-shadow:0 1px 2px rgba(0,0,0,.4)">${label}</div>
+      </div>
+    </div>`,
+    className:'',
+    iconSize:[s,s+tail],iconAnchor:[s/2,s+tail],popupAnchor:[0,-(s+tail+2)]
+  });
+}
+
+function updateMap(filterPlate){
+  if(!leafletMap)return;
+  mapLayers.forEach(l=>{try{leafletMap.removeLayer(l);}catch(e){}});
+  mapLayers=[];
+
+  // Build stop order per truck
+  const stopNums={};
+  if(filterPlate){
+    [...bills].filter(b=>queue[b.ref]===filterPlate)
+      .sort((a,b)=>dist(a)-dist(b))
+      .forEach((b,i)=>{stopNums[b.ref]=i+1;});
+  }
+
+  // Route lines
+  const truckStops={};
+  TRUCKS.forEach(t=>{
+    if(filterPlate&&t.plate!==filterPlate)return;
+    const stops=bills.filter(b=>queue[b.ref]===t.plate&&b.lat&&b.lng)
+      .sort((a,b)=>dist(a)-dist(b));
+    if(stops.length){truckStops[t.plate]=stops;}
+  });
+  Object.entries(truckStops).forEach(([plate,stops])=>{
+    const col=getTruckCol(plate);
+    const pts=[[HQ.lat,HQ.lng],...stops.map(b=>[b.lat,b.lng])];
+    const line=L.polyline(pts,{color:col,weight:4,opacity:.8,dashArray:'8 5',lineJoin:'round'}).addTo(leafletMap);
+    mapLayers.push(line);
+  });
+
+  // Bill markers
+  bills.filter(b=>b.lat&&b.lng).forEach(b=>{
+    const plate=queue[b.ref];
+    const isDim=filterPlate&&plate!==filterPlate;
+    const col=plate?getTruckCol(plate):'#9BAAB8';
+    const truck=TRUCKS.find(t=>t.plate===plate);
+    const num=stopNums[b.ref];
+    const size=num?30:(plate?26:22);
+    const label=num?String(num):(plate?'·':'?');
+    const icon=makePinIcon(col,label,size,isDim?.2:1);
+    const d=dist(b);
+    const popup=`<div style="min-width:180px">
+      <b style="font-size:13px;color:#07101F">${b.arName}</b><br/>
+      <span style="color:#6B7A90;font-size:11px">📍 ${b.district}, ${b.province}</span><br/>
+      <span style="color:#1A5FA5;font-size:11px">ห่าง HQ: <b>${d.toFixed(1)} กม.</b></span><br/>
+      <span style="font-size:11px;color:#444">⚖ ${fmtKg(b.totalW)}</span><br/>
+      <div style="margin-top:4px;padding:3px 8px;border-radius:6px;background:${plate?col+'18':'#F5F7FA'};color:${plate?col:'#9BAAB8'};font-weight:600;font-size:11px">
+        ${plate?`🚛 ${plate} — ${truck?.nick||''}`:'⏳ รอจัดรถ'}
+      </div>
+      ${num?`<div style="color:#C9A84C;font-weight:700;font-size:11px;margin-top:3px">🚩 จุดที่ ${num}</div>`:''}
+      <div style="margin-top:4px"><a href="https://www.google.com/maps?q=${b.lat},${b.lng}" target="_blank" style="color:#1A5FA5;font-size:10px;text-decoration:none">🔗 เปิด Google Maps</a></div>
+    </div>`;
+    const marker=L.marker([b.lat,b.lng],{icon}).bindPopup(popup,{maxWidth:240}).addTo(leafletMap);
+    mapLayers.push(marker);
+  });
+
+  // HQ marker
+  const hqIcon=L.divIcon({
+    html:`<div style="filter:drop-shadow(0 4px 8px rgba(0,0,0,.3))">
+      <div style="width:38px;height:38px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#C9A84C;border:3px solid white">
+        <div style="transform:rotate(45deg);text-align:center;line-height:32px;font-size:17px;color:white">★</div>
+      </div>
+    </div>`,className:'',iconSize:[38,57],iconAnchor:[19,57],popupAnchor:[0,-57]
+  });
+  const hqM=L.marker([HQ.lat,HQ.lng],{icon:hqIcon,zIndexOffset:1000})
+    .bindPopup('<b style="color:#C9A84C">★ HQ รัตนไพบูลย์ กรุ๊ป</b><br/><span style="font-size:11px;color:#6B7A90">สมุทรสงคราม</span>').addTo(leafletMap);
+  mapLayers.push(hqM);
+
+  // Auto-fit
+  const pts=bills.filter(b=>b.lat&&b.lng&&(!filterPlate||queue[b.ref]===filterPlate));
+  if(pts.length){
+    try{leafletMap.fitBounds(L.latLngBounds([[HQ.lat,HQ.lng],...pts.map(b=>[b.lat,b.lng])]),{padding:[36,36],maxZoom:13});}catch(e){}
+  }
+}
+
+function filterMap(plate,btn){
+  mapFilterPlate=plate;
+  document.querySelectorAll('#mapTruckFilter button').forEach(b=>b.style.background=b.style.borderColor=plate?'transparent':'#07101F');
+  if(btn){btn.style.background=plate?getTruckCol(plate):'#07101F';btn.style.borderColor=plate?getTruckCol(plate):'#07101F';}
+  document.getElementById('mapTitle').textContent=plate
+    ?`🗺️ เส้นทาง ${plate} (${TRUCKS.find(t=>t.plate===plate)?.nick})`
+    :'🗺️ แผนที่โลเคชันทั้งหมด';
+  updateMap(plate);
+}
+
 function renderRoutesView(){
+  // Build truck filter buttons
+  const wrap=document.getElementById('mapTruckFilter');
+  if(wrap){
+    const trucksWithBills=TRUCKS.filter(t=>bills.some(b=>queue[b.ref]===t.plate));
+    wrap.innerHTML=`<button onclick="filterMap(null,this)"
+        style="padding:6px 14px;border-radius:8px;border:2px solid #07101F;background:#07101F;color:#E4C46E;font-size:12px;font-weight:700;cursor:pointer">
+        🌐 ทั้งหมด
+      </button>`+
+      trucksWithBills.map(t=>{
+        const col=getTruckCol(t.plate);
+        const cnt=bills.filter(b=>queue[b.ref]===t.plate).length;
+        const isSel=mapFilterPlate===t.plate;
+        return`<button onclick="filterMap('${t.plate}',this)"
+          style="padding:6px 12px;border-radius:8px;border:2px solid ${isSel?col:'#E0E5ED'};
+            background:${isSel?col:'#fff'};color:${isSel?'#fff':'#07101F'};
+            font-size:12px;font-weight:${isSel?700:400};cursor:pointer;display:flex;align-items:center;gap:6px">
+          <span style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>
+          ${t.plate} <span style="color:${isSel?'rgba(255,255,255,.75)':'#6B7A90'};font-size:11px">${t.nick} ${cnt}บิล</span>
+        </button>`;
+      }).join('');
+  }
+
+  // Init and update map
+  if(document.getElementById('tab-routes').classList.contains('active')){
+    initMap();
+    updateMap(mapFilterPlate);
+  }
+
+  // Route cards
   const routes={};
   bills.forEach(b=>{
     const key=b.routeCode||b.route||'—';
     if(!routes[key])routes[key]={code:key,name:b.route||key,days:b.days||'',bills:[]};
     routes[key].bills.push(b);
   });
-
   document.getElementById('routeCards').innerHTML=
     Object.values(routes).filter(r=>r.bills.length>0)
     .sort((a,b)=>b.bills.length-a.bills.length)
@@ -1073,19 +1291,20 @@ function renderCarsView(){
 // ══════════════════════════════════════════
 let currentTab='queue';
 function switchTab(id,el,bnav){
-  // Update panels
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
-  // Update top nav
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   if(el)el.classList.add('active');
-  // Update bottom nav
   document.querySelectorAll('.bnav-item').forEach(b=>b.classList.remove('active'));
-  const map={dashboard:'d',queue:'q',bills:'b',routes:'r',cars:'c'};
   const bnavItems=document.querySelectorAll('.bnav-item');
   const idx={dashboard:0,queue:1,bills:2,routes:3,cars:4}[id];
   if(bnavItems[idx])bnavItems[idx].classList.add('active');
   currentTab=id;
+  // Init map when routes tab opens
+  if(id==='routes'){
+    renderRoutesView();
+    setTimeout(()=>{if(leafletMap)leafletMap.invalidateSize();},150);
+  }
 }
 
 function showToast(msg,type='ok'){
