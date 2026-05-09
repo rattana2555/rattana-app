@@ -513,6 +513,14 @@ const TRUCKS = [
 ];
 const TRUCK_COLORS = ['#B45309','#1D4ED8','#15803D','#9333EA','#7C3AED','#BE185D','#0369A1','#92400E','#4338CA','#065F46','#B91C1C','#0E7490','#6D28D9','#047857','#C2410C','#1E40AF','#7E22CE','#0F766E','#B45309','#374151','#6B21A8','#155E75','#92400E','#166534','#1D4ED8','#4B5563'];
 
+// ── รถที่ไม่ให้จัดอัตโนมัติ (รถพ่วงมีหาง) ──
+// แก้รายการนี้ถ้าต้องการเพิ่ม/ลดรถที่ exclude
+const EXCLUDE_AUTO = new Set([
+  '806991',  // ประสงค์ คำคุ้ม    — 10ล้อ รถพ่วง
+  '807482',  // บุญเปรม โสวจันทร์ — 12ล้อ รถพ่วง
+  '808343',  // มานพ ไกรวิจิตร   — 12ล้อ รถพ่วง
+]);
+
 // ── State ──
 let bills=[], billMap={}, products={}, routeMap={};
 let queue={};  // {billRef: plateNumber}
@@ -710,6 +718,7 @@ function renderTruckCards(){
     const col=TRUCK_COLORS[i%TRUCK_COLORS.length];
     const isSel=selPlate===t.plate;
     const effCol=over?'#C62828':pcColor(eff);
+    const isExcluded=EXCLUDE_AUTO.has(t.plate);
     return `<div class="tcard${isSel?' sel':''}${over?' over':''}" onclick="selectTruck('${t.plate}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
         <div>
@@ -718,6 +727,7 @@ function renderTruckCards(){
         </div>
         <div style="text-align:right">
           ${over?'<div style="font-size:9px;color:#C62828;font-weight:700">⚠ เกิน</div>':''}
+          ${isExcluded?'<div style="font-size:9px;color:#6B7A90;font-weight:600;background:#F0F2F6;border-radius:4px;padding:0 4px">🔒 Manual</div>':''}
           <div class="tcard-pct" style="color:${effCol}">${eff}%</div>
           <div class="tcard-wt">${fmtKg(ld.w)}</div>
         </div>
@@ -1117,13 +1127,33 @@ function confirmAutoAssign(){
 
     const assigned=new Set(), routeTruck={};
     const priority={'12 ล้อ':1,'10 ล้อ':2,'6 ล้อ':3,'4 ล้อจัมโบ้':4,'กระบะ':5};
-    const trucks=[...TRUCKS].filter(t=>t.maxW>0).sort((a,b)=>(priority[a.type]||9)-(priority[b.type]||9)||b.maxW-a.maxW);
+    // ── กรองรถพ่วง (EXCLUDE_AUTO) ออกจาก auto-assign ──
+    const trucks=[...TRUCKS]
+      .filter(t=>t.maxW>0 && !EXCLUDE_AUTO.has(t.plate))
+      .sort((a,b)=>(priority[a.type]||9)-(priority[b.type]||9)||b.maxW-a.maxW);
+
+    const medLargeTruckTypes=new Set(['12 ล้อ','10 ล้อ','6 ล้อ']); // เติมก่อน
 
     function fits(t,b){const ld=loads[t.plate];return(ld.w+b.totalW)<=t.maxW&&(t.maxV<=0||(ld.v+b.totalV)<=t.maxV);}
     function bearing(b){
       const lat1=HQ.lat*Math.PI/180,lat2=(b.lat||HQ.lat)*Math.PI/180;
       const dLng=((b.lng||HQ.lng)-HQ.lng)*Math.PI/180;
       return(Math.atan2(Math.sin(dLng)*Math.cos(lat2),Math.cos(lat1)*Math.sin(lat2)-Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLng))*180/Math.PI+360)%360;
+    }
+
+    // ── centroid ของบิลที่อยู่บนรถแล้ว ──
+    function truckCentroid(plate){
+      const on=Object.entries(newQ).filter(([,p])=>p===plate).map(([r])=>billMap[r]).filter(x=>x&&x.lat&&x.lng);
+      if(!on.length)return null;
+      return{lat:on.reduce((s,b)=>s+b.lat,0)/on.length, lng:on.reduce((s,b)=>s+b.lng,0)/on.length};
+    }
+    // ── ระยะจากจุด b ไปยัง centroid ของรถ (กม.) ──
+    const MAX_CENTROID_DIST=35; // กม. — ถ้าไกลกว่านี้ถือว่าข้ามแถบ
+    function farFromCentroid(plate,b){
+      if(!b.lat||!b.lng)return false;
+      const c=truckCentroid(plate);
+      if(!c)return false;
+      return haversine(c.lat,c.lng,b.lat,b.lng)>MAX_CENTROID_DIST;
     }
 
     const routeGroups={};
@@ -1146,24 +1176,29 @@ function confirmAutoAssign(){
     const bigT=new Set(['12 ล้อ','10 ล้อ','6 ล้อ']),smallT=new Set(['4 ล้อจัมโบ้','กระบะ']);
 
     groups.forEach(grp=>{
-      const isHi=grp.avgAmt>=AMT_HIGH, isLo=grp.avgAmt<=AMT_LOW;
+      const isHi=grp.avgAmt>=AMT_HIGH;
       [...grp.bills].sort((a,b)=>b.totalAmt-a.totalAmt||distOrInf(a)-distOrInf(b)).forEach(b=>{
         if(assigned.has(b.ref))return;
         let best=null;
         const bDist=distOrInf(b), bBear=bearing(b);
 
         // 1. Route truck ที่จัดไปแล้วในรอบนี้
-        if(routeTruck[grp.key]){const t=trucks.find(x=>x.plate===routeTruck[grp.key]);if(t&&fits(t,b))best=t;}
+        //    + เพิ่ม centroid check: ถ้าไกลเกิน MAX_CENTROID_DIST ข้ามแถบ → ไม่ใช้รถนั้น
+        if(routeTruck[grp.key]){
+          const t=trucks.find(x=>x.plate===routeTruck[grp.key]);
+          if(t&&fits(t,b)&&!farFromCentroid(t.plate,b))best=t;
+        }
 
-        // 2. Bearing clustering
+        // 2. Bearing clustering + centroid check
         if(!best){
           const cands=trucks.filter(t=>{
             if(!fits(t,b))return false;
+            if(farFromCentroid(t.plate,b))return false; // ← ข้ามแถบ ตัดออก
             const on=Object.entries(newQ).filter(([,p])=>p===t.plate).map(([r])=>billMap[r]).filter(x=>x);
             if(!on.length)return false;
             const tb=on.reduce((s,x)=>s+bearing(x),0)/on.length;
             const bd=Math.abs(((bBear-tb+180)%360)-180);
-            return bd<=45||on.some(x=>(x.routeCode||x.route)===grp.routeCode&&grp.routeCode)||(grp.days&&on.some(x=>x.days===grp.days));
+            return bd<=40||on.some(x=>(x.routeCode||x.route)===grp.routeCode&&grp.routeCode)||(grp.days&&on.some(x=>x.days===grp.days));
           });
           if(cands.length){
             best=cands.sort((a,b_)=>{
@@ -1176,15 +1211,18 @@ function confirmAutoAssign(){
           }
         }
 
-        // 3. Fallback
+        // 3. Fallback — เติม 6/10/12 ล้อก่อนเสมอ
         if(!best){
           let f=trucks.filter(t=>{
             if(!fits(t,b))return false;
             if(bDist>80&&t.type==='กระบะ')return false;
-            if(isHi&&smallT.has(t.type)&&trucks.filter(x=>bigT.has(x.type)&&fits(x,b)).length>0)return false;
-            if(isLo&&bigT.has(t.type)&&trucks.filter(x=>smallT.has(x.type)&&fits(x,b)).length>0)return false;
+            // ยอดสูง → ห้ามรถเล็ก ถ้ายังมีรถใหญ่ว่าง
+            if(isHi&&smallT.has(t.type)&&trucks.filter(x=>medLargeTruckTypes.has(x.type)&&fits(x,b)).length>0)return false;
             return true;
           });
+          // ลอง 6/10/12 ล้อก่อน ถ้ามีและรับได้
+          const medLargeF=f.filter(t=>medLargeTruckTypes.has(t.type));
+          if(medLargeF.length) f=medLargeF;
           if(!f.length)f=trucks.filter(t=>fits(t,b));
           best=f.sort((a,b_)=>(a.maxW>0?loads[a.plate].w/a.maxW:1)-(b_.maxW>0?loads[b_.plate].w/b_.maxW:1))[0];
         }
@@ -1193,7 +1231,7 @@ function confirmAutoAssign(){
       });
     });
 
-    // Overflow
+    // Overflow (บิลที่ยังไม่ถูกจัด)
     tmrBills.filter(b=>!assigned.has(b.ref)).forEach(b=>{
       const t=trucks.filter(t=>fits(t,b)).sort((a,b_)=>loads[a.plate].w/a.maxW-loads[b_.plate].w/b_.maxW)[0];
       if(t){newQ[b.ref]=t.plate;assigned.add(b.ref);loads[t.plate].w+=b.totalW;loads[t.plate].v+=b.totalV;}
