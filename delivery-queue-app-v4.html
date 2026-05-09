@@ -166,6 +166,27 @@ select,input{font-family:'Sarabun',sans-serif;font-size:15px!important}
 <!-- Toasts -->
 <div id="toasts"></div>
 
+<!-- Delivery Date Picker Modal -->
+<div id="deliveryDateOverlay" style="display:none;position:fixed;inset:0;background:rgba(7,16,31,.55);z-index:5000;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:14px;max-width:320px;width:100%;box-shadow:0 8px 30px rgba(0,0,0,.2);overflow:hidden">
+    <div style="background:#07101F;padding:14px 18px;display:flex;align-items:center;justify-content:space-between">
+      <div style="font-family:Kanit;font-size:14px;font-weight:700;color:#E4C46E">📅 วันที่ส่งสินค้า</div>
+      <button onclick="document.getElementById('deliveryDateOverlay').style.display='none'" style="background:none;border:none;color:#9BAAB8;font-size:14px;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+      <div style="font-size:12px;color:#6B7A90">เลือกวันที่จะไปส่งสินค้า (ใช้สำหรับบันทึกลงชีท Keepdata)</div>
+      <input type="date" id="deliveryDateInput"
+        style="border:1.5px solid #E0E5ED;border-radius:8px;padding:10px 12px;font-size:14px;font-family:Sarabun,sans-serif;color:#07101F;width:100%"/>
+      <div style="display:flex;gap:8px">
+        <button onclick="document.getElementById('deliveryDateOverlay').style.display='none'"
+          style="flex:1;border:1.5px solid #E0E5ED;background:#fff;color:#6B7A90;border-radius:8px;padding:9px;font-size:13px;font-weight:600;cursor:pointer">ยกเลิก</button>
+        <button onclick="confirmDeliveryDate()"
+          style="flex:1;background:#07101F;color:#E4C46E;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer">ตกลง</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Day Picker Modal -->
 <div id="dayPickerOverlay" style="display:none;position:fixed;inset:0;background:rgba(7,16,31,.55);z-index:5000;align-items:center;justify-content:center;padding:16px">
   <div style="background:#fff;border-radius:16px;max-width:480px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.25);overflow:hidden">
@@ -311,7 +332,14 @@ select,input{font-family:'Sarabun',sans-serif;font-size:15px!important}
         <button class="btn btn-auto" id="btn-auto" onclick="doAutoAssign()">⚡ จัดอัตโนมัติ</button>
         <button class="btn" onclick="doClearAll()" style="background:#FEF2F2;border:1.5px solid #FCA5A5;color:#C62828">🗑 ล้างทั้งหมด</button>
         <button class="btn btn-ai" id="btn-ai" onclick="doAI()">✨ AI แนะนำ</button>
-        <button class="btn btn-save" id="btn-save" onclick="doSave()">💾 Keepdata</button>
+        <div style="display:flex;gap:0;align-items:stretch">
+          <button class="btn btn-save" id="btn-save" onclick="doSave()" style="border-radius:8px 0 0 8px">💾 Keepdata</button>
+          <button id="btn-delivery-date" onclick="openDeliveryDatePicker()"
+            title="วันที่จะส่งสินค้า — คลิกเพื่อเปลี่ยน"
+            style="background:#0E2030;border:none;border-left:1px solid rgba(255,255,255,.15);color:#7B97B8;padding:7px 10px;font-size:11px;border-radius:0 8px 8px 0;cursor:pointer;white-space:nowrap">
+            📅 —
+          </button>
+        </div>
       </div>
     </div>
 
@@ -1021,7 +1049,7 @@ function pickDay(idx,short,full){
   });
   if(!cnt)return;
 
-  _pickedDay={short,full};
+  _pickedDay={short,full,idx};
 
   // อัปเดต card styles
   for(let i=0;i<7;i++){
@@ -1046,8 +1074,16 @@ function closeDayPicker(){
 
 function confirmAutoAssign(){
   if(!_pickedDay)return;
-  const {short:tmrShort,full:tmrFull}=_pickedDay;
+  const {short:tmrShort,full:tmrFull,idx:tmrIdx}=_pickedDay;
   closeDayPicker();
+
+  // ── คำนวณวันที่จริงของวันที่เลือก ──
+  const today=new Date();
+  let daysAhead=tmrIdx-today.getDay();
+  if(daysAhead<0)daysAhead+=7;
+  const deliveryDateObj=new Date(today);
+  deliveryDateObj.setDate(today.getDate()+daysAhead);
+  setDeliveryDate(deliveryDateObj);
 
   const btn=document.getElementById('btn-auto');
   btn.disabled=true; btn.textContent='⏳ กำลังจัด...';
@@ -1220,11 +1256,49 @@ async function doAI(){
 // SETTINGS
 // ══════════════════════════════════════════
 const KEEPDATA_HEADERS=[
-  'วันที่บิล','เลขบิล','รหัสร้านค้า','ชื่อร้านค้า','จังหวัด','อำเภอ',
+  'วันที่บิล','วันที่ส่ง',                                          // A, B ← วันที่ส่งใหม่
+  'เลขบิล','รหัสร้านค้า','ชื่อร้านค้า','จังหวัด','อำเภอ',
   'มี GPS','Lat','Lng','ห่าง HQ (กม.)','สายส่ง','รหัสสาย','วันส่ง',
   'ทะเบียนรถ','ชื่อเล่น','คนขับ','ประเภทรถ','น้ำหนัก (กก.)','ปริมาตร (m³)',
   'มูลค่า (บาท)','สถานะ','วันที่อัปเดต'
-];
+];  // 23 คอลัมน์
+
+// ── Delivery Date state ──
+let _deliveryDate=''; // "DD/MM/YYYY" เช่น "13/05/2026"
+
+function setDeliveryDate(dateObj){
+  const d=String(dateObj.getDate()).padStart(2,'0');
+  const m=String(dateObj.getMonth()+1).padStart(2,'0');
+  const y=dateObj.getFullYear();
+  _deliveryDate=`${d}/${m}/${y}`;
+  const label=dateObj.toLocaleDateString('th-TH',{day:'numeric',month:'short'});
+  const btn=document.getElementById('btn-delivery-date');
+  if(btn)btn.innerHTML=`📅 ${label}`;
+}
+
+function openDeliveryDatePicker(){
+  const inp=document.getElementById('deliveryDateInput');
+  if(inp){
+    // set input value from _deliveryDate or today
+    if(_deliveryDate){
+      const [d,m,y]=_deliveryDate.split('/');
+      inp.value=`${y}-${m}-${d}`;
+    } else {
+      const t=new Date(); t.setDate(t.getDate()+1);
+      inp.value=t.toISOString().slice(0,10);
+    }
+  }
+  document.getElementById('deliveryDateOverlay').style.display='flex';
+}
+
+function confirmDeliveryDate(){
+  const val=document.getElementById('deliveryDateInput')?.value;
+  if(!val){showToast('กรุณาเลือกวันที่','warn');return;}
+  setDeliveryDate(new Date(val+'T00:00:00'));
+  document.getElementById('deliveryDateOverlay').style.display='none';
+  showToast(`✅ วันที่ส่ง: ${_deliveryDate}`,'ok');
+}
+
 
 function openSettings(){
   const url=localStorage.getItem('scriptUrl')||'';
@@ -1311,6 +1385,11 @@ async function doSave(){
     openSettings();
     return;
   }
+  if(!_deliveryDate){
+    showToast('กรุณาเลือกวันที่ส่งก่อน','warn');
+    openDeliveryDatePicker();
+    return;
+  }
   btn.disabled=true;btn.innerHTML='⏳ กำลังบันทึก...';btn.style.background='#07101F';
   try{
     const now=new Date().toLocaleString('th-TH',{timeZone:'Asia/Bangkok'});
@@ -1321,7 +1400,9 @@ async function doSave(){
       const d=dist(b);
       const hasGPS=!!(b.lat&&b.lng);
       return[
-        b.date, b.ref, b.arCode, b.arName, b.province, b.district,
+        b.date,           // วันที่บิล
+        _deliveryDate,    // วันที่ส่ง ← ใหม่
+        b.ref, b.arCode, b.arName, b.province, b.district,
         hasGPS?'มี GPS':'ไม่มี GPS',
         hasGPS?b.lat.toFixed(6):'',
         hasGPS?b.lng.toFixed(6):'',
@@ -1337,7 +1418,7 @@ async function doSave(){
 
     const r=await fetch(scriptUrl,{
       method:'POST',
-      body:JSON.stringify({action:'save',headers:hdrs,rows})
+      body:JSON.stringify({action:'save', deliveryDate:_deliveryDate, headers:hdrs, rows})
     });
     const result=await r.json();
     if(!result.ok)throw new Error(result.message||'Script ตอบผิดพลาด');
