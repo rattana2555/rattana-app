@@ -406,7 +406,8 @@ function haversine(a,b,c,d){
   const x=Math.sin(dL/2)**2+Math.cos(r(a))*Math.cos(r(c))*Math.sin(dG/2)**2;
   return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 }
-const dist = b => haversine(HQ.lat,HQ.lng,b.lat||0,b.lng||0);
+const dist = b => (b.lat&&b.lng) ? haversine(HQ.lat,HQ.lng,b.lat,b.lng) : null;
+const distOrInf = b => dist(b)??99999;
 
 function truckLoad(plate){
   let w=0,v=0;
@@ -416,7 +417,23 @@ function truckLoad(plate){
 function truckPct(plate,t){const ld=truckLoad(plate);const wp=t.maxW>0?Math.round(ld.w/t.maxW*100):0;const vp=t.maxV>0?Math.round(ld.v/t.maxV*100):0;return {wp,vp,eff:Math.max(wp,vp),over:wp>100||vp>100};}
 function pcColor(p){return p>=90?'#DC3545':p>=70?'#E07B00':'#2E8B57';}
 function assignedSet(){return new Set(Object.values(queue).filter(Boolean));}
-function saveQ(){try{localStorage.setItem(STORE_KEY,JSON.stringify(queue));}catch(e){}}
+let isDirty=false;  // tracks unsaved changes
+function saveQ(){
+  try{localStorage.setItem(STORE_KEY,JSON.stringify(queue));}catch(e){}
+  isDirty=true;
+  updateSyncBadge();
+}
+function updateSyncBadge(){
+  const btn=document.getElementById('btn-save');
+  if(!btn)return;
+  if(isDirty){
+    btn.innerHTML='💾 Keepdata <span style="background:#C9A84C;color:#07101F;border-radius:8px;padding:0 5px;font-size:10px;font-weight:700;margin-left:2px">มีการแก้ไข</span>';
+    btn.style.background='#1A3A5C';
+  } else {
+    btn.innerHTML='💾 Keepdata';
+    btn.style.background='#07101F';
+  }
+}
 function getTruckCol(plate){const i=TRUCKS.findIndex(t=>t.plate===plate);return i>=0?TRUCK_COLORS[i%TRUCK_COLORS.length]:'#9BAAB8';}
 
 // ══════════════════════════════════════════
@@ -525,6 +542,16 @@ async function loadData(){
 
     renderAll();
     showToast(`โหลดสำเร็จ — ${bills.length} บิล`,'ok');
+    isDirty=false;
+    updateSyncBadge();
+
+    // อัปเดตปุ่ม จัดอัตโนมัติ ให้แสดงวันพรุ่งนี้
+    const _TD=['อา','จ','อ','พ','พฤ','ศ','ส'];
+    const _tmr=new Date(); _tmr.setDate(_tmr.getDate()+1);
+    const _tmrLabel=_TD[_tmr.getDay()];
+    const _tmrDate=_tmr.toLocaleDateString('th-TH',{day:'numeric',month:'short'});
+    const _btnAuto=document.getElementById('btn-auto');
+    if(_btnAuto)_btnAuto.innerHTML=`⚡ จัดอัตโนมัติ <span style="font-size:10px;background:#2E7D32;color:#fff;border-radius:6px;padding:1px 6px;margin-left:2px">วัน${_tmrLabel} ${_tmrDate}</span>`;
   }catch(e){
     console.error(e);
     showToast('โหลดไม่สำเร็จ: '+e.message,'err');
@@ -647,7 +674,7 @@ function getFilteredBills(){
     return true;
   });
 
-  if(fSort==='dist') list.sort((a,b)=>dist(a)-dist(b));
+  if(fSort==='dist') list.sort((a,b)=>distOrInf(a)-distOrInf(b));
   else if(fSort==='weight') list.sort((a,b)=>b.totalW-a.totalW);
   else list.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
 
@@ -671,7 +698,7 @@ function renderBillTable(){
     const isSel=selRefs.has(b.ref);
     const isOnActive=selPlate&&plate===selPlate;
     const d=dist(b);
-    const dCls=d<10?'dist-near':d<40?'dist-mid':'dist-far';
+    const dCls=d===null?'':d<10?'dist-near':d<40?'dist-mid':'dist-far';
     const col=plate?getTruckCol(plate):'';
     const rowCls=`bill-row${isOnActive?' on-truck':''}${isSel?' selected':''}`;
     return `<tr class="${rowCls}" onclick="handleBillClick('${b.ref}')">
@@ -679,8 +706,10 @@ function renderBillTable(){
         <input type="checkbox" ${isSel?'checked':''} onchange="toggleSel('${b.ref}',this)" style="cursor:pointer;accent-color:#C9A84C"/>
       </td>
       <td>
-        <div class="${dCls}" style="font-size:12px">${fmtKm(d)}</div>
-        <div style="font-size:9px;color:#A0ABBB">${(b.lat||0).toFixed(3)}, ${(b.lng||0).toFixed(3)}</div>
+        <div class="${dCls}" style="font-size:12px">${d===null?'<span style="color:#A0ABBB;font-size:11px">—</span>':fmtKm(d)}</div>
+        <div style="font-size:9px;color:${b.lat&&b.lng?'#A0ABBB':'#FCA5A5'};font-weight:${b.lat&&b.lng?400:600}">
+          ${b.lat&&b.lng?`${b.lat.toFixed(4)}, ${b.lng.toFixed(4)}`:'⚠ ไม่มี GPS'}
+        </div>
       </td>
       <td>
         <div style="font-weight:600;color:#07101F">${b.arName}</div>
@@ -723,10 +752,20 @@ function renderBillTable(){
 }
 
 function updateQueueSub(){
+  const THAI_DAYS=['อา','จ','อ','พ','พฤ','ศ','ส'];
+  const tmr=new Date(); tmr.setDate(tmr.getDate()+1);
+  const tmrShort=THAI_DAYS[tmr.getDay()];
+  const THAI_DAYS_FULL=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+  const tmrFull=THAI_DAYS_FULL[tmr.getDay()];
   const done=Object.keys(queue).filter(r=>queue[r]).length;
   const pend=bills.length-done;
+  const tmrCnt=bills.filter(b=>{
+    if(!b.days)return false;
+    return b.days.split(/[,\s\/]+/).some(d=>d.trim()===tmrShort||d.trim()===tmrFull||d.trim().startsWith(tmrShort));
+  }).length;
   document.getElementById('q-sub').innerHTML=
-    `<span style="color:#15803D;font-weight:600">${done} จัดแล้ว</span> / <span style="color:#B45309;font-weight:600">${pend} รอจัด</span> <span style="color:#6B7A90">— เรียงตามระยะทางจาก HQ</span>`;
+    `<span style="color:#15803D;font-weight:600">${done} จัดแล้ว</span> / <span style="color:#B45309;font-weight:600">${pend} รอจัด</span>`+
+    (tmrCnt?` — <span style="color:#1A5FA5;font-weight:600">📅 พรุ่งนี้ (วัน${tmrShort}): ${tmrCnt} บิล</span>`:'');
 }
 
 // ══════════════════════════════════════════
@@ -825,16 +864,62 @@ function doClearAll(){
 }
 
 function doAutoAssign(){
+  // ── วันส่งพรุ่งนี้ ──
+  const THAI_DAYS=['อา','จ','อ','พ','พฤ','ศ','ส'];
+  const THAI_DAYS_FULL=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+  const tmr=new Date(); tmr.setDate(tmr.getDate()+1);
+  const tmrIdx=tmr.getDay();
+  const tmrShort=THAI_DAYS[tmrIdx];
+  const tmrFull=THAI_DAYS_FULL[tmrIdx];
+  const tmrDateStr=tmr.toLocaleDateString('th-TH',{day:'numeric',month:'short'});
+
+  // ── กรองบิลที่ต้องส่งพรุ่งนี้ ──
+  // days field อาจเป็น "จ,พ" / "จ พ" / "จันทร์" / "จ/พ"
+  function matchDay(daysStr){
+    if(!daysStr)return false;
+    const parts=daysStr.split(/[,\s\/]+/).map(d=>d.trim()).filter(Boolean);
+    // จับคู่ทั้ง ย่อ (จ) และ เต็ม (จันทร์)
+    return parts.some(p=>p===tmrShort||p===tmrFull||p.startsWith(tmrShort));
+  }
+
+  const tmrBills=bills.filter(b=>matchDay(b.days));
+  const tmrRefs=new Set(tmrBills.map(b=>b.ref));
+
+  if(!tmrBills.length){
+    showToast(`ไม่พบบิลที่ต้องส่งวัน${tmrFull} (${tmrDateStr})`,'warn');
+    return;
+  }
+
+  const already=tmrBills.filter(b=>queue[b.ref]).length;
+  if(!confirm(
+    `📅 จัดรถพรุ่งนี้ — วัน${tmrFull} (${tmrDateStr})\n\n` +
+    `พบ ${tmrBills.length} บิล (${already > 0 ? already+' บิลจัดไปแล้ว, ':''}จะจัดใหม่ทั้งหมด)\n` +
+    `บิลวันอื่นจะไม่ถูกเปลี่ยน\n\nดำเนินการต่อ?`
+  ))return;
+
   const btn=document.getElementById('btn-auto');
   btn.disabled=true;btn.textContent='⏳ กำลังจัด...';
+
   setTimeout(()=>{
     const newQ={};
+
+    // ── โหลด loads เริ่มต้นจากบิลวันอื่นที่จัดไปแล้ว ──
+    // (เพื่อให้ capacity ถูกต้อง ไม่โหลดเกินรถ)
     const loads={};
-    TRUCKS.forEach(t=>{loads[t.plate]={w:0,v:0};});
+    TRUCKS.forEach(t=>{
+      let w=0,v=0;
+      Object.entries(queue).forEach(([ref,plate])=>{
+        if(plate===t.plate && !tmrRefs.has(ref) && billMap[ref]){
+          w+=billMap[ref].totalW;
+          v+=billMap[ref].totalV;
+        }
+      });
+      loads[t.plate]={w,v};
+    });
+
     const assigned=new Set();
     const routeTruck={};
 
-    // Priority: รถใหญ่ก่อน 12ล้อ→10ล้อ→6ล้อ→4ล้อ→กระบะ (เฉพาะรับน้ำหนักได้ > 0)
     const priority={'12 ล้อ':1,'10 ล้อ':2,'6 ล้อ':3,'4 ล้อจัมโบ้':4,'กระบะ':5};
     const trucks=[...TRUCKS].filter(t=>t.maxW>0)
       .sort((a,b)=>(priority[a.type]||9)-(priority[b.type]||9)||b.maxW-a.maxW);
@@ -843,8 +928,6 @@ function doAutoAssign(){
       const ld=loads[t.plate];
       return (ld.w+b.totalW)<=t.maxW&&(t.maxV<=0||(ld.v+b.totalV)<=t.maxV);
     }
-
-    // ── คำนวณ bearing (ทิศทาง) จาก HQ ──
     function bearing(b){
       const lat1=HQ.lat*Math.PI/180, lat2=(b.lat||HQ.lat)*Math.PI/180;
       const dLng=((b.lng||HQ.lng)-HQ.lng)*Math.PI/180;
@@ -853,66 +936,54 @@ function doAutoAssign(){
       return (Math.atan2(x,y)*180/Math.PI+360)%360;
     }
 
-    // ── จัดกลุ่มบิลตาม Route Code ──
+    // ── จัดกลุ่มบิล (เฉพาะวันพรุ่งนี้) ตาม Route Code ──
     const routeGroups={};
-    bills.forEach(b=>{
+    tmrBills.forEach(b=>{
       const key=(b.routeCode||b.route||'').trim()||`GEO_${Math.round(bearing(b)/30)*30}`;
       if(!routeGroups[key])routeGroups[key]={
-        key, bills:[], routeCode:b.routeCode||b.route||'', days:b.days||'',
-        avgBearing:0, totalW:0, totalAmt:0, avgAmt:0
+        key,bills:[],routeCode:b.routeCode||b.route||'',days:b.days||'',
+        avgBearing:0,totalW:0,totalAmt:0,avgAmt:0
       };
       routeGroups[key].bills.push(b);
       routeGroups[key].totalW+=b.totalW;
       routeGroups[key].totalAmt+=(b.totalAmt||0);
     });
 
-    // คำนวณ bearing เฉลี่ยของแต่ละ route group
     Object.values(routeGroups).forEach(g=>{
       const bs=g.bills.filter(b=>b.lat&&b.lng);
       g.avgBearing=bs.length?bs.reduce((s,b)=>s+bearing(b),0)/bs.length:0;
-      g.avgDist=bs.length?bs.reduce((s,b)=>s+dist(b),0)/bs.length:0;
-    });
-
-    // ── คำนวณสถิติ route group ──
-    Object.values(routeGroups).forEach(g=>{
+      g.avgDist=bs.length?bs.reduce((s,b)=>s+distOrInf(b),0)/bs.length:0;
       g.totalAmt=g.bills.reduce((s,b)=>s+b.totalAmt,0);
       g.avgAmt=g.bills.length?g.totalAmt/g.bills.length:0;
     });
 
-    // เรียง route groups:
-    // 1. ยอดขายเยอะก่อน (totalAmt สูง → จัดก่อน ได้รถดี)
-    // 2. ถ้ายอดเท่ากัน เรียงตามระยะทาง (ไกล → รถใหญ่)
     const groups=Object.values(routeGroups).sort((a,b)=>b.totalAmt-a.totalAmt||b.avgDist-a.avgDist);
 
-    // คำนวณ threshold ยอดขาย: ใช้ค่ามัธยฐาน (median) ของ avgAmt เป็น cutoff
     const sortedAmts=Object.values(routeGroups).map(g=>g.avgAmt).sort((a,b)=>a-b);
-    const AMT_HIGH=sortedAmts[Math.floor(sortedAmts.length*0.6)]||30000; // top 40% = HIGH
-    const AMT_LOW =sortedAmts[Math.floor(sortedAmts.length*0.3)]||5000;  // bottom 30% = LOW
+    const AMT_HIGH=sortedAmts[Math.floor(sortedAmts.length*0.6)]||30000;
+    const AMT_LOW =sortedAmts[Math.floor(sortedAmts.length*0.3)]||5000;
 
-    // รถใหญ่ = 6ล้อขึ้นไป, รถเล็ก = 4ล้อจัมโบ้+กระบะ
     const bigTruckTypes=new Set(['12 ล้อ','10 ล้อ','6 ล้อ']);
     const smallTruckTypes=new Set(['4 ล้อจัมโบ้','กระบะ']);
 
     groups.forEach(grp=>{
       const isHighValue=grp.avgAmt>=AMT_HIGH;
       const isLowValue =grp.avgAmt<=AMT_LOW;
-
-      // เรียงบิลใน group: ยอดขายสูงก่อน (เพื่อให้ร้านใหญ่ได้ขึ้นก่อน ไม่ตกรถ)
-      const sortedBills=[...grp.bills].sort((a,b)=>b.totalAmt-a.totalAmt||dist(a)-dist(b));
+      const sortedBills=[...grp.bills].sort((a,b)=>b.totalAmt-a.totalAmt||distOrInf(a)-distOrInf(b));
 
       sortedBills.forEach(b=>{
         if(assigned.has(b.ref))return;
         let bestTruck=null;
-        const bDist=dist(b);
+        const bDist=distOrInf(b);
         const bBear=bearing(b);
 
-        // 1. รถที่รับ route นี้อยู่แล้ว → ใช้ต่อเลย
+        // 1. รถที่รับ route นี้อยู่แล้ว
         if(routeTruck[grp.key]){
           const t=trucks.find(x=>x.plate===routeTruck[grp.key]);
           if(t&&fits(t,b))bestTruck=t;
         }
 
-        // 2. หารถที่มีบิลอยู่ในทิศทางเดียวกัน (bearing ±40°) และวันเดียวกัน
+        // 2. รถที่มีบิลทิศทางเดียวกัน
         if(!bestTruck){
           const candidates=trucks.filter(t=>{
             if(!fits(t,b))return false;
@@ -925,7 +996,6 @@ function doAutoAssign(){
             return bearDiff<=45||sameRoute||sameDay;
           });
           if(candidates.length){
-            // เลือกรถที่มี bearing ใกล้เคียงสุด
             bestTruck=candidates.sort((a,b_)=>{
               const onA=Object.entries(newQ).filter(([,p])=>p===a.plate).map(([r])=>billMap[r]).filter(x=>x);
               const onB=Object.entries(newQ).filter(([,p])=>p===b_.plate).map(([r])=>billMap[r]).filter(x=>x);
@@ -936,27 +1006,20 @@ function doAutoAssign(){
           }
         }
 
-        // 3. fallback: เลือกรถตาม ยอดขาย + ระยะทาง
+        // 3. fallback: เลือกรถที่บรรทุกน้อยสุด
         if(!bestTruck){
           let filtered=trucks.filter(t=>{
             if(!fits(t,b))return false;
-            if(bDist>80&&t.type==='กระบะ')return false; // ไม่ใช้กระบะไกล
-            // ✅ ร้านยอดขายสูง → รถใหญ่ก่อน (6ล้อขึ้นไป)
+            if(bDist>80&&t.type==='กระบะ')return false;
             if(isHighValue&&smallTruckTypes.has(t.type)){
-              // ยอมใช้รถเล็กก็ต่อเมื่อรถใหญ่เต็มทุกคันแล้ว
-              const anyBig=trucks.filter(x=>bigTruckTypes.has(x.type)&&fits(x,b));
-              if(anyBig.length>0)return false;
+              if(trucks.filter(x=>bigTruckTypes.has(x.type)&&fits(x,b)).length>0)return false;
             }
-            // ✅ ร้านยอดขายน้อย → รถเล็กก่อน (4ล้อ/กระบะ)
             if(isLowValue&&bigTruckTypes.has(t.type)){
-              const anySmall=trucks.filter(x=>smallTruckTypes.has(x.type)&&fits(x,b));
-              if(anySmall.length>0)return false;
+              if(trucks.filter(x=>smallTruckTypes.has(x.type)&&fits(x,b)).length>0)return false;
             }
             return true;
           });
-          // ถ้าไม่มีรถที่ตรงเงื่อนไข ใช้รถใดก็ได้ที่รับได้
-          if(!filtered.length) filtered=trucks.filter(t=>fits(t,b));
-          // เลือกรถที่บรรทุกน้อยสุด (%)
+          if(!filtered.length)filtered=trucks.filter(t=>fits(t,b));
           bestTruck=filtered.sort((a,b_)=>{
             const pA=a.maxW>0?loads[a.plate].w/a.maxW:1;
             const pB=b_.maxW>0?loads[b_.plate].w/b_.maxW:1;
@@ -974,17 +1037,31 @@ function doAutoAssign(){
       });
     });
 
-    // Overflow
-    bills.filter(b=>!assigned.has(b.ref)).forEach(b=>{
+    // Overflow — บิลพรุ่งนี้ที่ยังไม่ถูกจัด
+    tmrBills.filter(b=>!assigned.has(b.ref)).forEach(b=>{
       const t=trucks.filter(t=>fits(t,b)).sort((a,b_)=>loads[a.plate].w/a.maxW-loads[b_.plate].w/b_.maxW)[0];
       if(t){newQ[b.ref]=t.plate;assigned.add(b.ref);loads[t.plate].w+=b.totalW;loads[t.plate].v+=b.totalV;}
     });
 
-    queue={...newQ};selPlate=null;
+    // ── รวมผล: คง queue วันอื่น + เขียนทับ queue วันพรุ่งนี้ ──
+    const keptOtherDays={};
+    Object.entries(queue).forEach(([ref,plate])=>{
+      if(!tmrRefs.has(ref))keptOtherDays[ref]=plate;
+    });
+    queue={...keptOtherDays,...newQ};
+
+    selPlate=null;
     saveQ();renderAll();
-    btn.disabled=false;btn.innerHTML='⚡ จัดอัตโนมัติ';
+    btn.disabled=false;
+    btn.innerHTML=`⚡ จัดอัตโนมัติ`;
+
+    const unassigned=tmrBills.length-Object.keys(newQ).length;
     const usedTrucks=new Set(Object.values(newQ)).size;
-    showToast(`✅ จัดอัตโนมัติสำเร็จ ${Object.keys(newQ).length} บิล — ${usedTrucks} คัน`,'ok');
+    showToast(
+      `✅ วัน${tmrFull} (${tmrDateStr}) — ${Object.keys(newQ).length} บิล / ${usedTrucks} คัน`+
+      (unassigned>0?` ⚠ ${unassigned} บิลไม่พอรถ`:''),
+      unassigned>0?'warn':'ok'
+    );
   },400);
 }
 
@@ -1029,31 +1106,102 @@ async function doSave(){
   const btn=document.getElementById('btn-save');
   const apiKey=localStorage.getItem('apikey')||'';
   if(!apiKey){const k=prompt('ใส่ Anthropic API Key:');if(!k||!k.startsWith('sk-'))return;localStorage.setItem('apikey',k);}
-  btn.disabled=true;btn.textContent='⏳ บันทึก...';
+  btn.disabled=true;btn.innerHTML='⏳ กำลังบันทึก...';btn.style.background='#07101F';
   try{
     const now=new Date().toLocaleString('th-TH',{timeZone:'Asia/Bangkok'});
-    const rows=bills.sort((a,b)=>dist(a)-dist(b)).map(b=>{
+    const today=new Date().toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'numeric'});
+
+    // ── คอลัมน์ครบถ้วน ──
+    const hdrs=[
+      'วันที่บิล',        // DI_DATE
+      'เลขบิล',           // DI_REF
+      'รหัสร้านค้า',      // AR_CODE
+      'ชื่อร้านค้า',      // AR_NAME
+      'จังหวัด',          // ADDB_PROVINCE
+      'อำเภอ',            // ADDB_DISTRICT
+      'มี GPS',           // Y/N
+      'Lat',
+      'Lng',
+      'ห่าง HQ (กม.)',
+      'สายส่ง',           // route name
+      'รหัสสาย',          // routeCode
+      'วันส่ง',           // days
+      'ทะเบียนรถ',
+      'ชื่อเล่น',
+      'คนขับ',
+      'ประเภทรถ',
+      'น้ำหนัก (กก.)',
+      'ปริมาตร (m³)',
+      'มูลค่า (บาท)',
+      'สถานะ',
+      'วันที่อัปเดต'
+    ];
+
+    const rows=bills.sort((a,b)=>distOrInf(a)-distOrInf(b)).map(b=>{
       const t=TRUCKS.find(tt=>tt.plate===queue[b.ref]);
-      return[b.date,b.ref,b.arCode,b.arName,b.province,b.district,(b.lat||0),(b.lng||0),
-        dist(b).toFixed(2),queue[b.ref]||'',t?.nick||'',t?.driver||'',b.totalW.toFixed(0),(b.totalAmt||0).toFixed(0),
-        queue[b.ref]?'จัดแล้ว':'รอจัด',now];
+      const d=dist(b);
+      const hasGPS=!!(b.lat&&b.lng);
+      return[
+        b.date,
+        b.ref,
+        b.arCode,
+        b.arName,
+        b.province,
+        b.district,
+        hasGPS?'มี GPS':'ไม่มี GPS',
+        hasGPS?b.lat.toFixed(6):'',
+        hasGPS?b.lng.toFixed(6):'',
+        hasGPS?d.toFixed(2):'',
+        b.route||'',
+        b.routeCode||'',
+        b.days||'',
+        queue[b.ref]||'',
+        t?.nick||'',
+        t?.driver||'',
+        t?.type||'',
+        b.totalW.toFixed(0),
+        b.totalV.toFixed(3),
+        Math.round(b.totalAmt||0),
+        queue[b.ref]?'จัดแล้ว':'รอจัด',
+        now
+      ];
     });
-    const hdrs=['วันที่','เลขบิล','รหัสร้านค้า','ชื่อร้านค้า','จังหวัด','อำเภอ','Lat','Lng','ห่างHQ(กม.)','ทะเบียน','ชื่อเล่น','คนขับ','น้ำหนัก','มูลค่า','สถานะ','อัปเดต'];
-    await fetch('https://api.anthropic.com/v1/messages',{
+
+    const prompt=
+`คุณคือผู้ช่วย Google Sheets กรุณาเขียนข้อมูลลง Google Sheets โดยทำตามขั้นตอนเหล่านี้:
+1. เปิด Spreadsheet ID: "${SHEET_ID}"
+2. ไปที่ชีท "Keepdata" (ถ้าไม่มีให้สร้างใหม่)
+3. ลบข้อมูลทั้งหมดในชีทนี้ก่อน (clear all)
+4. เขียน Header แถวแรก: ${JSON.stringify(hdrs)}
+5. เขียนข้อมูล ${rows.length} แถวต่อไปนี้ทั้งหมด (เริ่มแถวที่ 2):
+${JSON.stringify(rows)}
+6. ตอบยืนยันว่าบันทึกสำเร็จ พร้อมบอกจำนวนแถวที่บันทึก`;
+
+    const r=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':localStorage.getItem('apikey'),
         'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,
-        messages:[{role:'user',content:`บันทึกข้อมูลลง Sheets ID:"${SHEET_ID}" ชีท"Keepdata"\nHeaders:${JSON.stringify(hdrs)}\nData:${JSON.stringify(rows.slice(0,5))}...`}],
-        mcp_servers:[{type:'url',url:'https://drivemcp.googleapis.com/mcp/v1',name:'google-drive'}]})
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        messages:[{role:'user',content:prompt}],
+        mcp_servers:[{type:'url',url:'https://drivemcp.googleapis.com/mcp/v1',name:'google-drive'}]
+      })
     });
-    localStorage.setItem('keepdata_bk',JSON.stringify({savedAt:now,rows}));
-    showToast(`✅ บันทึก ${rows.length} รายการแล้ว`,'ok');
+    const d2=await r.json();
+    const reply=d2.content?.find(c=>c.type==='text')?.text||'';
+    console.log('Keepdata reply:',reply);
+
+    // Backup ในเครื่องด้วยเสมอ
+    localStorage.setItem('keepdata_bk',JSON.stringify({savedAt:now,hdrs,rows}));
+    isDirty=false;
+    updateSyncBadge();
+    showToast(`✅ บันทึก ${rows.length} รายการลงชีท Keepdata แล้ว`,'ok');
   }catch(e){
-    localStorage.setItem('keepdata_bk',JSON.stringify({savedAt:new Date().toISOString()}));
+    localStorage.setItem('keepdata_bk',JSON.stringify({savedAt:new Date().toISOString(),error:e.message}));
     showToast('บันทึกล้มเหลว — สำรองในเครื่องแล้ว','err');
   }
-  btn.disabled=false;btn.innerHTML='💾 Keepdata';
+  btn.disabled=false;updateSyncBadge();
 }
 
 // ══════════════════════════════════════════
@@ -1107,7 +1255,7 @@ function renderBillsView(){
     if(fStatus==='done'&&!queue[b.ref])return false;
     return true;
   });
-  if(fSort==='dist')list.sort((a,b)=>dist(a)-dist(b));
+  if(fSort==='dist')list.sort((a,b)=>distOrInf(a)-distOrInf(b));
   else if(fSort==='weight')list.sort((a,b)=>b.totalW-a.totalW);
   else list.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
 
@@ -1116,10 +1264,10 @@ function renderBillsView(){
     const plate=queue[b.ref];
     const truck=TRUCKS.find(t=>t.plate===plate);
     const d=dist(b);
-    const dCls=d<10?'dist-near':d<40?'dist-mid':'dist-far';
+    const dCls=d===null?'':d<10?'dist-near':d<40?'dist-mid':'dist-far';
     const col=plate?getTruckCol(plate):'';
     return`<tr style="border-bottom:1px solid #EDF0F4;background:${i%2===0?'transparent':'#F8F9FB'}">
-      <td style="padding:8px 10px"><div class="${dCls}" style="font-size:12px">${fmtKm(d)}</div></td>
+      <td style="padding:8px 10px"><div class="${dCls}" style="font-size:12px">${d===null?'<span style="color:#FCA5A5;font-size:10px;font-weight:600">⚠ ไม่มี GPS</span>':fmtKm(d)}</div></td>
       <td style="padding:8px 10px"><div style="font-weight:500;color:#07101F">${b.arName}</div><div style="font-size:10px;color:#6B7A90">${b.ref}</div></td>
       <td style="padding:8px 10px;font-size:11px;color:#6B7A90">${b.province}<br/>${b.district}</td>
       <td style="padding:8px 10px;white-space:nowrap"><div style="color:#1A5FA5;font-weight:600;font-size:12px">${fmtKg(b.totalW)}</div><div style="color:#6B7A90;font-size:10px">${fmtM3(b.totalV)}</div></td>
@@ -1184,7 +1332,7 @@ function updateMap(filterPlate){
   const stopNums={};
   if(filterPlate){
     [...bills].filter(b=>queue[b.ref]===filterPlate)
-      .sort((a,b)=>dist(a)-dist(b))
+      .sort((a,b)=>distOrInf(a)-distOrInf(b))
       .forEach((b,i)=>{stopNums[b.ref]=i+1;});
   }
 
@@ -1220,7 +1368,7 @@ function updateMap(filterPlate){
     const popup=`<div style="min-width:180px">
       <b style="font-size:13px;color:#07101F">${b.arName}</b><br/>
       <span style="color:#6B7A90;font-size:11px">📍 ${b.district}, ${b.province}</span><br/>
-      <span style="color:#1A5FA5;font-size:11px">ห่าง HQ: <b>${d.toFixed(1)} กม.</b></span><br/>
+      <span style="color:#1A5FA5;font-size:11px">ห่าง HQ: <b>${d!==null?d.toFixed(1)+' กม.':'—'}</b></span><br/>
       <span style="font-size:11px;color:#444">⚖ ${fmtKg(b.totalW)}</span><br/>
       <div style="margin-top:4px;padding:3px 8px;border-radius:6px;background:${plate?col+'18':'#F5F7FA'};color:${plate?col:'#9BAAB8'};font-weight:600;font-size:11px">
         ${plate?`🚛 ${plate} — ${truck?.nick||''}`:'⏳ รอจัดรถ'}
@@ -1334,7 +1482,7 @@ function renderCarsView(){
     const col=TRUCK_COLORS[i%TRUCK_COLORS.length];
     const assignedBills=Object.entries(queue).filter(([,p])=>p===t.plate)
       .map(([r])=>billMap[r]).filter(Boolean)
-      .sort((a,b)=>dist(a)-dist(b));
+      .sort((a,b)=>distOrInf(a)-distOrInf(b));
     return`<div class="car-card${over?' over':''}">
       <div style="display:flex;justify-content:space-between;margin-bottom:10px">
         <div>
@@ -1370,7 +1518,7 @@ function renderCarsView(){
         ${assignedBills.map((b,j)=>`<div style="display:flex;align-items:center;gap:6px;padding:3px 0;${j>0?'border-top:1px solid #EDF0F4':''};font-size:11px">
           <span style="font-size:10px;color:#A0ABBB;min-width:16px">${j+1}.</span>
           <span style="flex:1;color:#07101F;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.arName}</span>
-          <span style="color:#1A5FA5;font-size:10px;flex-shrink:0">${fmtKm(dist(b))}</span>
+          <span style="color:#1A5FA5;font-size:10px;flex-shrink:0">${dist(b)!==null?fmtKm(dist(b)):'—'}</span>
         </div>`).join('')}
       </div>`:''}
     </div>`;
