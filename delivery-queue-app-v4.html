@@ -1343,23 +1343,9 @@ function confirmAutoAssign(){
         let best=null;
         const bDist=distOrInf(b), bBear=bearing(b);
 
-        // 0. ร้านเดียวกัน → ใส่รถ+เที่ยวเดิม (ถ้ายังรับได้)
-        let forcedTrip=0;
-        if(!best && b.arCode && storeTrip[b.arCode]){
-          const prev=storeTrip[b.arCode];
-          const t=trucks.find(x=>x.plate===prev.plate);
-          if(t){
-            const ld=loads[t.plate];
-            const tw=prev.trip===1?ld.w1:ld.w2, tv=prev.trip===1?ld.v1:ld.v2;
-            if((tw+b.totalW)<=t.maxW&&(t.maxV<=0||(tv+b.totalV)<=t.maxV)){
-              best=t; forcedTrip=prev.trip;
-            }
-          }
-        }
-
         // 1. Route truck ที่จัดไปแล้วในรอบนี้
         //    + เพิ่ม centroid check: ถ้าไกลเกิน MAX_CENTROID_DIST ข้ามแถบ → ไม่ใช้รถนั้น
-        if(!best && routeTruck[grp.key]){
+        if(routeTruck[grp.key]){
           const t=trucks.find(x=>x.plate===routeTruck[grp.key]);
           if(t&&fits(t,b)&&!farFromCentroid(t.plate,b))best=t;
         }
@@ -1403,13 +1389,19 @@ function confirmAutoAssign(){
         }
 
         if(best){
-          const tr=forcedTrip||fitsTrip(best,b)||1;
+          // ── ร้านเดียวกัน → บังคับเที่ยวเดิมเสมอ (override หลังหารถเจอ) ──
+          const storeKey=b.arCode||b.arName||'';
+          let tr;
+          if(storeKey && storeTrip[storeKey]){
+            tr=storeTrip[storeKey].trip; // force same trip
+          } else {
+            tr=fitsTrip(best,b)||1;
+          }
           newQ[b.ref]=best.plate; newTripMap[b.ref]=tr; assigned.add(b.ref);
           if(tr===1){loads[best.plate].w1+=b.totalW;loads[best.plate].v1+=b.totalV;}
           else      {loads[best.plate].w2+=b.totalW;loads[best.plate].v2+=b.totalV;}
           if(!routeTruck[grp.key])routeTruck[grp.key]=best.plate;
-          // บันทึกร้านนี้ไว้ → บิลถัดไปของร้านเดียวกันใช้รถ+เที่ยวนี้
-          if(b.arCode&&!storeTrip[b.arCode])storeTrip[b.arCode]={plate:best.plate,trip:tr};
+          if(storeKey&&!storeTrip[storeKey])storeTrip[storeKey]={plate:best.plate,trip:tr};
         }
       });
     });
@@ -1418,10 +1410,12 @@ function confirmAutoAssign(){
     tmrBills.filter(b=>!assigned.has(b.ref)).forEach(b=>{
       const t=trucks.filter(t=>fits(t,b)).sort((a,b_)=>(loads[a.plate].w1+loads[a.plate].w2)/a.maxW-(loads[b_.plate].w1+loads[b_.plate].w2)/b_.maxW)[0];
       if(t){
-        const tr=fitsTrip(t,b)||1;
+        const storeKey=b.arCode||b.arName||'';
+        const tr=(storeKey&&storeTrip[storeKey])?storeTrip[storeKey].trip:(fitsTrip(t,b)||1);
         newQ[b.ref]=t.plate;newTripMap[b.ref]=tr;assigned.add(b.ref);
         if(tr===1){loads[t.plate].w1+=b.totalW;loads[t.plate].v1+=b.totalV;}
         else      {loads[t.plate].w2+=b.totalW;loads[t.plate].v2+=b.totalV;}
+        if(storeKey&&!storeTrip[storeKey])storeTrip[storeKey]={plate:t.plate,trip:tr};
       }
     });
 
