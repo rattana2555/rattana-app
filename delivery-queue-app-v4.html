@@ -523,8 +523,8 @@ const EXCLUDE_AUTO = new Set([
 
 // ── State ──
 let bills=[], billMap={}, products={}, routeMap={};
-let queue={};  // {billRef: plateNumber}
-let tripMap={};    // {billRef: 1|2} — เที่ยวของแต่ละบิล
+let queue={};      // {billRef: plateNumber}
+let tripMap={};    // {billRef: 1|2} — เที่ยว (default=1)
 let selPlate=null;
 let selRefs=new Set();
 
@@ -542,7 +542,7 @@ function haversine(a,b,c,d){
 const dist = b => (b.lat&&b.lng) ? haversine(HQ.lat,HQ.lng,b.lat,b.lng) : null;
 const distOrInf = b => dist(b)??99999;
 
-function truckLoad(plate, trip=0){
+function truckLoad(plate,trip=0){
   let w1=0,v1=0,w2=0,v2=0;
   Object.entries(queue).forEach(([ref,p])=>{
     if(p!==plate||!billMap[ref])return;
@@ -555,7 +555,7 @@ function truckLoad(plate, trip=0){
   return{w:w1+w2,v:v1+v2,w1,v1,w2,v2};
 }
 function tripFor(t,b){
-  // หาเที่ยวที่รับบิลนี้ได้ (1 ก่อน → 2 ถ้า 1 เต็ม)
+  // คืน trip ที่รับได้: 1 → 2 → 0(เต็ม)
   const ld=truckLoad(t.plate);
   if((ld.w1+b.totalW)<=t.maxW&&(t.maxV<=0||(ld.v1+b.totalV)<=t.maxV))return 1;
   if((ld.w2+b.totalW)<=t.maxW&&(t.maxV<=0||(ld.v2+b.totalV)<=t.maxV))return 2;
@@ -568,15 +568,14 @@ function truckPct(plate,t){
   const wp2=t.maxW>0?Math.round(ld.w2/t.maxW*100):0;
   const vp2=t.maxV>0?Math.round(ld.v2/t.maxV*100):0;
   const eff=Math.max(wp1,vp1,wp2,vp2);
-  const over=(wp1>100||vp1>100||wp2>100||vp2>100);
-  return{wp1,vp1,wp2,vp2,eff,over,wp:Math.max(wp1,wp2),vp:Math.max(vp1,vp2)};
+  return{wp1,vp1,wp2,vp2,eff,over:eff>100,wp:Math.max(wp1,wp2),vp:Math.max(vp1,vp2)};
 }
 function pcColor(p){return p>=90?'#DC3545':p>=70?'#E07B00':'#2E8B57';}
 function assignedSet(){return new Set(Object.values(queue).filter(Boolean));}
 let isDirty=false;  // tracks unsaved changes
 function saveQ(){
   try{localStorage.setItem(STORE_KEY,JSON.stringify(queue));}catch(e){}
-  try{localStorage.setItem(STORE_KEY+"_trip",JSON.stringify(tripMap));}catch(e){}
+  try{localStorage.setItem(STORE_KEY+'_trip',JSON.stringify(tripMap));}catch(e){}
   isDirty=true;
   updateSyncBadge();
 }
@@ -635,7 +634,7 @@ async function loadData(){
   try{
     const saved=localStorage.getItem(STORE_KEY);
     if(saved)queue=JSON.parse(saved);
-    try{const st=localStorage.getItem(STORE_KEY+"_trip");if(st)tripMap=JSON.parse(st);}catch(e){}
+    try{const st=localStorage.getItem(STORE_KEY+'_trip');if(st)tripMap=JSON.parse(st);}catch(e){}
     setLoad('📊 โหลด Bill DS...',20);
 
     const [billData,productData,routeData]=await Promise.all([
@@ -651,16 +650,13 @@ async function loadData(){
       const v=parseFloat(p['ปริมาตร EA (ลิตร)']||p['ปริมาตร EA']||0)/1000;
       if(name)products[name]={w,v};
     });
-    // ── Fallback: สินค้าที่ไม่มีน้ำหนัก/ปริมาตร → ใช้ค่าเฉลี่ยของสินค้าที่มีข้อมูล ──
-    const allW=Object.values(products).map(p=>p.w).filter(w=>w>0);
-    const allV=Object.values(products).map(p=>p.v).filter(v=>v>0);
-    const avgW=allW.length?allW.reduce((a,b)=>a+b,0)/allW.length:0;
-    const avgV=allV.length?allV.reduce((a,b)=>a+b,0)/allV.length:0;
-    Object.values(products).forEach(p=>{
-      if(!p.w&&avgW)p.w=avgW;
-      if(!p.v&&avgV)p.v=avgV;
-    });
-    console.log(`Products: avgW=${avgW.toFixed(3)}kg, avgV=${avgV.toFixed(4)}m³ (fallback for missing data)`);
+    // ── Fallback: สินค้าไม่มีน้ำหนัก/ปริมาตร → ใช้ค่าเฉลี่ยของสินค้าที่มีข้อมูล ──
+    const _allW=Object.values(products).map(p=>p.w).filter(w=>w>0);
+    const _allV=Object.values(products).map(p=>p.v).filter(v=>v>0);
+    const _avgW=_allW.length?_allW.reduce((a,b)=>a+b,0)/_allW.length:0;
+    const _avgV=_allV.length?_allV.reduce((a,b)=>a+b,0)/_allV.length:0;
+    Object.values(products).forEach(p=>{if(!p.w&&_avgW)p.w=_avgW;if(!p.v&&_avgV)p.v=_avgV;});
+    console.log(`Products fallback: avgW=${_avgW.toFixed(3)}kg avgV=${_avgV.toFixed(4)}m³`);
 
     // Routes (with GPS)
     routeMap={};
@@ -748,15 +744,13 @@ function renderAll(){
 // ══════════════════════════════════════════
 function renderTruckCards(){
   const wrap=document.getElementById('truckCards');
-
-  // ── ข้อ 1: เรียงรถที่มีงานก่อน ──
+  // ── ข้อ 1: เรียงรถที่มีงานมาก่อน ──
   const sorted=[...TRUCKS].map((t,i)=>({...t,origIdx:i}))
     .sort((a,b)=>{
       const aC=Object.values(queue).filter(p=>p===a.plate).length;
       const bC=Object.values(queue).filter(p=>p===b.plate).length;
       return bC-aC;
     });
-
   wrap.innerHTML=sorted.map(t=>{
     const i=t.origIdx;
     const ld=truckLoad(t.plate);
@@ -767,9 +761,8 @@ function renderTruckCards(){
     const isExcluded=EXCLUDE_AUTO.has(t.plate);
     const cnt1=Object.entries(queue).filter(([r,p])=>p===t.plate&&(tripMap[r]||1)===1).length;
     const cnt2=Object.entries(queue).filter(([r,p])=>p===t.plate&&(tripMap[r]||1)===2).length;
-    const hasTrip2=cnt2>0||(wp1>=90&&(cnt1>0));
-    const ld1=truckLoad(t.plate,1), ld2=truckLoad(t.plate,2);
-
+    const ld1=truckLoad(t.plate,1),ld2=truckLoad(t.plate,2);
+    const hasT2=cnt2>0;
     return `<div class="tcard${isSel?' sel':''}${over?' over':''}" onclick="selectTruck('${t.plate}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
         <div>
@@ -785,13 +778,14 @@ function renderTruckCards(){
       </div>
       <div style="font-size:9px;color:#9BAAB8;margin-bottom:1px">เที่ยว 1 — ${cnt1} บิล ${fmtKg(ld1.w)}</div>
       <div class="tcard-bar"><div class="tcard-bar-fill" style="width:${Math.min(100,wp1)}%;background:${wp1>100?'#DC3545':pcColor(wp1)}"></div></div>
-      <div class="tcard-bar" style="margin-bottom:3px"><div class="tcard-bar-fill" style="width:${Math.min(100,vp1)}%;background:${vp1>100?'#DC3545':pcColor(vp1)};opacity:.65"></div></div>
-      ${hasTrip2?`
-      <div style="font-size:9px;color:#1A5FA5;margin-bottom:1px">เที่ยว 2 — ${cnt2} บิล ${fmtKg(ld2.w)}</div>
+      <div class="tcard-bar" style="margin-bottom:${hasT2?'3px':'0'}"><div class="tcard-bar-fill" style="width:${Math.min(100,vp1)}%;background:${vp1>100?'#DC3545':pcColor(vp1)};opacity:.65"></div></div>
+      ${hasT2?`<div style="font-size:9px;color:#1A5FA5;margin-bottom:1px">เที่ยว 2 — ${cnt2} บิล ${fmtKg(ld2.w)}</div>
       <div class="tcard-bar"><div class="tcard-bar-fill" style="width:${Math.min(100,wp2)}%;background:${wp2>100?'#DC3545':'#1A5FA5'}"></div></div>
-      <div class="tcard-bar" style="margin-bottom:3px"><div class="tcard-bar-fill" style="width:${Math.min(100,vp2)}%;background:${vp2>100?'#DC3545':'#1A5FA5'};opacity:.5"></div></div>
-      `:''}
-      <div class="tcard-meta"><span style="color:${wp1>100||wp2>100?'#C62828':'#6B7A90'}">⚖ ${wp1}%${cnt2?'/'+wp2+'%':''}</span><span style="color:${vp1>100||vp2>100?'#C62828':'#6B7A90'}">📦 ${vp1}%${cnt2?'/'+vp2+'%':''}</span></div>
+      <div class="tcard-bar" style="margin-bottom:0"><div class="tcard-bar-fill" style="width:${Math.min(100,vp2)}%;background:${wp2>100?'#DC3545':'#1A5FA5'};opacity:.5"></div></div>`:''}
+      <div class="tcard-meta">
+        <span style="color:${wp1>100||wp2>100?'#C62828':'#6B7A90'}">⚖ ${wp1}%${cnt2?'/'+wp2+'%':''}</span>
+        <span style="color:${vp1>100||vp2>100?'#C62828':'#6B7A90'}">📦 ${vp1}%${cnt2?'/'+vp2+'%':''}</span>
+      </div>
       <div class="tcard-driver" style="color:${isSel?'#7D6428':'#6B7A90'}"><span style="color:${col};font-weight:700">${t.nick}</span> <span style="font-size:10px">${t.driver}</span></div>
       <div style="display:flex;justify-content:space-between;font-size:10px;color:#A0ABBB;margin-top:1px"><span>${fmtKg(t.maxW)}/เที่ยว</span><span>${fmtM3(t.maxV)}</span></div>
       ${isSel?'<div class="tcard-sel-hint">▼ กำลังเลือก</div>':''}
@@ -914,7 +908,7 @@ function renderBillTable(){
       <td>
         ${plate
           ?`<span class="chip chip-truck" style="--c:${col};--cb:${col}18;--cc:${col}55">${truck?.e||'🚛'} ${plate} ${truck?.nick||''}</span>
-             <span style="font-size:10px;color:${(tripMap[b.ref]||1)===2?'#1A5FA5':'#9BAAB8'};font-weight:600;margin-left:2px">เที่ยว ${tripMap[b.ref]||1}</span>
+             <span style="font-size:10px;color:${(tripMap[b.ref]||1)===2?'#1A5FA5':'#A0ABBB'};font-weight:600;margin-left:3px">เที่ยว ${tripMap[b.ref]||1}</span>
              ${selPlate?`<div style="font-size:10px;color:#C62828;margin-top:2px">✕ คลิกยกเลิก</div>`:''}`
           :`<span class="chip chip-pending">⏳ รอจัด</span>
              ${selPlate?`<div style="font-size:10px;color:#C9A84C;margin-top:2px">→ คลิกจัดรถ</div>`:''}`
@@ -974,11 +968,11 @@ function handleBillClick(ref){
     const t=TRUCKS.find(x=>x.plate===selPlate);
     const b=billMap[ref];
     const tr=t&&b?tripFor(t,b):1;
-    if(t&&b&&tr===0){showToast('รถ '+selPlate+' เต็มทั้ง 2 เที่ยวแล้ว','warn');return;}
+    if(t&&b&&tr===0){showToast('รถ '+selPlate+' เต็มทั้ง 2 เที่ยวแล้ว ⚠','warn');return;}
     queue[ref]=selPlate;
     tripMap[ref]=tr||1;
     saveQ();renderAll();
-    if(tr===2)showToast(`→ ใส่เที่ยว 2 (เที่ยว 1 เต็มแล้ว)`,'ok');
+    if(tr===2)showToast('→ ใส่เที่ยว 2 (เที่ยว 1 เต็ม)','ok');
   } else {
     toggleSel(ref);
   }
@@ -1179,7 +1173,7 @@ function confirmAutoAssign(){
     const newQ={};
     const newTripMap={};
 
-    // loads เริ่มจากบิลวันอื่นที่จัดไปแล้ว — แยกตามเที่ยว
+    // loads เริ่มจากบิลวันอื่นที่จัดไปแล้ว — แยก เที่ยว 1/2
     const loads={};
     TRUCKS.forEach(t=>{
       let w1=0,v1=0,w2=0,v2=0;
@@ -1195,14 +1189,14 @@ function confirmAutoAssign(){
 
     const assigned=new Set(), routeTruck={};
     const priority={'12 ล้อ':1,'10 ล้อ':2,'6 ล้อ':3,'4 ล้อจัมโบ้':4,'กระบะ':5};
+    // ── กรองรถพ่วง (EXCLUDE_AUTO) ออกจาก auto-assign ──
     const trucks=[...TRUCKS]
       .filter(t=>t.maxW>0 && !EXCLUDE_AUTO.has(t.plate))
       .sort((a,b)=>(priority[a.type]||9)-(priority[b.type]||9)||b.maxW-a.maxW);
 
-    const medLargeTruckTypes=new Set(['12 ล้อ','10 ล้อ','6 ล้อ']);
+    const medLargeTruckTypes=new Set(['12 ล้อ','10 ล้อ','6 ล้อ']); // เติมก่อน
 
     function fitsTrip(t,b){
-      // คืน trip ที่รับได้ (1→2→0=เต็ม)
       const ld=loads[t.plate];
       if((ld.w1+b.totalW)<=t.maxW&&(t.maxV<=0||(ld.v1+b.totalV)<=t.maxV))return 1;
       if((ld.w2+b.totalW)<=t.maxW&&(t.maxV<=0||(ld.v2+b.totalV)<=t.maxV))return 2;
@@ -1303,9 +1297,7 @@ function confirmAutoAssign(){
 
         if(best){
           const tr=fitsTrip(best,b)||1;
-          newQ[b.ref]=best.plate;
-          newTripMap[b.ref]=tr;
-          assigned.add(b.ref);
+          newQ[b.ref]=best.plate; newTripMap[b.ref]=tr; assigned.add(b.ref);
           if(tr===1){loads[best.plate].w1+=b.totalW;loads[best.plate].v1+=b.totalV;}
           else      {loads[best.plate].w2+=b.totalW;loads[best.plate].v2+=b.totalV;}
           if(!routeTruck[grp.key])routeTruck[grp.key]=best.plate;
@@ -1313,7 +1305,7 @@ function confirmAutoAssign(){
       });
     });
 
-    // Overflow (บิลที่ยังไม่ถูกจัด)
+    // Overflow
     tmrBills.filter(b=>!assigned.has(b.ref)).forEach(b=>{
       const t=trucks.filter(t=>fits(t,b)).sort((a,b_)=>(loads[a.plate].w1+loads[a.plate].w2)/a.maxW-(loads[b_.plate].w1+loads[b_.plate].w2)/b_.maxW)[0];
       if(t){
@@ -1325,7 +1317,7 @@ function confirmAutoAssign(){
     });
 
     // คง queue+tripMap วันอื่น + เขียนทับวันที่เลือก
-    const kept={}, keptTrip={};
+    const kept={},keptTrip={};
     Object.entries(queue).forEach(([ref,plate])=>{if(!tmrRefs.has(ref)){kept[ref]=plate;keptTrip[ref]=tripMap[ref]||1;}});
     queue={...kept,...newQ};
     tripMap={...keptTrip,...newTripMap};
@@ -1382,7 +1374,7 @@ async function doAI(){
 // SETTINGS
 // ══════════════════════════════════════════
 const KEEPDATA_HEADERS=[
-  'วันที่บิล','วันที่ส่ง',                                          // A, B
+  'วันที่บิล','วันที่ส่ง',
   'เลขบิล','รหัสร้านค้า','ชื่อร้านค้า','จังหวัด','อำเภอ',
   'มี GPS','Lat','Lng','ห่าง HQ (กม.)','สายส่ง','รหัสสาย','วันส่ง',
   'ทะเบียนรถ','เที่ยว','ชื่อเล่น','คนขับ','ประเภทรถ','น้ำหนัก (กก.)','ปริมาตร (m³)',
