@@ -370,10 +370,22 @@ select,input{font-family:'Sarabun',sans-serif;font-size:15px!important}
         <div style="font-size:11px;color:#854F0B;margin-top:2px" id="tf-info"></div>
       </div>
       <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <span style="font-size:12px;color:#854F0B">ย้ายทุกบิลไปรถ →</span>
-        <select id="tf-select" onchange="doTransfer(this)">
-          <option value="">— เลือกรถปลายทาง —</option>
-        </select>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:11px;color:#854F0B;font-weight:600">ย้ายทั้งคัน →</span>
+          <select id="tf-select" onchange="doTransfer(this)" style="background:#fff;border:1.5px solid #E4C46E;border-radius:7px;padding:5px 9px;font-size:12px;min-width:155px">
+            <option value="">— เลือกรถ —</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:11px;color:#1A5FA5;font-weight:600">ย้ายเที่ยว →</span>
+          <select id="tf-trip-num" style="background:#fff;border:1.5px solid #93B8DE88;border-radius:7px;padding:5px 9px;font-size:12px">
+            <option value="1">🟠 เที่ยว 1</option>
+            <option value="2">🔵 เที่ยว 2</option>
+          </select>
+          <select id="tf-trip-truck" onchange="doTransferTrip(this)" style="background:#fff;border:1.5px solid #93B8DE88;border-radius:7px;padding:5px 9px;font-size:12px;min-width:155px">
+            <option value="">— เลือกรถ —</option>
+          </select>
+        </div>
         <button class="btn btn-clear" onclick="doClearTruck()">🗑 ล้างทั้งคัน</button>
       </div>
     </div>
@@ -444,6 +456,19 @@ select,input{font-family:'Sarabun',sans-serif;font-size:15px!important}
   <!-- ROUTES -->
   <div class="tab-panel fi" id="tab-routes">
     <h1 style="font-family:Kanit;font-size:20px;font-weight:600;color:#07101F;margin-bottom:14px">🗺️ สายส่งและโลเคชัน</h1>
+
+    <!-- Map trip filter -->
+    <div style="background:#fff;border:1px solid #E0E5ED;border-radius:12px;padding:10px 16px;margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:11px;color:#6B7A90;font-weight:500">🗺️ แสดงเที่ยว:</span>
+      <div id="mapTripFilter" style="display:flex;gap:6px">
+        <button onclick="filterMapTrip(0,this)" style="padding:4px 12px;border-radius:7px;border:1.5px solid #E0E5ED;background:#F5F7FA;color:#6B7A90;font-size:11px;font-weight:700;cursor:pointer">ทั้งหมด</button>
+        <button onclick="filterMapTrip(1,this)" style="padding:4px 12px;border-radius:7px;border:1.5px solid #F6C45A;background:#FFF8EC;color:#C47000;font-size:11px;font-weight:400;cursor:pointer">🟠 เที่ยว 1</button>
+        <button onclick="filterMapTrip(2,this)" style="padding:4px 12px;border-radius:7px;border:1.5px solid #93B8DE;background:#EAF0F8;color:#1A5FA5;font-size:11px;font-weight:400;cursor:pointer">🔵 เที่ยว 2</button>
+      </div>
+      <div style="margin-left:auto;font-size:10px;color:#A0ABBB">
+        ● = เที่ยว 1 (solid) &nbsp; ○ = เที่ยว 2 (dashed)
+      </div>
+    </div>
 
     <!-- Truck filter -->
     <div style="background:#fff;border:1px solid #E0E5ED;border-radius:12px;padding:12px 16px;margin-bottom:14px">
@@ -758,12 +783,15 @@ function renderAll(){
 // ══════════════════════════════════════════
 function renderTruckCards(){
   const wrap=document.getElementById('truckCards');
-  // ── ข้อ 1: เรียงรถที่มีงานมาก่อน ──
+  // เรียง: มีงาน+หลัก → มีงาน → หลัก → อื่น
   const sorted=[...TRUCKS].map((t,i)=>({...t,origIdx:i}))
     .sort((a,b)=>{
       const aC=Object.values(queue).filter(p=>p===a.plate).length;
       const bC=Object.values(queue).filter(p=>p===b.plate).length;
-      return bC-aC;
+      const aP=PRIMARY_PLATES.has(a.plate)?1:0;
+      const bP=PRIMARY_PLATES.has(b.plate)?1:0;
+      if(bC!==aC)return bC-aC;
+      return bP-aP;
     });
   wrap.innerHTML=sorted.map(t=>{
     const i=t.origIdx;
@@ -773,6 +801,7 @@ function renderTruckCards(){
     const isSel=selPlate===t.plate;
     const effCol=over?'#C62828':pcColor(eff);
     const isExcluded=EXCLUDE_AUTO.has(t.plate);
+    const isPrimary=PRIMARY_PLATES.has(t.plate);
     const cnt1=Object.entries(queue).filter(([r,p])=>p===t.plate&&(tripMap[r]||1)===1).length;
     const cnt2=Object.entries(queue).filter(([r,p])=>p===t.plate&&(tripMap[r]||1)===2).length;
     const ld1=truckLoad(t.plate,1),ld2=truckLoad(t.plate,2);
@@ -786,6 +815,7 @@ function renderTruckCards(){
         <div style="text-align:right">
           ${over?'<div style="font-size:9px;color:#C62828;font-weight:700">⚠ เกิน</div>':''}
           ${isExcluded?'<div style="font-size:9px;color:#6B7A90;font-weight:600;background:#F0F2F6;border-radius:4px;padding:0 4px">🔒 Manual</div>':''}
+          ${isPrimary&&!isExcluded?'<div style="font-size:9px;color:#B45309;font-weight:700;background:#FFF8EC;border:1px solid #F6C45A66;border-radius:4px;padding:0 5px">⭐ หลัก</div>':''}
           <div class="tcard-pct" style="color:${effCol}">${eff}%</div>
           <div class="tcard-wt">${fmtKg(ld.w)}</div>
         </div>
@@ -835,7 +865,10 @@ function updateTransferBar(){
   document.getElementById('tf-info').textContent=`${billsOnTruck.length} บิล • ${fmtKg(tw)} • ฿${fmtN(ta)}`;
   const ld=truckLoad(selPlate);
   const sel=document.getElementById('tf-select');
-  sel.innerHTML='<option value="">— เลือกรถปลายทาง —</option>'+
+  const tripTruckSel=document.getElementById('tf-trip-truck');
+  const truckOpts=TRUCKS.filter(t=>t.plate!==selPlate).map(t=>`<option value="${t.plate}">${t.e} ${t.plate} (${t.nick})</option>`).join('');
+  if(tripTruckSel)tripTruckSel.innerHTML='<option value="">— เลือกรถ —</option>'+truckOpts;
+  sel.innerHTML='<option value="">— เลือกรถ —</option>'+
     TRUCKS.filter(t=>t.plate!==selPlate).map(t=>{
       const tld=truckLoad(t.plate);
       const ep=Math.max(t.maxW>0?Math.round(tld.w/t.maxW*100):0,t.maxV>0?Math.round(tld.v/t.maxV*100):0);
@@ -1002,12 +1035,8 @@ function changeTrip(ref){
   const b=billMap[ref];
   if(t&&b){
     const ld=truckLoad(queue[ref],newTrip);
-    // หักตัวเองออกก่อนตรวจ
-    const selfW=(tripMap[ref]||1)===newTrip?b.totalW:0;
-    const selfV=(tripMap[ref]||1)===newTrip?b.totalV:0;
-    if((ld.w-selfW+b.totalW)>t.maxW||(t.maxV>0&&(ld.v-selfV+b.totalV)>t.maxV)){
-      showToast(`เที่ยว ${newTrip} เต็มแล้ว ไม่สามารถย้ายได้ ⚠`,'warn');
-      return;
+    if((ld.w+b.totalW)>t.maxW||(t.maxV>0&&(ld.v+b.totalV)>t.maxV)){
+      showToast(`⚠ เที่ยว ${newTrip} เกินขีดบรรทุก — บันทึกแล้วแต่ต้องปรับ`,'warn');
     }
   }
   tripMap[ref]=newTrip;
@@ -1057,8 +1086,8 @@ function handleBillClick(ref){
     // ตรวจสอบว่า selTrip นั้นรับได้ไหม
     const ld=truckLoad(selPlate,selTrip);
     if(t&&b&&((ld.w+b.totalW)>t.maxW||(t.maxV>0&&(ld.v+b.totalV)>t.maxV))){
-      showToast(`เที่ยว ${selTrip} เต็มแล้ว — เปลี่ยนเป็นเที่ยวอื่นหรือเลือกรถใหม่ ⚠`,'warn');
-      return;
+      showToast(`⚠ เที่ยว ${selTrip} เกินขีดบรรทุก — บันทึกแล้วแต่ต้องปรับ`,'warn');
+      // ไม่ return — ยังจัดได้
     }
     queue[ref]=selPlate;
     tripMap[ref]=selTrip;
@@ -1116,6 +1145,18 @@ function doTransfer(dd){
   selPlate=to;
   saveQ();renderAll();
   dd.value='';
+}
+
+function doTransferTrip(dd){
+  const to=dd.value; if(!to||!selPlate)return;
+  const trip=parseInt(document.getElementById('tf-trip-num')?.value||'1');
+  let count=0;
+  Object.keys(queue).forEach(r=>{
+    if(queue[r]===selPlate&&(tripMap[r]||1)===trip){queue[r]=to;count++;}
+  });
+  if(!count){showToast(`ไม่มีบิลเที่ยว ${trip} บนรถนี้`,'warn');dd.value='';return;}
+  showToast(`🔄 โยกเที่ยว ${trip} (${count} บิล) → ${to}`,'ok');
+  saveQ();renderAll();dd.value='';
 }
 
 function doClearTruck(){
@@ -1743,7 +1784,7 @@ function assignBill(ref,dd){
 // ══════════════════════════════════════════
 // ROUTES VIEW + LEAFLET MAP
 // ══════════════════════════════════════════
-let leafletMap=null, mapLayers=[], mapFilterPlate=null;
+let leafletMap=null, mapLayers=[], mapFilterPlate=null, mapFilterTrip=0;
 
 function initMap(){
   if(leafletMap||!document.getElementById('routeMap'))return;
@@ -1758,15 +1799,19 @@ function initMap(){
   }catch(e){console.warn('Map init error',e);}
 }
 
-function makePinIcon(col,label,size,opacity){
+function makePinIcon(col,label,size,opacity,isTrip2){
   const s=size||26,tail=s*0.55;
+  // เที่ยว 2: outer ring style (white bg + colored border)
+  const bg=isTrip2?'white':col;
+  const txtCol=isTrip2?col:'white';
+  const border=isTrip2?`3px solid ${col}`:'2.5px solid white';
   return L.divIcon({
-    html:`<div style="filter:drop-shadow(0 3px 5px rgba(0,0,0,.3));opacity:${opacity||1}">
+    html:`<div style="filter:drop-shadow(0 3px 5px rgba(0,0,0,.25));opacity:${opacity||1}">
       <div style="width:${s}px;height:${s}px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
-        background:${col};border:2.5px solid white;position:relative">
+        background:${bg};border:${border};position:relative">
         <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(45deg);
-          color:white;font-weight:700;font-size:${Math.round(s*.44)}px;font-family:'Sarabun',sans-serif;
-          text-shadow:0 1px 2px rgba(0,0,0,.4)">${label}</div>
+          color:${txtCol};font-weight:700;font-size:${Math.round(s*.44)}px;font-family:'Sarabun',sans-serif;
+          text-shadow:0 1px 2px rgba(0,0,0,.2)">${label}</div>
       </div>
     </div>`,
     className:'',
@@ -1779,45 +1824,68 @@ function updateMap(filterPlate){
   mapLayers.forEach(l=>{try{leafletMap.removeLayer(l);}catch(e){}});
   mapLayers=[];
 
-  // Build stop order per truck (sorted by distance from HQ)
-  const stopNums={};
-  if(filterPlate){
-    [...bills].filter(b=>queue[b.ref]===filterPlate)
-      .sort((a,b)=>distOrInf(a)-distOrInf(b))
-      .forEach((b,i)=>{stopNums[b.ref]=i+1;});
+  // กรองบิลตาม filterPlate และ mapFilterTrip
+  function passesFilter(b){
+    if(filterPlate&&queue[b.ref]!==filterPlate)return false;
+    if(mapFilterTrip&&(tripMap[b.ref]||1)!==mapFilterTrip)return false;
+    return true;
   }
 
-  // Route lines — only for selected truck (or all if no filter)
-  const truckStops={};
+  // Build stop nums per truck per trip
+  const stopNums={};
+  if(filterPlate){
+    [1,2].forEach(tr=>{
+      [...bills].filter(b=>queue[b.ref]===filterPlate&&(tripMap[b.ref]||1)===tr)
+        .sort((a,b)=>distOrInf(a)-distOrInf(b))
+        .forEach((b,i)=>{stopNums[b.ref]=i+1;});
+    });
+  }
+
+  // Route lines per truck per trip
   TRUCKS.forEach(t=>{
     if(filterPlate&&t.plate!==filterPlate)return;
-    const stops=bills.filter(b=>queue[b.ref]===t.plate&&b.lat&&b.lng)
-      .sort((a,b)=>dist(a)-dist(b));
-    if(stops.length){truckStops[t.plate]=stops;}
-  });
-  Object.entries(truckStops).forEach(([plate,stops])=>{
-    const col=getTruckCol(plate);
-    const pts=[[HQ.lat,HQ.lng],...stops.map(b=>[b.lat,b.lng])];
-    const line=L.polyline(pts,{color:col,weight:4,opacity:.85,dashArray:'8 5',lineJoin:'round'}).addTo(leafletMap);
-    mapLayers.push(line);
+    const col=getTruckCol(t.plate);
+
+    // เที่ยว 1: solid line
+    if(!mapFilterTrip||mapFilterTrip===1){
+      const t1=bills.filter(b=>queue[b.ref]===t.plate&&b.lat&&b.lng&&(tripMap[b.ref]||1)===1)
+        .sort((a,b)=>distOrInf(a)-distOrInf(b));
+      if(t1.length){
+        const line=L.polyline([[HQ.lat,HQ.lng],...t1.map(b=>[b.lat,b.lng])],
+          {color:col,weight:4,opacity:.85,lineJoin:'round'}).addTo(leafletMap);
+        mapLayers.push(line);
+      }
+    }
+    // เที่ยว 2: dashed line (thinner, lower opacity)
+    if(!mapFilterTrip||mapFilterTrip===2){
+      const t2=bills.filter(b=>queue[b.ref]===t.plate&&b.lat&&b.lng&&(tripMap[b.ref]||1)===2)
+        .sort((a,b)=>distOrInf(a)-distOrInf(b));
+      if(t2.length){
+        const line=L.polyline([[HQ.lat,HQ.lng],...t2.map(b=>[b.lat,b.lng])],
+          {color:col,weight:2.5,opacity:.7,dashArray:'10 6',lineJoin:'round'}).addTo(leafletMap);
+        mapLayers.push(line);
+      }
+    }
   });
 
-  // Bill markers — ถ้าเลือกรถ: แสดงเฉพาะรถที่เลือก ซ่อนคันอื่นทั้งหมด
-  const billsToShow = filterPlate
-    ? bills.filter(b=>b.lat&&b.lng&&queue[b.ref]===filterPlate)  // เฉพาะรถที่เลือก
-    : bills.filter(b=>b.lat&&b.lng);                             // ทั้งหมด
+  // Bill markers
+  const billsToShow=filterPlate
+    ? bills.filter(b=>b.lat&&b.lng&&queue[b.ref]===filterPlate&&(!mapFilterTrip||(tripMap[b.ref]||1)===mapFilterTrip))
+    : bills.filter(b=>b.lat&&b.lng&&(!mapFilterTrip||(tripMap[b.ref]||1)===mapFilterTrip));
 
   billsToShow.forEach(b=>{
     const plate=queue[b.ref];
+    const tr=tripMap[b.ref]||1;
     const col=plate?getTruckCol(plate):'#9BAAB8';
     const truck=TRUCKS.find(t=>t.plate===plate);
     const num=stopNums[b.ref];
     const size=num?30:(plate?26:22);
     const label=num?String(num):(plate?'·':'?');
-    const icon=makePinIcon(col,label,size,1); // always full opacity
+    const icon=makePinIcon(col,label,size,1,tr===2);
     const d=dist(b);
+    const tripBadge=plate?`<span style="background:${tr===2?'#EAF0F8':'#FFF8EC'};color:${tr===2?'#1A5FA5':'#C47000'};border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700">เที่ยว ${tr}</span>`:''
     const popup=`<div style="min-width:180px">
-      <b style="font-size:13px;color:#07101F">${b.arName}</b><br/>
+      <b style="font-size:13px;color:#07101F">${b.arName}</b> ${tripBadge}<br/>
       <span style="color:#6B7A90;font-size:11px">📍 ${b.district}, ${b.province}</span><br/>
       <span style="color:#1A5FA5;font-size:11px">ห่าง HQ: <b>${d!==null?d.toFixed(1)+' กม.':'—'}</b></span><br/>
       <span style="font-size:11px;color:#444">⚖ ${fmtKg(b.totalW)}</span><br/>
@@ -1843,17 +1911,26 @@ function updateMap(filterPlate){
     .bindPopup('<b style="color:#C9A84C">★ HQ รัตนไพบูลย์ กรุ๊ป</b><br/><span style="font-size:11px;color:#6B7A90">สมุทรสงคราม</span>').addTo(leafletMap);
   mapLayers.push(hqM);
 
-  // Auto-fit
-  const pts=bills.filter(b=>b.lat&&b.lng&&(!filterPlate||queue[b.ref]===filterPlate));
+  const pts=bills.filter(b=>b.lat&&b.lng&&passesFilter(b));
   if(pts.length){
     try{leafletMap.fitBounds(L.latLngBounds([[HQ.lat,HQ.lng],...pts.map(b=>[b.lat,b.lng])]),{padding:[36,36],maxZoom:13});}catch(e){}
   }
 }
 
+function filterMapTrip(trip,btn){
+  mapFilterTrip=mapFilterTrip===trip?0:trip;
+  document.querySelectorAll('#mapTripFilter button').forEach(b=>b.style.fontWeight='400');
+  if(mapFilterTrip&&btn){btn.style.fontWeight='700';}
+  updateMap(mapFilterPlate);
+}
+
 function filterMap(plate,btn){
   mapFilterPlate=plate;
+  mapFilterTrip=0; // reset trip filter on truck change
   document.querySelectorAll('#mapTruckFilter button').forEach(b=>b.style.background=b.style.borderColor=plate?'transparent':'#07101F');
   if(btn){btn.style.background=plate?getTruckCol(plate):'#07101F';btn.style.borderColor=plate?getTruckCol(plate):'#07101F';}
+  // Reset trip filter buttons
+  document.querySelectorAll('#mapTripFilter button').forEach(b=>b.style.fontWeight='400');
   document.getElementById('mapTitle').textContent=plate
     ?`🗺️ เส้นทาง ${plate} (${TRUCKS.find(t=>t.plate===plate)?.nick})`
     :'🗺️ แผนที่โลเคชันทั้งหมด';
