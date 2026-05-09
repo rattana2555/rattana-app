@@ -348,6 +348,19 @@ select,input{font-family:'Sarabun',sans-serif;font-size:15px!important}
 
     <!-- Truck cards -->
     <div class="truck-hint">👇 <strong style="color:#07101F">คลิกเลือกรถ</strong> แล้วคลิกบิล <span id="sel-plate-hint"></span></div>
+    <!-- Trip toggle — แสดงเมื่อเลือกรถแล้ว -->
+    <div id="tripToggle" style="display:none;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-size:12px;color:#6B7A90;font-weight:500">ใส่เที่ยว:</span>
+      <button id="tripBtn1" onclick="setSelTrip(1)"
+        style="padding:5px 16px;border-radius:20px;border:2px solid #C9A84C;background:#FFF8EC;color:#633806;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s">
+        🟠 เที่ยว 1
+      </button>
+      <button id="tripBtn2" onclick="setSelTrip(2)"
+        style="padding:5px 16px;border-radius:20px;border:2px solid #E0E5ED;background:#fff;color:#6B7A90;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s">
+        🔵 เที่ยว 2
+      </button>
+      <span id="tripToggleInfo" style="font-size:11px;color:#A0ABBB"></span>
+    </div>
     <div class="truck-scroll" id="truckCards"></div>
 
     <!-- Transfer bar (shown when truck selected + has bills) -->
@@ -525,6 +538,7 @@ const EXCLUDE_AUTO = new Set([
 let bills=[], billMap={}, products={}, routeMap={};
 let queue={};      // {billRef: plateNumber}
 let tripMap={};    // {billRef: 1|2} — เที่ยว (default=1)
+let selTrip=1;     // เที่ยวที่กำลังจะใส่ (1 หรือ 2) — toggle โดยผู้ใช้
 let selPlate=null;
 let selRefs=new Set();
 
@@ -792,6 +806,9 @@ function renderTruckCards(){
     </div>`;
   }).join('');
 
+  // Trip toggle
+  updateTripToggle();
+
   // Hint text
   const hint=document.getElementById('sel-plate-hint');
   if(selPlate){
@@ -859,9 +876,11 @@ function getFilteredBills(){
   else if(fSort==='weight') list.sort((a,b)=>b.totalW-a.totalW);
   else list.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
 
-  // Selected truck's bills first
+  // Selected truck's bills first — เรียงตามเที่ยวด้วย
   if(selPlate){
-    list=[...list.filter(b=>queue[b.ref]===selPlate),...list.filter(b=>queue[b.ref]!==selPlate)];
+    const onTruck=[...list.filter(b=>queue[b.ref]===selPlate)]
+      .sort((a,b)=>(tripMap[a.ref]||1)-(tripMap[b.ref]||1)||distOrInf(a)-distOrInf(b));
+    list=[...onTruck,...list.filter(b=>queue[b.ref]!==selPlate)];
   }
   return list;
 }
@@ -873,16 +892,29 @@ function renderBillTable(){
 
   if(!list.length){tbody.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:36px;color:#A0ABBB">ไม่พบข้อมูล</td></tr>`;return;}
 
+  let _lastTrip=0; // track trip group for divider
   tbody.innerHTML=list.map(b=>{
     const plate=queue[b.ref];
     const truck=TRUCKS.find(t=>t.plate===plate);
     const isSel=selRefs.has(b.ref);
     const isOnActive=selPlate&&plate===selPlate;
+    // ── Trip group divider ──
+    let divider='';
+    if(isOnActive){
+      const tr=tripMap[b.ref]||1;
+      if(tr!==_lastTrip){
+        _lastTrip=tr;
+        divider=`<tr style="background:${tr===1?'#FFF8EC':'#EAF0F8'};border-bottom:none">
+          <td colspan="7" style="padding:4px 10px;font-size:11px;font-weight:700;color:${tr===1?'#C47000':'#1A5FA5'}">
+            ${tr===1?'🟠':'🔵'} เที่ยว ${tr}
+          </td></tr>`;
+      }
+    } else { _lastTrip=0; }
     const d=dist(b);
     const dCls=d===null?'':d<10?'dist-near':d<40?'dist-mid':'dist-far';
     const col=plate?getTruckCol(plate):'';
     const rowCls=`bill-row${isOnActive?' on-truck':''}${isSel?' selected':''}`;
-    return `<tr class="${rowCls}" onclick="handleBillClick('${b.ref}')">
+    return divider+`<tr class="${rowCls}" onclick="handleBillClick('${b.ref}')">
       <td onclick="event.stopPropagation();toggleSel('${b.ref}',this)">
         <input type="checkbox" ${isSel?'checked':''} onchange="toggleSel('${b.ref}',this)" style="cursor:pointer;accent-color:#C9A84C"/>
       </td>
@@ -953,8 +985,32 @@ function updateQueueSub(){
 // ══════════════════════════════════════════
 // INTERACTIONS
 // ══════════════════════════════════════════
+function setSelTrip(trip){
+  selTrip=trip;
+  // อัปเดต style ปุ่ม toggle
+  const b1=document.getElementById('tripBtn1');
+  const b2=document.getElementById('tripBtn2');
+  if(b1)b1.style.cssText=`padding:5px 16px;border-radius:20px;border:2px solid ${trip===1?'#C9A84C':'#E0E5ED'};background:${trip===1?'#FFF8EC':'#fff'};color:${trip===1?'#633806':'#6B7A90'};font-size:12px;font-weight:700;cursor:pointer;transition:all .15s`;
+  if(b2)b2.style.cssText=`padding:5px 16px;border-radius:20px;border:2px solid ${trip===2?'#1A5FA5':'#E0E5ED'};background:${trip===2?'#EAF0F8':'#fff'};color:${trip===2?'#1A5FA5':'#6B7A90'};font-size:12px;font-weight:700;cursor:pointer;transition:all .15s`;
+}
+
+function updateTripToggle(){
+  const tog=document.getElementById('tripToggle');
+  if(!tog)return;
+  if(!selPlate){tog.style.display='none';return;}
+  tog.style.display='flex';
+  const t=TRUCKS.find(x=>x.plate===selPlate);
+  const ld1=truckLoad(selPlate,1),ld2=truckLoad(selPlate,2);
+  const pct1=t?Math.round(ld1.w/t.maxW*100):0;
+  const pct2=t?Math.round(ld2.w/t.maxW*100):0;
+  const info=document.getElementById('tripToggleInfo');
+  if(info)info.textContent=`เที่ยว 1: ${pct1}% | เที่ยว 2: ${pct2}%`;
+  setSelTrip(selTrip);
+}
+
 function selectTruck(plate){
-  selPlate=selPlate===plate?null:plate;
+  if(selPlate===plate){selPlate=null;selTrip=1;}else{selPlate=plate;}
+  updateTripToggle();
   renderTruckCards();
   renderBillTable();
 }
@@ -967,12 +1023,16 @@ function handleBillClick(ref){
     }
     const t=TRUCKS.find(x=>x.plate===selPlate);
     const b=billMap[ref];
-    const tr=t&&b?tripFor(t,b):1;
-    if(t&&b&&tr===0){showToast('รถ '+selPlate+' เต็มทั้ง 2 เที่ยวแล้ว ⚠','warn');return;}
+    // ── ใช้ selTrip ที่ผู้ใช้เลือก (ไม่ auto) ──
+    // ตรวจสอบว่า selTrip นั้นรับได้ไหม
+    const ld=truckLoad(selPlate,selTrip);
+    if(t&&b&&((ld.w+b.totalW)>t.maxW||(t.maxV>0&&(ld.v+b.totalV)>t.maxV))){
+      showToast(`เที่ยว ${selTrip} เต็มแล้ว — เปลี่ยนเป็นเที่ยวอื่นหรือเลือกรถใหม่ ⚠`,'warn');
+      return;
+    }
     queue[ref]=selPlate;
-    tripMap[ref]=tr||1;
+    tripMap[ref]=selTrip;
     saveQ();renderAll();
-    if(tr===2)showToast('→ ใส่เที่ยว 2 (เที่ยว 1 เต็ม)','ok');
   } else {
     toggleSel(ref);
   }
