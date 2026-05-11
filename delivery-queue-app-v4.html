@@ -208,6 +208,15 @@ select,input{font-family:inherit;font-size:16px}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
 
+/* ══ LEAFLET — Route Optimizer style ══ */
+.leaflet-popup-content-wrapper{background:var(--card-bg)!important;color:var(--text)!important;border-radius:var(--radius-md)!important;box-shadow:var(--shadow-lg)!important}
+.leaflet-popup-tip{background:var(--card-bg)!important}
+.leaflet-popup-content{color:var(--text)!important;margin:10px 14px!important;font-family:'Sarabun',sans-serif!important}
+.leaflet-popup-close-button{color:var(--muted)!important}
+.leaflet-container{background:var(--bg)!important}
+.leaflet-control-zoom a{background:var(--card-bg)!important;color:var(--text)!important;border-color:var(--border)!important}
+.leaflet-control-attribution{background:var(--card-bg)!important;color:var(--muted)!important;font-size:10px!important}
+
 /* ══ PRINT ══ */
 @media print{.topnav,.bottom-nav,#toasts,.no-print{display:none!important}body{background:#fff}}
 </style>
@@ -538,7 +547,24 @@ select,input{font-family:inherit;font-size:16px}
   <div class="tab-panel fi" id="tab-routes">
     <h1 style="font-family:Kanit;font-size:20px;font-weight:600;color:#07101F;margin-bottom:14px">🗺️ สายส่งและโลเคชัน</h1>
 
-    <!-- Map trip filter -->
+    <!-- Map controls bar -->
+    <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:8px 12px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div id="mapTripFilter" style="display:flex;gap:6px;align-items:center">
+        <span style="font-size:11px;color:var(--muted);font-weight:500">เที่ยว:</span>
+        <button onclick="filterMapTrip(0,this)" style="padding:4px 12px;border-radius:7px;border:1.5px solid var(--navy);background:var(--navy);color:var(--gold-light);font-size:11px;font-weight:700;cursor:pointer">ทั้งหมด</button>
+        <button onclick="filterMapTrip(1,this)" style="padding:4px 12px;border-radius:7px;border:1.5px solid #F6C45A;background:#FFF8EC;color:#C47000;font-size:11px;font-weight:400;cursor:pointer">🔴 เที่ยว 1</button>
+        <button onclick="filterMapTrip(2,this)" style="padding:4px 12px;border-radius:7px;border:1.5px solid #93B8DE;background:#EAF0F8;color:#1A5FA5;font-size:11px;font-weight:400;cursor:pointer">🔵 เที่ยว 2</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button id="mapThemeBtn" onclick="toggleMapTheme()"
+          style="padding:4px 12px;border-radius:7px;border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:11px;font-weight:600;cursor:pointer">
+          🌙 Dark
+        </button>
+        <span style="font-size:10px;color:var(--muted)">● = เที่ยว 1 (solid) &nbsp; ○ = เที่ยว 2 (ring)</span>
+      </div>
+    </div>
+
+    <!-- Truck filter -->
     <div style="background:#fff;border:1px solid #E0E5ED;border-radius:12px;padding:10px 16px;margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span style="font-size:11px;color:#6B7A90;font-weight:500">🗺️ แสดงเที่ยว:</span>
       <div id="mapTripFilter" style="display:flex;gap:6px">
@@ -1064,29 +1090,32 @@ function renderBillTable(){
         <div style="color:#6B7A90;font-size:10px">${fmtM3(b.totalV)}</div>
       </td>
       <td style="font-weight:600;white-space:nowrap">฿${fmtN(Math.round(b.totalAmt))}</td>
-      <td>
+      <td onclick="event.stopPropagation()">
         ${plate?`
-          <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:3px">
             <span class="chip chip-truck" style="--c:${col};--cb:${col}18;--cc:${col}55">${truck?.e||'🚛'} ${plate}</span>
             <span style="background:${(tripMap[b.ref]||1)===2?'#EAF0F8':'#FFF8EC'};color:${(tripMap[b.ref]||1)===2?'#1A5FA5':'#C47000'};border:1px solid ${(tripMap[b.ref]||1)===2?'#93B8DE':'#E4C46E'};border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700">
-              ${(tripMap[b.ref]||1)===2?'🔵':'🟠'} เที่ยว ${tripMap[b.ref]||1}
+              ${(tripMap[b.ref]||1)===2?'🔵':'🔴'} เที่ยว ${tripMap[b.ref]||1}
             </span>
           </div>
-          ${selPlate&&plate===selPlate?`
-            <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
-              <button onclick="event.stopPropagation();changeTrip('${b.ref}')"
-                style="padding:2px 8px;border-radius:6px;background:#EAF0F8;border:1px solid #93B8DE88;color:#1A5FA5;font-size:10px;font-weight:600;cursor:pointer">
-                🔄 เปลี่ยนเที่ยว
-              </button>
-              <button onclick="event.stopPropagation();removeBill('${b.ref}')"
-                style="padding:2px 8px;border-radius:6px;background:#FEF2F2;border:1px solid #FCA5A588;color:#C62828;font-size:10px;font-weight:600;cursor:pointer">
-                ✕ เอาออก
-              </button>
-            </div>`:
-          plate!==selPlate&&selPlate?`<div style="font-size:10px;color:#A0ABBB;margin-top:2px">คลิกเพื่อย้ายมา</div>`:''}
+          <div style="display:flex;gap:4px;flex-wrap:wrap">
+            <select onchange="reassignTruck('${b.ref}',this.value);this.value=''"
+              style="padding:2px 6px;border-radius:6px;background:#F5F7FA;border:1px solid var(--border);color:var(--text);font-size:10px;cursor:pointer;max-width:120px">
+              <option value="">🚛 เปลี่ยนรถ</option>
+              ${TRUCKS.filter(t=>t.plate!==plate).map(t=>`<option value="${t.plate}">${t.e} ${t.plate} (${t.nick})</option>`).join('')}
+            </select>
+            <button onclick="changeTrip('${b.ref}')"
+              style="padding:2px 8px;border-radius:6px;background:#EAF0F8;border:1px solid #93B8DE88;color:#1A5FA5;font-size:10px;font-weight:600;cursor:pointer">
+              🔄 เที่ยว
+            </button>
+            <button onclick="removeBill('${b.ref}')"
+              style="padding:2px 8px;border-radius:6px;background:#FEF2F2;border:1px solid #FCA5A588;color:#C62828;font-size:10px;font-weight:600;cursor:pointer">
+              ✕
+            </button>
+          </div>
         `:`
           <span class="chip chip-pending">⏳ รอจัด</span>
-          ${selPlate?`<div style="font-size:10px;color:#C9A84C;margin-top:3px;font-weight:600">👆 คลิกเพื่อใส่ ${selTrip===2?'🔵 เที่ยว 2':'🟠 เที่ยว 1'}</div>`:''}
+          ${selPlate?`<div style="font-size:10px;color:var(--gold);margin-top:3px;font-weight:600">👆 คลิกเพื่อใส่ ${selTrip===2?'🔵 เที่ยว 2':'🔴 เที่ยว 1'}</div>`:''}
         `}
       </td>
     </tr>`;
@@ -1205,6 +1234,21 @@ function handleBillClick(ref){
   } else {
     toggleSel(ref);
   }
+}
+
+function reassignTruck(ref, newPlate){
+  if(!newPlate||newPlate===queue[ref])return;
+  const t=TRUCKS.find(x=>x.plate===newPlate);
+  const b=billMap[ref];
+  if(t&&b){
+    const ld=truckLoad(newPlate,tripMap[ref]||1);
+    if((ld.w+b.totalW)>t.maxW||(t.maxV>0&&(ld.v+b.totalV)>t.maxV)){
+      showToast(`⚠ ${newPlate} เกินขีดบรรทุก — บันทึกแล้วต้องปรับ`,'warn');
+    }
+  }
+  queue[ref]=newPlate;
+  saveQ();renderAll();
+  showToast(`🚛 ย้ายไป ${newPlate} (${t?.nick||''})`,'ok');
 }
 
 function removeBill(ref){
@@ -1900,6 +1944,13 @@ function assignBill(ref,dd){
 // ══════════════════════════════════════════
 // ROUTES VIEW + LEAFLET MAP
 // ══════════════════════════════════════════
+// ── Route Optimizer map style ──
+const MAP_TILES = {
+  light: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+  dark:  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+};
+let mapTheme = 'light';
+let currentTileLayer = null;
 let leafletMap=null, mapLayers=[], mapFilterPlate=null, mapFilterTrip=0;
 
 function initMap(){
@@ -1907,32 +1958,46 @@ function initMap(){
   try{
     leafletMap=L.map('routeMap',{zoomControl:true,scrollWheelZoom:true})
       .setView([HQ.lat,HQ.lng],11);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
-      maxZoom:19,
-      attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>'
+    currentTileLayer=L.tileLayer(MAP_TILES[mapTheme],{
+      attribution:'©OpenStreetMap ©CARTO',subdomains:'abcd',maxZoom:19
     }).addTo(leafletMap);
     setTimeout(()=>leafletMap.invalidateSize(),100);
   }catch(e){console.warn('Map init error',e);}
 }
 
 function makePinIcon(col,label,size,opacity,isTrip2){
-  const s=size||26,tail=s*0.55;
-  // เที่ยว 2: outer ring style (white bg + colored border)
-  const bg=isTrip2?'white':col;
-  const txtCol=isTrip2?col:'white';
-  const border=isTrip2?`3px solid ${col}`:'2.5px solid white';
+  // ── Route Optimizer style: circular pin ──
+  const s=size||30;
+  const bg=isTrip2?'transparent':col;
+  const border=isTrip2?`3px solid ${col}`:`3px solid rgba(255,255,255,.9)`;
+  const txtCol=isTrip2?col:'#fff';
+  const shadow=mapTheme==='dark'?'0 3px 10px rgba(0,0,0,.7)':'0 3px 10px rgba(0,0,0,.35)';
   return L.divIcon({
-    html:`<div style="filter:drop-shadow(0 3px 5px rgba(0,0,0,.25));opacity:${opacity||1}">
-      <div style="width:${s}px;height:${s}px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
-        background:${bg};border:${border};position:relative">
-        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(45deg);
-          color:${txtCol};font-weight:700;font-size:${Math.round(s*.44)}px;font-family:'Sarabun',sans-serif;
-          text-shadow:0 1px 2px rgba(0,0,0,.2)">${label}</div>
-      </div>
+    html:`<div style="width:${s}px;height:${s}px;border-radius:50%;
+      background:${bg};border:${border};
+      display:flex;align-items:center;justify-content:center;
+      color:${txtCol};font-weight:700;font-size:${Math.round(s*.38)}px;
+      font-family:'Sarabun',sans-serif;
+      box-shadow:${shadow};
+      opacity:${opacity||1}">
+      ${label}
     </div>`,
     className:'',
-    iconSize:[s,s+tail],iconAnchor:[s/2,s+tail],popupAnchor:[0,-(s+tail+2)]
+    iconSize:[s,s],iconAnchor:[s/2,s/2],popupAnchor:[0,-s/2-4]
   });
+}
+
+function toggleMapTheme(){
+  mapTheme=mapTheme==='light'?'dark':'light';
+  if(leafletMap&&currentTileLayer){
+    leafletMap.removeLayer(currentTileLayer);
+    currentTileLayer=L.tileLayer(MAP_TILES[mapTheme],{
+      attribution:'©OpenStreetMap ©CARTO',subdomains:'abcd',maxZoom:19
+    }).addTo(leafletMap);
+  }
+  const btn=document.getElementById('mapThemeBtn');
+  if(btn)btn.textContent=mapTheme==='dark'?'☀️ Light':'🌙 Dark';
+  updateMap(mapFilterPlate);
 }
 
 function updateMap(filterPlate){
@@ -2017,11 +2082,13 @@ function updateMap(filterPlate){
 
   // HQ marker
   const hqIcon=L.divIcon({
-    html:`<div style="filter:drop-shadow(0 4px 8px rgba(0,0,0,.3))">
-      <div style="width:38px;height:38px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#C9A84C;border:3px solid white">
-        <div style="transform:rotate(45deg);text-align:center;line-height:32px;font-size:17px;color:white">★</div>
-      </div>
-    </div>`,className:'',iconSize:[38,57],iconAnchor:[19,57],popupAnchor:[0,-57]
+    html:`<div style="width:42px;height:42px;border-radius:50%;
+      background:var(--gold,#c9a84c);border:3px solid rgba(255,255,255,.9);
+      display:flex;align-items:center;justify-content:center;
+      color:#0d1b3e;font-size:20px;font-weight:700;
+      box-shadow:0 4px 14px rgba(201,168,76,.6)">
+      ★
+    </div>`,className:'',iconSize:[42,42],iconAnchor:[21,21],popupAnchor:[0,-25]
   });
   const hqM=L.marker([HQ.lat,HQ.lng],{icon:hqIcon,zIndexOffset:1000})
     .bindPopup('<b style="color:#C9A84C">★ HQ รัตนไพบูลย์ กรุ๊ป</b><br/><span style="font-size:11px;color:#6B7A90">สมุทรสงคราม</span>').addTo(leafletMap);
