@@ -5,156 +5,217 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า — รัตนไพบูลย์ กรุ๊ป W1</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v5.0</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-html,body{background:#F5F7FA;color:#07101F;font-family:'Sarabun',sans-serif;font-size:15px;line-height:1.5}
-button{cursor:pointer;font-family:'Sarabun',sans-serif;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
-select,input{font-family:'Sarabun',sans-serif;font-size:15px!important}
-::-webkit-scrollbar{width:5px;height:5px}
-::-webkit-scrollbar-track{background:#F0F2F6}
-::-webkit-scrollbar-thumb{background:#CBD2DC;border-radius:3px}
+/* ══ RATTANA DESIGN TOKENS ══ */
+:root{
+  --navy:       #0d1b3e;
+  --navy-mid:   #1a2f5e;
+  --navy-light: #243b73;
+  --gold:       #c9a84c;
+  --gold-light: #e8c86a;
+  --success:    #2ecc71;
+  --danger:     #e74c3c;
+  --warning:    #f39c12;
+  --info:       #3498db;
+  --bg:         #f4f6fb;
+  --text:       #0d1b3e;
+  --card-bg:    #ffffff;
+  --border:     #dde3f0;
+  --muted:      #6b7896;
+  --row-alt:    #fafbfd;
+  --radius-sm:  6px;
+  --radius-md:  12px;
+  --radius-lg:  16px;
+  --shadow-sm:  0 1px 4px rgba(0,0,0,.06);
+  --shadow-md:  0 2px 8px rgba(0,0,0,.08);
+  --shadow-lg:  0 8px 24px rgba(13,27,62,.12);
+  --shadow-gold:0 4px 12px rgba(201,168,76,.35);
+}
 
-/* ── Loading ── */
-#ls{position:fixed;inset:0;background:#F5F7FA;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:9999;transition:opacity .5s,visibility .5s}
+/* ══ RESET ══ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--text);font-family:'Sarabun',sans-serif;font-size:14px;line-height:1.5;min-height:100dvh;overflow-x:hidden}
+button{font-family:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+select,input{font-family:inherit;font-size:16px}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:#f0f2f6}
+::-webkit-scrollbar-thumb{background:#cbd2dc;border-radius:3px}
+
+/* ══ LOADING BAR ══ */
+#loadingBar{position:fixed;top:0;left:0;height:3px;background:var(--gold);width:0;transition:width .4s;z-index:10000}
+
+/* ══ LOADING SCREEN ══ */
+#ls{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:9999;transition:opacity .5s,visibility .5s}
 #ls.hide{opacity:0;visibility:hidden;pointer-events:none}
 #ls .truck{font-size:54px;animation:bounce 1s ease-in-out infinite alternate}
 @keyframes bounce{from{transform:translateY(0) rotate(-2deg)}to{transform:translateY(-8px) rotate(2deg)}}
-#ls .title{font-family:'Kanit',sans-serif;font-size:20px;font-weight:600;color:#07101F}
-#ls .sub{font-size:13px;color:#6B7A90}
-#ls .bar-wrap{width:220px;height:5px;background:#E0E5ED;border-radius:3px;overflow:hidden}
-#ls .bar{height:100%;background:#C9A84C;width:8%;transition:width .5s ease;border-radius:3px}
+#ls .title{font-family:'Kanit',sans-serif;font-size:20px;font-weight:600;color:var(--navy)}
+#ls .sub{font-size:13px;color:var(--muted)}
+#ls .bar-wrap{width:220px;height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+#ls .bar{height:100%;background:var(--gold);width:8%;transition:width .5s ease;border-radius:3px}
 
-/* ── TopNav ── */
-.topnav{background:#07101F;position:sticky;top:0;z-index:200;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+/* ══ TOAST ══ */
+#toasts{position:fixed;bottom:max(24px,env(safe-area-inset-bottom));right:16px;z-index:9998;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.toast{background:var(--card-bg);border:1.5px solid;border-radius:var(--radius-md);padding:10px 14px;font-size:13px;display:flex;align-items:flex-start;gap:8px;max-width:320px;box-shadow:var(--shadow-lg);animation:slideIn .3s ease}
+@keyframes slideIn{from{transform:translateX(110%);opacity:0}to{transform:none;opacity:1}}
+.toast.ok{border-color:#2ecc7188;background:#f0fdf4;color:#1e8449}
+.toast.warn{border-color:#f39c1288;background:#fffbeb;color:#a87800}
+.toast.err{border-color:#e74c3c88;background:#fef2f2;color:#c0392b}
+
+/* ══ HEADER ══ */
+.topnav{background:var(--navy);position:sticky;top:0;z-index:200;box-shadow:0 1px 4px rgba(0,0,0,.15);border-bottom:3px solid var(--gold)}
 .topnav-inner{display:flex;align-items:center;padding:0 16px;height:52px;gap:8px}
-.logo-box{width:30px;height:30px;background:#C9A84C;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.logo-box{width:30px;height:30px;background:var(--gold);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
 .logo-text{flex-shrink:0}
-.logo-title{font-family:'Kanit',sans-serif;font-size:13px;font-weight:600;color:#E4C46E;line-height:1.1}
-.logo-sub{font-size:9px;color:#4A6280}
-.nav-tabs{display:flex;flex:1;overflow:hidden}
-.nav-tab{display:flex;align-items:center;gap:5px;padding:6px 12px;border:none;background:none;color:#7B97B8;font-size:13px;font-weight:400;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;cursor:pointer}
-.nav-tab:hover{color:#CBD5E0}
-.nav-tab.active{color:#E4C46E;border-bottom-color:#C9A84C;font-weight:600}
-.topnav-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0;font-size:10px;color:#4A6280}
+.logo-title{font-family:'Kanit',sans-serif;font-size:13px;font-weight:600;color:var(--gold-light);line-height:1.1}
+.logo-sub{font-size:9px;color:rgba(255,255,255,.4)}
+.topnav-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0;font-size:10px;color:rgba(255,255,255,.4)}
 
-/* ── Bottom Nav (mobile) ── */
-.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #E0E5ED;z-index:200;padding-bottom:env(safe-area-inset-bottom,0)}
-.bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border:none;background:none;color:#A0ABBB;font-size:10px;font-weight:400;border-top:2px solid transparent;transition:all .15s}
-.bnav-item.active{color:#C9A84C;border-top-color:#C9A84C;font-weight:600}
+/* ══ TAB NAV ══ */
+.nav-tabs{display:flex;flex:1;overflow:hidden;gap:4px;padding:0 8px 0 4px}
+.nav-tab{display:flex;align-items:center;gap:5px;padding:6px 12px;border:none;background:none;color:rgba(255,255,255,.55);font-size:13px;font-weight:500;border-bottom:3px solid transparent;transition:all .15s;white-space:nowrap;cursor:pointer;border-radius:var(--radius-sm) var(--radius-sm) 0 0;margin-bottom:-3px}
+.nav-tab:hover{color:#fff;background:rgba(255,255,255,.07)}
+.nav-tab.active{color:var(--navy);background:var(--gold);border-bottom-color:var(--gold);font-weight:700;box-shadow:0 -2px 8px rgba(201,168,76,.3)}
+
+/* ══ BOTTOM NAV (mobile) ══ */
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--card-bg);border-top:1px solid var(--border);z-index:200;padding-bottom:env(safe-area-inset-bottom,0)}
+.bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border:none;background:none;color:var(--muted);font-size:10px;font-weight:400;border-top:2px solid transparent;transition:all .15s}
+.bnav-item.active{color:var(--gold);border-top-color:var(--gold);font-weight:600}
 .bnav-icon{font-size:18px}
 @media(max-width:768px){.bottom-nav{display:flex}.nav-tabs{display:none}.main{padding-bottom:70px!important}}
 
-/* ── Main ── */
-.main{padding:18px 20px;max-width:1400px;margin:0 auto}
+/* ══ MAIN ══ */
+.main{padding:14px 16px;max-width:1400px;margin:0 auto}
 .tab-panel{display:none}
 .tab-panel.active{display:block}
 @keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
 .fi{animation:fi .2s ease}
 
-/* ── Toast ── */
-#toasts{position:fixed;top:16px;right:16px;z-index:9998;display:flex;flex-direction:column;gap:8px}
-.toast{background:#fff;border:1.5px solid;border-radius:10px;padding:10px 14px;font-size:13px;display:flex;align-items:flex-start;gap:8px;max-width:320px;box-shadow:0 2px 12px rgba(0,0,0,.10);animation:tIn .3s ease}
-@keyframes tIn{from{transform:translateX(110%);opacity:0}to{transform:none;opacity:1}}
-.toast.ok{border-color:#97C45988;background:#F0FDF4;color:#15803D}
-.toast.warn{border-color:#FAC77588;background:#FFFBEB;color:#C47000}
-.toast.err{border-color:#FCA5A588;background:#FEF2F2;color:#C62828}
-
-/* ── Cards ── */
-.card{background:#fff;border:1px solid #E0E5ED;border-radius:12px;padding:16px}
-
-/* ── Stat cards ── */
+/* ══ STAT CARDS ══ */
 .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px}
-.stat-card{background:#fff;border:1px solid #E0E5ED;border-radius:12px;padding:16px;display:flex;align-items:center;gap:14px;transition:border-color .2s,box-shadow .2s}
-.stat-card:hover{border-color:#C9A84C;box-shadow:0 2px 8px rgba(201,168,76,.1)}
+.stat-card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);border-top:3px solid var(--gold);padding:14px 16px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow-sm);transition:box-shadow .2s}
+.stat-card:hover{box-shadow:var(--shadow-md)}
 .stat-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
 .stat-num{font-family:'Kanit',sans-serif;font-size:26px;font-weight:700;line-height:1}
-.stat-lbl{font-size:11px;color:#6B7A90;margin-top:3px}
+.stat-lbl{font-size:11px;color:var(--muted);margin-top:3px}
 
-/* ── Queue header ── */
+/* ══ CARDS ══ */
+.card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:var(--shadow-sm)}
+.card-gold{border-top:3px solid var(--gold)}
+
+/* ══ BUTTONS ══ */
+.btn{padding:7px 13px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;border:1px solid transparent;display:inline-flex;align-items:center;gap:6px;transition:opacity .15s,transform .1s;cursor:pointer;min-height:36px}
+.btn:hover{opacity:.88}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.btn-auto{background:#eaf3de;border:1px solid #97c459;color:#27500a}
+.btn-ai{background:#fdf6e8;border:1px solid var(--gold);color:#633806}
+.btn-save{background:var(--navy);border:none;color:var(--gold-light)}
+.btn-gold{background:var(--gold);color:var(--navy);border-color:var(--gold)}
+.btn-danger{background:#fef2f2;border:1.5px solid #fca5a5;color:var(--danger)}
+
+/* ══ QUEUE HEADER ══ */
 .queue-header{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;margin-bottom:14px}
-.queue-title{font-family:'Kanit',sans-serif;font-size:20px;font-weight:600;color:#07101F}
-.queue-sub{font-size:12px;color:#6B7A90;margin-top:2px}
+.queue-title{font-family:'Kanit',sans-serif;font-size:20px;font-weight:600;color:var(--navy)}
+.queue-sub{font-size:12px;color:var(--muted);margin-top:2px}
 .queue-btns{margin-left:auto;display:flex;gap:7px;flex-wrap:wrap}
-.btn{padding:7px 13px;border-radius:8px;font-size:12px;font-weight:600;border:none;display:inline-flex;align-items:center;gap:6px;transition:all .15s;cursor:pointer}
-.btn-auto{background:#EAF3DE;border:1px solid #97C459;color:#27500A}
-.btn-ai{background:#FDF6E8;border:1px solid #E4C46E;color:#633806}
-.btn-save{background:#07101F;border:none;color:#E4C46E}
-.btn:disabled{opacity:.6;cursor:default}
 
-/* ── Truck Cards ── */
-.truck-hint{font-size:12px;color:#6B7A90;margin-bottom:8px}
+/* ══ TRUCK CARDS ══ */
+.truck-hint{font-size:12px;color:var(--muted);margin-bottom:8px}
 .truck-scroll{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px}
 .truck-scroll::-webkit-scrollbar{height:4px}
-.tcard{background:#fff;border:2px solid #E0E5ED;border-radius:10px;padding:10px 12px;cursor:pointer;min-width:140px;flex-shrink:0;transition:all .15s}
-.tcard:hover{border-color:#C9A84C}
-.tcard.sel{background:#FFF8EC;border-color:#C9A84C}
-.tcard.over{border-color:#C62828}
+.tcard{background:var(--card-bg);border:2px solid var(--border);border-radius:10px;padding:10px 12px;cursor:pointer;min-width:145px;flex-shrink:0;transition:all .15s;box-shadow:var(--shadow-sm)}
+.tcard:hover{border-color:var(--gold)}
+.tcard.sel{background:#fff8ec;border-color:var(--gold)}
+.tcard.over{border-color:var(--danger)}
 .tcard-type{font-size:9px;font-weight:600}
-.tcard-plate{font-family:'Kanit',sans-serif;font-size:14px;font-weight:700;color:#07101F;margin-top:1px}
+.tcard-plate{font-family:'Kanit',sans-serif;font-size:14px;font-weight:700;color:var(--navy);margin-top:1px}
 .tcard-pct{font-size:15px;font-weight:700}
-.tcard-wt{font-size:9px;color:#6B7A90}
-.tcard-bar{height:4px;background:#E0E5ED;border-radius:2px;overflow:hidden;margin:2px 0}
+.tcard-wt{font-size:9px;color:var(--muted)}
+.tcard-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin:2px 0}
 .tcard-bar-fill{height:100%;border-radius:2px;transition:width .4s}
-.tcard-meta{display:flex;justify-content:space-between;font-size:10px;color:#6B7A90;margin-top:2px}
+.tcard-meta{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:2px}
 .tcard-driver{font-size:11px;font-weight:600;margin-top:3px}
-.tcard-sel-hint{text-align:center;font-size:10px;color:#C9A84C;font-weight:600;margin-top:4px}
+.tcard-sel-hint{text-align:center;font-size:10px;color:var(--gold);font-weight:600;margin-top:4px}
 
-/* ── Transfer bar ── */
-.transfer-bar{background:#FFF8EC;border:1.5px solid #E4C46E;border-radius:10px;padding:10px 14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;margin-bottom:4px}
-.transfer-bar select{background:#fff;border:1.5px solid #E4C46E;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;min-width:180px}
-.btn-clear{background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:8px;padding:6px 11px;color:#C62828;font-size:12px;font-weight:600}
+/* ══ TRANSFER BAR ══ */
+.transfer-bar{background:#fff8ec;border:1.5px solid var(--gold);border-radius:10px;padding:10px 14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;margin-bottom:4px}
+.transfer-bar select{background:var(--card-bg);border:1.5px solid var(--gold);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;min-width:155px}
+.btn-clear{background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px;padding:6px 11px;color:var(--danger);font-size:12px;font-weight:600}
 
-/* ── Filters ── */
+/* ══ FILTERS ══ */
 .filters{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:8px;align-items:center}
-.filters input,.filters select{background:#fff;border:1.5px solid #E0E5ED;border-radius:7px;padding:7px 10px;color:#07101F;font-size:13px}
+.filters input,.filters select{background:var(--card-bg);border:1.5px solid var(--border);border-radius:7px;padding:7px 10px;color:var(--text);font-size:13px}
 .filters input{flex:1;min-width:130px}
-.sel-bar{display:flex;gap:6px;align-items:center;background:#FDF6E8;border:1px solid #E4C46E;border-radius:7px;padding:5px 9px}
+.sel-bar{display:flex;gap:6px;align-items:center;background:#fdf6e8;border:1px solid var(--gold);border-radius:7px;padding:5px 9px}
 
-/* ── Bill Table ── */
-.bill-table-wrap{background:#fff;border:1px solid #E0E5ED;border-radius:10px;overflow:hidden}
+/* ══ BILL TABLE ══ */
+.bill-table-wrap{background:var(--card-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:var(--shadow-sm)}
 .bill-table{width:100%;border-collapse:collapse;font-size:13px}
-.bill-table th{padding:9px 10px;text-align:left;color:#444;font-weight:600;font-size:11px;white-space:nowrap;background:#F5F7FA;border-bottom:1.5px solid #E0E5ED}
-.bill-table td{padding:9px 10px;border-bottom:1px solid #EDF0F4;vertical-align:middle}
+.bill-table th{padding:9px 10px;text-align:left;font-size:11px;font-weight:600;white-space:nowrap;background:var(--navy);color:#fff;border-bottom:2px solid var(--gold)}
+.bill-table td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
 .bill-row{cursor:pointer;transition:background .1s}
-.bill-row:hover{background:#EAF0F8}
-.bill-row.on-truck{background:#FFF8EC}
-.bill-row.selected{background:#EAF4FF}
-.bill-row:nth-child(even){background:#F8F9FB}
-.bill-row:nth-child(even):hover{background:#EAF0F8}
-.bill-row.on-truck:nth-child(even){background:#FFF8EC}
-.bill-row.selected:nth-child(even){background:#EAF4FF}
-.dist-near{color:#15803D;font-weight:700}
-.dist-mid{color:#C9A84C;font-weight:700}
-.dist-far{color:#C47000;font-weight:700}
+.bill-row:hover{background:#eaf0f8}
+.bill-row.on-truck{background:#fff8ec}
+.bill-row.selected{background:#eaf4ff}
+.bill-row:nth-child(even){background:var(--row-alt)}
+.bill-row:nth-child(even):hover{background:#eaf0f8}
+.bill-row.on-truck:nth-child(even){background:#fff8ec}
+.bill-row.selected:nth-child(even){background:#eaf4ff}
+.dist-near{color:var(--success);font-weight:700}
+.dist-mid{color:var(--gold);font-weight:700}
+.dist-far{color:var(--warning);font-weight:700}
 .chip{display:inline-flex;align-items:center;gap:3px;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:600;white-space:nowrap;border:1px solid}
 .chip-truck{color:var(--c);background:var(--cb);border-color:var(--cc)}
-.chip-pending{color:#C47000;background:#FEF6EC;border-color:#FAC77588}
-.table-foot{padding:7px 12px;border-top:1px solid #EDF0F4;font-size:11px;color:#6B7A90;display:flex;gap:14px;background:#FAFBFC}
+.chip-pending{color:var(--warning);background:#fef6ec;border-color:#fac77588}
+.table-foot{padding:7px 12px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);display:flex;gap:14px;background:#fafbfc}
 
-/* ── Progress bars (fill colors) ── */
+/* ══ DISTANCE INDICATORS ══ */
 .fill-green{background:#2E8B57}.fill-amber{background:#E07B00}.fill-red{background:#DC3545}
 
-/* ── Car View ── */
+/* ══ CAR VIEW ══ */
 .car-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
-.car-card{background:#fff;border:1px solid #E0E5ED;border-radius:12px;padding:16px}
-.car-card.over{border-color:#C62828}
+.car-card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;box-shadow:var(--shadow-sm)}
+.car-card.over{border-color:var(--danger)}
 
-/* ── Routes ── */
+/* ══ SELECTED TRUCK PANEL ══ */
+#selTruckPanel{background:#fff8ec;border:2px solid var(--gold);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow-gold)}
+
+/* ══ MODAL (Rattana standard) ══ */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.65);z-index:5000;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--card-bg);border-radius:var(--radius-lg);max-width:480px;width:100%;box-shadow:var(--shadow-lg);overflow:hidden;border-top:4px solid var(--gold);animation:slideUp .22s ease}
+.modal-head{background:var(--navy);padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
+.modal-head-title{font-family:'Kanit',sans-serif;font-size:16px;font-weight:700;color:var(--gold-light)}
+.modal-head-sub{font-size:12px;color:rgba(255,255,255,.45);margin-top:2px}
+.modal-close{background:rgba(255,255,255,.1);border:none;color:rgba(255,255,255,.6);border-radius:var(--radius-sm);padding:6px 10px;font-size:13px;cursor:pointer}
+.modal-body{padding:18px 20px}
+.modal-foot{padding:0 20px 16px;display:flex;gap:8px;justify-content:flex-end}
+
+/* ══ ROUTES / MAP ══ */
 .route-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
 #routeMap{border:none;outline:none}
 .leaflet-popup-content{font-family:'Sarabun',sans-serif;font-size:12px}
 
-/* ── Print ── */
+/* ══ VERSION ══ */
+.app-version{font-size:9px;color:rgba(255,255,255,.3);margin-left:4px}
+
+/* ══ ANIMATIONS ══ */
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+/* ══ PRINT ══ */
 @media print{.topnav,.bottom-nav,#toasts,.no-print{display:none!important}body{background:#fff}}
 </style>
 </head>
 <body>
 
 <!-- Loading -->
+<div id="loadingBar"></div>
 <div id="ls">
   <div class="truck">🚛</div>
   <div class="title">จัดคิวรถส่งสินค้า</div>
@@ -167,18 +228,18 @@ select,input{font-family:'Sarabun',sans-serif;font-size:15px!important}
 <div id="toasts"></div>
 
 <!-- Delivery Date Picker Modal -->
-<div id="deliveryDateOverlay" style="display:none;position:fixed;inset:0;background:rgba(7,16,31,.55);z-index:5000;align-items:center;justify-content:center;padding:16px">
-  <div style="background:#fff;border-radius:14px;max-width:320px;width:100%;box-shadow:0 8px 30px rgba(0,0,0,.2);overflow:hidden">
-    <div style="background:#07101F;padding:14px 18px;display:flex;align-items:center;justify-content:space-between">
-      <div style="font-family:Kanit;font-size:14px;font-weight:700;color:#E4C46E">📅 วันที่ส่งสินค้า</div>
-      <button onclick="document.getElementById('deliveryDateOverlay').style.display='none'" style="background:none;border:none;color:#9BAAB8;font-size:14px;cursor:pointer">✕</button>
+<div id="deliveryDateOverlay" class="modal-overlay">
+  <div class="modal" style="max-width:340px">
+    <div class="modal-head">
+      <div class="modal-head-title">📅 วันที่ส่งสินค้า</div>
+      <button class="modal-close" onclick="document.getElementById('deliveryDateOverlay').classList.remove('open')">✕</button>
     </div>
     <div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
       <div style="font-size:12px;color:#6B7A90">เลือกวันที่จะไปส่งสินค้า (ใช้สำหรับบันทึกลงชีท Keepdata)</div>
       <input type="date" id="deliveryDateInput"
         style="border:1.5px solid #E0E5ED;border-radius:8px;padding:10px 12px;font-size:14px;font-family:Sarabun,sans-serif;color:#07101F;width:100%"/>
       <div style="display:flex;gap:8px">
-        <button onclick="document.getElementById('deliveryDateOverlay').style.display='none'"
+        <button onclick="document.getElementById('deliveryDateOverlay').classList.remove('open')"
           style="flex:1;border:1.5px solid #E0E5ED;background:#fff;color:#6B7A90;border-radius:8px;padding:9px;font-size:13px;font-weight:600;cursor:pointer">ยกเลิก</button>
         <button onclick="confirmDeliveryDate()"
           style="flex:1;background:#07101F;color:#E4C46E;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer">ตกลง</button>
@@ -188,15 +249,14 @@ select,input{font-family:'Sarabun',sans-serif;font-size:15px!important}
 </div>
 
 <!-- Day Picker Modal -->
-<div id="dayPickerOverlay" style="display:none;position:fixed;inset:0;background:rgba(7,16,31,.55);z-index:5000;align-items:center;justify-content:center;padding:16px">
-  <div style="background:#fff;border-radius:16px;max-width:480px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.25);overflow:hidden">
-    <!-- Modal header -->
-    <div style="background:#07101F;padding:16px 20px;display:flex;align-items:center;justify-content:space-between">
+<div id="dayPickerOverlay" class="modal-overlay">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-head">
       <div>
-        <div style="font-family:Kanit;font-size:16px;font-weight:700;color:#E4C46E">⚡ จัดอัตโนมัติ</div>
-        <div style="font-size:12px;color:#7B97B8;margin-top:2px">เลือกวันที่ต้องการจัดรถ</div>
+        <div class="modal-head-title">⚡ จัดอัตโนมัติ</div>
+        <div class="modal-head-sub">เลือกวันที่ต้องการจัดรถ</div>
       </div>
-      <button onclick="closeDayPicker()" style="background:rgba(255,255,255,.1);border:none;color:#9BAAB8;border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer">✕</button>
+      <button class="modal-close" onclick="closeDayPicker()">✕</button>
     </div>
     <!-- Day grid -->
     <div style="padding:18px 20px">
@@ -207,23 +267,22 @@ select,input{font-family:'Sarabun',sans-serif;font-size:15px!important}
         <div>บิลวันอื่นที่จัดไปแล้ว<strong>จะไม่ถูกเปลี่ยน</strong> — ระบบจะจัดเฉพาะวันที่เลือก และคำนวณน้ำหนักรถที่เหลือจากวันอื่นด้วย</div>
       </div>
     </div>
-    <!-- Footer -->
-    <div style="padding:0 20px 18px;display:flex;gap:8px;justify-content:flex-end">
-      <button onclick="closeDayPicker()" style="border:1.5px solid #E0E5ED;background:#fff;color:#6B7A90;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer">ยกเลิก</button>
-      <button id="dayPickerConfirm" onclick="confirmAutoAssign()" disabled style="background:#07101F;color:#E4C46E;border:none;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;opacity:.5">⚡ จัดเลย</button>
+    <div class="modal-foot">
+      <button onclick="closeDayPicker()" class="btn btn-outline" style="border:1.5px solid var(--border);background:var(--card-bg);color:var(--muted)">ยกเลิก</button>
+      <button id="dayPickerConfirm" onclick="confirmAutoAssign()" disabled class="btn btn-save" style="opacity:.5">⚡ จัดเลย</button>
     </div>
   </div>
 </div>
 
 <!-- Settings Modal -->
-<div id="settingsOverlay" style="display:none;position:fixed;inset:0;background:rgba(7,16,31,.6);z-index:5000;align-items:center;justify-content:center;padding:16px">
-  <div style="background:#fff;border-radius:16px;max-width:460px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.25);overflow:hidden">
-    <div style="background:#07101F;padding:16px 20px;display:flex;align-items:center;justify-content:space-between">
+<div id="settingsOverlay" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-head">
       <div>
-        <div style="font-family:Kanit;font-size:16px;font-weight:700;color:#E4C46E">⚙️ ตั้งค่า</div>
-        <div style="font-size:12px;color:#7B97B8;margin-top:2px">เชื่อมต่อ Google Sheets</div>
+        <div class="modal-head-title">⚙️ ตั้งค่า</div>
+        <div class="modal-head-sub">เชื่อมต่อ Google Sheets</div>
       </div>
-      <button onclick="closeSettings()" style="background:rgba(255,255,255,.1);border:none;color:#9BAAB8;border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer">✕</button>
+      <button class="modal-close" onclick="closeSettings()">✕</button>
     </div>
     <div style="padding:18px 20px;display:flex;flex-direction:column;gap:14px">
 
@@ -276,8 +335,8 @@ select,input{font-family:'Sarabun',sans-serif;font-size:15px!important}
       </div>
 
     </div>
-    <div style="padding:0 20px 16px;display:flex;justify-content:flex-end">
-      <button onclick="closeSettings()" style="border:1.5px solid #E0E5ED;background:#fff;color:#6B7A90;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:600;cursor:pointer">ปิด</button>
+    <div class="modal-foot">
+      <button onclick="closeSettings()" class="btn" style="border:1.5px solid var(--border);background:var(--card-bg);color:var(--muted)">ปิด</button>
     </div>
   </div>
 </div>
@@ -287,7 +346,7 @@ select,input{font-family:'Sarabun',sans-serif;font-size:15px!important}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า</div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v5.0</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -672,8 +731,9 @@ function getTruckCol(plate){const i=TRUCKS.findIndex(t=>t.plate===plate);return 
 // DATA LOADING
 // ══════════════════════════════════════════
 function setLoad(msg,pct){
-  const m=document.getElementById('ls-msg'),b=document.getElementById('ls-bar');
-  if(m)m.textContent=msg; if(b)b.style.width=pct+'%';
+  const m=document.getElementById('ls-msg'),b=document.getElementById('ls-bar'),lb=document.getElementById('loadingBar');
+  if(m)m.textContent=msg; if(b)b.style.width=pct+'%'; if(lb)lb.style.width=pct+'%';
+  if(pct>=100&&lb)setTimeout(()=>lb.style.width='0',600);
 }
 
 const csvURL = s=>`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(s)}`;
@@ -1283,7 +1343,7 @@ function doAutoAssign(){
     </button>`;
   }).join('');
 
-  document.getElementById('dayPickerOverlay').style.display='flex';
+  document.getElementById('dayPickerOverlay').classList.add('open');
   document.getElementById('dayPickerConfirm').disabled=true;
   document.getElementById('dayPickerConfirm').style.opacity='.5';
   document.getElementById('dayPickerConfirm').innerHTML='⚡ จัดเลย';
@@ -1322,7 +1382,7 @@ function pickDay(idx,short,full){
 }
 
 function closeDayPicker(){
-  document.getElementById('dayPickerOverlay').style.display='none';
+  document.getElementById('dayPickerOverlay').classList.remove('open');
   _pickedDay=null;
 }
 
@@ -1606,14 +1666,14 @@ function openDeliveryDatePicker(){
       inp.value=t.toISOString().slice(0,10);
     }
   }
-  document.getElementById('deliveryDateOverlay').style.display='flex';
+  document.getElementById('deliveryDateOverlay').classList.add('open');
 }
 
 function confirmDeliveryDate(){
   const val=document.getElementById('deliveryDateInput')?.value;
   if(!val){showToast('กรุณาเลือกวันที่','warn');return;}
   setDeliveryDate(new Date(val+'T00:00:00'));
-  document.getElementById('deliveryDateOverlay').style.display='none';
+  document.getElementById('deliveryDateOverlay').classList.remove('open');
   showToast(`✅ วันที่ส่ง: ${_deliveryDate}`,'ok');
 }
 
@@ -1627,9 +1687,9 @@ function openSettings(){
   if(ki)ki.value=k?'••••••••••••'+k.slice(-6):'';
   updateScriptUrlStatus();
   updateApiKeyStatus();
-  document.getElementById('settingsOverlay').style.display='flex';
+  document.getElementById('settingsOverlay').classList.add('open');
 }
-function closeSettings(){document.getElementById('settingsOverlay').style.display='none';}
+function closeSettings(){document.getElementById('settingsOverlay').classList.remove('open');}
 
 function updateScriptUrlStatus(){
   const url=localStorage.getItem('scriptUrl')||'';
