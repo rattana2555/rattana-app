@@ -181,6 +181,17 @@ html,body{height:100%;width:100%;overflow:hidden;font-family:'Anuphan',system-ui
 .orow-bar{flex:1;height:4px;background:var(--g1);border-radius:2px;overflow:hidden}
 .orow-bar-f{height:100%;border-radius:2px;background:var(--gd)}
 .orow-pct{font-size:11px;font-weight:600;color:var(--g6);min-width:32px;text-align:right}
+
+.pi-img{width:100%;height:160px;background:var(--g1);border-radius:12px 12px 0 0;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:36px}
+.pi-img img{width:100%;height:160px;object-fit:contain;background:#fff}
+.pi-body{padding:11px 12px 10px;flex:1}
+.pi-name-lg{font-size:14px;font-weight:700;color:var(--bl);margin-bottom:3px;line-height:1.3}
+.pi-bc-lg{font-size:11px;color:var(--g4);margin-bottom:6px;font-family:monospace;letter-spacing:.5px}
+.pi-meta-lg{font-size:12px;color:var(--g6);display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:5px}
+.pi-status-ok{color:#047857;font-weight:600}
+.pi-status-pend{color:var(--g4)}
+.pi-status-err{color:#991b1b;font-weight:600}
+.pi-pack{margin-top:5px;font-size:11px;background:#fff4e6;color:#b45309;border-radius:6px;padding:3px 9px;display:inline-block;font-weight:600}
 </style>
 </head>
 <body>
@@ -457,10 +468,11 @@ function parseGvizData(json) {
       const oi = APP.orders[oNum]&&APP.orders[oNum].items&&APP.orders[oNum].items.find(x=>x.barcode===bc);
       const rawQty   = num(ci('จำนวนชิ้น',9));
       const unitStr  = str(ci('หน่วยนับ',8));
-      const unitMatch= unitStr.match(/\d+$/);
-      const pcsPerCase = unitMatch ? parseInt(unitMatch[0]) : 1;
+      // รองรับทุก format: "ลัง48", "ลังx12(CS)", "กล่อง×6"
+      const unitMatch = unitStr.match(/[xX×](\d+)/) || unitStr.match(/(\d+)/);
+      const pcsPerCase = unitMatch ? parseInt(unitMatch[1]) : 1;
       const casesQty = pcsPerCase>1 ? Math.round(rawQty/pcsPerCase) : rawQty;
-      const unitLabel= unitStr.replace(/\d+$/,'').trim()||'ชิ้น';
+      const uLabelM=unitStr.match(/^([^\dxX×]+)/); const unitLabel=(uLabelM?uLabelM[1]:'').trim()||'ลัง';
       newOrders[oNum].items.push({
         barcode:bc, prodName:str(ci('ชื่อสินค้า',7)),
         unit:unitLabel, qty:casesQty, pieces:rawQty, pcsPerCase,
@@ -544,23 +556,38 @@ function renderOrderDetail(o) {
     const sc=item.status==='ok'?'ok':item.status==='error'?'er':'';
     const icoTxt=item.status==='ok'?'✓':item.status==='error'?'✕':'○';
     const icoCls=item.status==='ok'?'ok':item.status==='error'?'er':'pend';
-    let stTxt='';
-    if(item.status==='ok') stTxt=`<span style="color:#047857">✓ (${item.scannedQty}/${item.qty} ${item.unit})</span>`;
-    else if(item.status==='error') stTxt=`<span style="color:#991b1b">ไม่ตรง</span>`;
-    else stTxt=`<span style="color:var(--g4)">รอ (${item.scannedQty}/${item.qty} ${item.unit})</span>`;
     const pcsInfo=item.pcsPerCase>1?` (${item.pieces} ชิ้น)`:'';
-    const thumb=item.img1?`<img src="${item.img1}" style="width:100%;height:100%;object-fit:cover" onerror="this.remove()">`:'📦';
-    const packTag=item.pack?`<div style="margin-top:4px;font-size:10px;background:#fff4e6;color:#b45309;border-radius:6px;padding:2px 8px;display:inline-block;">📦 ${item.pack}</div>`:'';
-    html+=`<div class="pi ${sc}"><div class="pi-sh"></div><div class="pi-f">
-      <div class="pi-thumb">${thumb}</div>
-      <div class="pi-info">
-        <div class="pi-name">${item.prodName}</div>
-        <div class="pi-bc">${item.barcode}</div>
-        <div class="pi-meta"><span style="font-weight:700;color:var(--bl)">×${item.qty} ${item.unit}${pcsInfo}</span> <span style="color:var(--gdd)">฿${item.price.toLocaleString()}</span> ${stTxt}</div>
-        ${packTag}
+    let stTxt='', stCls='pi-status-pend';
+    if(item.status==='ok'){ stTxt=`✓ สแกนแล้ว (${item.scannedQty}/${item.qty} ${item.unit||'ลัง'})`; stCls='pi-status-ok'; }
+    else if(item.status==='error'){ stTxt='⚠ สแกนไม่ตรง'; stCls='pi-status-err'; }
+    else stTxt=`รอสแกน (${item.scannedQty}/${item.qty} ${item.unit||'ลัง'})`;
+    // Convert Drive link to direct image URL
+    const imgUrl = driveToImg(item.img1) || driveToImg(item.img2);
+    const imgSection = imgUrl
+      ? `<div class="pi-img"><img src="${imgUrl}" alt="" onerror="this.parentElement.innerHTML='📦'"></div>`
+      : '';
+    const packTag = item.pack ? `<div class="pi-pack">📦 ${item.pack}</div>` : '';
+    html+=`<div class="pi ${sc}">
+      <div class="pi-sh"></div>
+      <div class="pi-f" style="flex-direction:column;padding:0;gap:0;">
+        ${imgSection}
+        <div class="pi-body">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+            <div style="flex:1;min-width:0;">
+              <div class="pi-name-lg">${item.prodName}</div>
+              <div class="pi-bc-lg">${item.barcode}</div>
+            </div>
+            <div class="pi-icon ${icoCls}" style="margin-top:2px;flex-shrink:0;">${icoTxt}</div>
+          </div>
+          <div class="pi-meta-lg">
+            <span style="font-weight:700;color:var(--bl);font-size:13px;">×${item.qty} ${item.unit||'ลัง'}${pcsInfo}</span>
+            <span style="color:var(--gdd);font-size:13px;">฿${item.price.toLocaleString()}</span>
+          </div>
+          <div class="${stCls}" style="font-size:12px;">${stTxt}</div>
+          ${packTag}
+        </div>
       </div>
-      <div class="pi-icon ${icoCls}">${icoTxt}</div>
-    </div></div>`;
+    </div>`;
   });
   $('prod-list').innerHTML=html;
   updateCompleteBtn(o);
@@ -674,6 +701,16 @@ function startCamera(){
 
   const hints = new Map();
   hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+  // Product scan: 1D only (no QR — prevents reading courier QR instead of product barcode)
+  // Order scan: all formats
+  if(APP.scanMode === 'product') {
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+      ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
+      ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+      ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.ITF,
+      ZXing.BarcodeFormat.CODABAR,
+    ]);
+  }
   codeReader = new ZXing.BrowserMultiFormatReader(hints);
 
   // decodeFromConstraints handles stream + decode loop internally — no lag
@@ -707,6 +744,16 @@ function stopScanner(){
   if(codeReader){ try{codeReader.reset();}catch(e){} codeReader=null; }
   if(scanStream){ scanStream.getTracks().forEach(t=>t.stop()); scanStream=null; }
   const vid=$('scanner-video'); if(vid) vid.srcObject=null;
+}
+
+// ── DRIVE IMAGE ──────────────────────────────
+function driveToImg(url) {
+  if(!url) return '';
+  const m1 = url.match(/\/d\/([a-zA-Z0-9_-]{10,})/);
+  const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+  const id = (m1&&m1[1])||(m2&&m2[1]);
+  if(id) return 'https://lh3.googleusercontent.com/d/'+id;
+  return url;
 }
 
 // ── AUDIO ─────────────────────────────────────
