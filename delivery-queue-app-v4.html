@@ -789,12 +789,23 @@ async function loadData(){
       const gps=r['โลเคชัน']||'';
       let lat=null,lng=null;
       if(gps&&gps.includes(',')){const p=gps.split(',');lat=parseFloat(p[0]);lng=parseFloat(p[1]);}
-      routeMap[code]={
-        route:r['ชื่อสายจด']||r['สาย']||'',
-        days:r['วันส่ง']||'',
-        routeCode:r['Serial Route จด']||r['รูทจด']||'',
-        lat:isNaN(lat)?null:lat, lng:isNaN(lng)?null:lng
-      };
+      const newDays=r['วันส่ง']||'';
+      if(routeMap[code]){
+        // AR_CODE ซ้ำ → รวม วันส่ง ไม่ให้หาย
+        const existing=routeMap[code].days||'';
+        const merged=[...new Set([...existing.split(/[,\s\/]+/),
+                                  ...newDays.split(/[,\s\/]+/)].filter(Boolean))].join(',');
+        routeMap[code].days=merged;
+        if(!routeMap[code].lat&&lat)routeMap[code].lat=lat;
+        if(!routeMap[code].lng&&lng)routeMap[code].lng=lng;
+      } else {
+        routeMap[code]={
+          route:r['ชื่อสายจด']||r['สาย']||'',
+          days:newDays,
+          routeCode:r['Serial Route จด']||r['รูทจด']||'',
+          lat:isNaN(lat)?null:lat, lng:isNaN(lng)?null:lng
+        };
+      }
     });
 
     // Bills
