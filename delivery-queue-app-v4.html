@@ -1100,8 +1100,23 @@ function renderBillTable(){
             </button>
           </div>
         `:`
-          <span class="chip chip-pending">⏳ รอจัด</span>
-          ${selPlate?`<div style="font-size:10px;color:var(--gold);margin-top:3px;font-weight:600">👆 คลิกเพื่อใส่ ${selTrip===2?'🔵 เที่ยว 2':'🔴 เที่ยว 1'}</div>`:''}
+          <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap" onclick="event.stopPropagation()">
+            <select id="qp_${b.ref}"
+              style="flex:1;min-width:115px;padding:5px 7px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;cursor:pointer">
+              <option value="">🚛 เลือกรถ...</option>
+              ${TRUCKS.map(t=>`<option value="${t.plate}">${t.e} ${t.plate} (${t.nick})</option>`).join('')}
+            </select>
+            <select id="qt_${b.ref}"
+              style="width:78px;padding:5px 6px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;cursor:pointer">
+              <option value="1">🔴 ท.1</option>
+              <option value="2">🔵 ท.2</option>
+            </select>
+            <button onclick="const p=document.getElementById('qp_${b.ref}')?.value,t=document.getElementById('qt_${b.ref}')?.value||1;quickAssign('${b.ref}',p,t)"
+              style="padding:5px 10px;border-radius:var(--radius-sm);background:var(--navy);color:var(--gold-light);border:none;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">
+              ✓ จัด
+            </button>
+          </div>
+          ${selPlate?`<div style="font-size:10px;color:var(--muted);margin-top:2px">หรือกดแถวนี้ → ใส่ ${selTrip===2?'เที่ยว 2':'เที่ยว 1'} บนรถ ${selPlate}</div>`:''}
         `}
       </td>
     </tr>`;
@@ -1198,6 +1213,21 @@ function handleBillClick(ref){
   } else {
     toggleSel(ref);
   }
+}
+
+function quickAssign(ref, plate, trip){
+  if(!plate)return;
+  const t=TRUCKS.find(x=>x.plate===plate);
+  const b=billMap[ref];
+  if(t&&b){
+    const ld=truckLoad(plate,trip||1);
+    if((ld.w+b.totalW)>t.maxW||(t.maxV>0&&(ld.v+b.totalV)>t.maxV)){
+      showToast(`⚠ ${plate} เที่ยว ${trip} เกินขีดบรรทุก — บันทึกไว้แต่ต้องปรับ`,'warn');
+    }
+  }
+  queue[ref]=plate;
+  tripMap[ref]=parseInt(trip)||1;
+  saveQ();renderAll();
 }
 
 function reassignTruck(ref, newPlate){
