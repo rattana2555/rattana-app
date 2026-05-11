@@ -416,41 +416,6 @@ select,input{font-family:inherit;font-size:16px}
 
     <!-- Truck cards -->
     <div class="truck-hint">👇 <strong style="color:#07101F">คลิกเลือกรถ</strong> แล้วคลิกบิล <span id="sel-plate-hint"></span></div>
-    <!-- Selected Truck Panel — แสดงเมื่อเลือกรถแล้ว -->
-    <div id="selTruckPanel" style="display:none;background:#FFF8EC;border:2px solid #C9A84C;border-radius:12px;padding:14px 16px;margin-bottom:10px">
-      <!-- Header row -->
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div>
-          <div style="font-family:Kanit;font-size:14px;font-weight:700;color:#633806">🚛 <span id="spTruckName">—</span></div>
-          <div style="font-size:11px;color:#A08030;margin-top:2px" id="spTruckLoad"></div>
-        </div>
-        <button onclick="selectTruck(null)"
-          style="background:#fff;border:1.5px solid #E4C46E;border-radius:8px;padding:5px 12px;font-size:12px;color:#633806;font-weight:600;cursor:pointer">
-          ✕ ยกเลิกเลือกรถ
-        </button>
-      </div>
-      <!-- Trip selector -->
-      <div style="font-size:12px;color:#854F0B;font-weight:600;margin-bottom:8px">คลิกบิลด้านล่าง → ใส่เที่ยวไหน?</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-        <button id="tripBtn1" onclick="setSelTrip(1)"
-          style="padding:10px 8px;border-radius:10px;border:2.5px solid #C9A84C;background:#FFF8EC;cursor:pointer;text-align:center;transition:all .15s">
-          <div style="font-size:20px;line-height:1">🟠</div>
-          <div style="font-family:Kanit;font-size:14px;font-weight:700;color:#633806;margin-top:3px">เที่ยว 1</div>
-          <div id="spTrip1" style="font-size:11px;color:#A08030;margin-top:1px">—</div>
-        </button>
-        <button id="tripBtn2" onclick="setSelTrip(2)"
-          style="padding:10px 8px;border-radius:10px;border:2.5px solid #E0E5ED;background:#F8F9FB;cursor:pointer;text-align:center;transition:all .15s">
-          <div style="font-size:20px;line-height:1">🔵</div>
-          <div style="font-family:Kanit;font-size:14px;font-weight:700;color:#6B7A90;margin-top:3px">เที่ยว 2</div>
-          <div id="spTrip2" style="font-size:11px;color:#6B7A90;margin-top:1px">—</div>
-        </button>
-      </div>
-      <!-- Hint -->
-      <div style="background:rgba(201,168,76,.12);border-radius:7px;padding:6px 10px;font-size:11px;color:#854F0B">
-        💡 <strong>คลิกบิล</strong> = ใส่เที่ยวที่เลือก (กรอบไฮไลต์ด้านบน) &nbsp;|&nbsp;
-           <strong style="color:#C62828">✕ เอาออก</strong> = ลบบิลออกจากรถ
-      </div>
-    </div>
     <div class="truck-scroll" id="truckCards"></div>
 
     <!-- Transfer bar (shown when truck selected + has bills) -->
@@ -951,7 +916,28 @@ function renderTruckCards(){
       </div>
       <div class="tcard-driver" style="color:${isSel?'#7D6428':'#6B7A90'}"><span style="color:${col};font-weight:700">${t.nick}</span> <span style="font-size:10px">${t.driver}</span></div>
       <div style="display:flex;justify-content:space-between;font-size:10px;color:#A0ABBB;margin-top:1px"><span>${fmtKg(t.maxW)}/เที่ยว</span><span>${fmtM3(t.maxV)}</span></div>
-      ${isSel?'<div class="tcard-sel-hint">▼ กำลังเลือก</div>':''}
+      ${isSel?`
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">
+          <button onclick="event.stopPropagation();setSelTrip(1)"
+            style="padding:6px 4px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;
+              border:2px solid ${selTrip===1?'var(--gold)':'var(--border)'};
+              background:${selTrip===1?'rgba(201,168,76,.15)':'var(--bg)'};
+              color:${selTrip===1?'#C47000':'var(--muted)'}">
+            🔴 เที่ยว 1<br>
+            <span style="font-size:10px;font-weight:400">${cnt1}บิล ${fmtKg(ld1.w)}</span>
+          </button>
+          <button onclick="event.stopPropagation();setSelTrip(2)"
+            style="padding:6px 4px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;
+              border:2px solid ${selTrip===2?'#1A5FA5':'var(--border)'};
+              background:${selTrip===2?'rgba(26,95,165,.12)':'var(--bg)'};
+              color:${selTrip===2?'#1A5FA5':'var(--muted)'}">
+            🔵 เที่ยว 2<br>
+            <span style="font-size:10px;font-weight:400">${cnt2}บิล ${fmtKg(ld2.w)}</span>
+          </button>
+        </div>
+        <div style="text-align:center;font-size:10px;color:var(--gold);font-weight:600;margin-top:4px">
+          👇 คลิกบิลด้านล่างเพื่อใส่ ${selTrip===2?'เที่ยว 2':'เที่ยว 1'}
+        </div>`:''}
     </div>`;
   }).join('');
 
@@ -1177,32 +1163,11 @@ function changeTrip(ref){
 
 function setSelTrip(trip){
   selTrip=trip;
-  const b1=document.getElementById('tripBtn1');
-  const b2=document.getElementById('tripBtn2');
-  if(b1)b1.style.cssText=`padding:10px 8px;border-radius:10px;cursor:pointer;text-align:center;transition:all .15s;border:${trip===1?'2.5px solid #C9A84C':'2.5px solid #E0E5ED'};background:${trip===1?'#FFF8EC':'#F8F9FB'};transform:${trip===1?'scale(1.03)':'scale(1)'};box-shadow:${trip===1?'0 2px 8px rgba(201,168,76,.3)':'none'}`;
-  if(b2)b2.style.cssText=`padding:10px 8px;border-radius:10px;cursor:pointer;text-align:center;transition:all .15s;border:${trip===2?'2.5px solid #1A5FA5':'2.5px solid #E0E5ED'};background:${trip===2?'#EAF0F8':'#F8F9FB'};transform:${trip===2?'scale(1.03)':'scale(1)'};box-shadow:${trip===2?'0 2px 8px rgba(26,95,165,.25)':'none'}`;
+  renderTruckCards();
 }
 
 function updateTripToggle(){
-  const panel=document.getElementById('selTruckPanel');
-  if(!panel)return;
-  if(!selPlate){panel.style.display='none';return;}
-  panel.style.display='block';
-  const t=TRUCKS.find(x=>x.plate===selPlate);
-  const ld1=truckLoad(selPlate,1),ld2=truckLoad(selPlate,2);
-  const ld=truckLoad(selPlate);
-  const p1=t?Math.round(ld1.w/t.maxW*100):0;
-  const p2=t?Math.round(ld2.w/t.maxW*100):0;
-  const cnt1=Object.entries(queue).filter(([r,p])=>p===selPlate&&(tripMap[r]||1)===1).length;
-  const cnt2=Object.entries(queue).filter(([r,p])=>p===selPlate&&(tripMap[r]||1)===2).length;
-  const nameEl=document.getElementById('spTruckName');
-  const loadEl=document.getElementById('spTruckLoad');
-  const t1El=document.getElementById('spTrip1');
-  const t2El=document.getElementById('spTrip2');
-  if(nameEl)nameEl.textContent=`${t?.plate||selPlate} — ${t?.nick||''} (${t?.type||''})`;
-  if(loadEl)loadEl.textContent=`รวม ${fmtKg(ld.w)} / ${fmtKg(t?.maxW||0)} • ${cnt1+cnt2} บิล`;
-  if(t1El)t1El.textContent=`${cnt1} บิล • ${fmtKg(ld1.w)} • ${p1}%${p1>100?' ⚠ เกิน':''}`;
-  if(t2El)t2El.textContent=`${cnt2} บิล • ${fmtKg(ld2.w)} • ${p2}%${p2>100?' ⚠ เกิน':''}`;
+  // Trip toggle is now inside the truck card — just re-render cards
   setSelTrip(selTrip);
 }
 
@@ -1518,6 +1483,32 @@ function confirmAutoAssign(){
     // ── ข้อ 1: ติดตามร้านค้าที่จัดไปแล้ว → ใส่รอบเดียวกัน ──
     const storeTrip={}; // {arCode: {plate, trip}}
 
+    // ── ข้อ 2 (ใหม่): Pre-cluster bills by GPS proximity ──
+    // บิลที่ GPS ใกล้กัน (< GEO_CLUSTER_KM กม.) → cluster เดียวกัน → รถเดียวกัน
+    const GEO_CLUSTER_KM = 18;
+    const geoClusters = []; // [{centLat,centLng,bills:[],plate:null}]
+
+    tmrBills.filter(b=>b.lat&&b.lng).forEach(b=>{
+      let nearest=null, minD=Infinity;
+      geoClusters.forEach((c,i)=>{
+        const d=haversine(c.centLat,c.centLng,b.lat,b.lng);
+        if(d<minD){minD=d;nearest=i;}
+      });
+      if(nearest!==null && minD<=GEO_CLUSTER_KM){
+        geoClusters[nearest].bills.push(b);
+        // Update centroid (running average)
+        const bs=geoClusters[nearest].bills;
+        geoClusters[nearest].centLat=bs.reduce((s,x)=>s+(x.lat||0),0)/bs.length;
+        geoClusters[nearest].centLng=bs.reduce((s,x)=>s+(x.lng||0),0)/bs.length;
+      } else {
+        geoClusters.push({centLat:b.lat,centLng:b.lng,bills:[b],plate:null});
+      }
+    });
+    // billRef → clusterId map
+    const billCluster={};
+    geoClusters.forEach((c,i)=>c.bills.forEach(b=>{billCluster[b.ref]=i;}));
+    const clusterTruck={}; // clusterId → plate
+
     const routeGroups={};
     tmrBills.forEach(b=>{
       const key=(b.routeCode||b.route||'').trim()||`GEO_${Math.round(bearing(b)/30)*30}`;
@@ -1544,9 +1535,16 @@ function confirmAutoAssign(){
         let best=null;
         const bDist=distOrInf(b), bBear=bearing(b);
 
+        // 0. Geo cluster: บิลนี้อยู่ cluster เดิมที่จัดรถไปแล้ว → ใช้รถนั้น
+        const bCid=billCluster[b.ref];
+        if(!best && bCid!==undefined && clusterTruck[bCid]){
+          const t=trucks.find(x=>x.plate===clusterTruck[bCid]);
+          if(t&&fits(t,b)&&!farFromCentroid(t.plate,b))best=t;
+        }
+
         // 1. Route truck ที่จัดไปแล้วในรอบนี้
         //    + เพิ่ม centroid check: ถ้าไกลเกิน MAX_CENTROID_DIST ข้ามแถบ → ไม่ใช้รถนั้น
-        if(routeTruck[grp.key]){
+        if(!best && routeTruck[grp.key]){
           const t=trucks.find(x=>x.plate===routeTruck[grp.key]);
           if(t&&fits(t,b)&&!farFromCentroid(t.plate,b))best=t;
         }
@@ -1590,11 +1588,10 @@ function confirmAutoAssign(){
         }
 
         if(best){
-          // ── ร้านเดียวกัน → บังคับเที่ยวเดิมเสมอ (override หลังหารถเจอ) ──
           const storeKey=b.arCode||b.arName||'';
           let tr;
           if(storeKey && storeTrip[storeKey]){
-            tr=storeTrip[storeKey].trip; // force same trip
+            tr=storeTrip[storeKey].trip;
           } else {
             tr=fitsTrip(best,b)||1;
           }
@@ -1603,6 +1600,9 @@ function confirmAutoAssign(){
           else      {loads[best.plate].w2+=b.totalW;loads[best.plate].v2+=b.totalV;}
           if(!routeTruck[grp.key])routeTruck[grp.key]=best.plate;
           if(storeKey&&!storeTrip[storeKey])storeTrip[storeKey]={plate:best.plate,trip:tr};
+          // บันทึก geo cluster → truck
+          const cid=billCluster[b.ref];
+          if(cid!==undefined&&!clusterTruck[cid])clusterTruck[cid]=best.plate;
         }
       });
     });
