@@ -79,8 +79,8 @@ html,body{height:100%;overflow:hidden;font-family:'Sarabun',system-ui,sans-serif
 .live-dot{width:7px;height:7px;border-radius:50%;background:#ff3b30;animation:blink 1s ease infinite;display:inline-block}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
 .scan-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:12px}
-.vf{width:100%;max-width:340px;aspect-ratio:4/3;border-radius:8px;overflow:hidden;background:#000;position:relative}
-#cam-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.vf{width:100%;max-width:340px;aspect-ratio:4/3;border-radius:8px;background:#111;overflow:hidden}
+#cam-video{width:100%;height:100%;object-fit:cover;display:block;border-radius:8px}
 .vf-ov{position:absolute;inset:0;pointer-events:none}
 .beam{position:absolute;left:0;right:0;height:2px;background:var(--gd);animation:scan 1.8s ease-in-out infinite;z-index:2}
 .beam::after{content:"";position:absolute;inset:-6px 0;background:rgba(249,166,2,.12)}
@@ -727,49 +727,93 @@ function renderOrdersSummary(){
 function openFromSummary(num){ openOrder(num); }
 
 // ─── CAMERA ──────────────────────────────────────────────────
+var scanStream = null, isDecoding = false;
+
 function startCam(){
   stopCam();
-  if(!window.ZXing){ setTimeout(startCam,400); return; }
-  // Pre-warm audio (user gesture context)
+  scanActive = true;
+
+  // Pre-warm audio while in user gesture context
   try{ if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)(); audioCtx.resume(); }catch(e){}
 
-  var vid=$('cam-video');
-  scanActive=true;
-  var hints=new Map();
-  hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
-  if(scanMode==='product'){
+  var vid = $('cam-video');
+
+  // Show status while opening
+  toast('กำลังเปิดกล้อง...','');
+
+  // Try back camera first, then any camera
+  var constraints = [
+    {video:{facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720}}},
+    {video:{facingMode:'environment'}},
+    {video:{facingMode:{ideal:'environment'}}},
+    {video:true}
+  ];
+
+  function tryNext(i){
+    if(i >= constraints.length){
+      toast('เปิดกล้องไม่ได้ — กรุณาอนุญาตสิทธิ์','err');
+      scanActive = false; return;
+    }
+    navigator.mediaDevices.getUserMedia(constraints[i])
+      .then(function(stream){
+        scanStream = stream;
+        vid.srcObject = stream;
+        vid.muted = true;
+        vid.setAttribute('playsinline','true');
+        vid.setAttribute('autoplay','true');
+        vid.setAttribute('muted','true');
+        var p = vid.play();
+        if(p && p.then) p.then(function(){ waitZxing(vid); }).catch(function(e){ toast('Play: '+e.message,'err'); });
+        else waitZxing(vid);
+      })
+      .catch(function(err){
+        if(err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'){
+          toast('กรุณาอนุญาตสิทธิ์กล้อง','err'); scanActive=false;
+        } else {
+          tryNext(i+1);
+        }
+      });
+  }
+  tryNext(0);
+}
+
+function waitZxing(vid){
+  if(!window.ZXing){ setTimeout(function(){ waitZxing(vid); }, 400); return; }
+
+  var hints = new Map();
+  hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+  if(scanMode === 'product'){
     hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[
       ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
       ZXing.BarcodeFormat.EAN_13,   ZXing.BarcodeFormat.EAN_8,
       ZXing.BarcodeFormat.UPC_A,    ZXing.BarcodeFormat.ITF,
     ]);
   }
-  codeReader=new ZXing.BrowserMultiFormatReader(hints);
+  codeReader = new ZXing.BrowserMultiFormatReader(hints);
+  isDecoding = false;
 
-  var cb=function(result,err){
+  (function tick(){
     if(!scanActive) return;
-    if(result) onScan(result.getText());
-  };
-
-  ZXing.BrowserCodeReader.listVideoInputDevices()
-    .then(function(devices){
-      if(!devices.length) throw new Error('ไม่พบกล้อง');
-      var back=devices.find(function(d){return /back|rear|environment/i.test(d.label);})||devices[devices.length-1];
-      return codeReader.decodeFromVideoDevice(back.deviceId, vid, cb);
-    })
-    .then(function(ctrl){ scanControls=ctrl; })
-    .catch(function(){
-      codeReader.decodeFromConstraints({video:{facingMode:{ideal:'environment'}}}, vid, cb)
-        .then(function(ctrl){ scanControls=ctrl; })
-        .catch(function(e){ toast('กล้อง: '+e.message,'err'); scanActive=false; });
-    });
+    if(!isDecoding && vid.readyState >= 2 && vid.videoWidth > 0){
+      isDecoding = true;
+      codeReader.decodeFromVideoElement(vid)
+        .then(function(r){
+          isDecoding = false;
+          if(r && scanActive) onScan(r.getText());
+        })
+        .catch(function(){ isDecoding = false; });
+    }
+    setTimeout(tick, 500);
+  })();
 }
 
 function stopCam(){
-  scanActive=false;
-  if(scanControls){ try{scanControls.stop();}catch(e){} scanControls=null; }
-  if(codeReader){ try{codeReader.reset();}catch(e){} codeReader=null; }
-  var vid=$('cam-video'); if(vid) vid.srcObject=null;
+  scanActive = false;
+  isDecoding = false;
+  if(codeReader){ try{codeReader.reset();}catch(e){} codeReader = null; }
+  if(scanStream){ scanStream.getTracks().forEach(function(t){ t.stop(); }); scanStream = null; }
+  var vid = $('cam-video');
+  if(vid){ vid.srcObject = null; }
 }
 
 // ─── DRIVE IMAGE URL ─────────────────────────────────────────
