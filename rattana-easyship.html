@@ -190,6 +190,19 @@ html,body{height:100%;overflow:hidden;font-family:'Sarabun',system-ui,sans-serif
 .empty-ic{font-size:40px;margin-bottom:8px}
 .empty-t{font-size:14px;font-weight:600;color:var(--g6);margin-bottom:4px}
 .ver{font-size:9px;color:rgba(255,255,255,.12);text-align:right;padding:2px 16px 6px;flex-shrink:0}
+
+.scan-mode-bar{display:flex;gap:0;margin:0 14px 10px;border-radius:10px;overflow:hidden;border:1.5px solid rgba(249,166,2,.3);flex-shrink:0}
+.scan-mode-btn{flex:1;padding:9px 6px;background:transparent;border:none;color:rgba(255,255,255,.4);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}
+.scan-mode-btn.active{background:var(--gd);color:var(--bl)}
+.ocr-zone{width:100%;max-width:340px;aspect-ratio:4/3;border-radius:8px;background:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;cursor:pointer;border:2px dashed rgba(249,166,2,.3)}
+.ocr-zone:active{background:#1a1a1a}
+.ocr-ic{font-size:48px;line-height:1}
+.ocr-t{color:var(--gd);font-size:14px;font-weight:600}
+.ocr-s{color:rgba(255,255,255,.35);font-size:11px}
+.ocr-status{width:100%;max-width:340px;background:rgba(249,166,2,.07);border:1px solid rgba(249,166,2,.2);border-radius:11px;padding:10px 14px;text-align:center}
+.ocr-status-t{font-size:11px;color:rgba(255,255,255,.4);margin-bottom:4px}
+.ocr-status-v{font-size:14px;font-weight:600;color:var(--gd);font-family:monospace;word-break:break-all}
+.ocr-use-btn{margin-top:8px;background:var(--gd);color:var(--bl);border:none;border-radius:7px;padding:7px 18px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;display:none}
 </style>
 </head>
 <body>
@@ -238,22 +251,45 @@ html,body{height:100%;overflow:hidden;font-family:'Sarabun',system-ui,sans-serif
   <div class="sub-hdr">
     <button class="back-btn" onclick="goBack()">←</button>
     <span class="sub-t" id="scan-title">สแกนออเดอร์</span>
-    <div style="display:flex;align-items:center;gap:4px"><div class="live-dot"></div><span style="font-size:11px;color:#ff3b30;font-weight:700">LIVE</span></div>
+    <div style="display:flex;align-items:center;gap:4px"><div class="live-dot" id="live-dot"></div><span style="font-size:11px;color:#ff3b30;font-weight:700" id="live-lbl">LIVE</span></div>
+  </div>
+  <!-- Mode Toggle -->
+  <div class="scan-mode-bar">
+    <button class="scan-mode-btn active" id="btn-mode-bc" onclick="setScanMode('barcode')">📷 สแกนบาร์โค้ด</button>
+    <button class="scan-mode-btn" id="btn-mode-ocr" onclick="setScanMode('ocr')">🔍 OCR อ่านตัวอักษร</button>
   </div>
   <div class="scan-body">
-    <div class="vf">
-      <video id="cam-video" autoplay playsinline muted></video>
-      <div class="vf-ov">
-        <div class="beam"></div>
-        <div class="corner tl"></div><div class="corner tr"></div>
-        <div class="corner bl"></div><div class="corner br"></div>
+    <!-- BARCODE MODE -->
+    <div id="ui-barcode">
+      <div class="vf">
+        <video id="cam-video" autoplay playsinline muted></video>
+        <div class="vf-ov">
+          <div class="beam"></div>
+          <div class="corner tl"></div><div class="corner tr"></div>
+          <div class="corner bl"></div><div class="corner br"></div>
+        </div>
       </div>
     </div>
+    <!-- OCR MODE -->
+    <div id="ui-ocr" style="display:none;flex-direction:column;align-items:center;gap:10px;width:100%">
+      <input type="file" id="ocr-input" accept="image/*" capture="environment" style="display:none" onchange="processOCR(event)">
+      <div class="ocr-zone" onclick="document.getElementById('ocr-input').click()">
+        <div class="ocr-ic">📸</div>
+        <div class="ocr-t">แตะเพื่อถ่ายรูปใบปะ</div>
+        <div class="ocr-s">แอปจะอ่าน Shopee Order No. อัตโนมัติ</div>
+      </div>
+      <div class="ocr-status" id="ocr-status">
+        <div class="ocr-status-t" id="ocr-status-t">รอถ่ายรูป...</div>
+        <div class="ocr-status-v" id="ocr-status-v">-</div>
+        <button class="ocr-use-btn" id="ocr-use-btn" onclick="useOCRResult()">ใช้เลขนี้ →</button>
+      </div>
+    </div>
+    <!-- SHARED READOUT -->
     <div class="readout">
       <div><div class="rd-l" id="rd-lbl">รอสแกน...</div><div class="rd-v" id="rd-val">-</div></div>
       <button class="rd-btn" id="rd-btn" onclick="openLastScanned()">เปิด →</button>
     </div>
-    <div class="scan-tip" id="scan-tip">💡 เล็ง <b>บาร์โค้ด Shopee Order No.</b> (กลางใบปะ)<br>ไม่ใช่บาร์โค้ดขนส่งด้านบน</div>
+    <div class="scan-tip" id="scan-tip" style="font-size:11px;color:rgba(255,255,255,.4);text-align:center;padding:0 16px;line-height:1.5">💡 เล็ง <b style="color:rgba(255,200,0,.7)">บาร์โค้ด Shopee Order No.</b> กลางใบปะ</div>
   </div>
   <div class="manual">
     <div class="manual-l" id="manual-lbl">ป้อนหมายเลขออเดอร์</div>
@@ -352,11 +388,12 @@ html,body{height:100%;overflow:hidden;font-family:'Sarabun',system-ui,sans-serif
 </div><!-- #app -->
 
 <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
 // ─── CONFIG ─────────────────────────────────────────────────
 var SHEET_ID  = '1-KQ9dGZiQBB9CfoCObCUtHMqKWeDQZZTjIEXj9PIGDA';
 var SHEET_TAB = 'ใบเช็ค';
-var GAS_URL   = ''; // ใส่ URL Apps Script Web App เพื่อ upload รูป Drive
+var GAS_URL   = 'https://script.google.com/macros/s/AKfycbzshnirqR6NDxdtyN5CQmNYinZ0UCFt0JNnHPDaioUgg8ZKBXk7mrXQA2kW_Lno3TzX/exec';
 
 // ─── STATE ──────────────────────────────────────────────────
 var orders = {}, curOrder = null, orderStart = null, scanMode = 'order';
@@ -378,10 +415,9 @@ function goScan(mode){
   scanMode = mode || 'order';
   setText('scan-title', mode === 'product' ? 'สแกนสินค้า' : 'สแกนออเดอร์');
   setText('manual-lbl', mode === 'product' ? 'ป้อนบาร์โคดสินค้า' : 'ป้อนหมายเลขออเดอร์');
-  var tip = $('scan-tip');
-  if(tip) tip.style.display = mode === 'product' ? 'none' : '';
   showScreen('scan');
-  startCam();
+  currentScanMode = 'barcode';
+  setScanMode('barcode');
 }
 function goBack(){
   stopCam();
@@ -634,6 +670,10 @@ function openLastScanned(){ if(lastScanned){ stopCam(); openOrder(lastScanned); 
 function manualSearch(){
   var val=$('manual-inp').value.trim(); if(!val) return;
   $('manual-inp').value='';
+  manualSearchWithVal(val);
+}
+
+function manualSearchWithVal(val){
   if(scanMode==='product') handleProductScan(val);
   else{ handleOrderScan(val); if(lastScanned) setTimeout(openLastScanned,300); }
 }
@@ -678,19 +718,25 @@ function onPhoto(ev){
 
 function uploadPhoto(b64, orderNum){
   setText('photo-btn','⏳ กำลังอัปโหลด...');
-  var xhr=new XMLHttpRequest();
-  xhr.timeout=30000;
-  xhr.onload=function(){
-    try{
-      var d=JSON.parse(xhr.responseText);
-      if(d.ok){ toast('✓ อัปโหลด Drive สำเร็จ!','ok'); setText('photo-btn','✓ สำเร็จ'); }
-      else{ toast('อัปโหลดไม่สำเร็จ','err'); setText('photo-btn','❌ ลองอีกครั้ง'); }
-    }catch(e){ toast('Error','err'); setText('photo-btn','❌'); }
-  };
-  xhr.onerror=xhr.ontimeout=function(){ toast('Upload ไม่สำเร็จ','err'); setText('photo-btn','❌ ลองอีกครั้ง'); };
-  xhr.open('POST',GAS_URL);
-  xhr.setRequestHeader('Content-Type','application/json');
-  xhr.send(JSON.stringify({action:'savePhoto',b64:b64,orderNum:orderNum}));
+  // Use no-cors mode to avoid CORS preflight with Apps Script
+  var fd = new FormData();
+  fd.append('action', 'savePhoto');
+  fd.append('b64', b64);
+  fd.append('orderNum', orderNum);
+  fetch(GAS_URL, {method:'POST', mode:'no-cors', body: fd})
+    .then(function(){
+      toast('✓ อัปโหลด Drive สำเร็จ!','ok');
+      setText('photo-btn','✓ สำเร็จ');
+    })
+    .catch(function(e){
+      // Fallback: try XMLHttpRequest without Content-Type
+      var xhr=new XMLHttpRequest();
+      xhr.timeout=30000;
+      xhr.onload=function(){ toast('✓ อัปโหลดสำเร็จ!','ok'); setText('photo-btn','✓ สำเร็จ'); };
+      xhr.onerror=xhr.ontimeout=function(){ toast('Upload ไม่สำเร็จ — ลองใหม่','err'); setText('photo-btn','❌ ลองอีกครั้ง'); };
+      xhr.open('POST', GAS_URL);
+      xhr.send(JSON.stringify({action:'savePhoto',b64:b64,orderNum:orderNum}));
+    });
 }
 
 function delPhoto(){ $('photo-prev').style.display='none'; setText('photo-btn','📷 ถ่ายภาพบันทึก'); }
@@ -726,8 +772,127 @@ function renderOrdersSummary(){
 
 function openFromSummary(num){ openOrder(num); }
 
+// ─── SCAN MODE TOGGLE ────────────────────────────────────────
+var currentScanMode = 'barcode'; // 'barcode' | 'ocr'
+
+function setScanMode(mode){
+  currentScanMode = mode;
+  var isBC = mode === 'barcode';
+  $('btn-mode-bc').classList.toggle('active', isBC);
+  $('btn-mode-ocr').classList.toggle('active', !isBC);
+  $('ui-barcode').style.display = isBC ? '' : 'none';
+  $('ui-ocr').style.display = isBC ? 'none' : 'flex';
+  $('scan-tip').style.display = isBC ? '' : 'none';
+  var ld = $('live-dot'), ll = $('live-lbl');
+  if(ld) ld.style.display = isBC ? '' : 'none';
+  if(ll) ll.style.display = isBC ? '' : 'none';
+  if(isBC){ startCam(); }
+  else{ stopCam(); resetOCR(); }
+}
+
+// ─── OCR ──────────────────────────────────────────────────────
+var ocrResult = null;
+var tesseractWorker = null;
+
+function initTesseract(){
+  if(tesseractWorker) return Promise.resolve();
+  if(!window.Tesseract){ return Promise.reject('Tesseract not loaded'); }
+  return Tesseract.createWorker('eng', 1, {
+    logger: function(){}
+  }).then(function(w){
+    tesseractWorker = w;
+    return tesseractWorker.setParameters({
+      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .'
+    });
+  });
+}
+
+function resetOCR(){
+  ocrResult = null;
+  setText('ocr-status-t','รอถ่ายรูป...');
+  setText('ocr-status-v','-');
+  var btn=$('ocr-use-btn'); if(btn) btn.style.display='none';
+}
+
+function processOCR(ev){
+  var file = ev.target.files[0]; if(!file) return;
+  ev.target.value = '';
+  setText('ocr-status-t','⏳ กำลังอ่าน...');
+  setText('ocr-status-v','กรุณารอ 1-3 วินาที');
+  var btn=$('ocr-use-btn'); if(btn) btn.style.display='none';
+
+  var reader = new FileReader();
+  reader.onload = function(e){
+    var imgData = e.target.result;
+    initTesseract().then(function(){
+      return tesseractWorker.recognize(imgData);
+    }).then(function(result){
+      var text = result.data.text;
+      // Try to find Shopee Order No. pattern
+      var found = extractOrderNum(text);
+      if(found){
+        ocrResult = found;
+        setText('ocr-status-t','✓ พบหมายเลขออเดอร์');
+        setText('ocr-status-v', found);
+        var btn=$('ocr-use-btn'); if(btn) btn.style.display='block';
+        // Auto-try search
+        handleOrderScan(found);
+      } else {
+        // Try to find any 14-char alphanumeric sequence
+        var alt = text.match(/[A-Z0-9]{12,16}/g);
+        if(alt && alt.length > 0){
+          // Try each against orders
+          var matched = null;
+          for(var i=0; i<alt.length; i++){
+            if(orders[alt[i]]){ matched=alt[i]; break; }
+          }
+          if(matched){
+            ocrResult = matched;
+            setText('ocr-status-t','✓ พบออเดอร์');
+            setText('ocr-status-v', matched);
+            var btn=$('ocr-use-btn'); if(btn) btn.style.display='block';
+            handleOrderScan(matched);
+          } else {
+            ocrResult = alt[0];
+            setText('ocr-status-t','⚠ ไม่พบในระบบ — ลองอีกครั้ง');
+            setText('ocr-status-v', alt.join(' | '));
+            var btn=$('ocr-use-btn'); if(btn) btn.style.display='block';
+          }
+        } else {
+          setText('ocr-status-t','❌ อ่านไม่ได้ — ถ่ายใหม่ให้ชัดกว่านี้');
+          setText('ocr-status-v','-');
+        }
+      }
+    }).catch(function(err){
+      setText('ocr-status-t','❌ Error: '+err);
+      setText('ocr-status-v','-');
+    });
+  };
+  reader.readAsDataURL(file);
+}
+
+function extractOrderNum(text){
+  // Pattern: "Shopee Order No. XXXXXX" or "Shopee Order No XXXXXX"
+  var m = text.match(/Shopee\s*Order\s*No[.\s:]*([A-Z0-9]{10,18})/i);
+  if(m) return m[1].toUpperCase();
+  // Fallback: check each token against orders
+  var tokens = text.toUpperCase().split(/[\s
+
+]+/);
+  for(var i=0; i<tokens.length; i++){
+    var t = tokens[i].replace(/[^A-Z0-9]/g,'');
+    if(t.length >= 12 && t.length <= 16 && orders[t]) return t;
+  }
+  return null;
+}
+
+function useOCRResult(){
+  if(ocrResult){ manualSearchWithVal(ocrResult); }
+}
+
 // ─── CAMERA ──────────────────────────────────────────────────
 var scanStream = null, isDecoding = false;
+var decodeTimer = null;
 
 function startCam(){
   stopCam();
@@ -792,8 +957,11 @@ function waitZxing(vid){
   codeReader = new ZXing.BrowserMultiFormatReader(hints);
   isDecoding = false;
 
-  (function tick(){
-    if(!scanActive) return;
+  clearInterval(decodeTimer);
+  decodeTimer = setInterval(function(){
+    if(!scanActive){ clearInterval(decodeTimer); return; }
+    // Keep video alive on iOS (prevent black screen)
+    if(vid.paused && vid.srcObject){ vid.play().catch(function(){}); return; }
     if(!isDecoding && vid.readyState >= 2 && vid.videoWidth > 0){
       isDecoding = true;
       codeReader.decodeFromVideoElement(vid)
@@ -803,13 +971,13 @@ function waitZxing(vid){
         })
         .catch(function(){ isDecoding = false; });
     }
-    setTimeout(tick, 500);
-  })();
+  }, 500);
 }
 
 function stopCam(){
   scanActive = false;
   isDecoding = false;
+  clearInterval(decodeTimer);
   if(codeReader){ try{codeReader.reset();}catch(e){} codeReader = null; }
   if(scanStream){ scanStream.getTracks().forEach(function(t){ t.stop(); }); scanStream = null; }
   var vid = $('cam-video');
