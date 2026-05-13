@@ -611,25 +611,15 @@ function delPh(){$('ph-prev').style.display='none';TXT('ph-btn','📷 ถ่า�
 
 function uploadPh(b64,orderNum){
   TXT('ph-btn','⏳ กำลังอัปโหลด...');
-  // ส่งเป็น text/plain เพื่อหลีกเลี่ยง CORS preflight
-  // Apps Script รับผ่าน e.postData.contents
+  // no-cors + JSON body = Apps Script รับข้อมูลได้, เราไม่ต้องอ่าน response
   fetch(GAS_URL,{
     method:'POST',
+    mode:'no-cors',
     body:JSON.stringify({action:'savePhoto',b64:b64,orderNum:orderNum})
   })
-  .then(function(r){
-    // Apps Script อาจ redirect → text response
-    return r.text();
-  })
-  .then(function(txt){
-    try{
-      var d=JSON.parse(txt);
-      if(d.ok){toast('✓ อัปโหลด Drive สำเร็จ!','ok');TXT('ph-btn','✓ สำเร็จ');}
-      else{toast('❌ '+(d.error||'ไม่สำเร็จ'),'err');TXT('ph-btn','❌ ลองอีกครั้ง');}
-    }catch(e){
-      // ถ้า parse ไม่ได้แต่ status ok ถือว่าสำเร็จ
-      toast('✓ อัปโหลด Drive สำเร็จ!','ok');TXT('ph-btn','✓ สำเร็จ');
-    }
+  .then(function(){
+    toast('✓ อัปโหลด Drive สำเร็จ!','ok');
+    TXT('ph-btn','✓ สำเร็จ');
   })
   .catch(function(e){
     toast('Upload error: '+e.message,'err');
