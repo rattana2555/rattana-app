@@ -1525,6 +1525,11 @@ function confirmAutoAssign(){
     // ── ข้อ 1: ติดตามร้านค้าที่จัดไปแล้ว → ใส่รอบเดียวกัน ──
     const storeTrip={}; // key → {plate, trip}
 
+    // ── Normalize store name: ลบ (FN),(เครดิต),(สด) ฯลฯ ──
+    function normName(n){ return (n||'').replace(/\s*\([^)]*\)/g,'').replace(/\s+/g,' ').trim(); }
+    const billNormName={}; // billRef → normalized name
+    tmrBills.forEach(b=>{ billNormName[b.ref]=normName(b.arName); });
+
     // ── Pre-compute: GPS เดียวกัน (< 200ม.) = ร้านเดียวกัน → pre-link ไว้ใน gpsGroup ──
     // สร้าง gpsGroup: {gpsKey → gpsKey ของตัวแทน} เพื่อ merge GPS ที่ใกล้มากๆ
     const GPS_SAME_KM = 0.2; // 200 เมตร
@@ -1625,7 +1630,7 @@ function confirmAutoAssign(){
             if(!on.length)return false;
             const tb=on.reduce((s,x)=>s+bearing(x),0)/on.length;
             const bd=Math.abs(((bBear-tb+180)%360)-180);
-            return bd<=40||on.some(x=>(x.routeCode||x.route)===grp.routeCode&&grp.routeCode)||(grp.days&&on.some(x=>x.days===grp.days));
+            return bd<=30||on.some(x=>(x.routeCode||x.route)===grp.routeCode&&grp.routeCode)||(grp.days&&on.some(x=>x.days===grp.days));
           });
           if(cands.length){
             best=cands.sort((a,b_)=>{
@@ -1638,27 +1643,39 @@ function confirmAutoAssign(){
           }
         }
 
-        // 3. Fallback — เติม 6/10/12 ล้อก่อนเสมอ
+        // 3. Fallback — เลือกรถโดยสนทิศทาง (bearing) ก่อน แล้วค่อยเลือกตาม load
         if(!best){
           let f=trucks.filter(t=>{
             if(!fits(t,b))return false;
             if(bDist>80&&t.type==='กระบะ')return false;
-            // ยอดสูง → ห้ามรถเล็ก ถ้ายังมีรถใหญ่ว่าง
             if(isHi&&smallT.has(t.type)&&trucks.filter(x=>medLargeTruckTypes.has(x.type)&&fits(x,b)).length>0)return false;
             return true;
           });
-          // ลอง 6/10/12 ล้อก่อน ถ้ามีและรับได้
           const medLargeF=f.filter(t=>medLargeTruckTypes.has(t.type));
           if(medLargeF.length) f=medLargeF;
           if(!f.length)f=trucks.filter(t=>fits(t,b));
-          best=f.sort((a,b_)=>(a.maxW>0?loads[a.plate].w/a.maxW:1)-(b_.maxW>0?loads[b_.plate].w/b_.maxW:1))[0];
+          // เรียงโดย: 1) ทิศทางใกล้เคียงก่อน 2) น้ำหนักน้อยสุด
+          best=f.sort((tA,tB)=>{
+            const onA=Object.entries(newQ).filter(([,p])=>p===tA.plate).map(([r])=>billMap[r]).filter(x=>x&&x.lat&&x.lng);
+            const onB=Object.entries(newQ).filter(([,p])=>p===tB.plate).map(([r])=>billMap[r]).filter(x=>x&&x.lat&&x.lng);
+            if(!onA.length&&!onB.length) return (loads[tA.plate].w1+loads[tA.plate].w2)/tA.maxW-(loads[tB.plate].w1+loads[tB.plate].w2)/tB.maxW;
+            if(!onA.length)return 1;  // prefer truck that already has direction
+            if(!onB.length)return -1;
+            const bearA=onA.reduce((s,x)=>s+bearing(x),0)/onA.length;
+            const bearB=onB.reduce((s,x)=>s+bearing(x),0)/onB.length;
+            const dA=Math.abs(((bBear-bearA+180)%360)-180);
+            const dB=Math.abs(((bBear-bearB+180)%360)-180);
+            if(Math.abs(dA-dB)>15)return dA-dB; // ทิศต่างกันมาก → เลือกใกล้กว่า
+            return (loads[tA.plate].w1+loads[tA.plate].w2)/tA.maxW-(loads[tB.plate].w1+loads[tB.plate].w2)/tB.maxW;
+          })[0];
         }
 
         if(best){
           const storeKey=b.arCode||b.arName||'';
           const gpsKey=billGpsKey[b.ref]||'';
-          // ค้นหาการจัดที่มีอยู่แล้ว: arCode/name → GPS anchor → ค่อยตัดสินใจ
-          const prevStore=storeTrip[storeKey]||(gpsKey&&storeTrip[gpsKey]);
+          const normKey=billNormName[b.ref]?'NM:'+billNormName[b.ref]:'';
+          // 1=arCode 2=GPS 3=normalized name
+          const prevStore=storeTrip[storeKey]||(gpsKey&&storeTrip[gpsKey])||(normKey&&storeTrip[normKey]);
           let tr;
           if(prevStore){
             tr=prevStore.trip;
@@ -1674,6 +1691,7 @@ function confirmAutoAssign(){
           if(!routeTruck[grp.key])routeTruck[grp.key]=best.plate;
           if(storeKey&&!storeTrip[storeKey])storeTrip[storeKey]={plate:best.plate,trip:tr};
           if(gpsKey&&!storeTrip[gpsKey])storeTrip[gpsKey]={plate:best.plate,trip:tr};
+          if(normKey&&!storeTrip[normKey])storeTrip[normKey]={plate:best.plate,trip:tr};
           const cid=billCluster[b.ref];
           if(cid!==undefined&&!clusterTruck[cid])clusterTruck[cid]=best.plate;
         }
@@ -1700,9 +1718,8 @@ function confirmAutoAssign(){
     const kept={},keptTrip={};
     Object.entries(queue).forEach(([ref,plate])=>{if(!tmrRefs.has(ref)){kept[ref]=plate;keptTrip[ref]=tripMap[ref]||1;}});
 
-    // ══ POST-PROCESS: GPS เดียวกัน MUST ไปรถ+เที่ยวเดียวกัน ══
-    // สร้าง gpsGroup → รวมบิลที่ GPS anchor เดียวกัน
-    const gpsBillsMap={}; // gpsKey → [refs]
+    // ══ POST-PROCESS: GPS เดียวกัน → รถเดียวกัน (ดูความจุด้วย) ══
+    const gpsBillsMap={};
     Object.keys(newQ).forEach(ref=>{
       const k=billGpsKey[ref];
       if(!k)return;
@@ -1711,26 +1728,45 @@ function confirmAutoAssign(){
     });
     Object.entries(gpsBillsMap).forEach(([,refs])=>{
       if(refs.length<=1)return;
-      // หา plate+trip ที่ได้รับโหวตมากสุด (majority)
+      // หา plate+trip ที่ได้รับโหวตมากสุด
       const votes={};
       refs.forEach(r=>{const k2=`${newQ[r]}|${newTripMap[r]||1}`;votes[k2]=(votes[k2]||0)+1;});
       const [winner]=Object.entries(votes).sort((a,b)=>b[1]-a[1])[0];
       const [winPlate,winTripStr]=winner.split('|');
       const winTrip=parseInt(winTripStr)||1;
-      // บังคับทุกบิลในกลุ่มให้ใช้ winner
+      const winTruck=TRUCKS.find(t=>t.plate===winPlate);
+
       refs.forEach(r=>{
-        if(newQ[r]===winPlate&&(newTripMap[r]||1)===winTrip)return;
+        if(newQ[r]===winPlate&&(newTripMap[r]||1)===winTrip)return; // already correct
         const b=billMap[r];if(!b)return;
+
+        // ตรวจว่า winPlate รับได้ไหม (คำนวณจาก loads ปัจจุบัน)
+        const curLd=winTrip===1?{w:loads[winPlate].w1,v:loads[winPlate].v1}:{w:loads[winPlate].w2,v:loads[winPlate].v2};
+        const canFit=winTruck&&(curLd.w+b.totalW)<=winTruck.maxW&&
+                     (winTruck.maxV<=0||(curLd.v+b.totalV)<=winTruck.maxV);
+
+        // ลอง trip อื่นของ winPlate ถ้า trip นี้เต็ม
+        let usePlate=winPlate,useTrip=winTrip;
+        if(!canFit&&winTruck){
+          const altTrip=winTrip===1?2:1;
+          const altLd=altTrip===1?{w:loads[winPlate].w1,v:loads[winPlate].v1}:{w:loads[winPlate].w2,v:loads[winPlate].v2};
+          if((altLd.w+b.totalW)<=winTruck.maxW&&(winTruck.maxV<=0||(altLd.v+b.totalV)<=winTruck.maxV)){
+            useTrip=altTrip; // trip อื่นยังรับได้
+          }
+          // ถ้าทั้ง 2 เที่ยวเต็ม → คงรถเดิมไว้ (ไม่บังคับย้าย)
+          else return;
+        }
+
+        // ย้าย load จากรถเดิมออก
         const oldTrip=newTripMap[r]||1,oldPlate=newQ[r];
         if(loads[oldPlate]){
           if(oldTrip===1){loads[oldPlate].w1-=b.totalW;loads[oldPlate].v1-=b.totalV;}
           else            {loads[oldPlate].w2-=b.totalW;loads[oldPlate].v2-=b.totalV;}
         }
-        newQ[r]=winPlate; newTripMap[r]=winTrip;
-        if(loads[winPlate]){
-          if(winTrip===1){loads[winPlate].w1+=b.totalW;loads[winPlate].v1+=b.totalV;}
-          else           {loads[winPlate].w2+=b.totalW;loads[winPlate].v2+=b.totalV;}
-        }
+        // ใส่รถใหม่
+        newQ[r]=usePlate; newTripMap[r]=useTrip;
+        if(useTrip===1){loads[usePlate].w1+=b.totalW;loads[usePlate].v1+=b.totalV;}
+        else           {loads[usePlate].w2+=b.totalW;loads[usePlate].v2+=b.totalV;}
       });
     });
     // ════════════════════════════════════════════════
