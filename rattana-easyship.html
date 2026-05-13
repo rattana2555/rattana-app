@@ -16,7 +16,7 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 html,body{height:100%;overflow:hidden;font-family:'Sarabun',system-ui,sans-serif;font-size:14px;background:var(--bl)}
 #app{height:100dvh;width:100%;max-width:480px;margin:0 auto;position:relative;overflow:hidden;background:var(--g0)}
-.screen{position:absolute;inset:0;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity .18s;overflow:hidden}
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity .18s;overflow:hidden;height:100dvh}
 .screen.active{opacity:1;pointer-events:auto}
 .scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
 
@@ -64,7 +64,7 @@ html,body{height:100%;overflow:hidden;font-family:'Sarabun',system-ui,sans-serif
 .prf{height:100%;background:var(--gd);border-radius:2px;transition:width .3s}
 
 /* ── Bottom Nav ── */
-.bot{display:flex;background:var(--bl);padding:8px 0 max(16px,env(safe-area-inset-bottom));border-top:1px solid rgba(249,166,2,.08);flex-shrink:0}
+.bot{display:flex;background:var(--bl);padding:8px 0 max(16px,env(safe-area-inset-bottom));border-top:1px solid rgba(249,166,2,.08);flex-shrink:0;position:relative;z-index:10}
 .bni{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;padding:4px 0}
 .bni-ic{font-size:18px;line-height:1}
 .bni-l{font-size:9px;color:rgba(255,255,255,.28);text-transform:uppercase;letter-spacing:.3px}
@@ -232,9 +232,9 @@ html,body{height:100%;overflow:hidden;font-family:'Sarabun',system-ui,sans-serif
     <div class="cta-ic">📷</div>
     <div><div class="cta-t">สแกนบาร์โคดออเดอร์</div><div class="cta-s">กดเพื่อเปิดกล้อง</div></div>
   </div>
-  <div class="sec">
+  <div class="sec" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
     <div class="sec-h"><span class="sec-t">ออเดอร์วันนี้</span></div>
-    <div class="scroll" id="order-list" style="max-height:calc(100dvh - 385px)">
+    <div class="scroll" id="order-list" style="flex:1;overflow-y:auto">
       <div class="empty"><div class="spinner" style="width:30px;height:30px;margin:0 auto 10px"></div><div class="empty-t" style="color:var(--g6)">กำลังโหลด...</div><button onclick="doRefresh()" style="margin-top:12px;background:transparent;border:1px solid var(--g2);color:var(--g4);border-radius:10px;padding:6px 14px;font-size:11px;cursor:pointer;font-family:inherit">โหลดนานไป? กดที่นี่</button></div>
     </div>
   </div>
@@ -444,23 +444,42 @@ function initDash(){
   setText('dash-date', days[d.getDay()]+' '+d.getDate()+' '+months[d.getMonth()]+' '+(d.getFullYear()+543));
 }
 
-// ─── FETCH DATA (XMLHttpRequest — max iOS compat) ───────────
+// ─── FETCH DATA — JSONP (ไม่มี CORS issue เลย) ───────────────
 function doRefresh(){
-  $('order-list').innerHTML = '<div class="empty"><div class="spinner" style="width:30px;height:30px;margin:0 auto 10px"></div><div class="empty-t" style="color:var(--g6)">กำลังโหลด...</div><button onclick="doRefresh()" style="margin-top:12px;background:transparent;border:1px solid var(--g2);color:var(--g4);border-radius:10px;padding:6px 14px;font-size:11px;cursor:pointer;font-family:inherit">โหลดนานไป? กดที่นี่</button></div>';
-  var url = 'https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:json&sheet='+encodeURIComponent(SHEET_TAB)+'&t='+Date.now();
-  var xhr = new XMLHttpRequest();
-  xhr.timeout = 9000;
-  xhr.onload  = function(){
-    if(xhr.status !== 200){ showErr('HTTP '+xhr.status); return; }
-    var txt = xhr.responseText;
-    var s = txt.indexOf('{'), e = txt.lastIndexOf('}');
-    if(s < 0){ showErr('Sheet ต้องตั้งเป็น Anyone with link'); return; }
-    try{ parseGviz(JSON.parse(txt.substring(s, e+1))); }
-    catch(ex){ showErr('Parse: '+ex.message); }
+  $('order-list').innerHTML = '<div class="empty"><div class="spinner" style="width:30px;height:30px;margin:0 auto 10px"></div><div class="empty-t" style="color:var(--g6)">กำลังโหลด...</div></div>';
+
+  // ล้าง script เก่า
+  var old = document.getElementById('_gviz_script');
+  if(old) old.parentNode.removeChild(old);
+
+  var cbName = '_gvizCb';
+  var timer = setTimeout(function(){
+    window[cbName] = null;
+    var s = document.getElementById('_gviz_script');
+    if(s && s.parentNode) s.parentNode.removeChild(s);
+    showErr('โหลดนานเกิน 10 วิ — กดรีเฟรช');
+  }, 10000);
+
+  window[cbName] = function(resp){
+    clearTimeout(timer);
+    window[cbName] = null;
+    var s = document.getElementById('_gviz_script');
+    if(s && s.parentNode) s.parentNode.removeChild(s);
+    if(!resp || !resp.table){ showErr('Sheet ต้องตั้งเป็น Anyone with link'); return; }
+    try{ parseGviz(resp); }
+    catch(e){ showErr('Parse: '+e.message); }
   };
-  xhr.onerror   = function(){ showErr('Network error — ตรวจสอบอินเตอร์เน็ต'); };
-  xhr.ontimeout = function(){ showErr('หมดเวลา 9 วิ — กดรีเฟรช'); };
-  xhr.open('GET', url); xhr.send();
+
+  var script = document.createElement('script');
+  script.id = '_gviz_script';
+  script.src = 'https://docs.google.com/spreadsheets/d/'+SHEET_ID
+    + '/gviz/tq?tqx=responseHandler:_gvizCb&sheet='
+    + encodeURIComponent(SHEET_TAB)+'&t='+Date.now();
+  script.onerror = function(){
+    clearTimeout(timer);
+    showErr('โหลดไม่ได้ — ตรวจสอบอินเตอร์เน็ต');
+  };
+  document.head.appendChild(script);
 }
 
 function showErr(msg){
@@ -1034,6 +1053,10 @@ function toast(msg,type){
 function autoRefresh(){ setTimeout(function(){ doRefresh(); autoRefresh(); }, 60000); }
 
 // ─── START ───────────────────────────────────────────────────
+// Handle iOS back-forward cache (BFCache)
+window.addEventListener('pageshow', function(e){
+  if(e.persisted) doRefresh();
+});
 $('manual-inp').addEventListener('keydown',function(e){if(e.key==='Enter')manualSearch();});
 initDash();
 doRefresh();
