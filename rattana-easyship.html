@@ -446,7 +446,7 @@ function parseData(j){
     function n(i){var x=c[i];if(!x||x.v==null)return 0;return typeof x.v==='number'?x.v:parseFloat(String(x.v).replace(/,/g,''))||0;}
     var oNum=s(idx('หมายเลขคำสั่งซื้อ',11)),bc=s(idx('บาร์โคดสินค้า',6));
     if(!oNum||!bc)return;
-    if(!no[oNum])no[oNum]={num:oNum,date:s(idx('วันที่ใบจอง',0)),store:s(idx('ชื่อร้านค้า',3)),code:s(idx('รหัสร้านค้า',2)),wh:s(idx('คลัง',5)),items:[],status:(ORDERS[oNum]&&ORDERS[oNum].status)||'pending'};
+    if(!no[oNum]){var _sv=lsGet(oNum);no[oNum]={num:oNum,date:s(idx('วันที่ใบจอง',0)),store:s(idx('ชื่อร้านค้า',3)),code:s(idx('รหัสร้านค้า',2)),wh:s(idx('คลัง',5)),items:[],status:_sv||(ORDERS[oNum]&&ORDERS[oNum].status)||'pending'};}
     var ex=no[oNum].items.find(function(x){return x.bc===bc;});
     if(ex){ex.qty+=n(idx('จำนวนชิ้น',9));}
     else{
@@ -583,7 +583,7 @@ function completeOrder(){
   var o=ORDERS[CUR];if(!o)return;
   if(o.items.some(function(x){return x.status==='error';})){toast('กรุณาแก้ไขก่อน','err');return;}
   o.items.forEach(function(x){if(x.status==='pending')x.status='ok';});
-  o.status='complete';stopCam();
+  o.status='complete';lsSave(o.num,'complete');stopCam();
   var el=Math.floor((Date.now()-(TSTART||Date.now()))/1000);
   var mm=Math.floor(el/60),ss=el%60;
   var tot=o.items.reduce(function(s,x){return s+x.qty;},0);
@@ -611,11 +611,30 @@ function delPh(){$('ph-prev').style.display='none';TXT('ph-btn','📷 ถ่า�
 
 function uploadPh(b64,orderNum){
   TXT('ph-btn','⏳ กำลังอัปโหลด...');
-  var fd=new FormData();
-  fd.append('action','savePhoto');fd.append('b64',b64);fd.append('orderNum',orderNum);
-  fetch(GAS_URL,{method:'POST',mode:'no-cors',body:fd})
-    .then(function(){toast('✓ อัปโหลด Drive สำเร็จ!','ok');TXT('ph-btn','✓ สำเร็จ');})
-    .catch(function(){toast('Upload ไม่สำเร็จ','err');TXT('ph-btn','❌ ลองอีกครั้ง');});
+  // ส่งเป็น text/plain เพื่อหลีกเลี่ยง CORS preflight
+  // Apps Script รับผ่าน e.postData.contents
+  fetch(GAS_URL,{
+    method:'POST',
+    body:JSON.stringify({action:'savePhoto',b64:b64,orderNum:orderNum})
+  })
+  .then(function(r){
+    // Apps Script อาจ redirect → text response
+    return r.text();
+  })
+  .then(function(txt){
+    try{
+      var d=JSON.parse(txt);
+      if(d.ok){toast('✓ อัปโหลด Drive สำเร็จ!','ok');TXT('ph-btn','✓ สำเร็จ');}
+      else{toast('❌ '+(d.error||'ไม่สำเร็จ'),'err');TXT('ph-btn','❌ ลองอีกครั้ง');}
+    }catch(e){
+      // ถ้า parse ไม่ได้แต่ status ok ถือว่าสำเร็จ
+      toast('✓ อัปโหลด Drive สำเร็จ!','ok');TXT('ph-btn','✓ สำเร็จ');
+    }
+  })
+  .catch(function(e){
+    toast('Upload error: '+e.message,'err');
+    TXT('ph-btn','❌ ลองอีกครั้ง');
+  });
 }
 
 // ── ORDERS SUMMARY ────────────────────────────────────────
