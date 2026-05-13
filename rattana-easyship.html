@@ -212,6 +212,25 @@ input[type=file]{display:none}
 .sum-pack-name{font-size:12px;color:var(--bl);font-weight:500;display:flex;align-items:center;gap:7px}
 .sum-pack-cnt{font-size:12px;font-weight:700;color:var(--gdd);background:#fff4e6;padding:2px 9px;border-radius:20px}
 .sum-section-l{font-size:10px;font-weight:700;color:var(--g4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px;margin-top:10px}
+
+/* Dashboard redesign */
+.dash-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:8px}
+/* Summary cards - single column */
+.sum2-section{padding:0 14px 6px}
+.sum2-label{font-size:10px;font-weight:700;color:var(--g4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;margin-top:10px;display:flex;align-items:center;gap:6px}
+.pcard{background:#fff;border-radius:13px;padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:12px;border:1px solid var(--g1);border-bottom:2.5px solid var(--g2)}
+.pcard-img{width:52px;height:52px;border-radius:10px;background:var(--g1);flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:24px}
+.pcard-img img{width:100%;height:100%;object-fit:contain}
+.pcard-info{flex:1;min-width:0}
+.pcard-name{font-size:13px;font-weight:600;color:var(--bl);margin-bottom:2px;line-height:1.3}
+.pcard-meta{font-size:11px;color:var(--g6)}
+.pcard-qty{font-size:15px;font-weight:700;color:var(--bl);margin-bottom:1px}
+/* Pack methods */
+.pkrow{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#fff;border-radius:11px;margin-bottom:6px;border:1px solid var(--g1);border-bottom:2px solid var(--g2)}
+.pkrow-name{font-size:12px;font-weight:500;color:var(--bl);flex:1}
+.pkrow-cnt{font-size:12px;font-weight:700;color:var(--gdd);background:#fff4e6;padding:3px 10px;border-radius:20px}
+/* Orders tab redesign */
+.olist-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 14px}
 </style>
 </head>
 <body>
@@ -237,24 +256,13 @@ input[type=file]{display:none}
     <div class="stat"><div class="stat-n" id="st-pend" style="color:var(--gd)">0</div><div class="stat-l">รอดำเนิน</div></div>
     <div class="stat"><div class="stat-n" id="st-err"  style="color:var(--rd)">0</div><div class="stat-l">ผิดพลาด</div></div>
   </div>
-  <!-- SUMMARY SECTION -->
-  <div class="sumbox" id="sumbox" style="display:none">
-    <div class="sum-hdr">
-      <span class="sum-hdr-t">📊 ภาพรวมวันนี้</span>
-      <button class="sum-toggle" onclick="toggleSum()">ซ่อน ▲</button>
-    </div>
-    <div id="sum-inner">
-      <!-- rendered by JS -->
-    </div>
-  </div>
-
   <div class="cta" onclick="openScan('order')">
     <div class="cta-ic">📷</div>
     <div><div class="cta-t">สแกนบาร์โคดออเดอร์</div><div class="cta-s">กดเพื่อเปิดกล้อง</div></div>
   </div>
-  <div class="sec-h"><span class="sec-t">ออเดอร์วันนี้</span></div>
-  <div class="olist" id="olist">
-    <div class="empty"><div class="spin" style="width:30px;height:30px;margin:0 auto 10px"></div><div class="empty-t" style="color:var(--g6)">กำลังโหลด...</div></div>
+  <!-- DASHBOARD SUMMARY (scrollable) -->
+  <div class="dash-scroll" id="dash-sum">
+    <div class="empty"><div class="spin" style="width:28px;height:28px;margin:0 auto 10px"></div><div class="empty-t" style="color:var(--g6)">กำลังโหลด...</div></div>
   </div>
   <div class="bnav">
     <div class="bni on"><div class="bni-i">🏠</div><div class="bni-l" style="color:var(--gd)">หน้าหลัก</div><div class="bni-d"></div></div>
@@ -369,14 +377,15 @@ input[type=file]{display:none}
   </div>
 </div>
 
-<!-- ORDERS SUMMARY -->
+<!-- ORDERS TAB -->
 <div id="s-orders" class="screen">
   <div class="hdr" style="padding-bottom:14px">
     <div class="hdr-row">
       <div style="display:flex;align-items:center;gap:9px">
         <div class="logo">📋</div>
-        <div><div class="brand">รายการออเดอร์</div><div class="brand-s">ทั้งหมด</div></div>
+        <div><div class="brand">รายการออเดอร์</div><div class="brand-s" id="ord-sub">วันนี้ทั้งหมด</div></div>
       </div>
+      <button class="ref-btn" onclick="doRefresh();gotoOrders()">🔄</button>
     </div>
   </div>
   <div class="ostat-row">
@@ -384,7 +393,9 @@ input[type=file]{display:none}
     <div class="ostat"><div class="ostat-n" id="os-p" style="color:var(--or)">0</div><div class="ostat-l">กำลังแพ็ก</div></div>
     <div class="ostat"><div class="ostat-n" id="os-w" style="color:var(--gd)">0</div><div class="ostat-l">รอดำเนิน</div></div>
   </div>
-  <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-top:4px" id="osum"></div>
+  <div class="olist-scroll" id="olist">
+    <div class="empty"><div class="spin" style="width:28px;height:28px;margin:0 auto 10px"></div><div class="empty-t" style="color:var(--g6)">กำลังโหลด...</div></div>
+  </div>
   <div class="bnav">
     <div class="bni" onclick="goHome()"><div class="bni-i">🏠</div><div class="bni-l">หน้าหลัก</div></div>
     <div class="bni" onclick="openScan('order')"><div class="bni-i">📷</div><div class="bni-l">สแกน</div></div>
@@ -415,7 +426,11 @@ function show(n){
 function goHome(){stopCam();CUR=null;TSTART=null;show('s-dash');doRefresh();}
 function goBack(){stopCam();if(SMODE==='product'){SMODE='order';show('s-order');}else show('s-dash');}
 function closeOrder(){stopCam();CUR=null;TSTART=null;show('s-dash');}
-function gotoOrders(){renderSummary();show('s-orders');}
+function gotoOrders(){
+  renderSummary();
+  renderList();
+  show('s-orders');
+}
 
 function openScan(mode){
   SMODE=mode;
@@ -659,9 +674,11 @@ function uploadPh(b64,orderNum){
 // ── ORDERS SUMMARY ────────────────────────────────────────
 function renderSummary(){
   var v=Object.values(ORDERS);
-  TXT('os-d',v.filter(function(x){return x.status==='complete';}).length);
-  TXT('os-p',v.filter(function(x){return x.status==='in-progress';}).length);
-  TXT('os-w',v.filter(function(x){return x.status==='pending';}).length);
+  var done=v.filter(function(x){return x.status==='complete';}).length;
+  var prog=v.filter(function(x){return x.status==='in-progress';}).length;
+  var pend=v.filter(function(x){return x.status==='pending';}).length;
+  TXT('os-d',done); TXT('os-p',prog); TXT('os-w',pend);
+  TXT('ord-sub','รวม '+v.length+' ออเดอร์');
   var sL={pending:'รอแพ็ก','in-progress':'กำลังแพ็ก',complete:'✓ เสร็จ',error:'ผิดพลาด'};
   var sB={pending:'bdg-p','in-progress':'bdg-r',complete:'bdg-d',error:'bdg-e'};
   var ord={'in-progress':0,pending:1,complete:2,error:3};
@@ -795,75 +812,65 @@ function handleOCR(res){
 function useOCR(){if(OCRVAL){hdOrder(OCRVAL);if(LSCANNED)setTimeout(useLast,300);}}
 
 
-// ── SUMMARY ───────────────────────────────────────────────────
-var sumOpen = true;
-function toggleSum(){
-  sumOpen = !sumOpen;
-  var inner = $('sum-inner');
-  var btn = document.querySelector('.sum-toggle');
-  if(inner) inner.style.display = sumOpen ? '' : 'none';
-  if(btn) btn.textContent = sumOpen ? 'ซ่อน ▲' : 'แสดง ▼';
-}
-
+// ── SUMMARY (DASHBOARD) ───────────────────────────────────────
 function renderSummaryBox(){
   var keys = Object.keys(ORDERS);
-  var box = $('sumbox');
-  if(!box || !keys.length) return;
-  box.style.display = '';
+  var el = $('dash-sum');
+  if(!el) return;
+  if(!keys.length){
+    el.innerHTML='<div class="empty"><div class="empty-ic">📭</div><div class="empty-t">ยังไม่มีข้อมูลวันนี้</div></div>';
+    return;
+  }
 
-  // Aggregate products by barcode
+  // Aggregate by barcode
   var prods = {};
   var packs = {};
-
   keys.forEach(function(k){
     ORDERS[k].items.forEach(function(item){
-      // Products
       if(!prods[item.bc]){
-        prods[item.bc] = {name:item.name, unit:item.unit||'ลัง', qty:0, pieces:0, pcs:item.pcs||1};
+        prods[item.bc]={name:item.name,unit:item.unit||'ลัง',qty:0,pieces:0,pcs:item.pcs||1,img1:item.img1,img2:item.img2};
       }
       prods[item.bc].qty += item.qty;
-      prods[item.bc].pieces += item.pieces || (item.qty * (item.pcs||1));
-      // Pack methods
-      if(item.pack){
-        packs[item.pack] = (packs[item.pack]||0) + 1;
-      }
+      prods[item.bc].pieces += item.pieces||(item.qty*(item.pcs||1));
+      var pk = (item.pack||'').trim();
+      if(pk) packs[pk] = (packs[pk]||0)+1;
     });
   });
 
   var prodKeys = Object.keys(prods);
   var packKeys = Object.keys(packs);
+  var h = '<div class="sum2-section">';
 
-  // Build products grid
-  var prodHtml = '<div class="sum-section-l">สินค้าทั้งหมด — ' + prodKeys.length + ' รายการ</div>';
-  prodHtml += '<div class="sum-cards">';
+  // ── Products section ──
+  h += '<div class="sum2-label">📦 สินค้าทั้งหมด <span style="color:var(--gd);margin-left:4px">'+prodKeys.length+' รายการ</span></div>';
   prodKeys.forEach(function(bc){
     var p = prods[bc];
-    var pcsInfo = p.pcs > 1 ? '<div class="sum-card-pcs">'+p.pieces+' ชิ้น</div>' : '';
-    prodHtml += '<div class="sum-card">'
-      + '<div class="sum-card-ic">📦</div>'
-      + '<div class="sum-card-name">'+p.name+'</div>'
-      + '<div class="sum-card-qty">×'+p.qty+' '+p.unit+'</div>'
-      + pcsInfo
-      + '</div>';
+    var imgUrl = dimg(p.img1)||dimg(p.img2);
+    var imgHtml = imgUrl
+      ? '<img src="'+imgUrl+'" onerror="this.parentElement.innerHTML='📦'">'
+      : '📦';
+    var pcsInfo = p.pcs>1 ? ' · '+p.pieces+' ชิ้น' : '';
+    h += '<div class="pcard">'
+      +'<div class="pcard-img">'+imgHtml+'</div>'
+      +'<div class="pcard-info">'
+      +'<div class="pcard-name">'+p.name+'</div>'
+      +'<div class="pcard-qty">×'+p.qty+' '+p.unit+'</div>'
+      +'<div class="pcard-meta">'+p.pieces+(p.pcs>1?' ชิ้นรวม':'')+'</div>'
+      +'</div></div>';
   });
-  prodHtml += '</div>';
 
-  // Build pack methods list
-  var packHtml = '';
+  // ── Pack methods section ──
   if(packKeys.length){
-    packHtml = '<div class="sum-section-l">วิธีแพ็ค — '+packKeys.length+' แบบ</div>';
-    packHtml += '<div class="sum-pack-list">';
+    h += '<div class="sum2-label" style="margin-top:14px">🏷️ วิธีแพ็ค <span style="color:var(--gd);margin-left:4px">'+packKeys.length+' แบบ</span></div>';
     packKeys.sort(function(a,b){return packs[b]-packs[a];}).forEach(function(m){
-      packHtml += '<div class="sum-pack-row">'
-        + '<span class="sum-pack-name">📋 '+m+'</span>'
-        + '<span class="sum-pack-cnt">'+packs[m]+' รายการ</span>'
-        + '</div>';
+      h += '<div class="pkrow"><span class="pkrow-name">'+m+'</span><span class="pkrow-cnt">'+packs[m]+' รายการ</span></div>';
     });
-    packHtml += '</div>';
+  } else {
+    h += '<div class="sum2-label" style="margin-top:14px;color:var(--g4)">🏷️ ไม่มีข้อมูลวิธีแพ็ค</div>';
   }
 
-  var inner = $('sum-inner');
-  if(inner) inner.innerHTML = prodHtml + packHtml;
+  h += '</div>';
+  el.innerHTML = h;
 }
 
 // ── LOCALSTORAGE ─────────────────────────────────────────────
