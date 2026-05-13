@@ -1699,6 +1699,42 @@ function confirmAutoAssign(){
     // คง queue+tripMap วันอื่น + เขียนทับวันที่เลือก
     const kept={},keptTrip={};
     Object.entries(queue).forEach(([ref,plate])=>{if(!tmrRefs.has(ref)){kept[ref]=plate;keptTrip[ref]=tripMap[ref]||1;}});
+
+    // ══ POST-PROCESS: GPS เดียวกัน MUST ไปรถ+เที่ยวเดียวกัน ══
+    // สร้าง gpsGroup → รวมบิลที่ GPS anchor เดียวกัน
+    const gpsBillsMap={}; // gpsKey → [refs]
+    Object.keys(newQ).forEach(ref=>{
+      const k=billGpsKey[ref];
+      if(!k)return;
+      if(!gpsBillsMap[k])gpsBillsMap[k]=[];
+      gpsBillsMap[k].push(ref);
+    });
+    Object.entries(gpsBillsMap).forEach(([,refs])=>{
+      if(refs.length<=1)return;
+      // หา plate+trip ที่ได้รับโหวตมากสุด (majority)
+      const votes={};
+      refs.forEach(r=>{const k2=`${newQ[r]}|${newTripMap[r]||1}`;votes[k2]=(votes[k2]||0)+1;});
+      const [winner]=Object.entries(votes).sort((a,b)=>b[1]-a[1])[0];
+      const [winPlate,winTripStr]=winner.split('|');
+      const winTrip=parseInt(winTripStr)||1;
+      // บังคับทุกบิลในกลุ่มให้ใช้ winner
+      refs.forEach(r=>{
+        if(newQ[r]===winPlate&&(newTripMap[r]||1)===winTrip)return;
+        const b=billMap[r];if(!b)return;
+        const oldTrip=newTripMap[r]||1,oldPlate=newQ[r];
+        if(loads[oldPlate]){
+          if(oldTrip===1){loads[oldPlate].w1-=b.totalW;loads[oldPlate].v1-=b.totalV;}
+          else            {loads[oldPlate].w2-=b.totalW;loads[oldPlate].v2-=b.totalV;}
+        }
+        newQ[r]=winPlate; newTripMap[r]=winTrip;
+        if(loads[winPlate]){
+          if(winTrip===1){loads[winPlate].w1+=b.totalW;loads[winPlate].v1+=b.totalV;}
+          else           {loads[winPlate].w2+=b.totalW;loads[winPlate].v2+=b.totalV;}
+        }
+      });
+    });
+    // ════════════════════════════════════════════════
+
     queue={...kept,...newQ};
     tripMap={...keptTrip,...newTripMap};
 
