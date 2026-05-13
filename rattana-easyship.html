@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#011d3d">
-<title>Rattana EasyShip v2.0</title>
+<title>Rattana EasyShip v2.1</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -235,7 +235,7 @@ html,body{height:100%;overflow:hidden;font-family:'Sarabun',system-ui,sans-serif
   <div class="sec">
     <div class="sec-h"><span class="sec-t">ออเดอร์วันนี้</span></div>
     <div class="scroll" id="order-list" style="max-height:calc(100dvh - 385px)">
-      <div class="empty"><div class="spinner" style="width:30px;height:30px;margin:0 auto 10px"></div><div class="empty-t" style="color:var(--g6)">กำลังโหลด...</div></div>
+      <div class="empty"><div class="spinner" style="width:30px;height:30px;margin:0 auto 10px"></div><div class="empty-t" style="color:var(--g6)">กำลังโหลด...</div><button onclick="doRefresh()" style="margin-top:12px;background:transparent;border:1px solid var(--g2);color:var(--g4);border-radius:10px;padding:6px 14px;font-size:11px;cursor:pointer;font-family:inherit">โหลดนานไป? กดที่นี่</button></div>
     </div>
   </div>
   <div class="bot">
@@ -243,7 +243,7 @@ html,body{height:100%;overflow:hidden;font-family:'Sarabun',system-ui,sans-serif
     <div class="bni" onclick="goScan('order')"><div class="bni-ic">📷</div><div class="bni-l">สแกน</div></div>
     <div class="bni" onclick="goOrders()"><div class="bni-ic">📋</div><div class="bni-l">ออเดอร์</div></div>
   </div>
-  <div class="ver">Rattana EasyShip v2.0</div>
+  <div class="ver">Rattana EasyShip v2.1</div>
 </div>
 
 <!-- SCAN -->
@@ -388,7 +388,6 @@ html,body{height:100%;overflow:hidden;font-family:'Sarabun',system-ui,sans-serif
 </div><!-- #app -->
 
 <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
 // ─── CONFIG ─────────────────────────────────────────────────
 var SHEET_ID  = '1-KQ9dGZiQBB9CfoCObCUtHMqKWeDQZZTjIEXj9PIGDA';
@@ -447,7 +446,7 @@ function initDash(){
 
 // ─── FETCH DATA (XMLHttpRequest — max iOS compat) ───────────
 function doRefresh(){
-  $('order-list').innerHTML = '<div class="empty"><div class="spinner" style="width:30px;height:30px;margin:0 auto 10px"></div><div class="empty-t" style="color:var(--g6)">กำลังโหลด...</div></div>';
+  $('order-list').innerHTML = '<div class="empty"><div class="spinner" style="width:30px;height:30px;margin:0 auto 10px"></div><div class="empty-t" style="color:var(--g6)">กำลังโหลด...</div><button onclick="doRefresh()" style="margin-top:12px;background:transparent;border:1px solid var(--g2);color:var(--g4);border-radius:10px;padding:6px 14px;font-size:11px;cursor:pointer;font-family:inherit">โหลดนานไป? กดที่นี่</button></div>';
   var url = 'https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:json&sheet='+encodeURIComponent(SHEET_TAB)+'&t='+Date.now();
   var xhr = new XMLHttpRequest();
   xhr.timeout = 9000;
@@ -787,7 +786,20 @@ function setScanMode(mode){
   if(ld) ld.style.display = isBC ? '' : 'none';
   if(ll) ll.style.display = isBC ? '' : 'none';
   if(isBC){ startCam(); }
-  else{ stopCam(); resetOCR(); }
+  else{
+    stopCam(); resetOCR();
+    // Load Tesseract only when OCR mode is first selected
+    if(!window.Tesseract && !window._tesseractLoading){
+      window._tesseractLoading = true;
+      setText('ocr-status-t','⏳ กำลังโหลด OCR engine...');
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+      s.onload = function(){ setText('ocr-status-t','✓ OCR พร้อมใช้งาน — กดถ่ายรูป'); window._tesseractLoading=false; };
+      document.head.appendChild(s);
+    } else if(window.Tesseract){
+      setText('ocr-status-t','✓ OCR พร้อม — กดถ่ายรูปใบปะ');
+    }
+  }
 }
 
 // ─── OCR ──────────────────────────────────────────────────────
