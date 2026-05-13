@@ -1524,10 +1524,28 @@ function confirmAutoAssign(){
 
     // ── ข้อ 1: ติดตามร้านค้าที่จัดไปแล้ว → ใส่รอบเดียวกัน ──
     const storeTrip={}; // key → {plate, trip}
-    // key = arCode, arName, หรือ "GPS:lat4,lng4" (จับร้านเดียวกันที่ GPS ตรงกัน)
 
-    // ── ข้อ 2 (ใหม่): Pre-cluster bills by GPS proximity ──
-    // บิลที่ GPS ใกล้กัน (< GEO_CLUSTER_KM กม.) → cluster เดียวกัน → รถเดียวกัน
+    // ── Pre-compute: GPS เดียวกัน (< 200ม.) = ร้านเดียวกัน → pre-link ไว้ใน gpsGroup ──
+    // สร้าง gpsGroup: {gpsKey → gpsKey ของตัวแทน} เพื่อ merge GPS ที่ใกล้มากๆ
+    const GPS_SAME_KM = 0.2; // 200 เมตร
+    const gpsAnchors = []; // [{lat,lng,key}] ตัวแทนของแต่ละ GPS cluster เล็กๆ
+    const billGpsKey = {}; // billRef → gpsKey มาตรฐาน
+
+    tmrBills.filter(b=>b.lat&&b.lng).forEach(b=>{
+      const key=`G:${b.lat.toFixed(4)},${b.lng.toFixed(4)}`;
+      // หา anchor ที่ใกล้ที่สุด
+      let found=null;
+      for(const a of gpsAnchors){
+        if(haversine(a.lat,a.lng,b.lat,b.lng)<=GPS_SAME_KM){found=a;break;}
+      }
+      if(!found){
+        found={lat:b.lat,lng:b.lng,key};
+        gpsAnchors.push(found);
+      }
+      billGpsKey[b.ref]=found.key;
+    });
+
+    // ── Pre-cluster bills by larger GPS proximity (18กม.) ──
     const GEO_CLUSTER_KM = 18;
     const geoClusters = []; // [{centLat,centLng,bills:[],plate:null}]
 
@@ -1578,7 +1596,13 @@ function confirmAutoAssign(){
         let best=null;
         const bDist=distOrInf(b), bBear=bearing(b);
 
-        // 0. Geo cluster: บิลนี้อยู่ cluster เดิมที่จัดรถไปแล้ว → ใช้รถนั้น
+        // 0a. GPS anchor: บิล GPS เดียวกับที่จัดไปแล้ว → รถ+เที่ยวเดียวกัน (สูงสุด)
+        const bGpsKey=billGpsKey[b.ref]||'';
+        if(!best && bGpsKey && storeTrip[bGpsKey]){
+          const prevT=trucks.find(x=>x.plate===storeTrip[bGpsKey].plate);
+          if(prevT&&fits(prevT,b))best=prevT;
+        }
+        // 0b. Geo cluster: บิลอยู่ cluster เดิมที่จัดรถไปแล้ว → ใช้รถนั้น
         const bCid=billCluster[b.ref];
         if(!best && bCid!==undefined && clusterTruck[bCid]){
           const t=trucks.find(x=>x.plate===clusterTruck[bCid]);
@@ -1631,14 +1655,14 @@ function confirmAutoAssign(){
         }
 
         if(best){
-          // ── GPS key: ใช้ lat/lng ความละเอียด 4 ตำแหน่ง (~11ม.) เป็น key เสริม ──
           const storeKey=b.arCode||b.arName||'';
-          const gpsKey=(b.lat&&b.lng)?`G:${b.lat.toFixed(4)},${b.lng.toFixed(4)}`:'';
+          const gpsKey=billGpsKey[b.ref]||'';
+          // ค้นหาการจัดที่มีอยู่แล้ว: arCode/name → GPS anchor → ค่อยตัดสินใจ
           const prevStore=storeTrip[storeKey]||(gpsKey&&storeTrip[gpsKey]);
           let tr;
           if(prevStore){
             tr=prevStore.trip;
-            // ถ้ารถที่กำหนดไว้ยังรับได้ → override best ด้วยรถนั้น
+            // Override best ด้วยรถเดิมถ้าสามารถรับได้
             const prevT=trucks.find(x=>x.plate===prevStore.plate);
             if(prevT&&fits(prevT,b))best=prevT;
           } else {
@@ -1661,7 +1685,7 @@ function confirmAutoAssign(){
       const t=trucks.filter(t=>fits(t,b)).sort((a,b_)=>(loads[a.plate].w1+loads[a.plate].w2)/a.maxW-(loads[b_.plate].w1+loads[b_.plate].w2)/b_.maxW)[0];
       if(t){
         const storeKey=b.arCode||b.arName||'';
-        const gpsKey=(b.lat&&b.lng)?`G:${b.lat.toFixed(4)},${b.lng.toFixed(4)}`:'';
+        const gpsKey=billGpsKey[b.ref]||'';
         const prevStore=storeTrip[storeKey]||(gpsKey&&storeTrip[gpsKey]);
         const tr=prevStore?prevStore.trip:(fitsTrip(t,b)||1);
         newQ[b.ref]=t.plate;newTripMap[b.ref]=tr;assigned.add(b.ref);
