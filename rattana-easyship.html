@@ -194,6 +194,24 @@ html,body{height:100%;overflow:hidden;font-family:'Sarabun',system-ui,sans-serif
 .empty-t{font-size:14px;font-weight:600;color:var(--g6);margin-bottom:4px}
 .ver{font-size:9px;color:rgba(255,255,255,.12);text-align:right;padding:2px 14px 4px;flex-shrink:0}
 input[type=file]{display:none}
+
+/* Summary Section */
+.sumbox{margin:0 14px 14px;flex-shrink:0}
+.sum-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.sum-hdr-t{font-size:11px;font-weight:700;color:var(--bl);text-transform:uppercase;letter-spacing:.6px;display:flex;align-items:center;gap:6px}
+.sum-toggle{font-size:11px;color:var(--gdd);cursor:pointer;background:none;border:none;font-family:inherit;padding:0}
+.sum-cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.sum-card{background:#fff;border-radius:13px;padding:11px 12px;border:1px solid var(--g1);border-bottom:2.5px solid var(--g2)}
+.sum-card-ic{font-size:20px;margin-bottom:6px}
+.sum-card-name{font-size:11px;color:var(--g6);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sum-card-qty{font-size:15px;font-weight:700;color:var(--bl);line-height:1.2}
+.sum-card-pcs{font-size:10px;color:var(--g4);margin-top:1px}
+.sum-pack-list{background:#fff;border-radius:13px;padding:10px 14px;border:1px solid var(--g1);border-bottom:2.5px solid var(--g2)}
+.sum-pack-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0}
+.sum-pack-row+.sum-pack-row{border-top:1px solid var(--g1)}
+.sum-pack-name{font-size:12px;color:var(--bl);font-weight:500;display:flex;align-items:center;gap:7px}
+.sum-pack-cnt{font-size:12px;font-weight:700;color:var(--gdd);background:#fff4e6;padding:2px 9px;border-radius:20px}
+.sum-section-l{font-size:10px;font-weight:700;color:var(--g4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px;margin-top:10px}
 </style>
 </head>
 <body>
@@ -219,6 +237,17 @@ input[type=file]{display:none}
     <div class="stat"><div class="stat-n" id="st-pend" style="color:var(--gd)">0</div><div class="stat-l">รอดำเนิน</div></div>
     <div class="stat"><div class="stat-n" id="st-err"  style="color:var(--rd)">0</div><div class="stat-l">ผิดพลาด</div></div>
   </div>
+  <!-- SUMMARY SECTION -->
+  <div class="sumbox" id="sumbox" style="display:none">
+    <div class="sum-hdr">
+      <span class="sum-hdr-t">📊 ภาพรวมวันนี้</span>
+      <button class="sum-toggle" onclick="toggleSum()">ซ่อน ▲</button>
+    </div>
+    <div id="sum-inner">
+      <!-- rendered by JS -->
+    </div>
+  </div>
+
   <div class="cta" onclick="openScan('order')">
     <div class="cta-ic">📷</div>
     <div><div class="cta-t">สแกนบาร์โคดออเดอร์</div><div class="cta-s">กดเพื่อเปิดกล้อง</div></div>
@@ -463,7 +492,7 @@ function parseData(j){
   ORDERS=no;
   var f=Object.values(ORDERS)[0];
   if(f&&f.wh){TXT('dash-loc','📍 คลัง '+f.wh);TXT('dash-sub','คลัง '+f.wh);}
-  updateStats();renderList();
+  updateStats();renderList();renderSummaryBox();
   toast('โหลดสำเร็จ ('+Object.keys(ORDERS).length+' ออเดอร์)','ok');
 }
 
@@ -764,6 +793,86 @@ function handleOCR(res){
 }
 
 function useOCR(){if(OCRVAL){hdOrder(OCRVAL);if(LSCANNED)setTimeout(useLast,300);}}
+
+
+// ── SUMMARY ───────────────────────────────────────────────────
+var sumOpen = true;
+function toggleSum(){
+  sumOpen = !sumOpen;
+  var inner = $('sum-inner');
+  var btn = document.querySelector('.sum-toggle');
+  if(inner) inner.style.display = sumOpen ? '' : 'none';
+  if(btn) btn.textContent = sumOpen ? 'ซ่อน ▲' : 'แสดง ▼';
+}
+
+function renderSummaryBox(){
+  var keys = Object.keys(ORDERS);
+  var box = $('sumbox');
+  if(!box || !keys.length) return;
+  box.style.display = '';
+
+  // Aggregate products by barcode
+  var prods = {};
+  var packs = {};
+
+  keys.forEach(function(k){
+    ORDERS[k].items.forEach(function(item){
+      // Products
+      if(!prods[item.bc]){
+        prods[item.bc] = {name:item.name, unit:item.unit||'ลัง', qty:0, pieces:0, pcs:item.pcs||1};
+      }
+      prods[item.bc].qty += item.qty;
+      prods[item.bc].pieces += item.pieces || (item.qty * (item.pcs||1));
+      // Pack methods
+      if(item.pack){
+        packs[item.pack] = (packs[item.pack]||0) + 1;
+      }
+    });
+  });
+
+  var prodKeys = Object.keys(prods);
+  var packKeys = Object.keys(packs);
+
+  // Build products grid
+  var prodHtml = '<div class="sum-section-l">สินค้าทั้งหมด — ' + prodKeys.length + ' รายการ</div>';
+  prodHtml += '<div class="sum-cards">';
+  prodKeys.forEach(function(bc){
+    var p = prods[bc];
+    var pcsInfo = p.pcs > 1 ? '<div class="sum-card-pcs">'+p.pieces+' ชิ้น</div>' : '';
+    prodHtml += '<div class="sum-card">'
+      + '<div class="sum-card-ic">📦</div>'
+      + '<div class="sum-card-name">'+p.name+'</div>'
+      + '<div class="sum-card-qty">×'+p.qty+' '+p.unit+'</div>'
+      + pcsInfo
+      + '</div>';
+  });
+  prodHtml += '</div>';
+
+  // Build pack methods list
+  var packHtml = '';
+  if(packKeys.length){
+    packHtml = '<div class="sum-section-l">วิธีแพ็ค — '+packKeys.length+' แบบ</div>';
+    packHtml += '<div class="sum-pack-list">';
+    packKeys.sort(function(a,b){return packs[b]-packs[a];}).forEach(function(m){
+      packHtml += '<div class="sum-pack-row">'
+        + '<span class="sum-pack-name">📋 '+m+'</span>'
+        + '<span class="sum-pack-cnt">'+packs[m]+' รายการ</span>'
+        + '</div>';
+    });
+    packHtml += '</div>';
+  }
+
+  var inner = $('sum-inner');
+  if(inner) inner.innerHTML = prodHtml + packHtml;
+}
+
+// ── LOCALSTORAGE ─────────────────────────────────────────────
+function lsSave(num,status){
+  try{var d=JSON.parse(localStorage.getItem('re_done')||'{}');d[num]=status;localStorage.setItem('re_done',JSON.stringify(d));}catch(e){}
+}
+function lsGet(num){
+  try{var d=JSON.parse(localStorage.getItem('re_done')||'{}');return d[num]||null;}catch(e){return null;}
+}
 
 // ── DRIVE IMAGE ───────────────────────────────────────────
 function dimg(url){
