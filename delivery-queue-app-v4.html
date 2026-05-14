@@ -362,9 +362,7 @@ select,input{font-family:inherit;font-size:16px}
       <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <span style="font-size:11px;color:#854F0B;font-weight:600">ย้ายทั้งคัน →</span>
-          <select id="tf-select" onchange="doTransfer(this)" style="background:#fff;border:1.5px solid #E4C46E;border-radius:7px;padding:5px 9px;font-size:12px;min-width:155px">
-            <option value="">— เลือกรถ —</option>
-          </select>
+          <div id="tf-select-cont"></div>
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <span style="font-size:11px;color:#1A5FA5;font-weight:600">ย้ายเที่ยว →</span>
@@ -373,9 +371,7 @@ select,input{font-family:inherit;font-size:16px}
             <option value="2">🔵 เที่ยว 2</option>
             <option value="3">🟢 เที่ยว 3</option>
           </select>
-          <select id="tf-trip-truck" onchange="doTransferTrip(this)" style="background:#fff;border:1.5px solid #93B8DE88;border-radius:7px;padding:5px 9px;font-size:12px;min-width:155px">
-            <option value="">— เลือกรถ —</option>
-          </select>
+          <div id="tf-trip-truck-cont"></div>
         </div>
         <button class="btn btn-clear" onclick="doClearTruck()">🗑 ล้างทั้งคัน</button>
       </div>
@@ -397,9 +393,7 @@ select,input{font-family:inherit;font-size:16px}
       </select>
       <div class="sel-bar no-print" id="selBar" style="display:none">
         <span id="sel-count" style="font-size:12px;font-weight:600;color:#633806"></span>
-        <select id="sel-truck-dd" onchange="assignSelected(this)" style="background:#fff;border:1px solid #E0E5ED;border-radius:6px;padding:4px 8px;font-size:12px">
-          <option value="">→ เลือกรถ</option>
-        </select>
+        <div id="sel-truck-dd-cont" style="display:inline-block"></div>
         <button onclick="clearSelected()" style="border:1px solid #FCA5A5;border-radius:6px;padding:3px 8px;background:none;color:#C62828;font-size:12px">✕</button>
         <button onclick="cancelSel()" style="background:none;border:none;color:#6B7A90;font-size:11px;text-decoration:underline">ยกเลิก</button>
       </div>
@@ -936,29 +930,24 @@ function updateTransferBar(){
   const ta=billsOnTruck.reduce((s,b)=>s+b.totalAmt,0);
   document.getElementById('tf-title').textContent=`🔄 โยกทั้งคัน — ${selPlate}`;
   document.getElementById('tf-info').textContent=`${billsOnTruck.length} บิล • ${fmtKg(tw)} • ฿${fmtN(ta)}`;
-  const ld=truckLoad(selPlate);
-  const sel=document.getElementById('tf-select');
-  const tripTruckSel=document.getElementById('tf-trip-truck');
-  const truckOpts=TRUCKS.filter(t=>t.plate!==selPlate).map(t=>`<option value="${t.plate}">${t.e} ${t.plate} (${t.nick})</option>`).join('');
-  if(tripTruckSel)tripTruckSel.innerHTML='<option value="">— เลือกรถ —</option>'+truckOpts;
-  sel.innerHTML='<option value="">— เลือกรถ —</option>'+
-    TRUCKS.filter(t=>t.plate!==selPlate).map(t=>{
-      const tld=truckLoad(t.plate);
-      const ep=Math.max(t.maxW>0?Math.round(tld.w/t.maxW*100):0,t.maxV>0?Math.round(tld.v/t.maxV*100):0);
-      const afterW=tld.w+tw;
-      const over=afterW>t.maxW;
-      return `<option value="${t.plate}">${over?'⚠ ':''}${t.e} ${t.plate} (${t.nick}) [${ep}% → ${Math.round(afterW/t.maxW*100)}%]</option>`;
-    }).join('');
+  const tOpts=TRUCKS.filter(t=>t.plate!==selPlate).map(function(t){
+    const tld=truckLoad(t.plate);
+    const afterW=tld.w+tw;
+    const over=afterW>t.maxW;
+    return {v:t.plate,l:(over?'⚠ ':'')+t.e+' '+t.plate+' ('+t.nick+')'};
+  });
+  const tOptsAll=[{v:'',l:'— เลือกรถ —'}].concat(tOpts);
+  const selCont=document.getElementById('tf-select-cont');
+  const tripCont=document.getElementById('tf-trip-truck-cont');
+  if(selCont)selCont.innerHTML=renderSS('ss_tfs',tOptsAll,'','— เลือกรถ —','ssTransfer','min-width:165px');
+  if(tripCont)tripCont.innerHTML=renderSS('ss_tft',tOptsAll,'','— เลือกรถ —','ssTransferTrip','min-width:165px');
   bar.style.display='flex';
 }
 
 function updateSelDropdowns(){
-  const opts='<option value="">→ เลือกรถ</option>'+
-    TRUCKS.map(t=>{const ld=truckLoad(t.plate);const ep=Math.max(t.maxW>0?Math.round(ld.w/t.maxW*100):0,t.maxV>0?Math.round(ld.v/t.maxV*100):0);
-      return `<option value="${t.plate}">${t.e} ${t.plate} (${t.nick}) [${ep}%]</option>`;}).join('');
-  const dd=document.getElementById('sel-truck-dd');
-  const bvdd=document.getElementById('bv-truck-dd');
-  if(dd)dd.innerHTML=opts;
+  const opts=ssMakeTruckOpts('');
+  const cont=document.getElementById('sel-truck-dd-cont');
+  if(cont)cont.innerHTML=renderSS('ss_seldd',opts,'','→ เลือกรถ','ssAssignSel');
 }
 
 // ══════════════════════════════════════════
@@ -1051,11 +1040,7 @@ function renderBillTable(){
             </span>
           </div>
           <div style="display:flex;gap:4px;flex-wrap:wrap">
-            <select onchange="reassignTruck('${b.ref}',this.value);this.value=''"
-              style="padding:2px 6px;border-radius:6px;background:#F5F7FA;border:1px solid var(--border);color:var(--text);font-size:10px;cursor:pointer;max-width:120px">
-              <option value="">🚛 เปลี่ยนรถ</option>
-              ${TRUCKS.filter(t=>t.plate!==plate).map(t=>`<option value="${t.plate}">${t.e} ${t.plate} (${t.nick})</option>`).join('')}
-            </select>
+            ${renderSS('rs_${b.ref}',ssMakeTruckOpts(plate),'','🚛 เปลี่ยนรถ','ssPickReassign','')}
             <button onclick="changeTrip('${b.ref}')"
               style="padding:2px 8px;border-radius:6px;background:#EAF0F8;border:1px solid #93B8DE88;color:#1A5FA5;font-size:10px;font-weight:600;cursor:pointer">
               🔄 เที่ยว
@@ -1067,18 +1052,14 @@ function renderBillTable(){
           </div>
         `:`
           <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap" onclick="event.stopPropagation()">
-            <select id="qp_${b.ref}"
-              style="flex:1;min-width:115px;padding:5px 7px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;cursor:pointer">
-              <option value="">🚛 เลือกรถ...</option>
-              ${TRUCKS.map(t=>`<option value="${t.plate}">${t.e} ${t.plate} (${t.nick})</option>`).join('')}
-            </select>
+            ${renderSS('qp_'+b.ref,ssMakeTruckOpts(''),queue[b.ref]||'','🚛 เลือกรถ...','','')}
             <select id="qt_${b.ref}"
               style="width:78px;padding:5px 6px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;cursor:pointer">
               <option value="1">🔴 ท.1</option>
               <option value="2">🔵 ท.2</option>
               <option value="3">🟢 ท.3</option>
             </select>
-            <button onclick="const p=document.getElementById('qp_${b.ref}')?.value,t=document.getElementById('qt_${b.ref}')?.value||1;quickAssign('${b.ref}',p,t)"
+            <button onclick="quickAssign('${b.ref}',ssGetVal('qp_${b.ref}')||'',document.getElementById('qt_${b.ref}')?.value||1)"
               style="padding:5px 10px;border-radius:var(--radius-sm);background:var(--navy);color:var(--gold-light);border:none;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">
               ✓ จัด
             </button>
@@ -1973,10 +1954,7 @@ function renderBillsView(){
       <td style="padding:8px 10px;font-weight:600">฿${fmtN(Math.round(b.totalAmt))}</td>
       <td style="padding:8px 10px">
         <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
-          <select id="bvp_${b.ref}" onchange="assignBill('${b.ref}')" style="background:${plate?'#EAF4FF':'#fff'};border:1px solid ${plate?'#1A5FA5':'#E0E5ED'};border-radius:7px;padding:5px 6px;color:${plate?'#1A5FA5':'#6B7A90'};font-size:11px;min-width:120px">
-            <option value="">⏳ เลือกรถ...</option>
-            ${TRUCKS.map(t=>`<option value="${t.plate}" ${plate===t.plate?'selected':''}>${t.e} ${t.plate} (${t.nick})</option>`).join('')}
-          </select>
+          ${renderSS('bvp_'+b.ref,ssMakeTruckOpts(''),plate,'⏳ เลือกรถ...','ssBvAssign','')}
           <select id="bvt_${b.ref}" onchange="assignBill('${b.ref}')" style="padding:5px 5px;border-radius:7px;border:1.5px solid ${(tripMap[b.ref]||1)===3?'#97C459':(tripMap[b.ref]||1)===2?'#93B8DE':'#E4C46E'};background:${(tripMap[b.ref]||1)===3?'#EAF3DE':(tripMap[b.ref]||1)===2?'#EAF0F8':'#FFF8EC'};color:${(tripMap[b.ref]||1)===3?'#15803D':(tripMap[b.ref]||1)===2?'#1A5FA5':'#C47000'};font-size:11px;font-weight:600">
             <option value="1" ${(tripMap[b.ref]||1)===1?'selected':''}>🔴 ท.1</option>
             <option value="2" ${(tripMap[b.ref]||1)===2?'selected':''}>🔵 ท.2</option>
@@ -2006,10 +1984,8 @@ function assignBillFull(ref, plate, trip){
   showToast(plate?`✅ ${billMap[ref]?.arName} → ${plate} เที่ยว ${tr}`:`ยกเลิก`,'ok');
 }
 function assignBill(ref){
-  const plateEl=document.getElementById('bvp_'+ref);
+  const plate=ssGetVal('bvp_'+ref);
   const tripEl=document.getElementById('bvt_'+ref);
-  if(!plateEl)return;
-  const plate=plateEl.value;
   const trip=parseInt(tripEl?.value||1);
   if(plate){queue[ref]=plate;tripMap[ref]=trip;}
   else{delete queue[ref];delete tripMap[ref];}
@@ -2361,6 +2337,120 @@ function showToast(msg,type='ok'){
   setTimeout(()=>t.remove(),3500);
 }
 
+
+// ══════════════════════════════════════════
+// SEARCHABLE SELECT COMPONENT
+// ══════════════════════════════════════════
+function renderSS(id,opts,val,ph,cbName,st){
+  ph=ph||'⏳ เลือก...'; st=st||''; cbName=cbName||'';
+  const cur=opts.find(o=>o.v===val);
+  const lbl=cur?cur.l:'';
+  let optHtml='';
+  opts.forEach(function(o){
+    var sel=o.v===val?' ss-sel':'';
+    var dv=o.v.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+    var dl=o.l.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+    optHtml+='<div class="ss-opt'+sel+'" data-v="'+dv+'" data-l="'+dl+'" onclick="ssPick(\''+id+'\',\''+dv+'\')">'+o.l+'</div>';
+  });
+  return '<div class="ss-wrap" id="sswrap_'+id+'" data-val="'+(val||'')+'" data-cb="'+cbName+'" style="'+st+'">'
+    +'<div class="ss-btn" onclick="ssToggle(\''+id+'\')">'
+    +'<span class="ss-btn-lbl'+(lbl?'':' ss-ph')+'" id="sslbl_'+id+'">'+(lbl||ph)+'</span>'
+    +'<span style="color:var(--muted);font-size:9px;flex-shrink:0">&#9662;</span></div>'
+    +'<div class="ss-pnl" id="sspnl_'+id+'">'
+    +'<input class="ss-inp" type="text" id="ssinp_'+id+'" placeholder="🔍 ค้นหา..." '
+    +'oninput="ssFilter(\''+id+'\',this.value)" onclick="event.stopPropagation()" autocomplete="off">'
+    +'<div class="ss-list" id="sslst_'+id+'">'+optHtml+'</div>'
+    +'<div class="ss-none" id="ssnone_'+id+'" style="display:none">ไม่พบ</div></div></div>';
+}
+function ssToggle(id){
+  var pnl=document.getElementById('sspnl_'+id);
+  if(!pnl)return;
+  var opening=!pnl.classList.contains('open');
+  document.querySelectorAll('.ss-pnl.open').forEach(function(p){p.classList.remove('open');});
+  if(opening){
+    pnl.classList.add('open');
+    var inp=document.getElementById('ssinp_'+id);
+    if(inp){inp.value='';ssFilter(id,'');setTimeout(function(){inp.focus();},30);}
+  }
+}
+function ssFilter(id,q){
+  var lst=document.getElementById('sslst_'+id);
+  var none=document.getElementById('ssnone_'+id);
+  if(!lst)return;
+  var lq=q.toLowerCase(); var shown=0;
+  lst.querySelectorAll('.ss-opt').forEach(function(el){
+    var show=!lq||el.dataset.l.toLowerCase().includes(lq);
+    el.style.display=show?'':'none';
+    if(show)shown++;
+  });
+  if(none)none.style.display=shown?'none':'block';
+}
+function ssPick(id,val){
+  var wrap=document.getElementById('sswrap_'+id);
+  var pnl=document.getElementById('sspnl_'+id);
+  var lbl=document.getElementById('sslbl_'+id);
+  if(!wrap)return;
+  if(pnl)pnl.classList.remove('open');
+  var l='';
+  if(pnl)pnl.querySelectorAll('.ss-opt').forEach(function(el){
+    var match=el.dataset.v===val; el.classList.toggle('ss-sel',match); if(match)l=el.dataset.l;
+  });
+  if(lbl){lbl.textContent=l||val;lbl.className='ss-btn-lbl'+(l?'':' ss-ph');}
+  wrap.dataset.val=val;
+  var cb=wrap.dataset.cb;
+  if(cb&&window[cb])window[cb](val,id);
+}
+function ssGetVal(id){return (document.getElementById('sswrap_'+id)||{dataset:{}}).dataset.val||'';}
+document.addEventListener('click',function(e){
+  if(!e.target.closest('.ss-wrap'))
+    document.querySelectorAll('.ss-pnl.open').forEach(function(p){p.classList.remove('open');});
+},true);
+function ssTransfer(val){
+  if(!val||!selPlate)return;
+  var c=0;Object.keys(queue).forEach(function(r){if(queue[r]===selPlate){queue[r]=val;c++;}});
+  showToast('🔄 โยก '+c+' บิล \u2192 '+val+' แล้ว','ok');selPlate=val;saveQ();renderAll();
+}
+function ssTransferTrip(val){
+  if(!val||!selPlate)return;
+  var trip=parseInt(document.getElementById('tf-trip-num')?.value||'1');
+  var c=0;Object.keys(queue).forEach(function(r){if(queue[r]===selPlate&&(tripMap[r]||1)===trip){queue[r]=val;c++;}});
+  if(!c){showToast('ไม่มีบิลเที่ยว '+trip+' บนรถนี้','warn');return;}
+  showToast('🔄 โยกเที่ยว '+trip+' ('+c+' บิล) \u2192 '+val,'ok');saveQ();renderAll();
+}
+function ssAssignSel(val){
+  if(!val)return;
+  selRefs.forEach(function(r){queue[r]=val;});
+  showToast('✅ จัด '+selRefs.size+' บิล \u2192 '+val,'ok');
+  selRefs.clear();saveQ();renderAll();
+}
+
+
+function ssBvAssign(val,id){
+  // id = 'bvp_REFSTRING' or 'bvp_'+ref
+  var ref=id.replace(/^bvp_/,'');
+  var tripEl=document.getElementById('bvt_'+ref);
+  var trip=parseInt(tripEl?tripEl.value:'1')||1;
+  if(val){queue[ref]=val;tripMap[ref]=trip;}
+  else{delete queue[ref];delete tripMap[ref];}
+  saveQ();renderAll();
+  showToast(val?'✅ '+billMap[ref]?.arName+' → '+val+' เที่ยว '+trip:'ยกเลิก '+ref,'ok');
+}
+function ssPickReassign(val,id){
+  // Extract ref from SS id: 'rs_REFSTRING'
+  if(!val)return;
+  var ref=id.replace(/^rs_/,'');
+  reassignTruck(ref,val);
+  // Reset display
+  setTimeout(function(){
+    var lbl=document.getElementById('sslbl_'+id);
+    if(lbl){lbl.textContent='🚛 เปลี่ยนรถ';lbl.className='ss-btn-lbl ss-ph';}
+    var wrap=document.getElementById('sswrap_'+id);
+    if(wrap)wrap.dataset.val='';
+  },300);
+}
+function ssMakeTruckOpts(excludePlate){
+  return [{v:'',l:'— เลือกรถ —'}].concat(TRUCKS.filter(function(t){return !excludePlate||t.plate!==excludePlate;}).map(function(t){return {v:t.plate,l:t.e+' '+t.plate+' ('+t.nick+')'};}));
+}
 // ══════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════
