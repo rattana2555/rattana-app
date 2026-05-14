@@ -51,14 +51,22 @@ select,input{font-family:inherit;font-size:16px}
 #loadingBar{position:fixed;top:0;left:0;height:3px;background:var(--gold);width:0;transition:width .4s;z-index:10000}
 
 /* ══ LOADING SCREEN ══ */
-#ls{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:9999;transition:opacity .5s,visibility .5s}
+#ls{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:9999;transition:opacity .5s,visibility .5s;padding:24px;text-align:center}
 #ls.hide{opacity:0;visibility:hidden;pointer-events:none}
 #ls .truck{font-size:54px;animation:bounce 1s ease-in-out infinite alternate}
+#ls.err-state .truck{animation:none}
 @keyframes bounce{from{transform:translateY(0) rotate(-2deg)}to{transform:translateY(-8px) rotate(2deg)}}
 #ls .title{font-family:'Kanit',sans-serif;font-size:20px;font-weight:600;color:var(--navy)}
 #ls .sub{font-size:13px;color:var(--muted)}
 #ls .bar-wrap{width:220px;height:5px;background:var(--border);border-radius:3px;overflow:hidden}
 #ls .bar{height:100%;background:var(--gold);width:8%;transition:width .5s ease;border-radius:3px}
+#ls-error-box{display:none;background:#fef2f2;border:1.5px solid #e74c3c88;border-radius:12px;padding:16px 20px;max-width:380px;width:100%;text-align:left}
+#ls-error-box .err-title{color:#c0392b;font-weight:700;font-size:14px;margin-bottom:6px}
+#ls-error-box .err-msg{color:#7b241c;font-size:12px;line-height:1.6}
+#ls-error-box .err-steps{margin-top:10px;padding-left:16px;color:#7b241c;font-size:12px;line-height:2}
+#ls-error-box .err-detail{margin-top:8px;font-size:11px;color:#a93226;font-family:monospace;word-break:break-all;background:#fde8e8;padding:6px 8px;border-radius:6px}
+#ls .retry-btn{background:var(--gold);color:var(--navy);border:none;border-radius:8px;padding:10px 24px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Sarabun',sans-serif;display:none}
+#ls .retry-btn:hover{background:var(--gold-light)}
 
 /* ══ TOAST ══ */
 #toasts{position:fixed;bottom:max(24px,env(safe-area-inset-bottom));right:16px;z-index:9998;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
@@ -233,6 +241,17 @@ select,input{font-family:inherit;font-size:16px}
   <div class="sub" id="ls-msg">กำลังโหลดข้อมูล...</div>
   <div class="bar-wrap"><div class="bar" id="ls-bar"></div></div>
   <div style="font-size:11px;color:#C8CEDC;margin-top:4px">รัตนไพบูลย์ กรุ๊ป • คลัง W1</div>
+  <div id="ls-error-box">
+    <div class="err-title">❌ โหลดข้อมูลไม่สำเร็จ</div>
+    <div class="err-msg">ไม่สามารถดึงข้อมูลจาก Google Sheets ได้ กรุณาตรวจสอบ:</div>
+    <ol class="err-steps">
+      <li>เปิด Google Sheets → <b>Share</b> → ตั้งเป็น <b>"Anyone with the link – Viewer"</b></li>
+      <li>หรือ <b>File → Share → Publish to web</b> แล้วเลือก Entire document</li>
+      <li>ตรวจสอบว่าชื่อ Sheet tab ตรงกัน: <b>Bill DS, Product, Route</b></li>
+    </ol>
+    <div class="err-detail" id="ls-err-detail"></div>
+  </div>
+  <button class="retry-btn" id="ls-retry-btn" onclick="retryLoad()">🔄 ลองใหม่อีกครั้ง</button>
 </div>
 
 <!-- Toasts -->
@@ -693,12 +712,41 @@ function setLoad(msg,pct){
   if(pct>=100&&lb)setTimeout(()=>lb.style.width='0',600);
 }
 
-const csvURL = s=>`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(s)}`;
+const csvURL  = s=>`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent(s)}`;
+const exportURL= s=>`https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&sheet=${encodeURIComponent(s)}`;
 
 async function fetchSheet(name){
-  const r=await fetch(csvURL(name));
-  if(!r.ok)throw new Error(`"${name}" โหลดไม่ได้ (${r.status})`);
-  return parseCSV(await r.text());
+  // Try 1: gviz/tq (works for public + "Anyone with link" sheets)
+  let lastErr='';
+  try{
+    const r=await fetch(csvURL(name),{cache:'no-store'});
+    if(r.ok){
+      const txt=await r.text();
+      if(!txt.trim().startsWith('<')){   // HTML = redirected to Google login
+        const rows=parseCSV(txt);
+        if(rows.length>0)return rows;
+        throw new Error(`"${name}" ว่างเปล่า (0 rows)`);
+      }
+      lastErr=`"${name}" — Sheet ไม่ได้ตั้งเป็น Public (ได้รับ HTML แทน CSV)`;
+    } else {
+      lastErr=`"${name}" — HTTP ${r.status}`;
+    }
+  }catch(e){ lastErr=e.message||String(e); }
+
+  // Try 2: export URL (sometimes works when gviz doesn't)
+  try{
+    const r2=await fetch(exportURL(name),{cache:'no-store'});
+    if(r2.ok){
+      const txt2=await r2.text();
+      if(!txt2.trim().startsWith('<')){
+        const rows2=parseCSV(txt2);
+        if(rows2.length>0)return rows2;
+      }
+    }
+  }catch(e2){}
+
+  // Both failed
+  throw new Error(lastErr||`"${name}" โหลดไม่ได้`);
 }
 
 function parseCSV(txt){
@@ -814,14 +862,45 @@ async function loadData(){
     updateSyncBadge();
   }catch(e){
     console.error(e);
+    // Show error state on loading screen
+    const ls=document.getElementById('ls');
+    ls.classList.add('err-state');
+    setLoad('❌ โหลดข้อมูลไม่สำเร็จ',0);
+    const box=document.getElementById('ls-error-box');
+    const detail=document.getElementById('ls-err-detail');
+    const retryBtn=document.getElementById('ls-retry-btn');
+    if(box){box.style.display='block';}
+    if(detail){detail.textContent='Error: '+e.message;}
+    if(retryBtn){retryBtn.style.display='inline-block';}
     showToast('โหลดไม่สำเร็จ: '+e.message,'err');
   }finally{
-    setTimeout(()=>document.getElementById('ls').classList.add('hide'),400);
+    // Only auto-hide if no error
+    const ls=document.getElementById('ls');
+    if(!ls.classList.contains('err-state')){
+      setTimeout(()=>ls.classList.add('hide'),400);
+    }
   }
 }
 
+function retryLoad(){
+  const ls=document.getElementById('ls');
+  ls.classList.remove('err-state');
+  const box=document.getElementById('ls-error-box');
+  const retryBtn=document.getElementById('ls-retry-btn');
+  if(box)box.style.display='none';
+  if(retryBtn)retryBtn.style.display='none';
+  ls.classList.remove('hide');
+  setLoad('🔄 กำลังโหลดใหม่...',10);
+  loadData();
+}
+
 function refreshData(){
-  document.getElementById('ls').classList.remove('hide');
+  const ls=document.getElementById('ls');
+  ls.classList.remove('err-state','hide');
+  const box=document.getElementById('ls-error-box');
+  const retryBtn=document.getElementById('ls-retry-btn');
+  if(box)box.style.display='none';
+  if(retryBtn)retryBtn.style.display='none';
   setLoad('🔄 รีเฟรชข้อมูล...',10);
   loadData();
 }
