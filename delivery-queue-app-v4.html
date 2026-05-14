@@ -1577,7 +1577,10 @@ function confirmAutoAssign(){
 
     const routeGroups={};
     tmrBills.forEach(b=>{
-      const key=(b.routeCode||b.route||'').trim()||`GEO_${Math.round(bearing(b)/30)*30}`;
+      const baseKey=(b.routeCode||b.route||'').trim();
+      // แบ่ง sub-group ด้วย bearing sector 45° ป้องกัน route เดียวกันแต่ต่างทิศ
+      const bearSec=Math.round(bearing(b)/45)*45;
+      const key=baseKey?`${baseKey}_${bearSec}`:`DIR_${bearSec}`;
       if(!routeGroups[key])routeGroups[key]={key,bills:[],routeCode:b.routeCode||b.route||'',days:b.days||'',totalAmt:0,avgAmt:0,avgDist:0};
       routeGroups[key].bills.push(b);
     });
@@ -1614,11 +1617,17 @@ function confirmAutoAssign(){
           if(t&&fits(t,b)&&!farFromCentroid(t.plate,b))best=t;
         }
 
-        // 1. Route truck ที่จัดไปแล้วในรอบนี้
-        //    + เพิ่ม centroid check: ถ้าไกลเกิน MAX_CENTROID_DIST ข้ามแถบ → ไม่ใช้รถนั้น
+        // 1. Route truck + bearing check
         if(!best && routeTruck[grp.key]){
           const t=trucks.find(x=>x.plate===routeTruck[grp.key]);
-          if(t&&fits(t,b)&&!farFromCentroid(t.plate,b))best=t;
+          if(t&&fits(t,b)&&!farFromCentroid(t.plate,b)){
+            const on=Object.entries(newQ).filter(([,p])=>p===t.plate).map(([r])=>billMap[r]).filter(x=>x&&x.lat&&x.lng);
+            if(on.length){
+              const avgB=on.reduce((s,x)=>s+bearing(x),0)/on.length;
+              const bd=Math.abs(((bBear-avgB+180)%360)-180);
+              if(bd<=40)best=t; // ทิศต่างกัน>40° → ไม่ใช้รถนี้
+            } else { best=t; }
+          }
         }
 
         // 2. Bearing clustering + centroid check
