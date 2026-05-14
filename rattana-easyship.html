@@ -365,14 +365,24 @@ function setErr(m){
   var o=$('olist');if(o)o.innerHTML=e;
 }
 
-var _ac=null;
+var _ac=null, _hasData=false;
 function doRefresh(){
-  setSpinner();
+  // ถ้ายังไม่มีข้อมูลเลย — แสดง spinner
+  // ถ้ามีข้อมูลแล้ว — แสดง toast แทน ไม่ล้างจอ
+  if(!_hasData) setSpinner();
+  else toast('🔄 กำลังอัปเดต...','');
+
   if(_ac){try{_ac.abort();}catch(e){}}
   _ac=new AbortController();
   var signal=_ac.signal;
   var url='https://docs.google.com/spreadsheets/d/'+SHEET+'/gviz/tq?tqx=out:json&sheet='+encodeURIComponent(TAB)+'&t='+Date.now();
-  var timer=setTimeout(function(){try{_ac.abort();}catch(e){}setErr('หมดเวลา 9 วิ — กดรีเฟรช');},9000);
+
+  var timer=setTimeout(function(){
+    try{_ac.abort();}catch(e){}
+    if(!_hasData) setErr('หมดเวลา — กดรีเฟรช');
+    else toast('โหลดช้า — กดรีเฟรชถ้าต้องการ','err');
+  }, 15000);
+
   fetch(url,{signal:signal})
     .then(function(r){return r.text();})
     .then(function(txt){
@@ -383,7 +393,9 @@ function doRefresh(){
     })
     .catch(function(err){
       clearTimeout(timer);
-      if(err.name!=='AbortError')setErr(err.message||'โหลดไม่ได้');
+      if(err.name==='AbortError') return;
+      if(!_hasData) setErr(err.message||'โหลดไม่ได้ — กดรีเฟรช');
+      else toast('โหลดไม่ได้ — '+err.message,'err');
     });
 }
 
@@ -419,8 +431,9 @@ function parseGviz(j){
   DB=newDB;
   var f=Object.values(DB)[0];
   if(f&&f.wh){TXT('d-loc','📍 คลัง '+f.wh);TXT('d-sub','คลัง '+f.wh);}
+  _hasData=true;
   updateStats();renderDash();renderOrderList();renderOStats();
-  toast('โหลดสำเร็จ ('+Object.keys(DB).length+' ออเดอร์)','ok');
+  toast('✅ โหลดสำเร็จ ('+Object.keys(DB).length+' ออเดอร์)','ok');
 }
 
 // ═══ STATS ════════════════════════════════════════════════
@@ -628,10 +641,20 @@ function onPh(ev){
 }
 function delPh(){$('ph-p').style.display='none';TXT('ph-btn','📷 ถ่ายภาพหลักฐาน → Drive');}
 function uploadPh(b64,orderNum){
+  if(!GAS){toast('ยังไม่ได้ตั้งค่า GAS URL','err');return;}
   TXT('ph-btn','⏳ กำลังอัปโหลด...');
-  fetch(GAS,{method:'POST',mode:'no-cors',body:JSON.stringify({action:'savePhoto',b64:b64,orderNum:orderNum})})
-    .then(function(){toast('✓ อัปโหลด Drive สำเร็จ!','ok');TXT('ph-btn','✓ สำเร็จ');})
-    .catch(function(e){toast('Upload error','err');TXT('ph-btn','❌ ลองอีกครั้ง');});
+  var payload = JSON.stringify({action:'savePhoto',b64:b64,orderNum:orderNum});
+  // ใช้ no-cors — request จะถูกส่งเสมอ
+  fetch(GAS,{method:'POST',mode:'no-cors',body:payload})
+    .then(function(){
+      // no-cors always resolves — assume success
+      toast('✓ ส่งรูปไป Drive แล้ว!','ok');
+      TXT('ph-btn','✓ ส่งแล้ว — ตรวจใน Drive');
+    })
+    .catch(function(e){
+      toast('Upload error: '+e.message,'err');
+      TXT('ph-btn','❌ ลองอีกครั้ง');
+    });
 }
 
 // ═══ OCR ══════════════════════════════════════════════════
