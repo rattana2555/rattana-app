@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Rattana Bplus Sales v2.3</title>
+<title>Rattana Bplus Sales v2.4</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
@@ -321,7 +321,7 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
     <div class="header-row">
       <div>
         <div class="greeting">สวัสดี <b>rattana.phai</b> 👋</div>
-        <div class="page-title" id="homeTitle">ยอดขายวันนี้</div>
+        <div class="page-title" id="homeTitle">ยอดขายเดือนนี้</div>
       </div>
       <button class="icon-btn" id="refreshBtn">↻</button>
     </div>
@@ -361,9 +361,9 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
     <!-- Period Tabs -->
     <div class="period-tabs">
       <button class="period-btn" data-period="today">วันนี้</button>
-      <button class="period-btn active" data-period="yesterday">เมื่อวาน</button>
+      <button class="period-btn" data-period="yesterday">เมื่อวาน</button>
       <button class="period-btn" data-period="week">สัปดาห์</button>
-      <button class="period-btn" data-period="month">เดือน</button>
+      <button class="period-btn active" data-period="month">เดือน</button>
       <button class="period-btn" data-period="year">ปี</button>
     </div>
 
@@ -630,7 +630,7 @@ let stockData = [];   // [{product, cat, w1, w2, w3, w4}] จาก PDDT
 let saleInData = [];  // [{product, cat, wh, ...R-V}] จาก Sale_IN
 let saleInHeaders = [];
 let selectedWH = 'all';
-let selectedPeriod = 'yesterday';
+let selectedPeriod = 'month';
 let productSearch = '';
 let charts = {};
 let lastUpdated = '';
@@ -662,24 +662,34 @@ function toast(msg,type='ok'){
 }
 
 // ── Date ranges ───────────────────────────────────
+function getLatestDataDate(){
+  // Find max date in allRows
+  if(!allRows.length) return new Date();
+  const dates = allRows.map(r=>parseTHDate(r.date)).filter(Boolean);
+  return dates.length ? new Date(Math.max(...dates)) : new Date();
+}
+
 function getRange(period){
-  const today = new Date(); today.setHours(0,0,0,0);
-  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate()-1);
-  if(period==='today')     return {from:toISO(today), to:toISO(today), label:'วันนี้ '+today.toLocaleDateString('th-TH',{day:'2-digit',month:'short',year:'2-digit'})};
-  if(period==='yesterday') return {from:toISO(yesterday), to:toISO(yesterday), label:'เมื่อวาน '+yesterday.toLocaleDateString('th-TH',{day:'2-digit',month:'short',year:'2-digit'})};
+  const latest = getLatestDataDate();
+  latest.setHours(0,0,0,0);
+  const yesterday = new Date(latest); yesterday.setDate(yesterday.getDate()-1);
+  const fmtTH = d => d.toLocaleDateString('th-TH',{day:'2-digit',month:'short',year:'2-digit'});
+
+  if(period==='today')     return {from:toISO(latest), to:toISO(latest), label:'ข้อมูลล่าสุด '+fmtTH(latest)};
+  if(period==='yesterday') return {from:toISO(yesterday), to:toISO(yesterday), label:'ก่อนหน้า '+fmtTH(yesterday)};
   if(period==='week'){
-    const w=new Date(today);w.setDate(w.getDate()-6);
-    return {from:toISO(w), to:toISO(today), label:'7 วันย้อนหลัง'};
+    const w=new Date(latest);w.setDate(w.getDate()-6);
+    return {from:toISO(w), to:toISO(latest), label:'7 วัน ('+fmtTH(w)+'–'+fmtTH(latest)+')'};
   }
   if(period==='month'){
-    const m=new Date(today.getFullYear(),today.getMonth(),1);
-    return {from:toISO(m), to:toISO(today), label:'เดือนนี้'};
+    const m=new Date(latest.getFullYear(),latest.getMonth(),1);
+    return {from:toISO(m), to:toISO(latest), label:'เดือน '+latest.toLocaleDateString('th-TH',{month:'long',year:'2-digit'})};
   }
   if(period==='year'){
-    const y=new Date(today.getFullYear(),0,1);
-    return {from:toISO(y), to:toISO(today), label:'ปีนี้ '+today.getFullYear()};
+    const y=new Date(latest.getFullYear(),0,1);
+    return {from:toISO(y), to:toISO(latest), label:'ปี '+(latest.getFullYear()+543)};
   }
-  return {from:'', to:toISO(today), label:'ทั้งหมด'};
+  return {from:'', to:toISO(latest), label:'ทั้งหมด'};
 }
 
 function filterRows(period, wh){
@@ -875,9 +885,9 @@ function renderHome(){
 }
 
 function prevPeriodRows(){
-  const today=new Date();today.setHours(0,0,0,0);
-  if(selectedPeriod==='yesterday'){
-    const d2=new Date(today);d2.setDate(d2.getDate()-2);
+  const latest=getLatestDataDate();latest.setHours(0,0,0,0);
+  if(selectedPeriod==='today'||selectedPeriod==='yesterday'){
+    const d2=new Date(latest);d2.setDate(d2.getDate()-1);
     return allRows.filter(r=>{
       if(selectedWH!=='all'&&r.wh!==selectedWH) return false;
       const d=parseTHDate(r.date);
@@ -888,10 +898,10 @@ function prevPeriodRows(){
 }
 
 function getLast7Days(){
-  const today=new Date();today.setHours(0,0,0,0);
+  const latest=getLatestDataDate(); latest.setHours(0,0,0,0);
   const result=[];
   for(let i=6;i>=0;i--){
-    const d=new Date(today);d.setDate(d.getDate()-i);
+    const d=new Date(latest);d.setDate(d.getDate()-i);
     const ds=toISO(d);
     const sum=allRows.filter(r=>{
       if(selectedWH!=='all'&&r.wh!==selectedWH) return false;
@@ -981,10 +991,10 @@ function renderReports(){
   });
 
   // Daily 30 days
-  const today=new Date();today.setHours(0,0,0,0);
+  const latest30=getLatestDataDate(); latest30.setHours(0,0,0,0);
   const daily30=[];
   for(let i=29;i>=0;i--){
-    const d=new Date(today);d.setDate(d.getDate()-i);
+    const d=new Date(latest30);d.setDate(d.getDate()-i);
     const ds=toISO(d);
     const sum=allRows.filter(r=>{
       if(selectedWH!=='all'&&r.wh!==selectedWH) return false;
@@ -1323,7 +1333,7 @@ document.querySelectorAll('.period-btn').forEach(btn=>{
     document.querySelectorAll('.period-btn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     selectedPeriod=btn.dataset.period;
-    const titles={today:'ยอดขายวันนี้',yesterday:'ยอดขายเมื่อวาน',week:'ยอดขาย 7 วัน',month:'ยอดขายเดือนนี้',year:'ยอดขายปีนี้'};
+    const titles={today:'ข้อมูลล่าสุด',yesterday:'วันก่อนหน้า',week:'ยอดขาย 7 วัน',month:'ยอดขายเดือนนี้',year:'ยอดขายปีนี้'};
     $('homeTitle').textContent=titles[selectedPeriod]||'ยอดขาย';
     renderHome();
   });
