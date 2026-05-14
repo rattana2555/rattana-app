@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Rattana Bplus Sales v3.1</title>
+<title>Rattana Bplus Sales v3.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
@@ -438,7 +438,7 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
         </div>
         <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:14px;font-weight:600">เวอร์ชัน</span>
-          <span style="font-size:12px;color:var(--muted)">v3.1 · 2026-05-14</span>
+          <span style="font-size:12px;color:var(--muted)">v3.2 · 2026-05-14</span>
         </div>
       </div>
       <div style="margin-top:12px">
@@ -677,11 +677,18 @@ async function fetchStock(){
 function parsePDDT(text){
   const lines=text.split('\n').filter(l=>l.trim());
   if(lines.length<2) return;
-  const headers=parseCsvLine(lines[0]).map(h=>h.replace(/\r/,'').trim());
+
+  // Auto-detect header row — find the row containing 'ชื่อสินค้า' (up to row 15)
+  let headerIdx=0;
+  for(let i=0;i<Math.min(15,lines.length);i++){
+    if(lines[i].includes('ชื่อสินค้า')||lines[i].includes('Product_Name')){
+      headerIdx=i; break;
+    }
+  }
+
+  const headers=parseCsvLine(lines[headerIdx]).map(h=>h.replace(/\r/,'').trim());
   const ci={};headers.forEach((h,i)=>ci[h]=i);
 
-  // Map PDDT column names (Thai) → internal keys
-  // Try both Thai and English column names for robustness
   function getIdx(...names){ for(const n of names){ if(ci[n]!==undefined) return ci[n]; } return -1; }
   const nameI  = getIdx('ชื่อสินค้า','Product_Name');
   const packI  = getIdx('Cat packing size','Cat_Pack');
@@ -695,13 +702,20 @@ function parsePDDT(text){
   const smI    = getIdx('Stock SM','SM');
   const c4I    = getIdx('Stock C4','C4');
 
+  // Debug: log detected columns (visible in browser console)
+  console.log('[PDDT] headerIdx='+headerIdx,'nameI='+nameI,'w1I='+w1I,'w2I='+w2I,'w3I='+w3I,'w4I='+w4I,'smI='+smI,'c4I='+c4I);
+
+  // Bail if can't find product name column
+  if(nameI<0){ console.error('[PDDT] หาคอลัมน์ "ชื่อสินค้า" ไม่เจอ — headers:',headers); return; }
+
   stockRows=[];
-  for(let i=1;i<lines.length;i++){
+  for(let i=headerIdx+1;i<lines.length;i++){
     const cols=parseCsvLine(lines[i]);
-    if(!cols[nameI]||cols[nameI].replace(/\r/,'').trim()==='') continue;
+    const name=(cols[nameI]||'').replace(/\r/,'').trim();
+    if(!name) continue;
     const parseNum=idx=>idx>=0?parseFloat(String(cols[idx]||'0').replace(/,/g,''))||0:0;
     stockRows.push({
-      name    : (cols[nameI]||'').replace(/\r/,'').trim(),
+      name,
       pack    : packI>=0?(cols[packI]||'').replace(/\r/,'').trim():'',
       brand   : brandI>=0?(cols[brandI]||'').replace(/\r/,'').trim():'',
       cat_bu  : buI>=0?(cols[buI]||'').replace(/\r/,'').trim():'',
