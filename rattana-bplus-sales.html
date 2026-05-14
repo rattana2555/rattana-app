@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Rattana Bplus Sales v3.2</title>
+<title>Rattana Bplus Sales v3.3</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 <style>
@@ -199,7 +199,7 @@ a{color:inherit;text-decoration:none}
 <header class="app-header">
   <div class="header-logo">
     <h1>Rattana <span>Bplus</span> Sales</h1>
-    <small>v3.2 · 2026-05-13</small>
+    <small>v3.3 · 2026-05-13</small>
   </div>
   <button class="hbtn" id="darkBtn" title="Dark mode">🌙</button>
   <button class="hbtn" id="refreshBtn" title="รีเฟรชข้อมูล">↻</button>
@@ -693,16 +693,40 @@ function cacheAge(ts){
   return m < 1 ? 'เมื่อกี้' : m+'  นาทีที่แล้ว';
 }
 
-// ══ FETCH ══
-async function fetchWithTimeout(url, ms=8000){
-  const ctrl = new AbortController();
-  const tid  = setTimeout(()=>ctrl.abort(), ms);
-  try{ const r=await fetch(url,{signal:ctrl.signal}); clearTimeout(tid); return r; }
-  catch(e){ clearTimeout(tid); throw e; }
-}
-
+// ══ FETCH via JSONP (ไม่มีปัญหา CORS) ══
 const CATS_SET = new Set(['Bplus FMCG','Bplus Thaibev Al','Bplus บุหรี่','F&N']);
-const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
+
+function fetchGVIZ(){
+  return new Promise((resolve, reject) => {
+    const cbName = 'gviz_cb_' + Date.now();
+    const script  = document.createElement('script');
+    const timeout = setTimeout(()=>{
+      cleanup(); reject(new Error('timeout'));
+    }, 20000);
+
+    function cleanup(){
+      clearTimeout(timeout);
+      try{ delete window[cbName]; }catch(e){}
+      if(script.parentNode) script.parentNode.removeChild(script);
+    }
+
+    window[cbName] = function(resp){
+      cleanup();
+      try{
+        if(resp.status !== 'ok') { reject(new Error('gviz error')); return; }
+        const cols = resp.table.cols.map(c => c.label);
+        const rows = (resp.table.rows || []).map(r =>
+          Object.fromEntries(cols.map((c,i) => [c, r.c && r.c[i] ? String(r.c[i].v ?? '') : '']))
+        );
+        resolve(rows);
+      }catch(e){ reject(e); }
+    };
+
+    script.onerror = ()=>{ cleanup(); reject(new Error('script error')); };
+    script.src = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)}&callback=${cbName}`;
+    document.head.appendChild(script);
+  });
+}
 
 // ── Step 1: แสดงข้อมูล instant (cache หรือ baked) ──
 function loadInstant(){
@@ -712,32 +736,29 @@ function loadInstant(){
     setSource('cache', `⚡ Cache · ${cacheAge(cached.ts)}`);
   } else {
     allData = BAKED.map(normalize);
-    setSource('baked', '📦 Baked · 13 พ.ค. 2026');
+    setSource('baked','📦 Baked · 13 พ.ค. 2026');
     document.getElementById('bakedNotice').style.display='block';
   }
-  renderAll(); // แสดงทันที ไม่รอ
+  renderAll();
 }
 
-// ── Step 2: refresh ข้างหลัง ไม่บล็อก UI ──
+// ── Step 2: background refresh ──
 async function refreshBackground(){
   const bar = document.getElementById('refreshBar');
   if(bar) bar.style.display='block';
   try{
-    const res = await fetchWithTimeout(SHEET_URL, 15000);
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const rows = parseCsv(await res.text());
-    const fresh = rows.filter(r=>CATS_SET.has(r.Cat_BU)).map(normalize);
-    if(!fresh.length) throw new Error('ไม่มีข้อมูล');
+    const rows  = await fetchGVIZ();
+    const fresh = rows.filter(r => CATS_SET.has(r.Cat_BU)).map(normalize);
+    if(!fresh.length) throw new Error('ไม่พบข้อมูล Cat_BU ที่ต้องการ');
     saveCache(fresh);
     allData = fresh;
     setSource('live','🟢 Live · '+new Date().toLocaleTimeString('th-TH'));
     document.getElementById('bakedNotice').style.display='none';
     renderAll();
-    toast(`อัพเดตแล้ว ${fmtN(fresh.length)} รายการ`);
+    toast(`✅ อัพเดตแล้ว ${fmtN(fresh.length)} รายการ`);
   }catch(e){
-    // ถ้า fetch ไม่ได้ ใช้ข้อมูลเดิม ไม่แสดง error
-    if(allData===BAKED.map(normalize)) return; // ยังเป็น baked ไม่ toast
-    toast('ใช้ข้อมูลเดิม (ไม่มี internet)');
+    console.warn('refresh failed:', e.message);
+    setSource(loadCache()?'cache':'baked', loadCache()?`⚡ Cache (refresh ไม่สำเร็จ)`:'📦 Baked (offline)');
   }finally{
     if(bar) bar.style.display='none';
   }
@@ -746,28 +767,25 @@ async function refreshBackground(){
 // ── Entry point ──
 async function loadData(force=false){
   if(force){
-    // กด refresh ปุ่ม: spinner + force fetch
     document.getElementById('spinner').classList.add('on');
     try{
-      const res = await fetchWithTimeout(SHEET_URL, 15000);
-      if(!res.ok) throw new Error('HTTP '+res.status);
-      const rows = parseCsv(await res.text());
-      const fresh = rows.filter(r=>CATS_SET.has(r.Cat_BU)).map(normalize);
+      const rows  = await fetchGVIZ();
+      const fresh = rows.filter(r => CATS_SET.has(r.Cat_BU)).map(normalize);
+      if(!fresh.length) throw new Error('ไม่พบข้อมูล');
       saveCache(fresh);
       allData = fresh;
       setSource('live','🟢 Live · '+new Date().toLocaleTimeString('th-TH'));
       document.getElementById('bakedNotice').style.display='none';
       renderAll();
-      toast(`โหลดสำเร็จ ${fmtN(fresh.length)} รายการ`);
+      toast(`✅ โหลดสำเร็จ ${fmtN(fresh.length)} รายการ`);
     }catch(e){
-      toast('โหลดไม่ได้: '+e.message);
+      toast('⚠️ โหลดไม่ได้: '+e.message);
     }finally{
       document.getElementById('spinner').classList.remove('on');
     }
   } else {
-    // เปิดแอพครั้งแรก: instant render แล้ว background refresh
     loadInstant();
-    refreshBackground(); // ไม่ await — ทำงานข้างหลัง
+    refreshBackground();
   }
 }
 
@@ -871,3 +889,5 @@ loadData();
 </script>
 </body>
 </html>
+
+
