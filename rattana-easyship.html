@@ -561,15 +561,20 @@ function renderDetail(o){
   var btn=$('cfm-btn');
   var hasErr=o.items.some(function(x){return x.status==='error';});
   var allOk=o.items.every(function(x){return x.status==='ok';});
+  var anyScanned=o.items.some(function(x){return x.sc>0||x.status==='ok';});
   var tot=o.items.reduce(function(s,x){return s+x.qty;},0);
   var scn=o.items.reduce(function(s,x){return s+Math.min(x.sc,x.qty);},0);
+  btn.disabled=false; btn.style.opacity='1';
   if(hasErr){
     btn.disabled=true;btn.style.opacity='.4';btn.textContent='⚠ แก้ไขก่อน';
   } else if(allOk){
-    btn.disabled=false;btn.style.opacity='1';btn.textContent='✓ ยืนยันการแพ็กเสร็จสิ้น';
-  } else {
+    btn.textContent='✓ ยืนยันการแพ็กเสร็จสิ้น';
+  } else if(!anyScanned){
     btn.disabled=true;btn.style.opacity='.4';
-    btn.textContent='🔒 ยิงบาร์โค้ดให้ครบก่อน ('+scn+'/'+tot+')';
+    btn.textContent='🔒 ต้องสแกนสินค้าก่อนยืนยัน';
+  } else {
+    btn.style.opacity='.85';
+    btn.textContent='⚠ ยืนยัน (สแกนแล้ว '+scn+'/'+tot+')';
   }
 }
 
@@ -814,7 +819,10 @@ function dimg(url){
 }
 // ─── REMOTE STATUS SYNC ──────────────────────────────────────
 function _done(){
-  updateStats();renderDash();renderOrderList();renderOStats();
+  try{updateStats();}catch(e){}
+  try{renderDash();}catch(e){}
+  try{renderOrderList();}catch(e){}
+  try{renderOStats();}catch(e){}
   toast('✅ โหลดสำเร็จ ('+Object.keys(DB).length+' ออเดอร์)','ok');
 }
 
