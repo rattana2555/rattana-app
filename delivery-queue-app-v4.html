@@ -1069,8 +1069,8 @@ function renderBillTable(){
             </span>
           </div>
           <div style="display:flex;gap:4px;flex-wrap:wrap">
-            <select class="ts-truck" onchange="reassignTruck('${b.ref}',this.value);this.value=''"
-              style="padding:2px 6px;border-radius:6px;background:#F5F7FA;border:1px solid var(--border);color:var(--text);font-size:10px;cursor:pointer;max-width:120px">
+            <select class="ts-reassign" data-ref="${b.ref}"
+              style="padding:2px 6px;border-radius:6px;background:#F5F7FA;border:1px solid var(--border);color:var(--text);font-size:10px;cursor:pointer;min-width:130px">
               <option value="">🚛 เปลี่ยนรถ</option>
               ${TRUCKS.filter(t=>t.plate!==plate).map(t=>`<option value="${t.plate}">${t.e} ${t.plate} (${t.nick})</option>`).join('')}
             </select>
@@ -2382,17 +2382,31 @@ function showToast(msg,type='ok'){
 
 // ══ TOM SELECT INIT ══
 function initTS(){
+  var tsOpts={
+    maxOptions:30,
+    placeholder:'🔍 ค้นหา...',
+    searchField:['text'],
+    create:false,
+    render:{no_results:function(){return '<div style="padding:8px 10px;color:var(--muted);font-size:12px">ไม่พบ</div>';}}
+  };
+  // Regular truck selects
   document.querySelectorAll('select.ts-truck').forEach(function(el){
-    if(el.tomselect)return; // already initialized
-    new TomSelect(el,{
-      maxOptions:30,
-      placeholder:'🔍 ค้นหา...',
-      searchField:['text'],
-      create:false,
-      render:{
-        no_results:function(){return '<div class="no-results">ไม่พบ</div>';}
+    if(el.tomselect)return;
+    new TomSelect(el, tsOpts);
+  });
+  // Reassign selects — use onChange callback to clear after pick
+  document.querySelectorAll('select.ts-reassign').forEach(function(el){
+    if(el.tomselect)return;
+    var ref=el.dataset.ref;
+    var ts=new TomSelect(el,Object.assign({},tsOpts,{
+      placeholder:'🔍 เปลี่ยนรถ...',
+      onChange:function(val){
+        if(!val)return;
+        reassignTruck(ref,val);
+        // Reset after pick (delay to avoid flicker)
+        setTimeout(function(){ts.clear();ts.blur();},200);
       }
-    });
+    }));
   });
 }
 // ══════════════════════════════════════════
