@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="R-Product">
 <meta name="theme-color" content="#0d1b3e">
-<title>Rattana Product Barcode v1.4</title>
+<title>Rattana Product Barcode v2.0</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 <style>
@@ -158,17 +158,12 @@ body.dark .cat-group-badge{color:var(--gold-light)}
 .thumb{width:40px;height:40px;border-radius:var(--radius-sm);object-fit:contain;background:var(--bg);border:1px solid var(--border);flex-shrink:0;padding:2px}
 .thumb-placeholder{width:40px;height:40px;border-radius:var(--radius-sm);background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
 
-/* LINE browser overlay */
-.line-overlay{display:none;position:fixed;inset:0;z-index:9999;background:var(--navy);flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;text-align:center}
-.line-overlay.show{display:flex}
-.line-logo{font-size:56px;margin-bottom:16px}
-.line-title{font-size:22px;font-weight:700;color:#fff;margin-bottom:8px;line-height:1.3}
-.line-sub{font-size:14px;color:rgba(255,255,255,.65);line-height:1.6;margin-bottom:28px}
-.line-steps{background:rgba(255,255,255,.08);border-radius:var(--radius-md);padding:16px 20px;margin-bottom:28px;text-align:left;width:100%;max-width:340px}
-.line-step{display:flex;align-items:flex-start;gap:10px;font-size:14px;color:rgba(255,255,255,.85);margin-bottom:10px;line-height:1.4}
-.line-step:last-child{margin-bottom:0}
-.line-step-num{background:var(--gold);color:var(--navy);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px}
-.line-open-btn{background:var(--gold);color:var(--navy);border:none;border-radius:var(--radius-md);padding:14px 32px;font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;width:100%;max-width:340px}
+/* LINE soft banner */
+.line-banner{display:none;background:#00b900;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;align-items:center;gap:10px;z-index:200;position:relative}
+.line-banner.show{display:flex}
+.line-banner-text{flex:1;line-height:1.4}
+.line-banner-btn{background:#fff;color:#00b900;border:none;border-radius:20px;padding:5px 12px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.line-banner-close{background:transparent;border:none;color:rgba(255,255,255,.7);font-size:18px;cursor:pointer;padding:0 2px;flex-shrink:0}
 
 @media print {
   header, .search-wrap, .pagination, .icon-btn, .print-btn { display:none!important }
@@ -183,28 +178,6 @@ body.dark .cat-group-badge{color:var(--gold-light)}
 </style>
 </head>
 <body>
-
-<!-- LINE Browser Overlay -->
-<div class="line-overlay" id="lineOverlay">
-  <div class="line-logo">🌐</div>
-  <div class="line-title">กรุณาเปิดในบราวเซอร์</div>
-  <div class="line-sub">แอปนี้ไม่รองรับ Browser ในตัว LINE<br>กรุณาเปิดด้วย Safari หรือ Chrome</div>
-  <div class="line-steps">
-    <div class="line-step">
-      <div class="line-step-num">1</div>
-      <div>กดปุ่ม <strong style="color:#fff">⋯</strong> หรือ <strong style="color:#fff">⋮</strong> ที่มุมขวาบน</div>
-    </div>
-    <div class="line-step">
-      <div class="line-step-num">2</div>
-      <div>เลือก <strong style="color:var(--gold)">"เปิดใน Browser"</strong> หรือ <strong style="color:var(--gold)">"Open in Browser"</strong></div>
-    </div>
-    <div class="line-step">
-      <div class="line-step-num">3</div>
-      <div>แอปจะเปิดใน <strong style="color:#fff">Safari / Chrome</strong> โดยอัตโนมัติ</div>
-    </div>
-  </div>
-  <button class="line-open-btn" onclick="tryOpenExternal()">🔗 คัดลอก URL เพื่อเปิดใน Browser</button>
-</div>
 
 <!-- Spinner -->
 <div class="spinner-overlay" id="spinnerOverlay">
@@ -221,13 +194,18 @@ body.dark .cat-group-badge{color:var(--gold-light)}
 <div class="screen active" id="listScreen">
   <header>
     <div class="logo-text">Rattana <span>Product</span></div>
-    <span class="version-tag">v1.4 · 2026-05-14</span>
+    <span class="version-tag">v2.0 · 2026-05-14</span>
     <button class="icon-btn" id="installBtn" onclick="installApp()" title="ติดตั้งแอป" style="display:none">📲</button>
     <button class="icon-btn" onclick="toggleDark()" title="Dark mode">🌙</button>
     <button class="icon-btn" onclick="loadData(true)" title="รีเฟรช">🔄</button>
   </header>
 
-  <div class="search-wrap">
+  <!-- LINE soft banner — shown only inside LINE browser -->
+  <div class="line-banner" id="lineBanner">
+    <div class="line-banner-text">เปิดใน LINE Browser — หากข้อมูลไม่ขึ้น กด "เปิดใน Browser"</div>
+    <button class="line-banner-btn" onclick="tryOpenExternal()">เปิดใน Browser</button>
+    <button class="line-banner-close" onclick="dismissLineBanner()">✕</button>
+  </div>
     <div class="search-inner">
       <span class="search-icon">🔍</span>
       <input type="search" class="search-input" id="searchInput"
@@ -265,30 +243,26 @@ body.dark .cat-group-badge{color:var(--gold-light)}
 
 <script>
 // ═══════════════ CONFIG ═══════════════
-const SHEET_ID       = '1ImkivuDxxTaluPVt2dJLX12fhVWvpU5czshn-OsRYuY';
-const CATALOG_TAB    = 'Detail';   // ชื่อ tab ใน Google Sheets
-// ใช้ gviz API — ไม่มี redirect, ใช้ได้กับ iOS Safari
-const CSV_URL        = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=0`;
-const CATALOG_URL    = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(CATALOG_TAB)}`;
-const PER_PAGE = 8;
+const SHEET_ID    = '1ImkivuDxxTaluPVt2dJLX12fhVWvpU5czshn-OsRYuY';
+const CATALOG_TAB = 'Detail';
+const PER_PAGE    = 8;
 
 // ═══════════════ STATE ════════════════
-let allProducts   = [];
-let filtered      = [];
-let currentPage   = 1;
-let searchQuery   = '';
-let darkMode      = false;
-let catalogMap    = new Map(); // name (normalized) → { catGroup, imgUrl }
+let allProducts = [];
+let filtered    = [];
+let currentPage = 1;
+let searchQuery = '';
+let darkMode    = false;
+let catalogMap  = new Map();
 
 // ═══════════════ INIT ════════════════
 window.addEventListener('DOMContentLoaded', () => {
-  // Detect LINE in-app browser
-  if (isLineBrowser()) {
-    document.getElementById('lineOverlay').classList.add('show');
-    return; // Stop — don't load data in LINE browser
-  }
   const saved = localStorage.getItem('rattana-dark');
   if (saved === 'true') { darkMode = true; document.body.classList.add('dark'); }
+  // Show soft banner if LINE browser, but still load data
+  if (isLineBrowser()) {
+    document.getElementById('lineBanner').classList.add('show');
+  }
   loadData(false);
 });
 
@@ -297,28 +271,40 @@ function isLineBrowser() {
   return /Line\//i.test(ua) || /LIFF/i.test(ua);
 }
 
-function tryOpenExternal() {
-  const url = location.href;
-  // Try clipboard copy
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(url).then(() => {
-      showToast('✅ คัดลอก URL แล้ว — วางใน Safari หรือ Chrome');
-    }).catch(() => promptManual(url));
-  } else {
-    promptManual(url);
-  }
+function dismissLineBanner() {
+  document.getElementById('lineBanner').classList.remove('show');
 }
 
-function promptManual(url) {
-  // As last resort, show the URL in an alert
-  window.prompt('คัดลอก URL นี้แล้วเปิดใน Safari / Chrome:', url);
+function tryOpenExternal() {
+  const url = location.href;
+  // iOS LINE: open external browser directly
+  const ua = navigator.userAgent || '';
+  if (/iPhone|iPad|iPod/i.test(ua)) {
+    // iOS LINE supports opening Safari via this URL scheme
+    location.href = 'googlechrome://' + url.replace(/^https?:\/\//, '');
+    setTimeout(() => { location.href = url; }, 500);
+    return;
+  }
+  // Android — try intent
+  if (/Android/i.test(ua)) {
+    location.href = `intent://${url.replace(/^https?:\/\//,'')}#Intent;scheme=https;package=com.android.chrome;end`;
+    return;
+  }
+  // Fallback: copy to clipboard
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url)
+      .then(() => showToast('✅ คัดลอก URL แล้ว — วางใน Safari หรือ Chrome'))
+      .catch(() => window.prompt('คัดลอก URL นี้:', url));
+  } else {
+    window.prompt('คัดลอก URL นี้:', url);
+  }
 }
 
 // ═══════════════ DATA LOAD ═══════════
 async function loadData(force = false) {
-  const cacheKey = 'rattana-barcode-data';
-  const catKey   = 'rattana-catalog-data';
-  const cacheTs  = 'rattana-barcode-ts';
+  const cacheKey = 'rattana-barcode-v2';
+  const catKey   = 'rattana-catalog-v2';
+  const cacheTs  = 'rattana-ts-v2';
   const CACHE_MS = 5 * 60 * 1000;
 
   if (!force) {
@@ -329,157 +315,133 @@ async function loadData(force = false) {
       if (raw && Date.now() - ts < CACHE_MS) {
         allProducts = JSON.parse(raw);
         if (cat) buildCatalogMap(JSON.parse(cat));
-        afterLoad();
-        return;
+        afterLoad(); return;
       }
     } catch(e) {}
   }
 
-  showSpinner('กำลังโหลดข้อมูลจาก Google Sheets...');
+  showSpinner('กำลังโหลดข้อมูล...');
   try {
-    const [text1, text2] = await Promise.all([
-      fetchText(CSV_URL),
-      fetchText(CATALOG_URL).catch(() => null),
+    // JSONP — ใช้ <script> tag ไม่มี CORS ใช้ได้ทุก browser
+    const [rows1, rows2] = await Promise.all([
+      fetchSheetJsonp(SHEET_ID, 'gid=0'),
+      fetchSheetJsonp(SHEET_ID, `sheet=${encodeURIComponent(CATALOG_TAB)}`).catch(() => null),
     ]);
 
-    allProducts = parseCsv(text1);
+    allProducts = parseBarcodeRows(rows1);
     localStorage.setItem(cacheKey, JSON.stringify(allProducts));
 
-    if (text2) {
-      const catRows = parseCatalogCsv(text2);
+    if (rows2) {
+      const catRows = parseCatalogRows(rows2);
       buildCatalogMap(catRows);
       localStorage.setItem(catKey, JSON.stringify(catRows));
     }
-
     localStorage.setItem(cacheTs, Date.now().toString());
     afterLoad();
+
   } catch(err) {
     hideSpinner();
-    console.error('Load error:', err);
-    // Try loading from cache even if expired
+    // Fallback to stale cache
     try {
-      const raw = localStorage.getItem('rattana-barcode-data');
-      const cat = localStorage.getItem('rattana-catalog-data');
+      const raw = localStorage.getItem('rattana-barcode-v2');
+      const cat = localStorage.getItem('rattana-catalog-v2');
       if (raw) {
         allProducts = JSON.parse(raw);
         if (cat) buildCatalogMap(JSON.parse(cat));
         afterLoad();
-        showToast('⚠️ ใช้ข้อมูล cache (ไม่มีเน็ต)');
+        showToast('⚠️ ใช้ข้อมูล cache เก่า (ไม่มีเน็ต)');
         return;
       }
-    } catch(e2) {}
-    showToast('⚠️ โหลดข้อมูลไม่สำเร็จ — กด 🔄 รีเฟรช');
-    renderEmpty('โหลดข้อมูลไม่สำเร็จ', 'ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต แล้วกด 🔄');
+    } catch(e) {}
+    renderEmpty('โหลดข้อมูลไม่สำเร็จ', 'กรุณาตรวจสอบว่า Sheet เปิดเป็น Public แล้วกด 🔄');
+    showToast('⚠️ โหลดไม่สำเร็จ — กด 🔄 รีเฟรช');
   }
 }
 
-// iOS-safe fetch: ใช้ fetch ก่อน ถ้าไม่ได้ fallback ไป XHR
-function fetchText(url) {
+// ── JSONP Fetch ─────────────────────────────────────────────────
+// ใช้ <script> tag แทน fetch → ไม่มี CORS เลย ใช้ได้ทุก browser
+function fetchSheetJsonp(sheetId, sheetParam) {
   return new Promise((resolve, reject) => {
-    // Try fetch first
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 15000);
-    fetch(url, {
-      method: 'GET',
-      mode: 'cors',
-      credentials: 'omit',
-      signal: ctrl.signal,
-    })
-    .then(r => {
+    const cb  = 'gviz_' + Date.now() + '_' + Math.floor(Math.random()*9999);
+    const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&${sheetParam}&callback=${cb}`;
+
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error('Timeout'));
+    }, 18000);
+
+    function cleanup() {
       clearTimeout(timer);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      return r.text();
-    })
-    .then(resolve)
-    .catch(() => {
-      clearTimeout(timer);
-      // Fallback: XMLHttpRequest (handles iOS quirks better)
-      const xhr = new XMLHttpRequest();
-      xhr.open('GET', url, true);
-      xhr.timeout = 15000;
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(xhr.responseText);
-        } else {
-          reject(new Error(`XHR HTTP ${xhr.status}`));
-        }
-      };
-      xhr.onerror   = () => reject(new Error('XHR network error'));
-      xhr.ontimeout = () => reject(new Error('XHR timeout'));
-      xhr.send();
-    });
+      try { delete window[cb]; } catch(e) {}
+      const el = document.getElementById(cb);
+      if (el) el.remove();
+    }
+
+    window[cb] = function(resp) {
+      cleanup();
+      if (!resp || resp.status !== 'ok') {
+        reject(new Error(resp?.errors?.[0]?.message || 'Sheet API error'));
+        return;
+      }
+      resolve(gvizToRows(resp.table));
+    };
+
+    const s = document.createElement('script');
+    s.id  = cb;
+    s.src = url;
+    s.onerror = () => { cleanup(); reject(new Error('Script load failed')); };
+    document.head.appendChild(s);
   });
+}
+
+// แปลง gviz table → rows[][]  (row[0] = header labels)
+function gvizToRows(table) {
+  const header = (table.cols || []).map(c => c.label || c.id || '');
+  const rows   = (table.rows || []).map(r =>
+    (table.cols || []).map((_, i) => {
+      const cell = r.c ? r.c[i] : null;
+      return (cell && cell.v != null) ? String(cell.v) : '';
+    })
+  );
+  return [header, ...rows];
 }
 
 function afterLoad() {
   hideSpinner();
-  filtered = [...allProducts];
+  filtered    = [...allProducts];
   currentPage = 1;
   renderList();
 }
 
-// ═══════════════ CSV PARSER ══════════
-function parseCsv(text) {
-  const lines = text.split('\n');
-  const header = parseCsvLine(lines[0]);
-
-  // Column indices
-  // A=0 PRODUCT NAME, B=1 CODE EA, C=2 UNA EA, D=3 CODE PA, E=4 UNA PA,
+// ═══════════════ SHEET PARSERS ════════
+function parseBarcodeRows(rows) {
+  // rows[0]=header, rows[1..]=data
+  // A=0 PRODUCT NAME, B=1 CODE EA, C=2 UNA EA, D=3 CODE PA, E=4 UNA PA
   // F=5 CODE BP, G=6 UNA BP, H=7 CODE CS, I=8 UNA CS, J=9 UNIT EA
-  const IDX = { name:0, codeEA:1, unitEA:2, codePA:3, unitPA:4, codeBP:5, unitBP:6, codeCS:7, unitCS:8, unitEALabel:9 };
-
+  const I = { name:0, codeEA:1, unitEA:2, codePA:3, unitPA:4, codeBP:5, unitBP:6, codeCS:7, unitCS:8, unitEALabel:9 };
   const products = [];
-  for (let i = 1; i < lines.length; i++) {
-    const cols = parseCsvLine(lines[i]);
-    if (!cols || !cols[IDX.name] || cols[IDX.name].trim() === '') continue;
-    const name = cols[IDX.name].trim();
-    if (name.toLowerCase() === 'product name') continue; // skip duplicate header
-
-    const prod = {
-      id:      i,
-      name:    name,
-      codeEA:  (cols[IDX.codeEA]  || '').trim(),
-      unitEA:  (cols[IDX.unitEA]  || '').trim(),
-      codePA:  (cols[IDX.codePA]  || '').trim(),
-      unitPA:  (cols[IDX.unitPA]  || '').trim(),
-      codeBP:  (cols[IDX.codeBP]  || '').trim(),
-      unitBP:  (cols[IDX.unitBP]  || '').trim(),
-      codeCS:  (cols[IDX.codeCS]  || '').trim(),
-      unitCS:  (cols[IDX.unitCS]  || '').trim(),
-      unitEALabel: (cols[IDX.unitEALabel] || '').trim(),
-    };
-    products.push(prod);
+  for (let i = 1; i < rows.length; i++) {
+    const c = rows[i];
+    if (!c || !c[I.name] || !c[I.name].trim()) continue;
+    const name = c[I.name].trim();
+    if (name.toLowerCase() === 'product name') continue;
+    products.push({
+      id: i, name,
+      codeEA: (c[I.codeEA]  ||'').trim(), unitEA: (c[I.unitEA]  ||'').trim(),
+      codePA: (c[I.codePA]  ||'').trim(), unitPA: (c[I.unitPA]  ||'').trim(),
+      codeBP: (c[I.codeBP]  ||'').trim(), unitBP: (c[I.unitBP]  ||'').trim(),
+      codeCS: (c[I.codeCS]  ||'').trim(), unitCS: (c[I.unitCS]  ||'').trim(),
+      unitEALabel: (c[I.unitEALabel]||'').trim(),
+    });
   }
   return products;
 }
 
-function parseCsvLine(line) {
-  if (!line) return [];
-  const result = [];
-  let cur = '', inQ = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (c === '"') {
-      if (inQ && line[i+1] === '"') { cur += '"'; i++; }
-      else inQ = !inQ;
-    } else if (c === ',' && !inQ) {
-      result.push(cur); cur = '';
-    } else {
-      cur += c;
-    }
-  }
-  result.push(cur);
-  return result.map(s => s.trim().replace(/\r/g,''));
-}
+function parseCatalogRows(rows) {
+  if (rows.length < 2) return [];
+  const header = rows[0].map(h => h.toLowerCase().trim());
 
-// ═══════════════ CATALOG PARSE ═══════
-function parseCatalogCsv(text) {
-  const lines = text.split('\n');
-  if (lines.length < 2) return [];
-  const header = parseCsvLine(lines[0]).map(h => h.toLowerCase().trim());
-
-  // Find column indices dynamically
-  const findCol = (...names) => {
+  const find = (...names) => {
     for (const n of names) {
       const idx = header.findIndex(h => h.includes(n));
       if (idx >= 0) return idx;
@@ -487,33 +449,27 @@ function parseCatalogCsv(text) {
     return -1;
   };
 
-  const iName    = findCol('product name', 'productname', 'sku name');
-  const iBrand   = findCol('cat brand', 'brand');
-  const iSize    = findCol('cat size', 'size');
-  const iCatGrp  = findCol('cat group', 'group');
-  const iImg     = findCol('sku_usage', 'sku usage', 'image', 'img');
+  const iName   = find('product name','productname','sku name');
+  const iBrand  = find('cat brand','brand');
+  const iSize   = find('cat size','size');
+  const iCatGrp = find('cat group','group');
+  const iImg    = find('sku_usage','sku usage','image','img');
 
-  const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    const c = parseCsvLine(lines[i]);
+  const result = [];
+  for (let i = 1; i < rows.length; i++) {
+    const c = rows[i];
     if (!c || c.length < 2) continue;
-
-    // Build join key: use product name col if exists, else brand+size
     let nameKey = '';
-    if (iName >= 0 && c[iName]) {
-      nameKey = c[iName].trim();
-    } else if (iBrand >= 0 && iSize >= 0) {
-      nameKey = ((c[iBrand]||'') + ' ' + (c[iSize]||'')).trim();
-    }
+    if (iName >= 0 && c[iName]) nameKey = c[iName].trim();
+    else if (iBrand >= 0 && iSize >= 0) nameKey = ((c[iBrand]||'')+' '+(c[iSize]||'')).trim();
     if (!nameKey) continue;
-
-    rows.push({
+    result.push({
       nameKey,
-      catGroup: iCatGrp >= 0 ? (c[iCatGrp] || '').trim() : '',
-      imgUrl:   iImg    >= 0 ? (c[iImg]     || '').trim() : '',
+      catGroup: iCatGrp >= 0 ? (c[iCatGrp]||'').trim() : '',
+      imgUrl:   iImg    >= 0 ? (c[iImg]   ||'').trim() : '',
     });
   }
-  return rows;
+  return result;
 }
 
 function buildCatalogMap(rows) {
