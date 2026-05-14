@@ -1457,7 +1457,7 @@ function confirmAutoAssign(){
   const btn=document.getElementById('btn-auto');
   btn.disabled=true; btn.textContent='⏳ กำลังจัด...';
 
-  setTimeout(()=>{
+  setTimeout(async ()=>{
     function matchDay(daysStr){
       if(!daysStr)return false;
       return daysStr.split(/[,\s\/]+/).some(d=>{d=d.trim();return d===tmrShort||d===tmrFull||d.startsWith(tmrShort);});
@@ -1603,9 +1603,13 @@ function confirmAutoAssign(){
     const AMT_LOW =sortedAmts[Math.floor(sortedAmts.length*0.3)]||5000;
     const bigT=new Set(['12 ล้อ','10 ล้อ','6 ล้อ']),smallT=new Set(['4 ล้อจัมโบ้','กระบะ']);
 
-    groups.forEach(grp=>{
+    // yield ให้ browser ได้ update UI ก่อน process หนัก
+    await new Promise(r=>setTimeout(r,0));
+    setLoad('⚡ กำลังจัดรถ...',50);
+
+    for(const grp of groups){
       const isHi=grp.avgAmt>=AMT_HIGH;
-      [...grp.bills].sort((a,b)=>b.totalAmt-a.totalAmt||distOrInf(a)-distOrInf(b)).forEach(b=>{
+      for(const b of [...grp.bills].sort((a,b)=>b.totalAmt-a.totalAmt||distOrInf(a)-distOrInf(b))){
         if(assigned.has(b.ref))return;
         let best=null;
         const bDist=distOrInf(b), bBear=bearing(b);
@@ -1711,11 +1715,11 @@ function confirmAutoAssign(){
           const cid=billCluster[b.ref];
           if(cid!==undefined&&!clusterTruck[cid])clusterTruck[cid]=best.plate;
         }
-      });
-    });
+      }
+    }
 
     // Overflow
-    tmrBills.filter(b=>!assigned.has(b.ref)).forEach(b=>{
+    for(const b of tmrBills.filter(b=>!assigned.has(b.ref))){
       const t=trucks.filter(t=>fits(t,b)).sort((a,b_)=>(loads[a.plate].w1+loads[a.plate].w2)/a.maxW-(loads[b_.plate].w1+loads[b_.plate].w2)/b_.maxW)[0];
       if(t){
         const storeKey=b.arCode||b.arName||'';
@@ -1729,11 +1733,14 @@ function confirmAutoAssign(){
         if(storeKey&&!storeTrip[storeKey])storeTrip[storeKey]={plate:t.plate,trip:tr};
         if(gpsKey&&!storeTrip[gpsKey])storeTrip[gpsKey]={plate:t.plate,trip:tr};
       }
-    });
+    }
 
     // คง queue+tripMap วันอื่น + เขียนทับวันที่เลือก
     const kept={},keptTrip={};
     Object.entries(queue).forEach(([ref,plate])=>{if(!tmrRefs.has(ref)){kept[ref]=plate;keptTrip[ref]=tripMap[ref]||1;}});
+
+    await new Promise(r=>setTimeout(r,0));
+    setLoad('🔧 ปรับ GPS clusters...',80);
 
     // ══ POST-PROCESS: GPS เดียวกัน → รถเดียวกัน (ดูความจุด้วย) ══
     const gpsBillsMap={};
@@ -1790,6 +1797,7 @@ function confirmAutoAssign(){
     queue={...kept,...newQ};
     tripMap={...keptTrip,...newTripMap};
 
+    setLoad('✅ จัดเสร็จแล้ว',100);
     selPlate=null; saveQ(); renderAll();
     btn.disabled=false; btn.innerHTML='⚡ จัดอัตโนมัติ';
 
