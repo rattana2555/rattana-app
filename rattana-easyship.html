@@ -324,6 +324,7 @@ input[type=file]{display:none}
 // ═══ CONFIG ═══════════════════════════════════════════════
 var SHEET = '1-KQ9dGZiQBB9CfoCObCUtHMqKWeDQZZTjIEXj9PIGDA';
 var TAB   = 'ใบเช็ค';
+var STATUS_TAB = 'สถานะ';
 var GAS   = 'https://script.google.com/macros/s/AKfycbyWyv6Fa9jiPobvfhn7j4S4cDHA7iXkxr1xU30hTtPSwuKpbiWv4QsrPQsuHEp_gtwU/exec';
 
 // ═══ STATE ════════════════════════════════════════════════
@@ -432,8 +433,7 @@ function parseGviz(j){
   var f=Object.values(DB)[0];
   if(f&&f.wh){TXT('d-loc','📍 คลัง '+f.wh);TXT('d-sub','คลัง '+f.wh);}
   _hasData=true;
-  updateStats();renderDash();renderOrderList();renderOStats();
-  toast('✅ โหลดสำเร็จ ('+Object.keys(DB).length+' ออเดอร์)','ok');
+  loadRemoteStatus();
 }
 
 // ═══ STATS ════════════════════════════════════════════════
@@ -512,6 +512,7 @@ function renderOrderList(){
     var bc=st==='complete'?'background:var(--gr)':'';
     return'<div class="ocard" style="border-left-color:'+clr+'" onclick="openOrder(\''+k+'\')">'
       +'<div class="oc-n">#'+k+'</div><div class="oc-s">'+o.store+' · '+o.code+'</div>'
+      +'<div style="font-size:11px;color:#011d3d;margin:2px 0 4px;font-weight:500">'+o.items.slice(0,3).map(function(x){var n=x.name||'';return n.length>18?n.substr(0,18)+'…':n;}).join(' · ')+'</div>'
       +'<div class="oc-r"><span class="oc-m">📦 '+o.items.length+' รายการ · ฿'+sp.toLocaleString()+'</span>'
       +'<span class="bdg '+(sB[st]||'bdg-p')+'">'+(sL[st]||'-')+'</span></div>'
       +'<div class="pbar"><div class="pbf" style="width:'+pct+'%;'+bc+'"></div></div></div>';
@@ -558,10 +559,18 @@ function renderDetail(o){
   });
   $('plist').innerHTML=h;
   var btn=$('cfm-btn');
-  btn.disabled=false;btn.style.opacity='1';
-  if(o.items.some(function(x){return x.status==='error';})){btn.disabled=true;btn.style.opacity='.4';btn.textContent='แก้ไขก่อน';}
-  else if(o.items.every(function(x){return x.status==='ok';}))btn.textContent='✓ ยืนยันการแพ็กเสร็จสิ้น';
-  else{btn.style.opacity='.8';btn.textContent='ยืนยัน (ยังไม่ครบ)';}
+  var hasErr=o.items.some(function(x){return x.status==='error';});
+  var allOk=o.items.every(function(x){return x.status==='ok';});
+  var tot=o.items.reduce(function(s,x){return s+x.qty;},0);
+  var scn=o.items.reduce(function(s,x){return s+Math.min(x.sc,x.qty);},0);
+  if(hasErr){
+    btn.disabled=true;btn.style.opacity='.4';btn.textContent='⚠ แก้ไขก่อน';
+  } else if(allOk){
+    btn.disabled=false;btn.style.opacity='1';btn.textContent='✓ ยืนยันการแพ็กเสร็จสิ้น';
+  } else {
+    btn.disabled=true;btn.style.opacity='.4';
+    btn.textContent='🔒 ยิงบาร์โค้ดให้ครบก่อน ('+scn+'/'+tot+')';
+  }
 }
 
 // ═══ SCAN ══════════════════════════════════════════════════
@@ -616,7 +625,7 @@ function completeOrder(){
   var o=DB[CUR];if(!o)return;
   if(o.items.some(function(x){return x.status==='error';})){toast('กรุณาแก้ไขก่อน','err');return;}
   o.items.forEach(function(x){if(x.status==='pending')x.status='ok';});
-  o.status='complete';lsSave(o.num,'complete');stopCam();
+  o.status='complete';lsSave(o.num,'complete');saveRemoteStatus(o.num,'complete');stopCam();
   var el=Math.floor((Date.now()-(TSTART||Date.now()))/1000);
   var mm=Math.floor(el/60),ss=el%60;
   var tot=o.items.reduce(function(s,x){return s+x.qty;},0);
@@ -783,13 +792,12 @@ function waitZ(vid){
   DT=setInterval(function(){
     if(!SA){clearInterval(DT);return;}
     if(vid.paused&&vid.srcObject){vid.play().catch(function(){});return;}
-    if(!ID&&vid.readyState>=2&&vid.videoWidth>0){
-      ID=true;
-      CR.decodeFromVideoElement(vid)
-        .then(function(r){ID=false;if(r&&SA)onScan(r.getText());})
-        .catch(function(){ID=false;});
-    }
-  },600);
+    if(ID||vid.readyState<2||!vid.videoWidth)return;
+    ID=true;
+    CR.decodeFromVideoElement(vid)
+      .then(function(r){ID=false;if(r&&SA)onScan(r.getText());})
+      .catch(function(){ID=false;});
+  },400);
 }
 function stopCam(){
   SA=false;ID=false;clearInterval(DT);
