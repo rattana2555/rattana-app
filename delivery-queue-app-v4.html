@@ -1,2410 +1,783 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<meta name="mobile-web-app-capable" content="yes"/>
-<meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v6.0</title>
-<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tom-select/2.3.1/css/tom-select.default.min.css"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tom-select/2.3.1/js/tom-select.complete.min.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="R-Product">
+<meta name="theme-color" content="#0d1b3e">
+<title>Rattana Product Barcode v1.5</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 <style>
-
-
-/* ══ RATTANA DESIGN TOKENS ══ */
-:root{
-  --navy:       #0d1b3e;
-  --navy-mid:   #1a2f5e;
-  --navy-light: #243b73;
-  --gold:       #c9a84c;
-  --gold-light: #e8c86a;
-  --success:    #2ecc71;
-  --danger:     #e74c3c;
-  --warning:    #f39c12;
-  --info:       #3498db;
-  --bg:         #f4f6fb;
-  --text:       #0d1b3e;
-  --card-bg:    #ffffff;
-  --border:     #dde3f0;
-  --muted:      #6b7896;
-  --row-alt:    #fafbfd;
+:root {
+  --navy:        #0d1b3e;
+  --navy-mid:    #1a2f5e;
+  --navy-light:  #243b73;
+  --gold:        #c9a84c;
+  --gold-light:  #e8c86a;
+  --success:  #2ecc71;
+  --danger:   #e74c3c;
+  --warning:  #f39c12;
+  --info:     #3498db;
+  --bg:       #f4f6fb;
+  --text:     #0d1b3e;
+  --card-bg:  #ffffff;
+  --border:   #dde3f0;
+  --muted:    #6b7896;
+  --row-alt:  #fafbfd;
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  16px;
+  --space-lg:  24px;
+  --space-xl:  32px;
   --radius-sm:  6px;
   --radius-md:  12px;
   --radius-lg:  16px;
   --shadow-sm:  0 1px 4px rgba(0,0,0,.06);
   --shadow-md:  0 2px 8px rgba(0,0,0,.08);
   --shadow-lg:  0 8px 24px rgba(13,27,62,.12);
-  --shadow-gold:0 4px 12px rgba(201,168,76,.35);
+}
+body.dark {
+  --bg:       #0a1020;
+  --text:     #e8eaf0;
+  --card-bg:  #111c35;
+  --border:   #243b73;
+  --muted:    #8a98b8;
+  --row-alt:  #0f1830;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;min-height:100dvh;background:var(--bg);color:var(--text);transition:background .25s,color .25s;overflow-x:hidden}
+button{font-family:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent}
+input{font-family:inherit;font-size:16px}
+
+/* Header */
+header{background:var(--navy);color:#fff;padding:12px 16px;position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:12px;border-bottom:3px solid var(--gold);padding-top:max(12px,env(safe-area-inset-top))}
+.logo-text{font-weight:700;font-size:18px;color:#fff;flex:1}
+.logo-text span{color:var(--gold)}
+.icon-btn{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.2);width:38px;height:38px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:18px;transition:background .15s;flex-shrink:0}
+.icon-btn:hover{background:rgba(255,255,255,.12)}
+.back-btn{background:transparent;border:none;color:#fff;display:flex;align-items:center;gap:6px;font-size:15px;font-family:inherit;font-weight:600;cursor:pointer;padding:4px 0}
+
+/* Screens */
+.screen{display:none}
+.screen.active{display:block}
+
+/* Search bar */
+.search-wrap{padding:12px 16px;background:var(--card-bg);border-bottom:1px solid var(--border);position:sticky;top:max(51px,calc(51px + env(safe-area-inset-top)));z-index:90}
+.search-inner{position:relative}
+.search-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:16px;pointer-events:none}
+.search-input{width:100%;height:44px;padding:0 14px 0 42px;border-radius:22px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:16px;font-family:inherit;outline:none;transition:border-color .15s}
+.search-input:focus{border-color:var(--gold)}
+.search-clear{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:var(--muted);border:none;color:#fff;width:22px;height:22px;border-radius:50%;font-size:12px;display:none;align-items:center;justify-content:center;cursor:pointer}
+.search-clear.show{display:flex}
+
+/* Stats bar */
+.stats-bar{padding:8px 16px;font-size:12px;color:var(--muted);background:var(--bg);display:flex;align-items:center;justify-content:space-between}
+
+/* Product list */
+.product-list{padding:8px 12px 80px}
+.product-card{background:var(--card-bg);border-radius:var(--radius-md);border:1px solid var(--border);box-shadow:var(--shadow-sm);margin-bottom:8px;display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent}
+.product-card:hover{border-color:var(--gold);box-shadow:var(--shadow-md);transform:translateY(-1px)}
+.product-card:active{transform:scale(.98)}
+.product-num{width:28px;height:28px;border-radius:50%;background:var(--navy);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.product-info{flex:1;min-width:0}
+.product-name{font-size:14px;font-weight:600;color:var(--text);line-height:1.3;word-break:break-word}
+.product-codes{font-size:11px;color:var(--muted);margin-top:3px;display:flex;gap:6px;flex-wrap:wrap}
+.code-chip{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:600}
+.code-chip.ea{color:#1a6fb8;border-color:#b8d6f5}
+.code-chip.pa{color:#1e8449;border-color:#b8e8cb}
+.code-chip.bp{color:#a87800;border-color:#f5dfa0}
+.code-chip.cs{color:#c0392b;border-color:#f5c0b8}
+.product-arrow{color:var(--muted);font-size:16px;flex-shrink:0}
+
+/* Pagination */
+.pagination{position:fixed;bottom:0;left:0;right:0;background:var(--card-bg);border-top:1px solid var(--border);padding:10px 16px;padding-bottom:max(10px,env(safe-area-inset-bottom));display:flex;align-items:center;justify-content:center;gap:6px;z-index:90;box-shadow:0 -2px 12px rgba(0,0,0,.08)}
+.page-btn{min-width:36px;height:36px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0 8px}
+.page-btn:hover:not(:disabled){border-color:var(--gold);color:var(--navy)}
+.page-btn.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.page-btn:disabled{opacity:.35;cursor:not-allowed}
+.page-ellipsis{color:var(--muted);font-size:13px;padding:0 4px}
+
+/* Detail screen */
+.detail-body{padding:16px 16px 32px}
+.detail-product-header{background:var(--card-bg);border-radius:var(--radius-md);border:1px solid var(--border);border-top:3px solid var(--gold);box-shadow:var(--shadow-sm);padding:16px;margin-bottom:20px;display:flex;align-items:flex-start;gap:12px}
+.detail-product-name{font-size:18px;font-weight:700;color:var(--text);line-height:1.3;flex:1}
+.detail-unit-ea{margin-top:6px;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+
+/* Barcode cards */
+.barcode-section-title{font-size:13px;font-weight:700;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:10px;padding-left:4px}
+.barcode-card{background:var(--card-bg);border-radius:var(--radius-md);border:1px solid var(--border);box-shadow:var(--shadow-sm);padding:16px;margin-bottom:14px}
+.barcode-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.barcode-type-badge{font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px}
+.badge-ea{background:#e3f0fd;color:#1a6fb8}
+.badge-pa{background:#e8f7ee;color:#1e8449}
+.badge-bp{background:#fef3d7;color:#a87800}
+.badge-cs{background:#ffd5d0;color:#c0392b}
+.barcode-unit{font-size:12px;color:var(--muted);font-weight:600}
+.barcode-canvas-wrap{display:flex;flex-direction:column;align-items:center;padding:8px 0}
+.barcode-canvas-wrap svg{max-width:100%;height:auto}
+.barcode-number{font-size:13px;font-weight:700;color:var(--text);margin-top:4px;letter-spacing:1px;font-family:'Courier New',monospace}
+.no-barcode{text-align:center;color:var(--muted);font-size:13px;padding:20px;background:var(--bg);border-radius:var(--radius-sm)}
+
+/* Loading spinner */
+.spinner-overlay{display:none;position:fixed;inset:0;background:rgba(255,255,255,.85);z-index:999;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+.spinner-overlay.show{display:flex}
+body.dark .spinner-overlay{background:rgba(10,16,32,.85)}
+.spinner{width:42px;height:42px;border:4px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner-text{font-size:14px;color:var(--muted)}
+
+/* Toast */
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--navy);color:#fff;padding:10px 20px;border-radius:22px;font-size:13px;opacity:0;transition:all .3s;z-index:9999;white-space:nowrap;pointer-events:none;border-left:3px solid var(--gold)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* Empty */
+.empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
+.empty-icon{font-size:48px;margin-bottom:12px}
+.empty-text{font-size:15px;font-weight:600}
+.empty-sub{font-size:13px;margin-top:6px}
+
+/* Version */
+.version-tag{font-size:10px;color:rgba(255,255,255,.4);margin-left:auto}
+
+/* Print barcodes */
+.print-btn{display:flex;align-items:center;gap:6px;padding:9px 16px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .15s}
+.print-btn:hover{border-color:var(--gold);color:var(--navy)}
+
+/* Product image */
+.detail-img-wrap{text-align:center;margin-bottom:4px}
+.detail-img{width:120px;height:120px;object-fit:contain;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--bg);padding:6px}
+.detail-img-error{display:none}
+.cat-group-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(201,168,76,.14);border:1px solid rgba(201,168,76,.4);color:var(--navy);border-radius:20px;padding:3px 12px;font-size:12px;font-weight:700;margin-top:6px}
+body.dark .cat-group-badge{color:var(--gold-light)}
+
+/* Thumbnail on list card */
+.thumb{width:40px;height:40px;border-radius:var(--radius-sm);object-fit:contain;background:var(--bg);border:1px solid var(--border);flex-shrink:0;padding:2px}
+.thumb-placeholder{width:40px;height:40px;border-radius:var(--radius-sm);background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+
+/* LINE browser overlay */
+.line-overlay{display:none;position:fixed;inset:0;z-index:9999;background:var(--navy);flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;text-align:center}
+.line-overlay.show{display:flex}
+.line-logo{font-size:56px;margin-bottom:16px}
+.line-title{font-size:22px;font-weight:700;color:#fff;margin-bottom:8px;line-height:1.3}
+.line-sub{font-size:14px;color:rgba(255,255,255,.65);line-height:1.6;margin-bottom:28px}
+.line-steps{background:rgba(255,255,255,.08);border-radius:var(--radius-md);padding:16px 20px;margin-bottom:28px;text-align:left;width:100%;max-width:340px}
+.line-step{display:flex;align-items:flex-start;gap:10px;font-size:14px;color:rgba(255,255,255,.85);margin-bottom:10px;line-height:1.4}
+.line-step:last-child{margin-bottom:0}
+.line-step-num{background:var(--gold);color:var(--navy);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px}
+.line-open-btn{background:var(--gold);color:var(--navy);border:none;border-radius:var(--radius-md);padding:14px 32px;font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;width:100%;max-width:340px}
+
+@media print {
+  header, .search-wrap, .pagination, .icon-btn, .print-btn { display:none!important }
+  .barcode-card { break-inside:avoid; page-break-inside:avoid }
 }
 
-/* ══ RESET ══ */
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{background:var(--bg);color:var(--text);font-family:'Sarabun',sans-serif;font-size:14px;line-height:1.5;min-height:100dvh;overflow-x:hidden}
-button{font-family:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
-select,input{font-family:inherit;font-size:16px}
-::-webkit-scrollbar{width:5px;height:5px}
-::-webkit-scrollbar-track{background:#f0f2f6}
-::-webkit-scrollbar-thumb{background:#cbd2dc;border-radius:3px}
-
-/* ══ LOADING BAR ══ */
-#loadingBar{position:fixed;top:0;left:0;height:3px;background:var(--gold);width:0;transition:width .4s;z-index:10000}
-
-/* ══ LOADING SCREEN ══ */
-#ls{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:9999;transition:opacity .5s,visibility .5s}
-#ls.hide{opacity:0;visibility:hidden;pointer-events:none}
-#ls .truck{font-size:54px;animation:bounce 1s ease-in-out infinite alternate}
-@keyframes bounce{from{transform:translateY(0) rotate(-2deg)}to{transform:translateY(-8px) rotate(2deg)}}
-#ls .title{font-family:'Kanit',sans-serif;font-size:20px;font-weight:600;color:var(--navy)}
-#ls .sub{font-size:13px;color:var(--muted)}
-#ls .bar-wrap{width:220px;height:5px;background:var(--border);border-radius:3px;overflow:hidden}
-#ls .bar{height:100%;background:var(--gold);width:8%;transition:width .5s ease;border-radius:3px}
-
-/* ══ TOAST ══ */
-#toasts{position:fixed;bottom:max(24px,env(safe-area-inset-bottom));right:16px;z-index:9998;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
-.toast{background:var(--card-bg);border:1.5px solid;border-radius:var(--radius-md);padding:10px 14px;font-size:13px;display:flex;align-items:flex-start;gap:8px;max-width:320px;box-shadow:var(--shadow-lg);animation:slideIn .3s ease}
-@keyframes slideIn{from{transform:translateX(110%);opacity:0}to{transform:none;opacity:1}}
-.toast.ok{border-color:#2ecc7188;background:#f0fdf4;color:#1e8449}
-.toast.warn{border-color:#f39c1288;background:#fffbeb;color:#a87800}
-.toast.err{border-color:#e74c3c88;background:#fef2f2;color:#c0392b}
-
-/* ══ HEADER ══ */
-.topnav{background:var(--navy);position:sticky;top:0;z-index:200;box-shadow:0 1px 4px rgba(0,0,0,.15);border-bottom:3px solid var(--gold)}
-.topnav-inner{display:flex;align-items:center;padding:0 16px;height:52px;gap:8px}
-.logo-box{width:30px;height:30px;background:var(--gold);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
-.logo-text{flex-shrink:0}
-.logo-title{font-family:'Kanit',sans-serif;font-size:13px;font-weight:600;color:var(--gold-light);line-height:1.1}
-.logo-sub{font-size:9px;color:rgba(255,255,255,.4)}
-.topnav-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0;font-size:10px;color:rgba(255,255,255,.4)}
-
-/* ══ TAB NAV ══ */
-.nav-tabs{display:flex;flex:1;overflow:hidden;gap:4px;padding:0 8px 0 4px}
-.nav-tab{display:flex;align-items:center;gap:5px;padding:6px 12px;border:none;background:none;color:rgba(255,255,255,.55);font-size:13px;font-weight:500;border-bottom:3px solid transparent;transition:all .15s;white-space:nowrap;cursor:pointer;border-radius:var(--radius-sm) var(--radius-sm) 0 0;margin-bottom:-3px}
-.nav-tab:hover{color:#fff;background:rgba(255,255,255,.07)}
-.nav-tab.active{color:var(--navy);background:var(--gold);border-bottom-color:var(--gold);font-weight:700;box-shadow:0 -2px 8px rgba(201,168,76,.3)}
-
-/* ══ BOTTOM NAV (mobile) ══ */
-.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--card-bg);border-top:1px solid var(--border);z-index:200;padding-bottom:env(safe-area-inset-bottom,0)}
-.bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border:none;background:none;color:var(--muted);font-size:10px;font-weight:400;border-top:2px solid transparent;transition:all .15s}
-.bnav-item.active{color:var(--gold);border-top-color:var(--gold);font-weight:600}
-.bnav-icon{font-size:18px}
-@media(max-width:768px){.bottom-nav{display:flex}.nav-tabs{display:none}.main{padding-bottom:70px!important}}
-
-/* ══ MAIN ══ */
-.main{padding:14px 16px;max-width:1400px;margin:0 auto}
-.tab-panel{display:none}
-.tab-panel.active{display:block}
-@keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
-.fi{animation:fi .2s ease}
-
-/* ══ STAT CARDS ══ */
-.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px}
-.stat-card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);border-top:3px solid var(--gold);padding:14px 16px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow-sm);transition:box-shadow .2s}
-.stat-card:hover{box-shadow:var(--shadow-md)}
-.stat-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
-.stat-num{font-family:'Kanit',sans-serif;font-size:26px;font-weight:700;line-height:1}
-.stat-lbl{font-size:11px;color:var(--muted);margin-top:3px}
-
-/* ══ CARDS ══ */
-.card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:var(--shadow-sm)}
-.card-gold{border-top:3px solid var(--gold)}
-
-/* ══ BUTTONS ══ */
-.btn{padding:7px 13px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;border:1px solid transparent;display:inline-flex;align-items:center;gap:6px;transition:opacity .15s,transform .1s;cursor:pointer;min-height:36px}
-.btn:hover{opacity:.88}
-.btn:active{transform:scale(.97)}
-.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
-.btn-auto{background:#eaf3de;border:1px solid #97c459;color:#27500a}
-.btn-save{background:var(--navy);border:none;color:var(--gold-light)}
-.btn-gold{background:var(--gold);color:var(--navy);border-color:var(--gold)}
-.btn-danger{background:#fef2f2;border:1.5px solid #fca5a5;color:var(--danger)}
-
-/* ══ QUEUE HEADER ══ */
-.queue-header{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;margin-bottom:14px}
-.queue-title{font-family:'Kanit',sans-serif;font-size:20px;font-weight:600;color:var(--navy)}
-.queue-sub{font-size:12px;color:var(--muted);margin-top:2px}
-.queue-btns{margin-left:auto;display:flex;gap:7px;flex-wrap:wrap}
-
-/* ══ TRUCK CARDS ══ */
-.truck-hint{font-size:12px;color:var(--muted);margin-bottom:8px}
-.truck-scroll{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px}
-.truck-scroll::-webkit-scrollbar{height:4px}
-.tcard{background:var(--card-bg);border:2px solid var(--border);border-radius:10px;padding:10px 12px;cursor:pointer;min-width:145px;flex-shrink:0;transition:all .15s;box-shadow:var(--shadow-sm)}
-.tcard:hover{border-color:var(--gold)}
-.tcard.sel{background:#fff8ec;border-color:var(--gold)}
-.tcard.over{border-color:var(--danger)}
-.tcard-type{font-size:9px;font-weight:600}
-.tcard-plate{font-family:'Kanit',sans-serif;font-size:14px;font-weight:700;color:var(--navy);margin-top:1px}
-.tcard-pct{font-size:15px;font-weight:700}
-.tcard-wt{font-size:9px;color:var(--muted)}
-.tcard-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin:2px 0}
-.tcard-bar-fill{height:100%;border-radius:2px;transition:width .4s}
-.tcard-meta{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:2px}
-.tcard-driver{font-size:11px;font-weight:600;margin-top:3px}
-.tcard-sel-hint{text-align:center;font-size:10px;color:var(--gold);font-weight:600;margin-top:4px}
-
-/* ══ TRANSFER BAR ══ */
-.transfer-bar{background:#fff8ec;border:1.5px solid var(--gold);border-radius:10px;padding:10px 14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;margin-bottom:4px}
-.transfer-bar select{background:var(--card-bg);border:1.5px solid var(--gold);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;min-width:155px}
-.btn-clear{background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px;padding:6px 11px;color:var(--danger);font-size:12px;font-weight:600}
-
-/* ══ FILTERS ══ */
-.filters{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:8px;align-items:center}
-.filters input,.filters select{background:var(--card-bg);border:1.5px solid var(--border);border-radius:7px;padding:7px 10px;color:var(--text);font-size:13px}
-.filters input{flex:1;min-width:130px}
-.sel-bar{display:flex;gap:6px;align-items:center;background:#fdf6e8;border:1px solid var(--gold);border-radius:7px;padding:5px 9px}
-
-/* ══ BILL TABLE ══ */
-.bill-table-wrap{background:var(--card-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:var(--shadow-sm)}
-.bill-table{width:100%;border-collapse:collapse;font-size:13px}
-.bill-table th{padding:9px 10px;text-align:left;font-size:11px;font-weight:600;white-space:nowrap;background:var(--navy);color:#fff;border-bottom:2px solid var(--gold)}
-.bill-table td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
-.bill-row{cursor:pointer;transition:background .1s}
-.bill-row:hover{background:#eaf0f8}
-.bill-row.on-truck{background:#fff8ec}
-.bill-row.selected{background:#eaf4ff}
-.bill-row:nth-child(even){background:var(--row-alt)}
-.bill-row:nth-child(even):hover{background:#eaf0f8}
-.bill-row.on-truck:nth-child(even){background:#fff8ec}
-.bill-row.selected:nth-child(even){background:#eaf4ff}
-.dist-near{color:var(--success);font-weight:700}
-.dist-mid{color:var(--gold);font-weight:700}
-.dist-far{color:var(--warning);font-weight:700}
-.chip{display:inline-flex;align-items:center;gap:3px;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:600;white-space:nowrap;border:1px solid}
-.chip-truck{color:var(--c);background:var(--cb);border-color:var(--cc)}
-.chip-pending{color:var(--warning);background:#fef6ec;border-color:#fac77588}
-.table-foot{padding:7px 12px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);display:flex;gap:14px;background:#fafbfc}
-
-/* ══ DISTANCE INDICATORS ══ */
-.fill-green{background:#2E8B57}.fill-amber{background:#E07B00}.fill-red{background:#DC3545}
-
-/* ══ CAR VIEW ══ */
-.car-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
-.car-card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;box-shadow:var(--shadow-sm)}
-.car-card.over{border-color:var(--danger)}
-
-/* ══ SELECTED TRUCK PANEL ══ */
-#selTruckPanel{background:#fff8ec;border:2px solid var(--gold);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow-gold)}
-
-/* ══ MODAL (Rattana standard) ══ */
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.65);z-index:5000;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)}
-.modal-overlay.open{display:flex}
-.modal{background:var(--card-bg);border-radius:var(--radius-lg);max-width:480px;width:100%;box-shadow:var(--shadow-lg);overflow:hidden;border-top:4px solid var(--gold);animation:slideUp .22s ease}
-.modal-head{background:var(--navy);padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
-.modal-head-title{font-family:'Kanit',sans-serif;font-size:16px;font-weight:700;color:var(--gold-light)}
-.modal-head-sub{font-size:12px;color:rgba(255,255,255,.45);margin-top:2px}
-.modal-close{background:rgba(255,255,255,.1);border:none;color:rgba(255,255,255,.6);border-radius:var(--radius-sm);padding:6px 10px;font-size:13px;cursor:pointer}
-.modal-body{padding:18px 20px}
-.modal-foot{padding:0 20px 16px;display:flex;gap:8px;justify-content:flex-end}
-
-/* ══ ROUTES / MAP ══ */
-.route-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
-#routeMap{border:none;outline:none}
-.leaflet-popup-content{font-family:'Sarabun',sans-serif;font-size:12px}
-
-/* ══ VERSION ══ */
-.app-version{font-size:9px;color:rgba(255,255,255,.3);margin-left:4px}
-
-/* ══ ANIMATIONS ══ */
-@keyframes spin{to{transform:rotate(360deg)}}
-@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
-
-/* ══ LEAFLET — Route Optimizer style ══ */
-.leaflet-popup-content-wrapper{background:var(--card-bg)!important;color:var(--text)!important;border-radius:var(--radius-md)!important;box-shadow:var(--shadow-lg)!important}
-.leaflet-popup-tip{background:var(--card-bg)!important}
-.leaflet-popup-content{color:var(--text)!important;margin:10px 14px!important;font-family:'Sarabun',sans-serif!important}
-.leaflet-popup-close-button{color:var(--muted)!important}
-.leaflet-container{background:var(--bg)!important}
-.leaflet-control-zoom a{background:var(--card-bg)!important;color:var(--text)!important;border-color:var(--border)!important}
-.leaflet-control-attribution{background:var(--card-bg)!important;color:var(--muted)!important;font-size:10px!important}
-
-
-/* ══ TOM SELECT — Rattana style ══ */
-.ts-wrapper.single .ts-control{border-radius:7px!important;border:1.5px solid var(--border)!important;background:var(--card-bg)!important;font-family:'Sarabun',sans-serif!important;font-size:12px!important;padding:5px 8px!important;min-height:32px!important;box-shadow:none!important;cursor:pointer}
-.ts-wrapper.single .ts-control:hover{border-color:var(--gold)!important}
-.ts-wrapper.single.focus .ts-control{border-color:var(--gold)!important;box-shadow:none!important}
-.ts-dropdown{font-family:'Sarabun',sans-serif!important;font-size:12px!important;border:1.5px solid var(--gold)!important;border-radius:var(--radius-md)!important;box-shadow:var(--shadow-lg)!important;z-index:3000!important}
-.ts-dropdown .ts-dropdown-content{max-height:220px}
-.ts-dropdown-content .option{padding:7px 10px!important;border-bottom:1px solid var(--border)}
-.ts-dropdown-content .option:last-child{border-bottom:none}
-.ts-dropdown-content .option:hover,.ts-dropdown-content .option.active{background:#eaf0f8!important;color:var(--navy)!important}
-.ts-dropdown-content .option.selected{background:#fff8ec!important;color:#C47000!important;font-weight:600!important}
-.ts-wrapper .ts-control input{font-size:12px!important;font-family:'Sarabun',sans-serif!important}
-.ts-dropdown input{font-size:12px!important;font-family:'Sarabun',sans-serif!important;padding:7px 10px!important;border-bottom:1px solid var(--border)!important}
-.ts-wrapper{width:100%}
-/* ══ PRINT ══ */
-@media print{.topnav,.bottom-nav,#toasts,.no-print{display:none!important}body{background:#fff}}
+@media(prefers-color-scheme:dark){
+  body:not(.light){
+    --bg:#0a1020;--text:#e8eaf0;--card-bg:#111c35;--border:#243b73;--muted:#8a98b8;--row-alt:#0f1830;
+  }
+}
 </style>
 </head>
 <body>
 
-
-<!-- Loading -->
-<div id="loadingBar"></div>
-<div id="ls">
-  <div class="truck">🚛</div>
-  <div class="title">จัดคิวรถส่งสินค้า</div>
-  <div class="sub" id="ls-msg">กำลังโหลดข้อมูล...</div>
-  <div class="bar-wrap"><div class="bar" id="ls-bar"></div></div>
-  <div style="font-size:11px;color:#C8CEDC;margin-top:4px">รัตนไพบูลย์ กรุ๊ป • คลัง W1</div>
+<!-- LINE Browser Overlay -->
+<div class="line-overlay" id="lineOverlay">
+  <div class="line-logo">🌐</div>
+  <div class="line-title">กรุณาเปิดในบราวเซอร์</div>
+  <div class="line-sub">แอปนี้ไม่รองรับ Browser ในตัว LINE<br>กรุณาเปิดด้วย Safari หรือ Chrome</div>
+  <div class="line-steps">
+    <div class="line-step">
+      <div class="line-step-num">1</div>
+      <div>กดปุ่ม <strong style="color:#fff">⋯</strong> หรือ <strong style="color:#fff">⋮</strong> ที่มุมขวาบน</div>
+    </div>
+    <div class="line-step">
+      <div class="line-step-num">2</div>
+      <div>เลือก <strong style="color:var(--gold)">"เปิดใน Browser"</strong> หรือ <strong style="color:var(--gold)">"Open in Browser"</strong></div>
+    </div>
+    <div class="line-step">
+      <div class="line-step-num">3</div>
+      <div>แอปจะเปิดใน <strong style="color:#fff">Safari / Chrome</strong> โดยอัตโนมัติ</div>
+    </div>
+  </div>
+  <button class="line-open-btn" onclick="tryOpenExternal()">🔗 คัดลอก URL เพื่อเปิดใน Browser</button>
 </div>
 
-<!-- Toasts -->
-<div id="toasts"></div>
-
-<!-- Delivery Date Picker Modal -->
-<div id="deliveryDateOverlay" class="modal-overlay">
-  <div class="modal" style="max-width:340px">
-    <div class="modal-head">
-      <div class="modal-head-title">📅 วันที่ส่งสินค้า</div>
-      <button class="modal-close" onclick="document.getElementById('deliveryDateOverlay').classList.remove('open')">✕</button>
-    </div>
-    <div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
-      <div style="font-size:12px;color:#6B7A90">เลือกวันที่จะไปส่งสินค้า (ใช้สำหรับบันทึกลงชีท Keepdata)</div>
-      <input type="date" id="deliveryDateInput"
-        style="border:1.5px solid #E0E5ED;border-radius:8px;padding:10px 12px;font-size:14px;font-family:Sarabun,sans-serif;color:#07101F;width:100%"/>
-      <div style="display:flex;gap:8px">
-        <button onclick="document.getElementById('deliveryDateOverlay').classList.remove('open')"
-          style="flex:1;border:1.5px solid #E0E5ED;background:#fff;color:#6B7A90;border-radius:8px;padding:9px;font-size:13px;font-weight:600;cursor:pointer">ยกเลิก</button>
-        <button onclick="confirmDeliveryDate()"
-          style="flex:1;background:#07101F;color:#E4C46E;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer">ตกลง</button>
-      </div>
-    </div>
-  </div>
+<!-- Spinner -->
+<div class="spinner-overlay" id="spinnerOverlay">
+  <div class="spinner"></div>
+  <div class="spinner-text" id="spinnerText">กำลังโหลดข้อมูล...</div>
 </div>
 
-<!-- Day Picker Modal -->
-<div id="dayPickerOverlay" class="modal-overlay">
-  <div class="modal" style="max-width:500px">
-    <div class="modal-head">
-      <div>
-        <div class="modal-head-title">⚡ จัดอัตโนมัติ</div>
-        <div class="modal-head-sub">เลือกวันที่ต้องการจัดรถ</div>
-      </div>
-      <button class="modal-close" onclick="closeDayPicker()">✕</button>
-    </div>
-    <!-- Day grid -->
-    <div style="padding:18px 20px">
-      <div id="dayGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:16px"></div>
-      <!-- Warning note -->
-      <div style="background:#FFFBEB;border:1px solid #FAC77588;border-radius:8px;padding:10px 13px;font-size:12px;color:#854F0B;display:flex;gap:8px;align-items:flex-start">
-        <span style="flex-shrink:0;font-size:14px">💡</span>
-        <div>บิลวันอื่นที่จัดไปแล้ว<strong>จะไม่ถูกเปลี่ยน</strong> — ระบบจะจัดเฉพาะวันที่เลือก และคำนวณน้ำหนักรถที่เหลือจากวันอื่นด้วย</div>
-      </div>
-    </div>
-    <div class="modal-foot">
-      <button onclick="closeDayPicker()" class="btn btn-outline" style="border:1.5px solid var(--border);background:var(--card-bg);color:var(--muted)">ยกเลิก</button>
-      <button id="dayPickerConfirm" onclick="confirmAutoAssign()" disabled class="btn btn-save" style="opacity:.5">⚡ จัดเลย</button>
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- ═══════════════════════════════════════════════
+     LIST SCREEN
+════════════════════════════════════════════════ -->
+<div class="screen active" id="listScreen">
+  <header>
+    <div class="logo-text">Rattana <span>Product</span></div>
+    <span class="version-tag">v1.5 · 2026-05-14</span>
+    <button class="icon-btn" id="installBtn" onclick="installApp()" title="ติดตั้งแอป" style="display:none">📲</button>
+    <button class="icon-btn" onclick="toggleDark()" title="Dark mode">🌙</button>
+    <button class="icon-btn" onclick="loadData(true)" title="รีเฟรช">🔄</button>
+  </header>
+
+  <div class="search-wrap">
+    <div class="search-inner">
+      <span class="search-icon">🔍</span>
+      <input type="search" class="search-input" id="searchInput"
+             placeholder="ค้นหาชื่อสินค้า หรือ บาร์โค้ด..."
+             oninput="onSearch(this.value)">
+      <button class="search-clear" id="searchClear" onclick="clearSearch()">✕</button>
     </div>
   </div>
+
+  <div class="stats-bar">
+    <span id="statsText">กำลังโหลด...</span>
+    <span id="pageInfo" style="font-weight:600;color:var(--text)"></span>
+  </div>
+
+  <div class="product-list" id="productList">
+    <!-- Rendered by JS -->
+  </div>
+
+  <div class="pagination" id="pagination"></div>
 </div>
 
-
-
-<!-- TopNav -->
-<nav class="topnav">
-  <div class="topnav-inner">
-    <div class="logo-box">🚛</div>
-    <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v6.0</span></div>
-      <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
-    </div>
-    <div class="nav-tabs">
-      <button class="nav-tab" onclick="switchTab('dashboard',this)"><span>🏠</span><span>แดชบอร์ด</span></button>
-      <button class="nav-tab active" onclick="switchTab('queue',this)"><span>🚛</span><span>จัดคิวรถ</span></button>
-      <button class="nav-tab" onclick="switchTab('bills',this)"><span>📋</span><span>บิลสินค้า</span></button>
-      <button class="nav-tab" onclick="switchTab('routes',this)"><span>🗺️</span><span>สายส่ง</span></button>
-      <button class="nav-tab" onclick="switchTab('cars',this)"><span>🚐</span><span>รถทั้งหมด</span></button>
-    </div>
-    <div class="topnav-right">
-      <span id="dateLabel"></span>
-      <button class="btn" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);color:#9BAAB8;padding:4px 10px;font-size:11px" onclick="refreshData()">🔄</button>
-      <button onclick="logout()" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.5);padding:4px 10px;font-size:11px;border-radius:6px;cursor:pointer" title="ออกจากระบบ">⎋</button>
-    </div>
-  </div>
-</nav>
-
-<!-- Main -->
-<div class="main" id="mainContent">
-
-  <!-- DASHBOARD -->
-  <div class="tab-panel fi" id="tab-dashboard">
-    <h1 style="font-family:Kanit;font-size:22px;font-weight:600;color:#07101F;margin-bottom:14px">แดชบอร์ด</h1>
-    <div class="stats-row">
-      <div class="stat-card"><div class="stat-icon" style="background:#FEF6EC">📦</div><div><div class="stat-num" style="color:#C47000" id="d-total">—</div><div class="stat-lbl">บิลทั้งหมด</div></div></div>
-      <div class="stat-card"><div class="stat-icon" style="background:#EAF3DE">✅</div><div><div class="stat-num" style="color:#1E7D45" id="d-done">—</div><div class="stat-lbl">จัดแล้ว</div></div></div>
-      <div class="stat-card"><div class="stat-icon" style="background:#EAF0F8">⏳</div><div><div class="stat-num" style="color:#1A5FA5" id="d-pend">—</div><div class="stat-lbl">ยังไม่จัด</div></div></div>
-      <div class="stat-card"><div class="stat-icon" style="background:rgba(201,168,76,.12)">🚛</div><div><div class="stat-num" style="color:#C9A84C" id="d-trucks">—</div><div class="stat-lbl">รถมีงาน</div></div></div>
-    </div>
-    <div class="card" id="dashTruckList" style="margin-bottom:16px"></div>
-  </div>
-
-  <!-- QUEUE -->
-  <div class="tab-panel active fi" id="tab-queue">
-    <!-- Header row -->
-    <div class="queue-header">
-      <div>
-        <div class="queue-title">🚛 จัดคิวรถส่งสินค้า</div>
-        <div class="queue-sub" id="q-sub">กำลังโหลด...</div>
-      </div>
-      <div class="queue-btns no-print">
-        <button class="btn btn-auto" id="btn-auto" onclick="doAutoAssign()">⚡ จัดอัตโนมัติ</button>
-        <button class="btn" onclick="doClearAll()" style="background:#FEF2F2;border:1.5px solid #FCA5A5;color:#C62828">🗑 ล้างทั้งหมด</button>
-        <div style="display:flex;gap:0;align-items:stretch">
-          <button class="btn" onclick="doPrintSummary()" style="background:#F0F4FF;border:1px solid #93B8DE88;color:var(--navy)" title="พิมพ์สรุปร้านค้า">🖨 พิมพ์สรุป</button>
-        <button class="btn btn-save" id="btn-save" onclick="doSave()" style="border-radius:8px 0 0 8px">💾 Keepdata</button>
-          <button id="btn-delivery-date" onclick="openDeliveryDatePicker()"
-            title="วันที่จะส่งสินค้า — คลิกเพื่อเปลี่ยน"
-            style="background:#0E2030;border:none;border-left:1px solid rgba(255,255,255,.15);color:#7B97B8;padding:7px 10px;font-size:11px;border-radius:0 8px 8px 0;cursor:pointer;white-space:nowrap">
-            📅 —
-          </button>
-        </div>
-      </div>
-    </div>
-
-
-    <!-- Truck cards -->
-    <div class="truck-hint">👇 <strong style="color:#07101F">คลิกเลือกรถ</strong> แล้วคลิกบิล <span id="sel-plate-hint"></span></div>
-    <div class="truck-scroll" id="truckCards"></div>
-
-    <!-- Transfer bar (shown when truck selected + has bills) -->
-    <div class="transfer-bar no-print" id="transferBar" style="display:none">
-      <div>
-        <div style="font-size:12px;font-weight:700;color:#633806" id="tf-title">🔄 โยกทั้งคัน</div>
-        <div style="font-size:11px;color:#854F0B;margin-top:2px" id="tf-info"></div>
-      </div>
-      <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <span style="font-size:11px;color:#854F0B;font-weight:600">ย้ายทั้งคัน →</span>
-          <select id="tf-select" onchange="doTransfer(this)" style="background:#fff;border:1.5px solid #E4C46E;border-radius:7px;padding:5px 9px;font-size:12px;min-width:155px">
-            <option value="">— เลือกรถ —</option>
-          </select>
-        </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <span style="font-size:11px;color:#1A5FA5;font-weight:600">ย้ายเที่ยว →</span>
-          <select id="tf-trip-num" style="background:#fff;border:1.5px solid #93B8DE88;border-radius:7px;padding:5px 9px;font-size:12px">
-            <option value="1">🔴 เที่ยว 1</option>
-            <option value="2">🔵 เที่ยว 2</option>
-            <option value="3">🟢 เที่ยว 3</option>
-          </select>
-          <select id="tf-trip-truck" onchange="doTransferTrip(this)" style="background:#fff;border:1.5px solid #93B8DE88;border-radius:7px;padding:5px 9px;font-size:12px;min-width:155px">
-            <option value="">— เลือกรถ —</option>
-          </select>
-        </div>
-        <button class="btn btn-clear" onclick="doClearTruck()">🗑 ล้างทั้งคัน</button>
-      </div>
-    </div>
-
-    <!-- Filters -->
-    <div class="filters no-print">
-      <input type="text" id="srch" placeholder="🔍 ร้านค้า / เลขบิล" oninput="renderBillTable()"/>
-      <select id="fDate" onchange="renderBillTable()"><option value="">ทุกวันที่</option></select>
-      <select id="fStatus" onchange="renderBillTable()">
-        <option value="">ทั้งหมด</option>
-        <option value="pending">⏳ รอจัด</option>
-        <option value="done">✅ จัดแล้ว</option>
-      </select>
-      <select id="fSort" onchange="renderBillTable()">
-        <option value="dist">📍 เรียงตามระยะทาง</option>
-        <option value="weight">⚖️ น้ำหนักมากสุด</option>
-        <option value="date">📅 วันที่</option>
-      </select>
-      <div class="sel-bar no-print" id="selBar" style="display:none">
-        <span id="sel-count" style="font-size:12px;font-weight:600;color:#633806"></span>
-        <select id="sel-truck-dd" onchange="assignSelected(this)" style="background:#fff;border:1px solid #E0E5ED;border-radius:6px;padding:4px 8px;font-size:12px">
-          <option value="">→ เลือกรถ</option>
-        </select>
-        <button onclick="clearSelected()" style="border:1px solid #FCA5A5;border-radius:6px;padding:3px 8px;background:none;color:#C62828;font-size:12px">✕</button>
-        <button onclick="cancelSel()" style="background:none;border:none;color:#6B7A90;font-size:11px;text-decoration:underline">ยกเลิก</button>
-      </div>
-    </div>
-
-    <!-- Bill table -->
-    <div class="bill-table-wrap">
-      <table class="bill-table">
-        <thead>
-          <tr>
-            <th style="width:34px"><input type="checkbox" id="chk-all" onchange="toggleAll(this)" style="cursor:pointer;accent-color:#C9A84C"/></th>
-            <th>📍 ระยะ</th>
-            <th>ร้านค้า</th>
-            <th>จังหวัด / สาย</th>
-            <th>⚖ น้ำหนัก / 📦 ปริมาตร</th>
-            <th>มูลค่า</th>
-            <th>รถที่จัด</th>
-          </tr>
-        </thead>
-        <tbody id="billTbody"></tbody>
-      </table>
-      <div class="table-foot" id="tableFoot"></div>
-    </div>
-  </div>
-
-  <!-- BILLS VIEW -->
-  <div class="tab-panel fi" id="tab-bills">
-    <h1 style="font-family:Kanit;font-size:20px;font-weight:600;color:#07101F;margin-bottom:14px">📋 บิลสินค้า</h1>
-    <div class="filters" style="margin-bottom:12px">
-      <input type="text" id="bv-srch" placeholder="🔍 ค้นหา..." oninput="renderBillsView()"/>
-      <select id="bv-status" onchange="renderBillsView()"><option value="">ทุกสถานะ</option><option value="pending">รอจัด</option><option value="done">จัดแล้ว</option></select>
-      <select id="bv-sort" onchange="renderBillsView()"><option value="dist">📍 ระยะทาง</option><option value="weight">⚖️ น้ำหนัก</option><option value="date">📅 วันที่</option></select>
-    </div>
-    <div class="bill-table-wrap">
-      <table class="bill-table">
-        <thead><tr>
-          <th>📍 ระยะ</th><th>ร้านค้า</th><th>จังหวัด</th><th>น้ำหนัก / ปริมาตร</th><th>มูลค่า</th><th>จัดรถ</th>
-        </tr></thead>
-        <tbody id="bvTbody"></tbody>
-      </table>
-      <div class="table-foot" id="bvFoot"></div>
-    </div>
-  </div>
-
-  <!-- ROUTES -->
-  <div class="tab-panel fi" id="tab-routes">
-    <h1 style="font-family:Kanit;font-size:20px;font-weight:600;color:#07101F;margin-bottom:14px">🗺️ สายส่งและโลเคชัน</h1>
-
-    <!-- Map controls bar -->
-    <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:8px 12px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <div id="mapTripFilter" style="display:flex;gap:6px;align-items:center">
-        <span style="font-size:11px;color:var(--muted);font-weight:500">เที่ยว:</span>
-        <button onclick="filterMapTrip(0,this)" style="padding:4px 12px;border-radius:7px;border:1.5px solid var(--navy);background:var(--navy);color:var(--gold-light);font-size:11px;font-weight:700;cursor:pointer">ทั้งหมด</button>
-        <button onclick="filterMapTrip(1,this)" style="padding:4px 12px;border-radius:7px;border:1.5px solid #F6C45A;background:#FFF8EC;color:#C47000;font-size:11px;font-weight:400;cursor:pointer">🔴 เที่ยว 1</button>
-        <button onclick="filterMapTrip(2,this)" style="padding:4px 12px;border-radius:7px;border:1.5px solid #93B8DE;background:#EAF0F8;color:#1A5FA5;font-size:11px;font-weight:400;cursor:pointer">🔵 เที่ยว 2</button>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <button id="mapThemeBtn" onclick="toggleMapTheme()"
-          style="padding:4px 12px;border-radius:7px;border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:11px;font-weight:600;cursor:pointer">
-          🌙 Dark
-        </button>
-        <span style="font-size:10px;color:var(--muted)">● = เที่ยว 1 (solid) &nbsp; ○ = เที่ยว 2 (ring)</span>
-      </div>
-    </div>
-
-    <!-- Truck filter -->
-    <div style="background:#fff;border:1px solid #E0E5ED;border-radius:12px;padding:10px 16px;margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <span style="font-size:11px;color:#6B7A90;font-weight:500">🗺️ แสดงเที่ยว:</span>
-      <div id="mapTripFilter" style="display:flex;gap:6px">
-        <button onclick="filterMapTrip(0,this)" style="padding:4px 12px;border-radius:7px;border:1.5px solid #E0E5ED;background:#F5F7FA;color:#6B7A90;font-size:11px;font-weight:700;cursor:pointer">ทั้งหมด</button>
-        <button onclick="filterMapTrip(1,this)" style="padding:4px 12px;border-radius:7px;border:1.5px solid #F6C45A;background:#FFF8EC;color:#C47000;font-size:11px;font-weight:400;cursor:pointer">🟠 เที่ยว 1</button>
-        <button onclick="filterMapTrip(2,this)" style="padding:4px 12px;border-radius:7px;border:1.5px solid #93B8DE;background:#EAF0F8;color:#1A5FA5;font-size:11px;font-weight:400;cursor:pointer">🔵 เที่ยว 2</button>
-      </div>
-      <div style="margin-left:auto;font-size:10px;color:#A0ABBB">
-        ● = เที่ยว 1 (solid) &nbsp; ○ = เที่ยว 2 (dashed)
-      </div>
-    </div>
-
-    <!-- Truck filter -->
-    <div style="background:#fff;border:1px solid #E0E5ED;border-radius:12px;padding:12px 16px;margin-bottom:14px">
-      <div style="font-size:11px;color:#6B7A90;margin-bottom:10px;font-weight:500">🚛 เลือกดูโลเคชันรายคัน</div>
-      <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center" id="mapTruckFilter">
-        <button onclick="filterMap(null,this)"
-          style="padding:6px 14px;border-radius:8px;border:2px solid #07101F;background:#07101F;color:#E4C46E;font-size:12px;font-weight:700;cursor:pointer">
-          🌐 ทั้งหมด
-        </button>
-      </div>
-    </div>
-
-    <!-- Map -->
-    <div style="background:#fff;border:1px solid #E0E5ED;border-radius:12px;overflow:hidden;margin-bottom:14px">
-      <div style="padding:10px 16px;border-bottom:1px solid #E0E5ED;background:#F5F7FA;font-family:Kanit;font-size:13px;font-weight:600;color:#7D6428" id="mapTitle">🗺️ แผนที่โลเคชันทั้งหมด</div>
-      <div id="routeMap" style="height:380px;width:100%"></div>
-    </div>
-
-    <!-- Route cards -->
-    <div style="font-family:Kanit;font-size:13px;font-weight:600;color:#7D6428;margin-bottom:10px">📋 รายการตามสาย</div>
-    <div id="routeCards" class="route-cards"></div>
-  </div>
-
-  <!-- CARS -->
-  <div class="tab-panel fi" id="tab-cars">
-    <h1 style="font-family:Kanit;font-size:20px;font-weight:600;color:#07101F;margin-bottom:14px">🚐 รถทั้งหมด</h1>
-    <div id="carCards" class="car-grid"></div>
-  </div>
-
-</div><!-- /main -->
-
-<!-- Bottom Nav -->
-<nav class="bottom-nav" id="bottomNav">
-  <button class="bnav-item" onclick="switchTab('dashboard',null,'d')"><span class="bnav-icon">🏠</span>แดชบอร์ด</button>
-  <button class="bnav-item active" onclick="switchTab('queue',null,'q')"><span class="bnav-icon">🚛</span>จัดคิวรถ</button>
-  <button class="bnav-item" onclick="switchTab('bills',null,'b')"><span class="bnav-icon">📋</span>บิลสินค้า</button>
-  <button class="bnav-item" onclick="switchTab('routes',null,'r')"><span class="bnav-icon">🗺️</span>สายส่ง</button>
-  <button class="bnav-item" onclick="switchTab('cars',null,'c')"><span class="bnav-icon">🚐</span>ฝูงรถ</button>
-</nav>
-
-
-<!-- Print Summary Modal -->
-<div id="printOverlay" class="modal-overlay">
-  <div class="modal" style="max-width:700px;width:95%">
-    <div class="modal-head">
-      <div>
-        <div class="modal-head-title">🖨 สรุปร้านค้าสำหรับพิมพ์</div>
-        <div class="modal-head-sub" id="printSub">แยกตามรถและเที่ยว</div>
-      </div>
-      <button class="modal-close" onclick="document.getElementById('printOverlay').classList.remove('open')">✕</button>
-    </div>
-    <div class="modal-body" style="max-height:65vh;overflow-y:auto;padding:12px 16px">
-      <div id="printContent"></div>
-    </div>
-    <div class="modal-foot">
-      <button onclick="document.getElementById('printOverlay').classList.remove('open')" class="btn" style="border:1.5px solid var(--border);background:var(--card-bg);color:var(--muted)">ปิด</button>
-      <button onclick="window.print()" class="btn btn-gold">🖨 สั่งพิมพ์</button>
-    </div>
+<!-- ═══════════════════════════════════════════════
+     DETAIL SCREEN
+════════════════════════════════════════════════ -->
+<div class="screen" id="detailScreen">
+  <header>
+    <button class="back-btn" onclick="showList()">← กลับ</button>
+    <div class="logo-text" id="detailHeaderTitle" style="flex:1;text-align:right;font-size:14px;opacity:.7"></div>
+    <button class="print-btn" onclick="window.print()">🖨️ พิมพ์</button>
+  </header>
+  <div class="detail-body" id="detailBody">
+    <!-- Rendered by JS -->
   </div>
 </div>
 
-<style>
-@media print {
-  body > *:not(#printArea){ display:none!important }
-  #printArea{ display:block!important }
-}
-#printArea{ display:none }
-.print-truck-header{background:var(--navy);color:var(--gold-light);padding:8px 12px;border-radius:var(--radius-sm);font-family:Kanit;font-size:13px;font-weight:700;margin:10px 0 6px}
-.print-trip-header{background:#FFF8EC;border-left:3px solid var(--gold);padding:5px 10px;font-size:12px;font-weight:700;color:#C47000;margin:6px 0 3px}
-.print-trip-header.t2{background:#EAF0F8;border-left-color:#1A5FA5;color:#1A5FA5}.print-trip-header.t3{background:#EAF3DE;border-left-color:#15803D;color:#15803D}
-.print-bill-row{display:flex;gap:8px;padding:5px 4px;border-bottom:1px solid var(--border);font-size:12px;align-items:flex-start}
-.print-bill-row:last-child{border-bottom:none}
-</style>
 <script>
-// ══════════════════════════════════════════
-// DATA
-// ══════════════════════════════════════════
-const SHEET_ID = '1OvXga8M0XuUEMYqWPj_AIcBHTEI_vA_WXXNJpqUk0aQ';
-const HQ = {lat:13.444304778884815, lng:100.03838295867146};
-const STORE_KEY = 'dq_v4_queue';
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwnx2jD8cc5thpaJxdYSCzDW3INtUH37EXnfKqvxPfuBf0PLLLNv7gXDJeAvhfs-LCnWA/exec'; // Google Apps Script URL (hardcoded)
+// ═══════════════ CONFIG ═══════════════
+const SHEET_ID    = '1ImkivuDxxTaluPVt2dJLX12fhVWvpU5czshn-OsRYuY';
+const CATALOG_TAB = 'Detail';
+const PER_PAGE    = 8;
 
-const TRUCKS = [
-  {id:1,  nick:'แขก',         plate:'806893',  driver:'มนัส รักษาวงศ์',          type:'6 ล้อ',        maxW:9580,  maxV:23.6, e:'🚛'},
-  {id:2,  nick:'มนัส2',       plate:'806613',  driver:'มนัส รักษาวงศ์',           type:'6 ล้อ',        maxW:10660, maxV:18.5, e:'🚛'},
-  {id:3,  nick:'ไมด์',        plate:'807181',  driver:'นำชัย ทองคำประสาท',        type:'6 ล้อ',        maxW:9150,  maxV:29.4, e:'🚛'},
-  {id:4,  nick:'นะ',          plate:'807210',  driver:'จักรกฤษณ์ ศรีนวลสด',      type:'6 ล้อ',        maxW:8780,  maxV:31.3, e:'🚛'},
-  {id:5,  nick:'อาก',         plate:'808425',  driver:'จาตุพจน์ เงินยวง',          type:'6 ล้อ',        maxW:8845,  maxV:31.3, e:'🚛'},
-  {id:6,  nick:'ออม',         plate:'808557',  driver:'ออมสิน เป้าทอง',            type:'6 ล้อ',        maxW:8810,  maxV:35,   e:'🚛'},
-  {id:7,  nick:'เล็ก',        plate:'806991',  driver:'ประสงค์ คำคุ้ม',            type:'10 ล้อ',       maxW:14200, maxV:40.8, e:'🚚'},
-  {id:8,  nick:'ทิ้ง',        plate:'805865',  driver:'ขันติ บุญเฉลียว',           type:'12 ล้อ',       maxW:18000, maxV:36.5, e:'🚚'},
-  {id:9,  nick:'เบิร์ด',      plate:'807482',  driver:'บุญเปรม โสวจันทร์',         type:'12 ล้อ',       maxW:19000, maxV:40.8, e:'🚚'},
-  {id:10, nick:'มานพ',        plate:'808343',  driver:'มานพ ไกรวิจิตร',            type:'12 ล้อ',       maxW:19200, maxV:40.8, e:'🚚'},
-  {id:11, nick:'ปอนด์(ใหญ่)', plate:'บฉ1693', driver:'ภราดร สวนน้อย',             type:'4 ล้อจัมโบ้',  maxW:4000,  maxV:10.6, e:'🚐'},
-  {id:12, nick:'อุทัย',       plate:'บจ9541', driver:'อุทัย อยู่ประเสริฐ',        type:'4 ล้อจัมโบ้',  maxW:4000,  maxV:9.9,  e:'🚐'},
-  {id:13, nick:'ทัน',         plate:'บจ9543', driver:'พงศ์กานต์ จิตต์อารยคุณ',    type:'4 ล้อจัมโบ้',  maxW:4000,  maxV:4.0,  e:'🚐'},
-  {id:14, nick:'อั้ม',        plate:'บฉ8126', driver:'อภิวัฒน์ สะทองแก้ว',       type:'4 ล้อจัมโบ้',  maxW:4000,  maxV:28,   e:'🚐'},
-  {id:15, nick:'อั้ม2',       plate:'บฉ8127', driver:'อภิวัฒน์ สะทองแก้ว',       type:'4 ล้อจัมโบ้',  maxW:4000,  maxV:28,   e:'🚐'},
-  {id:16, nick:'ต้น',         plate:'บฉ8563', driver:'สันดุสิทธิ์ รุ่งสว่าง',    type:'4 ล้อจัมโบ้',  maxW:4000,  maxV:28,   e:'🚐'},
-  {id:17, nick:'เบส',         plate:'บฉ8564', driver:'เดชาพล ลายุก',              type:'4 ล้อจัมโบ้',  maxW:4000,  maxV:28,   e:'🚐'},
-  {id:18, nick:'อั้ม3',       plate:'บฉ8809', driver:'อภิวัฒน์ สะทองแก้ว',       type:'4 ล้อจัมโบ้',  maxW:4000,  maxV:28,   e:'🚐'},
-  {id:19, nick:'แชมป์',       plate:'4ฒข5418',driver:'ธีรพัฒน์ พุทธธรรม',         type:'4 ล้อจัมโบ้',  maxW:4000,  maxV:28,   e:'🚐'},
-  {id:20, nick:'ซัน',         plate:'4ฒข5420',driver:'อาทิตย์ แสงเจริญ',           type:'4 ล้อจัมโบ้',  maxW:4000,  maxV:28,   e:'🚐'},
-  {id:21, nick:'กฤต',         plate:'บฉ272',  driver:'กฤตนัน เจตโพธิ์',           type:'กระบะ',         maxW:2000,  maxV:5.0,  e:'🛻'},
-  {id:22, nick:'อั้ม4',       plate:'บจ6918', driver:'อภิวัฒน์ สะทองแก้ว',       type:'กระบะ',         maxW:2000,  maxV:5.0,  e:'🛻'},
-];
-const TRUCK_COLORS = ['#B45309','#1D4ED8','#15803D','#9333EA','#7C3AED','#BE185D','#0369A1','#92400E','#4338CA','#065F46','#B91C1C','#0E7490','#6D28D9','#047857','#C2410C','#1E40AF','#7E22CE','#0F766E','#B45309','#374151','#6B21A8','#155E75'];
+// ═══════════════ STATE ════════════════
+let allProducts = [];
+let filtered    = [];
+let currentPage = 1;
+let searchQuery = '';
+let darkMode    = false;
+let catalogMap  = new Map();
 
-// ── รถที่ไม่ให้จัดอัตโนมัติ (รถพ่วงมีหาง) ──
-// แก้รายการนี้ถ้าต้องการเพิ่ม/ลดรถที่ exclude
-const EXCLUDE_AUTO = new Set([
-  '806991',  // ประสงค์ คำคุ้ม    — 10ล้อ รถพ่วง
-  '807482',  // บุญเปรม โสวจันทร์ — 12ล้อ รถพ่วง
-  '808343',  // มานพ ไกรวิจิตร   — 12ล้อ รถพ่วง
-]);
+// ═══════════════ INIT ════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  if (isLineBrowser()) {
+    document.getElementById('lineOverlay').classList.add('show');
+    return;
+  }
+  const saved = localStorage.getItem('rattana-dark');
+  if (saved === 'true') { darkMode = true; document.body.classList.add('dark'); }
+  loadData(false);
+});
 
-// ── คนขับหลัก ──
-const PRIMARY_PLATES = new Set([
-  'บจ9541',  // อุทัย
-  '808425',  // อาก
-  '807181',  // ไมด์
-  '806893',  // แขก
-  '808557',  // ออม
-  'บฉ1693', // ปอนด์(ใหญ่)
-  'บจ9543',  // ทัน
-]);
-
-// ── State ──
-let bills=[], billMap={}, products={}, routeMap={};
-let queue={};      // {billRef: plateNumber}
-let tripMap={};    // {billRef: 1|2} — เที่ยว (default=1)
-let selTrip=1;     // เที่ยวที่กำลังจะใส่ (1 หรือ 2) — toggle โดยผู้ใช้
-let selPlate=null;
-let selRefs=new Set();
-
-// ── Helpers ──
-const fmtN = n => Number(n).toLocaleString('th-TH');
-const fmtKg = n => n>=1000?`${(n/1000).toFixed(1)}ต.`:`${Math.round(n)}กก.`;
-const fmtKm = d => d<1?`${Math.round(d*1000)}ม.`:`${d.toFixed(1)}กม.`;
-const fmtM3 = v => v<1?`${Math.round(v*1000)}L`:`${v.toFixed(1)}m³`;
-
-function haversine(a,b,c,d){
-  const R=6371,r=x=>x*Math.PI/180,dL=r(c-a),dG=r(d-b);
-  const x=Math.sin(dL/2)**2+Math.cos(r(a))*Math.cos(r(c))*Math.sin(dG/2)**2;
-  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+function isLineBrowser() {
+  const ua = navigator.userAgent || '';
+  return /Line\//i.test(ua) || /LIFF/i.test(ua);
 }
-const dist = b => (b.lat&&b.lng) ? haversine(HQ.lat,HQ.lng,b.lat,b.lng) : null;
-const distOrInf = b => dist(b)??99999;
 
-function truckLoad(plate,trip=0){
-  let w1=0,v1=0,w2=0,v2=0,w3=0,v3=0;
-  Object.entries(queue).forEach(([ref,p])=>{
-    if(p!==plate||!billMap[ref])return;
-    const tr=tripMap[ref]||1;
-    if(tr===1){w1+=billMap[ref].totalW;v1+=billMap[ref].totalV;}
-    else if(tr===2){w2+=billMap[ref].totalW;v2+=billMap[ref].totalV;}
-    else{w3+=billMap[ref].totalW;v3+=billMap[ref].totalV;}
-  });
-  if(trip===1)return{w:w1,v:v1};
-  if(trip===2)return{w:w2,v:v2};
-  if(trip===3)return{w:w3,v:v3};
-  return{w:w1+w2+w3,v:v1+v2+v3,w1,v1,w2,v2,w3,v3};
-}
-function tripFor(t,b){
-  const ld=truckLoad(t.plate);
-  if((ld.w1+b.totalW)<=t.maxW&&(t.maxV<=0||(ld.v1+b.totalV)<=t.maxV))return 1;
-  if((ld.w2+b.totalW)<=t.maxW&&(t.maxV<=0||(ld.v2+b.totalV)<=t.maxV))return 2;
-  if((ld.w3+b.totalW)<=t.maxW&&(t.maxV<=0||(ld.v3+b.totalV)<=t.maxV))return 3;
-  return 0;
-}
-function truckPct(plate,t){
-  const ld=truckLoad(plate);
-  const wp1=t.maxW>0?Math.round(ld.w1/t.maxW*100):0;
-  const vp1=t.maxV>0?Math.round(ld.v1/t.maxV*100):0;
-  const wp2=t.maxW>0?Math.round(ld.w2/t.maxW*100):0;
-  const vp2=t.maxV>0?Math.round(ld.v2/t.maxV*100):0;
-  const wp3=t.maxW>0?Math.round(ld.w3/t.maxW*100):0;
-  const vp3=t.maxV>0?Math.round(ld.v3/t.maxV*100):0;
-  const eff=Math.max(wp1,vp1,wp2,vp2,wp3,vp3);
-  return{wp1,vp1,wp2,vp2,wp3,vp3,eff,over:eff>100,wp:Math.max(wp1,wp2,wp3),vp:Math.max(vp1,vp2,vp3)};
-}
-function pcColor(p){return p>=90?'#DC3545':p>=70?'#E07B00':'#2E8B57';}
-function assignedSet(){return new Set(Object.values(queue).filter(Boolean));}
-let isDirty=false;  // tracks unsaved changes
-function saveQ(){
-  try{localStorage.setItem(STORE_KEY,JSON.stringify(queue));}catch(e){}
-  try{localStorage.setItem(STORE_KEY+'_trip',JSON.stringify(tripMap));}catch(e){}
-  isDirty=true;
-  updateSyncBadge();
-}
-function updateSyncBadge(){
-  const btn=document.getElementById('btn-save');
-  if(!btn)return;
-  const hasUrl=!!SCRIPT_URL;
-  if(isDirty&&hasUrl){
-    btn.innerHTML='💾 Keepdata <span style="background:#C9A84C;color:#07101F;border-radius:8px;padding:0 5px;font-size:10px;font-weight:700;margin-left:2px">มีการแก้ไข</span>';
-    btn.style.background='#1A3A5C';
-  } else if(!hasUrl){
-    btn.innerHTML='💾 Keepdata <span style="background:#C62828;color:#fff;border-radius:8px;padding:0 5px;font-size:10px;font-weight:700;margin-left:2px">ตั้งค่าก่อน</span>';
-    btn.style.background='#07101F';
+function tryOpenExternal() {
+  const url = location.href;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url)
+      .then(() => showToast('✅ คัดลอก URL แล้ว — วางใน Safari หรือ Chrome'))
+      .catch(() => window.prompt('คัดลอก URL:', url));
   } else {
-    btn.innerHTML='💾 Keepdata';
-    btn.style.background='#07101F';
+    window.prompt('คัดลอก URL:', url);
   }
 }
-function getTruckCol(plate){const i=TRUCKS.findIndex(t=>t.plate===plate);return i>=0?TRUCK_COLORS[i%TRUCK_COLORS.length]:'#9BAAB8';}
 
-// ══════════════════════════════════════════
-// DATA LOADING
-// ══════════════════════════════════════════
-function setLoad(msg,pct){
-  const m=document.getElementById('ls-msg'),b=document.getElementById('ls-bar'),lb=document.getElementById('loadingBar');
-  if(m)m.textContent=msg; if(b)b.style.width=pct+'%'; if(lb)lb.style.width=pct+'%';
-  if(pct>=100&&lb)setTimeout(()=>lb.style.width='0',600);
-}
+// ═══════════════ DATA LOAD ═══════════
+async function loadData(force = false) {
+  const cacheKey = 'rattana-barcode-v2';
+  const catKey   = 'rattana-catalog-v2';
+  const cacheTs  = 'rattana-ts-v2';
+  const CACHE_MS = 5 * 60 * 1000;
 
-const csvURL = s=>`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(s)}`;
-
-async function fetchSheet(name){
-  const r=await fetch(csvURL(name));
-  if(!r.ok)throw new Error(`"${name}" โหลดไม่ได้ (${r.status})`);
-  return parseCSV(await r.text());
-}
-
-function parseCSV(txt){
-  const lines=txt.split('\n').filter(l=>l.trim());
-  if(lines.length<2)return[];
-  const headers=parseLine(lines[0]);
-  return lines.slice(1).map(line=>{const v=parseLine(line);const o={};headers.forEach((h,i)=>o[h.trim()]=(v[i]||'').trim());return o;});
-}
-
-function parseLine(line){
-  const res=[];let cur='',inQ=false;
-  for(let i=0;i<line.length;i++){
-    const c=line[i];
-    if(c==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ;}
-    else if(c===','&&!inQ){res.push(cur);cur='';}
-    else cur+=c;
+  if (!force) {
+    try {
+      const ts  = parseInt(localStorage.getItem(cacheTs) || '0');
+      const raw = localStorage.getItem(cacheKey);
+      const cat = localStorage.getItem(catKey);
+      if (raw && Date.now() - ts < CACHE_MS) {
+        allProducts = JSON.parse(raw);
+        if (cat) buildCatalogMap(JSON.parse(cat));
+        afterLoad(); return;
+      }
+    } catch(e) {}
   }
-  res.push(cur);return res;
-}
 
-async function loadData(){
-  try{
-    const saved=localStorage.getItem(STORE_KEY);
-    if(saved)queue=JSON.parse(saved);
-    try{const st=localStorage.getItem(STORE_KEY+'_trip');if(st)tripMap=JSON.parse(st);}catch(e){}
-    setLoad('📊 โหลด Bill DS...',20);
-
-    const [billData,productData,routeData]=await Promise.all([
-      fetchSheet('Bill DS'), fetchSheet('Product'), fetchSheet('Route')
+  showSpinner('กำลังโหลดข้อมูล...');
+  try {
+    // JSONP — ใช้ <script> tag ไม่มี CORS ใช้ได้ทุก browser
+    const [rows1, rows2] = await Promise.all([
+      fetchSheetJsonp(SHEET_ID, 'gid=0'),
+      fetchSheetJsonp(SHEET_ID, `sheet=${encodeURIComponent(CATALOG_TAB)}`).catch(() => null),
     ]);
-    setLoad('🔧 ประมวลผลข้อมูล...',70);
 
-    // Products
-    products={};
-    productData.forEach(p=>{
-      const name=p['ชื่อสินค้า']||p['SKU_NAME']||'';
-      const w=parseFloat(p['นน. EA']||p['น้ำหนัก EA']||0);
-      const v=parseFloat(p['ปริมาตร EA (ลิตร)']||p['ปริมาตร EA']||0)/1000;
-      if(name)products[name]={w,v};
-    });
-    // ── Fallback: สินค้าไม่มีน้ำหนัก/ปริมาตร → ใช้ค่าเฉลี่ยของสินค้าที่มีข้อมูล ──
-    const _allW=Object.values(products).map(p=>p.w).filter(w=>w>0);
-    const _allV=Object.values(products).map(p=>p.v).filter(v=>v>0);
-    const _avgW=_allW.length?_allW.reduce((a,b)=>a+b,0)/_allW.length:0;
-    const _avgV=_allV.length?_allV.reduce((a,b)=>a+b,0)/_allV.length:0;
-    Object.values(products).forEach(p=>{if(!p.w&&_avgW)p.w=_avgW;if(!p.v&&_avgV)p.v=_avgV;});
-    console.log(`Products fallback: avgW=${_avgW.toFixed(3)}kg avgV=${_avgV.toFixed(4)}m³`);
+    allProducts = parseBarcodeRows(rows1);
+    localStorage.setItem(cacheKey, JSON.stringify(allProducts));
 
-    // Routes (with GPS)
-    routeMap={};
-    routeData.forEach(r=>{
-      const code=r['รหัสร้านค้า']||r['AR_CODE']||'';
-      if(!code)return;
-      const gps=r['โลเคชัน']||'';
-      let lat=null,lng=null;
-      if(gps&&gps.includes(',')){const p=gps.split(',');lat=parseFloat(p[0]);lng=parseFloat(p[1]);}
-      const newDays=r['วันส่ง']||'';
-      if(routeMap[code]){
-        // AR_CODE ซ้ำ → รวม วันส่ง ไม่ให้หาย
-        const existing=routeMap[code].days||'';
-        const merged=[...new Set([...existing.split(/[,\s\/]+/),
-                                  ...newDays.split(/[,\s\/]+/)].filter(Boolean))].join(',');
-        routeMap[code].days=merged;
-        if(!routeMap[code].lat&&lat)routeMap[code].lat=lat;
-        if(!routeMap[code].lng&&lng)routeMap[code].lng=lng;
-      } else {
-        routeMap[code]={
-          route:r['ชื่อสายจด']||r['สาย']||'',
-          days:newDays,
-          routeCode:r['Serial Route จด']||r['รูทจด']||'',
-          lat:isNaN(lat)?null:lat, lng:isNaN(lng)?null:lng
-        };
+    if (rows2) {
+      const catRows = parseCatalogRows(rows2);
+      buildCatalogMap(catRows);
+      localStorage.setItem(catKey, JSON.stringify(catRows));
+    }
+    localStorage.setItem(cacheTs, Date.now().toString());
+    afterLoad();
+
+  } catch(err) {
+    hideSpinner();
+    // Fallback to stale cache
+    try {
+      const raw = localStorage.getItem('rattana-barcode-v2');
+      const cat = localStorage.getItem('rattana-catalog-v2');
+      if (raw) {
+        allProducts = JSON.parse(raw);
+        if (cat) buildCatalogMap(JSON.parse(cat));
+        afterLoad();
+        showToast('⚠️ ใช้ข้อมูล cache เก่า (ไม่มีเน็ต)');
+        return;
       }
-    });
-
-    // Bills
-    billMap={};
-    billData.forEach(b=>{
-      const ref=b['DI_REF']||''; if(!ref)return;
-      const arCode=b['AR_CODE']||'';
-      if(!billMap[ref]){
-        const ri=routeMap[arCode]||{};
-        billMap[ref]={ref,arCode,arName:b['AR_NAME']||'',date:b['DI_DATE']||'',
-          district:b['ADDB_DISTRICT']||'',province:b['ADDB_PROVINCE']||'',
-          route:ri.route||'',days:ri.days||'',routeCode:ri.routeCode||'',
-          lat:ri.lat,lng:ri.lng, totalW:0,totalV:0,totalAmt:0};
-      }
-      const sku=b['SKU_NAME']||'';
-      const ea=parseFloat(b['EA']||0);
-      const amt=parseFloat((b['TRD_G_AMT']||'0').replace(/,/g,''))||0;
-      const pr=products[sku]||{w:0,v:0};
-      billMap[ref].totalW+=pr.w*ea;
-      billMap[ref].totalV+=pr.v*ea;
-      billMap[ref].totalAmt+=amt;
-    });
-
-    bills=Object.values(billMap);
-
-    // Populate date filter
-    const dates=[...new Set(bills.map(b=>b.date).filter(Boolean))].sort();
-    const fDate=document.getElementById('fDate');
-    dates.forEach(d=>{const o=document.createElement('option');o.value=d;o.textContent=d;fDate.appendChild(o);});
-
-    // Date label
-    document.getElementById('dateLabel').textContent=
-      new Date().toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'});
-
-    setLoad(`✅ ${bills.length} บิล พร้อมแล้ว`,100);
-
-    renderAll();
-    showToast(`โหลดสำเร็จ — ${bills.length} บิล`,'ok');
-    isDirty=false;
-    updateSyncBadge();
-  }catch(e){
-    console.error(e);
-    showToast('โหลดไม่สำเร็จ: '+e.message,'err');
-  }finally{
-    setTimeout(()=>document.getElementById('ls').classList.add('hide'),400);
+    } catch(e) {}
+    renderEmpty('โหลดข้อมูลไม่สำเร็จ', 'กรุณาตรวจสอบว่า Sheet เปิดเป็น Public แล้วกด 🔄');
+    showToast('⚠️ โหลดไม่สำเร็จ — กด 🔄 รีเฟรช');
   }
 }
 
-function refreshData(){
-  document.getElementById('ls').classList.remove('hide');
-  setLoad('🔄 รีเฟรชข้อมูล...',10);
-  loadData();
+// ── JSONP Fetch ─────────────────────────────────────────────────
+// ใช้ <script> tag แทน fetch → ไม่มี CORS เลย ใช้ได้ทุก browser
+function fetchSheetJsonp(sheetId, sheetParam) {
+  return new Promise((resolve, reject) => {
+    const cb  = 'gviz_' + Date.now() + '_' + Math.floor(Math.random()*9999);
+    const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&${sheetParam}&callback=${cb}`;
+
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error('Timeout'));
+    }, 18000);
+
+    function cleanup() {
+      clearTimeout(timer);
+      try { delete window[cb]; } catch(e) {}
+      const el = document.getElementById(cb);
+      if (el) el.remove();
+    }
+
+    window[cb] = function(resp) {
+      cleanup();
+      if (!resp || resp.status !== 'ok') {
+        reject(new Error(resp?.errors?.[0]?.message || 'Sheet API error'));
+        return;
+      }
+      resolve(gvizToRows(resp.table));
+    };
+
+    const s = document.createElement('script');
+    s.id  = cb;
+    s.src = url;
+    s.onerror = () => { cleanup(); reject(new Error('Script load failed')); };
+    document.head.appendChild(s);
+  });
 }
 
-// ══════════════════════════════════════════
-// RENDER ALL
-// ══════════════════════════════════════════
-function renderAll(){
-  renderTruckCards();
-  renderBillTable();
-  renderDashboard();
-  renderCarsView();
-  renderRoutesView();
-  renderBillsView();
-  updateQueueSub();
+// แปลง gviz table → rows[][]  (row[0] = header labels)
+function gvizToRows(table) {
+  const header = (table.cols || []).map(c => c.label || c.id || '');
+  const rows   = (table.rows || []).map(r =>
+    (table.cols || []).map((_, i) => {
+      const cell = r.c ? r.c[i] : null;
+      return (cell && cell.v != null) ? String(cell.v) : '';
+    })
+  );
+  return [header, ...rows];
 }
 
-// ══════════════════════════════════════════
-// TRUCK CARDS
-// ══════════════════════════════════════════
-function renderTruckCards(){
-  const wrap=document.getElementById('truckCards');
-  // เรียง: มีงาน+หลัก → มีงาน → หลัก → อื่น
-  const sorted=[...TRUCKS].map((t,i)=>({...t,origIdx:i}))
-    .sort((a,b)=>{
-      const aC=Object.values(queue).filter(p=>p===a.plate).length;
-      const bC=Object.values(queue).filter(p=>p===b.plate).length;
-      const aP=PRIMARY_PLATES.has(a.plate)?1:0;
-      const bP=PRIMARY_PLATES.has(b.plate)?1:0;
-      if(bC!==aC)return bC-aC;
-      return bP-aP;
+function afterLoad() {
+  hideSpinner();
+  filtered    = [...allProducts];
+  currentPage = 1;
+  renderList();
+}
+
+// ═══════════════ SHEET PARSERS ════════
+function parseBarcodeRows(rows) {
+  // rows[0]=header, rows[1..]=data
+  // A=0 PRODUCT NAME, B=1 CODE EA, C=2 UNA EA, D=3 CODE PA, E=4 UNA PA
+  // F=5 CODE BP, G=6 UNA BP, H=7 CODE CS, I=8 UNA CS, J=9 UNIT EA
+  const I = { name:0, codeEA:1, unitEA:2, codePA:3, unitPA:4, codeBP:5, unitBP:6, codeCS:7, unitCS:8, unitEALabel:9 };
+  const products = [];
+  for (let i = 1; i < rows.length; i++) {
+    const c = rows[i];
+    if (!c || !c[I.name] || !c[I.name].trim()) continue;
+    const name = c[I.name].trim();
+    if (name.toLowerCase() === 'product name') continue;
+    products.push({
+      id: i, name,
+      codeEA: (c[I.codeEA]  ||'').trim(), unitEA: (c[I.unitEA]  ||'').trim(),
+      codePA: (c[I.codePA]  ||'').trim(), unitPA: (c[I.unitPA]  ||'').trim(),
+      codeBP: (c[I.codeBP]  ||'').trim(), unitBP: (c[I.unitBP]  ||'').trim(),
+      codeCS: (c[I.codeCS]  ||'').trim(), unitCS: (c[I.unitCS]  ||'').trim(),
+      unitEALabel: (c[I.unitEALabel]||'').trim(),
     });
-  wrap.innerHTML=sorted.map(t=>{
-    const i=t.origIdx;
-    const ld=truckLoad(t.plate);
-    const {wp1,vp1,wp2,vp2,eff,over}=truckPct(t.plate,t);
-    const col=TRUCK_COLORS[i%TRUCK_COLORS.length];
-    const isSel=selPlate===t.plate;
-    const effCol=over?'#C62828':pcColor(eff);
-    const isExcluded=EXCLUDE_AUTO.has(t.plate);
-    const isPrimary=PRIMARY_PLATES.has(t.plate);
-    const cnt1=Object.entries(queue).filter(([r,p])=>p===t.plate&&(tripMap[r]||1)===1).length;
-    const cnt2=Object.entries(queue).filter(([r,p])=>p===t.plate&&(tripMap[r]||1)===2).length;
-    const cnt3=Object.entries(queue).filter(([r,p])=>p===t.plate&&(tripMap[r]||1)===3).length;
-    const ld1=truckLoad(t.plate,1),ld2=truckLoad(t.plate,2),ld3=truckLoad(t.plate,3);
-    const hasT2=cnt2>0,hasT3=cnt3>0;
-    return `<div class="tcard${isSel?' sel':''}${over?' over':''}" onclick="selectTruck('${t.plate}')">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
-        <div>
-          <div class="tcard-type" style="color:${col}">${t.e} ${t.type}</div>
-          <div class="tcard-plate">${t.plate}</div>
-        </div>
-        <div style="text-align:right">
-          ${over?'<div style="font-size:9px;color:#C62828;font-weight:700">⚠ เกิน</div>':''}
-          ${isExcluded?'<div style="font-size:9px;color:#6B7A90;font-weight:600;background:#F0F2F6;border-radius:4px;padding:0 4px">🔒 Manual</div>':''}
-          ${isPrimary&&!isExcluded?'<div style="font-size:9px;color:#B45309;font-weight:700;background:#FFF8EC;border:1px solid #F6C45A66;border-radius:4px;padding:0 5px">⭐ หลัก</div>':''}
-          <div class="tcard-pct" style="color:${effCol}">${eff}%</div>
-          <div class="tcard-wt">${fmtKg(ld.w)}</div>
-        </div>
-      </div>
-      <div style="font-size:9px;color:#9BAAB8;margin-bottom:1px">เที่ยว 1 — ${cnt1} บิล ${fmtKg(ld1.w)}</div>
-      <div class="tcard-bar"><div class="tcard-bar-fill" style="width:${Math.min(100,wp1)}%;background:${wp1>100?'#DC3545':pcColor(wp1)}"></div></div>
-      <div class="tcard-bar" style="margin-bottom:${hasT2||hasT3?'3px':'0'}"><div class="tcard-bar-fill" style="width:${Math.min(100,vp1)}%;background:${vp1>100?'#DC3545':pcColor(vp1)};opacity:.65"></div></div>
-      ${hasT2?`<div style="font-size:9px;color:#1A5FA5;margin-bottom:1px">เที่ยว 2 — ${cnt2} บิล ${fmtKg(ld2.w)}</div>
-      <div class="tcard-bar"><div class="tcard-bar-fill" style="width:${Math.min(100,wp2)}%;background:${wp2>100?'#DC3545':'#1A5FA5'}"></div></div>
-      <div class="tcard-bar" style="margin-bottom:${hasT3?'3px':'0'}"><div class="tcard-bar-fill" style="width:${Math.min(100,vp2)}%;background:${wp2>100?'#DC3545':'#1A5FA5'};opacity:.5"></div></div>`:''}
-      ${hasT3?`<div style="font-size:9px;color:#15803D;margin-bottom:1px">เที่ยว 3 — ${cnt3} บิล ${fmtKg(ld3.w)}</div>
-      <div class="tcard-bar"><div class="tcard-bar-fill" style="width:${Math.min(100,wp3)}%;background:${wp3>100?'#DC3545':'#15803D'}"></div></div>
-      <div class="tcard-bar" style="margin-bottom:0"><div class="tcard-bar-fill" style="width:${Math.min(100,vp3)}%;background:${wp3>100?'#DC3545':'#15803D'};opacity:.5"></div></div>`:''}
-      <div class="tcard-meta">
-        <span style="color:${eff>100?'#C62828':'#6B7A90'}">⚖ ${wp1}%${cnt2?'/'+wp2+'%':''}${cnt3?'/'+wp3+'%':''}</span>
-        <span style="color:${eff>100?'#C62828':'#6B7A90'}">📦 ${vp1}%${cnt2?'/'+vp2+'%':''}${cnt3?'/'+vp3+'%':''}</span>
-      </div>
-      <div class="tcard-driver" style="color:${isSel?'#7D6428':'#6B7A90'}"><span style="color:${col};font-weight:700">${t.nick}</span> <span style="font-size:10px">${t.driver}</span></div>
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:#A0ABBB;margin-top:1px"><span>${fmtKg(t.maxW)}/เที่ยว</span><span>${fmtM3(t.maxV)}</span></div>
-      ${isSel?`
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:8px">
-          <button onclick="event.stopPropagation();setSelTrip(1)" style="padding:5px 2px;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;border:2px solid ${selTrip===1?'#C47000':'var(--border)'};background:${selTrip===1?'rgba(196,112,0,.12)':'var(--bg)'};color:${selTrip===1?'#C47000':'var(--muted)'}">🔴 ท.1<br><span style="font-size:9px;font-weight:400">${cnt1}บิล ${fmtKg(ld1.w)}</span></button>
-          <button onclick="event.stopPropagation();setSelTrip(2)" style="padding:5px 2px;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;border:2px solid ${selTrip===2?'#1A5FA5':'var(--border)'};background:${selTrip===2?'rgba(26,95,165,.12)':'var(--bg)'};color:${selTrip===2?'#1A5FA5':'var(--muted)'}">🔵 ท.2<br><span style="font-size:9px;font-weight:400">${cnt2}บิล ${fmtKg(ld2.w)}</span></button>
-          <button onclick="event.stopPropagation();setSelTrip(3)" style="padding:5px 2px;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;border:2px solid ${selTrip===3?'#15803D':'var(--border)'};background:${selTrip===3?'rgba(21,128,61,.12)':'var(--bg)'};color:${selTrip===3?'#15803D':'var(--muted)'}">🟢 ท.3<br><span style="font-size:9px;font-weight:400">${cnt3}บิล ${fmtKg(ld3.w)}</span></button>
-        </div>
-        <div style="text-align:center;font-size:10px;color:var(--gold);font-weight:600;margin-top:4px">
-          👇 คลิกบิลด้านล่างเพื่อใส่ ${selTrip===2?'เที่ยว 2':'เที่ยว 1'}
-        </div>`:''}
-    </div>`;
-  }).join('');
+  }
+  return products;
+}
 
-  // Trip toggle
-  updateTripToggle();
+function parseCatalogRows(rows) {
+  if (rows.length < 2) return [];
+  const header = rows[0].map(h => h.toLowerCase().trim());
 
-  // Hint text
-  const hint=document.getElementById('sel-plate-hint');
-  if(selPlate){
-    hint.innerHTML=`<span style="color:#C9A84C;font-weight:600">— ${selPlate}</span> <button onclick="selectTruck(null)" style="background:none;border:none;color:#6B7A90;font-size:11px;text-decoration:underline;cursor:pointer">ยกเลิก</button>`;
+  const find = (...names) => {
+    for (const n of names) {
+      const idx = header.findIndex(h => h.includes(n));
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  };
+
+  const iName   = find('product name','productname','sku name');
+  const iBrand  = find('cat brand','brand');
+  const iSize   = find('cat size','size');
+  const iCatGrp = find('cat group','group');
+  const iImg    = find('sku_usage','sku usage','image','img');
+
+  const result = [];
+  for (let i = 1; i < rows.length; i++) {
+    const c = rows[i];
+    if (!c || c.length < 2) continue;
+    let nameKey = '';
+    if (iName >= 0 && c[iName]) nameKey = c[iName].trim();
+    else if (iBrand >= 0 && iSize >= 0) nameKey = ((c[iBrand]||'')+' '+(c[iSize]||'')).trim();
+    if (!nameKey) continue;
+    result.push({
+      nameKey,
+      catGroup: iCatGrp >= 0 ? (c[iCatGrp]||'').trim() : '',
+      imgUrl:   iImg    >= 0 ? (c[iImg]   ||'').trim() : '',
+    });
+  }
+  return result;
+}
+
+function buildCatalogMap(rows) {
+  catalogMap.clear();
+  for (const row of rows) {
+    catalogMap.set(normKey(row.nameKey), row);
+  }
+}
+
+function normKey(s) {
+  return String(s||'').toLowerCase().replace(/\s+/g,' ').trim();
+}
+
+// Find best catalog match for a product name
+function findCatalog(productName) {
+  const k = normKey(productName);
+  if (catalogMap.has(k)) return catalogMap.get(k);
+  // Partial match fallback
+  for (const [key, val] of catalogMap) {
+    if (k.includes(key) || key.includes(k)) return val;
+  }
+  return null;
+}
+
+// Convert Google Drive download URL → thumbnail URL
+function driveImgUrl(raw) {
+  if (!raw) return '';
+  // Handle: https://drive.google.com/uc?export=download&id=FILE_ID
+  //     or: https://drive.google.com/file/d/FILE_ID/view
+  let id = '';
+  const m1 = raw.match(/[?&]id=([^&]+)/);
+  if (m1) id = m1[1];
+  const m2 = raw.match(/\/d\/([^/]+)/);
+  if (m2) id = m2[1];
+  if (!id) return raw;
+  return `https://lh3.googleusercontent.com/d/${id}`;
+}
+
+function onSearch(val) {
+  searchQuery = val.trim();
+  document.getElementById('searchClear').classList.toggle('show', searchQuery.length > 0);
+  currentPage = 1;
+
+  if (!searchQuery) {
+    filtered = [...allProducts];
   } else {
-    hint.innerHTML='';
-  }
-
-  // Transfer bar
-  updateTransferBar();
-
-  // Sel truck dropdowns
-  updateSelDropdowns();
-}
-
-function updateTransferBar(){
-  ['tf-select','tf-trip-truck'].forEach(function(id){var el=document.getElementById(id);if(el&&el.tomselect){el.tomselect.destroy();}});
-  const bar=document.getElementById('transferBar');
-  if(!selPlate){bar.style.display='none';return;}
-  const billsOnTruck=Object.entries(queue).filter(([,p])=>p===selPlate).map(([r])=>billMap[r]).filter(Boolean);
-  if(!billsOnTruck.length){bar.style.display='none';return;}
-  const tw=billsOnTruck.reduce((s,b)=>s+b.totalW,0);
-  const ta=billsOnTruck.reduce((s,b)=>s+b.totalAmt,0);
-  document.getElementById('tf-title').textContent=`🔄 โยกทั้งคัน — ${selPlate}`;
-  document.getElementById('tf-info').textContent=`${billsOnTruck.length} บิล • ${fmtKg(tw)} • ฿${fmtN(ta)}`;
-  const ld=truckLoad(selPlate);
-  const sel=document.getElementById('tf-select');
-  const tripTruckSel=document.getElementById('tf-trip-truck');
-  const truckOpts=TRUCKS.filter(t=>t.plate!==selPlate).map(t=>`<option value="${t.plate}">${t.e} ${t.plate} (${t.nick})</option>`).join('');
-  if(tripTruckSel){tripTruckSel.className='ts-truck';tripTruckSel.innerHTML='<option value="">— เลือกรถ —</option>'+truckOpts;}
-  sel.className='ts-truck'; sel.innerHTML='<option value="">— เลือกรถ —</option>'+
-    TRUCKS.filter(t=>t.plate!==selPlate).map(t=>{
-      const tld=truckLoad(t.plate);
-      const ep=Math.max(t.maxW>0?Math.round(tld.w/t.maxW*100):0,t.maxV>0?Math.round(tld.v/t.maxV*100):0);
-      const afterW=tld.w+tw;
-      const over=afterW>t.maxW;
-      return `<option value="${t.plate}">${over?'⚠ ':''}${t.e} ${t.plate} (${t.nick}) [${ep}% → ${Math.round(afterW/t.maxW*100)}%]</option>`;
-    }).join('');
-  bar.style.display='flex';
-}
-
-function updateSelDropdowns(){
-  (function(){var _dd=document.getElementById('sel-truck-dd');if(_dd&&_dd.tomselect)_dd.tomselect.destroy();})();
-  const opts='<option value="">→ เลือกรถ</option>'+
-    TRUCKS.map(t=>{const ld=truckLoad(t.plate);const ep=Math.max(t.maxW>0?Math.round(ld.w/t.maxW*100):0,t.maxV>0?Math.round(ld.v/t.maxV*100):0);
-      return `<option value="${t.plate}">${t.e} ${t.plate} (${t.nick}) [${ep}%]</option>`;}).join('');
-  const dd=document.getElementById('sel-truck-dd');
-  const bvdd=document.getElementById('bv-truck-dd');
-  if(dd){dd.className='ts-truck';dd.innerHTML=opts;}
-}
-
-// ══════════════════════════════════════════
-// BILL TABLE (Queue tab)
-// ══════════════════════════════════════════
-function getFilteredBills(){
-  const srch=(document.getElementById('srch')?.value||'').toLowerCase();
-  const fDate=document.getElementById('fDate')?.value||'';
-  const fStatus=document.getElementById('fStatus')?.value||'';
-  const fSort=document.getElementById('fSort')?.value||'dist';
-
-  let list=bills.filter(b=>{
-    if(srch&&!b.arName.toLowerCase().includes(srch)&&!b.ref.toLowerCase().includes(srch))return false;
-    if(fDate&&b.date!==fDate)return false;
-    if(fStatus==='pending'&&queue[b.ref])return false;
-    if(fStatus==='done'&&!queue[b.ref])return false;
-    return true;
-  });
-
-  if(fSort==='dist') list.sort((a,b)=>distOrInf(a)-distOrInf(b));
-  else if(fSort==='weight') list.sort((a,b)=>b.totalW-a.totalW);
-  else list.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
-
-  // Selected truck's bills first — เรียงตามเที่ยวด้วย
-  if(selPlate){
-    const onTruck=[...list.filter(b=>queue[b.ref]===selPlate)]
-      .sort((a,b)=>(tripMap[a.ref]||1)-(tripMap[b.ref]||1)||distOrInf(a)-distOrInf(b));
-    list=[...onTruck,...list.filter(b=>queue[b.ref]!==selPlate)];
-  }
-  return list;
-}
-
-function renderBillTable(){
-  const list=getFilteredBills();
-  const tbody=document.getElementById('billTbody');
-  const asgn=Object.keys(queue).filter(r=>queue[r]);
-
-  if(!list.length){tbody.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:36px;color:#A0ABBB">ไม่พบข้อมูล</td></tr>`;return;}
-
-  let _lastTrip=0; // track trip group for divider
-  tbody.innerHTML=list.map(b=>{
-    const plate=queue[b.ref];
-    const truck=TRUCKS.find(t=>t.plate===plate);
-    const isSel=selRefs.has(b.ref);
-    const isOnActive=selPlate&&plate===selPlate;
-    // ── Trip group divider ──
-    let divider='';
-    if(isOnActive){
-      const tr=tripMap[b.ref]||1;
-      if(tr!==_lastTrip){
-        _lastTrip=tr;
-        const _bg=tr===3?'#EAF3DE':tr===2?'#EAF0F8':'#FFF8EC',_c=tr===3?'#15803D':tr===2?'#1A5FA5':'#C47000',_e=tr===3?'🟢':tr===2?'🔵':'🔴';
-        divider=`<tr style="background:${_bg};border-bottom:none"><td colspan="7" style="padding:4px 10px;font-size:11px;font-weight:700;color:${_c}">${_e} เที่ยว ${tr}</td></tr>`;
-      }
-    } else { _lastTrip=0; }
-    const d=dist(b);
-    const dCls=d===null?'':d<10?'dist-near':d<40?'dist-mid':'dist-far';
-    const col=plate?getTruckCol(plate):'';
-    const rowCls=`bill-row${isOnActive?' on-truck':''}${isSel?' selected':''}`;
-    return divider+`<tr class="${rowCls}" onclick="handleBillClick('${b.ref}')">
-      <td onclick="event.stopPropagation();toggleSel('${b.ref}',this)">
-        <input type="checkbox" ${isSel?'checked':''} onchange="toggleSel('${b.ref}',this)" style="cursor:pointer;accent-color:#C9A84C"/>
-      </td>
-      <td>
-        <div class="${dCls}" style="font-size:12px">${d===null?'<span style="color:#A0ABBB;font-size:11px">—</span>':fmtKm(d)}</div>
-        <div style="font-size:9px;color:${b.lat&&b.lng?'#A0ABBB':'#FCA5A5'};font-weight:${b.lat&&b.lng?400:600}">
-          ${b.lat&&b.lng?`${b.lat.toFixed(4)}, ${b.lng.toFixed(4)}`:'⚠ ไม่มี GPS'}
-        </div>
-      </td>
-      <td>
-        <div style="font-weight:600;color:#07101F">${b.arName}</div>
-        <div style="font-size:10px;color:#6B7A90;margin-top:1px">${b.ref}</div>
-      </td>
-      <td>
-        <div style="font-size:11px;color:#6B7A90">${b.province}</div>
-        <div style="font-size:10px;color:#A0ABBB">${b.route?`${b.route.substring(0,15)}`:(b.routeCode||'')}</div>
-        ${b.days?`<span style="font-size:9px;background:#EAF3DE;color:#15803D;border-radius:8px;padding:0 5px;font-weight:600">📅 ${b.days}</span>`:''}
-      </td>
-      <td style="white-space:nowrap">
-        <div style="color:#1A5FA5;font-weight:600;font-size:12px">${fmtKg(b.totalW)}</div>
-        <div style="color:#6B7A90;font-size:10px">${fmtM3(b.totalV)}</div>
-      </td>
-      <td style="font-weight:600;white-space:nowrap">฿${fmtN(Math.round(b.totalAmt))}</td>
-      <td onclick="event.stopPropagation()">
-        ${plate?`
-          <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:3px">
-            <span class="chip chip-truck" style="--c:${col};--cb:${col}18;--cc:${col}55">${truck?.e||'🚛'} ${plate}</span>
-            <span style="background:${(tripMap[b.ref]||1)===3?'#EAF3DE':(tripMap[b.ref]||1)===2?'#EAF0F8':'#FFF8EC'};color:${(tripMap[b.ref]||1)===3?'#15803D':(tripMap[b.ref]||1)===2?'#1A5FA5':'#C47000'};border:1px solid ${(tripMap[b.ref]||1)===3?'#97C459':(tripMap[b.ref]||1)===2?'#93B8DE':'#E4C46E'};border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700">
-              ${(tripMap[b.ref]||1)===3?'🟢':(tripMap[b.ref]||1)===2?'🔵':'🔴'} เที่ยว ${tripMap[b.ref]||1}
-            </span>
-          </div>
-          <div style="display:flex;gap:4px;flex-wrap:wrap">
-            <select class="ts-truck" onchange="reassignTruck('${b.ref}',this.value);this.value=''"
-              style="padding:2px 6px;border-radius:6px;background:#F5F7FA;border:1px solid var(--border);color:var(--text);font-size:10px;cursor:pointer;max-width:120px">
-              <option value="">🚛 เปลี่ยนรถ</option>
-              ${TRUCKS.filter(t=>t.plate!==plate).map(t=>`<option value="${t.plate}">${t.e} ${t.plate} (${t.nick})</option>`).join('')}
-            </select>
-            <button onclick="changeTrip('${b.ref}')"
-              style="padding:2px 8px;border-radius:6px;background:#EAF0F8;border:1px solid #93B8DE88;color:#1A5FA5;font-size:10px;font-weight:600;cursor:pointer">
-              🔄 เที่ยว
-            </button>
-            <button onclick="removeBill('${b.ref}')"
-              style="padding:2px 8px;border-radius:6px;background:#FEF2F2;border:1px solid #FCA5A588;color:#C62828;font-size:10px;font-weight:600;cursor:pointer">
-              ✕
-            </button>
-          </div>
-        `:`
-          <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap" onclick="event.stopPropagation()">
-            <select id="qp_${b.ref}"
-              class="ts-truck" style="flex:1;min-width:115px;padding:5px 7px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;cursor:pointer">
-              <option value="">🚛 เลือกรถ...</option>
-              ${TRUCKS.map(t=>`<option value="${t.plate}">${t.e} ${t.plate} (${t.nick})</option>`).join('')}
-            </select>
-            <select id="qt_${b.ref}"
-              style="width:78px;padding:5px 6px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;cursor:pointer">
-              <option value="1">🔴 ท.1</option>
-              <option value="2">🔵 ท.2</option>
-              <option value="3">🟢 ท.3</option>
-            </select>
-            <button onclick="const p=document.getElementById('qp_${b.ref}')?.value,t=document.getElementById('qt_${b.ref}')?.value||1;quickAssign('${b.ref}',p,t)"
-              style="padding:5px 10px;border-radius:var(--radius-sm);background:var(--navy);color:var(--gold-light);border:none;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">
-              ✓ จัด
-            </button>
-          </div>
-          ${selPlate?`<div style="font-size:10px;color:var(--muted);margin-top:2px">หรือกดแถวนี้ → ใส่ ${selTrip===3?'เที่ยว 3':selTrip===2?'เที่ยว 2':'เที่ยว 1'} บนรถ ${selPlate}</div>`:''}
-        `}
-      </td>
-    </tr>`;
-  }).join('');
-
-  // Checkbox all
-  const allChecked=list.length>0&&list.every(b=>selRefs.has(b.ref));
-  document.getElementById('chk-all').checked=allChecked;
-
-  // Footer
-  const done=Object.keys(queue).filter(r=>queue[r]).length;
-  const pend=bills.length-done;
-  document.getElementById('tableFoot').innerHTML=
-    `<span>แสดง ${list.length}/${bills.length}</span>
-     <span style="color:#B45309;font-weight:600">รอจัด: ${pend}</span>
-     <span style="color:#15803D;font-weight:600">จัดแล้ว: ${done}</span>`;
-
-  // Sel bar
-  updateSelBar();
-}
-
-function updateQueueSub(){
-  const THAI_DAYS=['อา','จ','อ','พ','พฤ','ศ','ส'];
-  const tmr=new Date(); tmr.setDate(tmr.getDate()+1);
-  const tmrShort=THAI_DAYS[tmr.getDay()];
-  const THAI_DAYS_FULL=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
-  const tmrFull=THAI_DAYS_FULL[tmr.getDay()];
-  const done=Object.keys(queue).filter(r=>queue[r]).length;
-  const pend=bills.length-done;
-  const tmrCnt=bills.filter(b=>{
-    if(!b.days)return false;
-    return b.days.split(/[,\s\/]+/).some(d=>d.trim()===tmrShort||d.trim()===tmrFull||d.trim().startsWith(tmrShort));
-  }).length;
-  document.getElementById('q-sub').innerHTML=
-    `<span style="color:#15803D;font-weight:600">${done} จัดแล้ว</span> / <span style="color:#B45309;font-weight:600">${pend} รอจัด</span>`+
-    (tmrCnt?` — <span style="color:#1A5FA5;font-weight:600">📅 พรุ่งนี้ (วัน${tmrShort}): ${tmrCnt} บิล</span>`:'');
-}
-
-// ══════════════════════════════════════════
-// INTERACTIONS
-// ══════════════════════════════════════════
-function changeTrip(ref){
-  if(!queue[ref])return;
-  const cur=tripMap[ref]||1;
-  const newTrip=cur===1?2:1;
-  // ตรวจสอบว่าเที่ยวใหม่รับได้ไหม
-  const t=TRUCKS.find(x=>x.plate===queue[ref]);
-  const b=billMap[ref];
-  if(t&&b){
-    const ld=truckLoad(queue[ref],newTrip);
-    if((ld.w+b.totalW)>t.maxW||(t.maxV>0&&(ld.v+b.totalV)>t.maxV)){
-      showToast(`⚠ เที่ยว ${newTrip} เกินขีดบรรทุก — บันทึกแล้วแต่ต้องปรับ`,'warn');
-    }
-  }
-  tripMap[ref]=newTrip;
-  saveQ();renderAll();
-  showToast(`เปลี่ยนเป็นเที่ยว ${newTrip} แล้ว`,'ok');
-}
-
-function setSelTrip(trip){
-  selTrip=trip;
-  renderTruckCards();
-}
-
-function updateTripToggle(){
-  // no-op — trip toggle is now rendered inside the truck card itself
-}
-
-function selectTruck(plate){
-  if(selPlate===plate){selPlate=null;selTrip=1;}else{selPlate=plate;}
-  updateTripToggle();
-  renderTruckCards();
-  renderBillTable();
-}
-
-function handleBillClick(ref){
-  if(selPlate){
-    if(queue[ref]===selPlate){return;}  // บนรถนี้แล้ว — ใช้ปุ่ม ✕
-    if(!queue[ref]){return;}            // ยังไม่จัด — ใช้ dropdown เท่านั้น
-    const t=TRUCKS.find(x=>x.plate===selPlate);
-    const b=billMap[ref];
-    // ── ใช้ selTrip ที่ผู้ใช้เลือก (ไม่ auto) ──
-    // ตรวจสอบว่า selTrip นั้นรับได้ไหม
-    const ld=truckLoad(selPlate,selTrip);
-    if(t&&b&&((ld.w+b.totalW)>t.maxW||(t.maxV>0&&(ld.v+b.totalV)>t.maxV))){
-      showToast(`⚠ เที่ยว ${selTrip} เกินขีดบรรทุก — บันทึกแล้วแต่ต้องปรับ`,'warn');
-      // ไม่ return — ยังจัดได้
-    }
-    queue[ref]=selPlate;
-    tripMap[ref]=selTrip;
-    saveQ();renderAll();
-  } else {
-    toggleSel(ref);
-  }
-}
-
-function quickAssign(ref, plate, trip){
-  if(!plate)return;
-  const t=TRUCKS.find(x=>x.plate===plate);
-  const b=billMap[ref];
-  if(t&&b){
-    const ld=truckLoad(plate,trip||1);
-    if((ld.w+b.totalW)>t.maxW||(t.maxV>0&&(ld.v+b.totalV)>t.maxV)){
-      showToast(`❌ ${plate} เที่ยว ${trip} เต็มแล้ว`,'err');return;
-    }
-  }
-  queue[ref]=plate;
-  tripMap[ref]=parseInt(trip)||1;
-  saveQ();renderAll();
-}
-
-function doPrintSummary(){
-  const assignedTrucks=TRUCKS.filter(t=>Object.values(queue).some(p=>p===t.plate));
-  if(!assignedTrucks.length){showToast('ยังไม่มีการจัดรถ','warn');return;}
-
-  let html='';
-  let totalBills=0;
-
-  assignedTrucks.forEach(t=>{
-    const allBills=Object.entries(queue)
-      .filter(([,p])=>p===t.plate).map(([r])=>billMap[r]).filter(Boolean)
-      .sort((a,b)=>distOrInf(a)-distOrInf(b));
-    if(!allBills.length)return;
-    const tw=allBills.reduce((s,b)=>s+b.totalW,0);
-    html+=`<div class="print-truck-header">🚛 ${t.plate} — ${t.nick} (${t.type}) &nbsp;|&nbsp; ${allBills.length} ร้าน &nbsp;|&nbsp; ${fmtKg(tw)}</div>`;
-    [1,2,3].forEach(tr=>{
-      const trBills=allBills.filter(b=>(tripMap[b.ref]||1)===tr);
-      if(!trBills.length)return;
-      const tw2=trBills.reduce((s,b)=>s+b.totalW,0);
-      html+=`<div class="print-trip-header ${tr===3?'t3':tr===2?'t2':''}">${tr===3?'🟢':tr===2?'🔵':'🔴'} เที่ยว ${tr} — ${trBills.length} ร้าน &nbsp;|&nbsp; ${fmtKg(tw2)}</div>`;
-      trBills.forEach((b,j)=>{
-        const d=dist(b);
-        totalBills++;
-        html+=`<div class="print-bill-row">
-          <span style="color:var(--muted);min-width:22px;font-size:10px">${j+1}.</span>
-          <span style="flex:1;font-weight:500">${b.arName}</span>
-          <span style="color:var(--muted);font-size:11px;white-space:nowrap">${b.district?b.district+' · ':''}</span>
-          <span style="color:#1A5FA5;font-size:11px;white-space:nowrap">${d!==null?fmtKm(d):'—'}</span>
-          <span style="color:var(--muted);font-size:10px;white-space:nowrap;margin-left:6px">${fmtKg(b.totalW)}</span>
-        </div>`;
-      });
-    });
-  });
-
-  document.getElementById('printContent').innerHTML=html;
-  document.getElementById('printSub').textContent=
-    `${assignedTrucks.length} คัน • ${totalBills} ร้าน • ${new Date().toLocaleDateString('th-TH')}`;
-  document.getElementById('printOverlay').classList.add('open');
-}
-
-function reassignTruck(ref, newPlate){
-  if(!newPlate||newPlate===queue[ref])return;
-  const t=TRUCKS.find(x=>x.plate===newPlate);
-  const b=billMap[ref];
-  if(t&&b){
-    const ld=truckLoad(newPlate,tripMap[ref]||1);
-    if((ld.w+b.totalW)>t.maxW||(t.maxV>0&&(ld.v+b.totalV)>t.maxV)){
-      showToast(`⚠ ${newPlate} เกินขีดบรรทุก — บันทึกแล้วต้องปรับ`,'warn');
-    }
-  }
-  queue[ref]=newPlate;
-  saveQ();renderAll();
-  showToast(`🚛 ย้ายไป ${newPlate} (${t?.nick||''})`,'ok');
-}
-
-function removeBill(ref){
-  delete queue[ref];
-  delete tripMap[ref];
-  saveQ();renderAll();
-}
-
-function toggleSel(ref){
-  if(selRefs.has(ref))selRefs.delete(ref);else selRefs.add(ref);
-  renderBillTable();
-}
-
-function toggleAll(cb){
-  const list=getFilteredBills();
-  if(cb.checked)list.forEach(b=>selRefs.add(b.ref));
-  else selRefs.clear();
-  renderBillTable();
-}
-
-function cancelSel(){selRefs.clear();renderBillTable();}
-
-function updateSelBar(){
-  const bar=document.getElementById('selBar');
-  if(!selRefs.size){bar.style.display='none';return;}
-  const tw=[...selRefs].reduce((s,r)=>s+(billMap[r]?.totalW||0),0);
-  document.getElementById('sel-count').textContent=`✓ ${selRefs.size} (${fmtKg(tw)})`;
-  bar.style.display='flex';
-}
-
-function assignSelected(dd){
-  const plate=dd.value;
-  if(!plate)return;
-  selRefs.forEach(r=>{queue[r]=plate;});
-  showToast(`✅ จัด ${selRefs.size} บิล → ${plate}`,'ok');
-  selRefs.clear();
-  saveQ();renderAll();
-  dd.value='';
-}
-
-function clearSelected(){
-  selRefs.forEach(r=>{delete queue[r];});
-  showToast('ลบบิลที่เลือกแล้ว','warn');
-  selRefs.clear();
-  saveQ();renderAll();
-}
-
-function doTransfer(dd){
-  const to=dd.value;
-  if(!to||!selPlate)return;
-  let count=0;
-  Object.keys(queue).forEach(r=>{if(queue[r]===selPlate){queue[r]=to;count++;}});
-  showToast(`🔄 โยก ${count} บิล → ${to} แล้ว`,'ok');
-  selPlate=to;
-  saveQ();renderAll();
-  dd.value='';
-}
-
-function doTransferTrip(dd){
-  const to=dd.value; if(!to||!selPlate)return;
-  const trip=parseInt(document.getElementById('tf-trip-num')?.value||'1');
-  let count=0;
-  Object.keys(queue).forEach(r=>{
-    if(queue[r]===selPlate&&(tripMap[r]||1)===trip){queue[r]=to;count++;}
-  });
-  if(!count){showToast(`ไม่มีบิลเที่ยว ${trip} บนรถนี้`,'warn');dd.value='';return;}
-  showToast(`🔄 โยกเที่ยว ${trip} (${count} บิล) → ${to}`,'ok');
-  saveQ();renderAll();dd.value='';
-}
-
-function doClearTruck(){
-  if(!selPlate)return;
-  const refs=Object.keys(queue).filter(r=>queue[r]===selPlate);
-  if(!refs.length)return;
-  if(!confirm(`ล้าง ${refs.length} บิลออกจาก ${selPlate}?`))return;
-  refs.forEach(r=>delete queue[r]);
-  showToast(`🗑 ล้าง ${refs.length} บิลแล้ว`,'warn');
-  selPlate=null;
-  saveQ();renderAll();
-}
-
-// ══════════════════════════════════════════
-// AUTO-ASSIGN
-// ══════════════════════════════════════════
-function doClearAll(){
-  if(!Object.keys(queue).length){showToast('ยังไม่มีข้อมูลการจัด','warn');return;}
-  if(!confirm('ล้างการจัดรถทั้งหมด?'))return;
-  queue={};tripMap={};selPlate=null;selRefs.clear();
-  saveQ();renderAll();
-  showToast('🗑 ล้างข้อมูลทั้งหมดแล้ว','warn');
-}
-
-let _pickedDay=null; // {short, full}
-
-function doAutoAssign(){
-  const THAI_DAYS_SHORT=['อา','จ','อ','พ','พฤ','ศ','ส'];
-  const THAI_DAYS_FULL=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
-
-  // นับบิลต่อวัน
-  const countPerDay=Array(7).fill(0);
-  bills.forEach(b=>{
-    if(!b.days)return;
-    b.days.split(/[,\s\/]+/).forEach(d=>{
-      d=d.trim();
-      THAI_DAYS_SHORT.forEach((s,i)=>{
-        if(d===s||d===THAI_DAYS_FULL[i]||d.startsWith(s))countPerDay[i]++;
-      });
-    });
-  });
-
-  const todayIdx=new Date().getDay();
-  const tmrIdx=(todayIdx+1)%7;
-  const tmr=new Date(); tmr.setDate(tmr.getDate()+1);
-  const tmrDateStr=tmr.toLocaleDateString('th-TH',{day:'numeric',month:'short'});
-  const EMOJI=['🌅','📦','📦','📦','📦','🎉','🌤️'];
-
-  _pickedDay=null;
-  const grid=document.getElementById('dayGrid');
-  grid.innerHTML=THAI_DAYS_SHORT.map((s,i)=>{
-    const cnt=countPerDay[i];
-    const isToday=i===todayIdx, isTmr=i===tmrIdx;
-    const badge=isTmr
-      ?`<span style="background:#1A5FA5;color:#fff;border-radius:4px;padding:0 5px;font-size:9px;font-weight:700;display:block;margin-bottom:4px">พรุ่งนี้ ${tmrDateStr}</span>`
-      :isToday
-      ?`<span style="background:#6B7A90;color:#fff;border-radius:4px;padding:0 5px;font-size:9px;font-weight:700;display:block;margin-bottom:4px">วันนี้</span>`
-      :'<span style="display:block;margin-bottom:4px;height:16px"></span>';
-    return`<button onclick="pickDay(${i},'${s}','${THAI_DAYS_FULL[i]}')" id="dayBtn${i}"
-      style="border:2px solid ${isTmr?'#1A5FA5':cnt?'#E0E5ED':'#EDF0F4'};
-        background:${isTmr?'#EAF0F8':cnt?'#fff':'#F8F9FB'};
-        border-radius:10px;padding:10px 8px;cursor:${cnt?'pointer':'not-allowed'};
-        opacity:${cnt?1:.35};text-align:center;transition:all .15s;width:100%">
-      ${badge}
-      <div style="font-family:Kanit;font-size:17px;font-weight:700;color:${cnt?'#07101F':'#A0ABBB'}">วัน${s}</div>
-      <div style="font-size:18px;margin:3px 0">${EMOJI[i]}</div>
-      <div style="font-size:14px;font-weight:700;color:${cnt?'#1A5FA5':'#A0ABBB'}">${cnt} บิล</div>
-    </button>`;
-  }).join('');
-
-  document.getElementById('dayPickerOverlay').classList.add('open');
-  document.getElementById('dayPickerConfirm').disabled=true;
-  document.getElementById('dayPickerConfirm').style.opacity='.5';
-  document.getElementById('dayPickerConfirm').innerHTML='⚡ จัดเลย';
-
-  // pre-select พรุ่งนี้ถ้ามีบิล
-  if(countPerDay[tmrIdx]>0) pickDay(tmrIdx,THAI_DAYS_SHORT[tmrIdx],THAI_DAYS_FULL[tmrIdx]);
-}
-
-function pickDay(idx,short,full){
-  const THAI_DAYS_SHORT=['อา','จ','อ','พ','พฤ','ศ','ส'];
-  const THAI_DAYS_FULL=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
-  // นับบิลวันนี้
-  let cnt=0;
-  bills.forEach(b=>{
-    if(!b.days)return;
-    if(b.days.split(/[,\s\/]+/).some(d=>{d=d.trim();return d===short||d===full||d.startsWith(short);}))cnt++;
-  });
-  if(!cnt)return;
-
-  _pickedDay={short,full,idx};
-
-  // อัปเดต card styles
-  for(let i=0;i<7;i++){
-    const btn=document.getElementById('dayBtn'+i);
-    if(!btn)continue;
-    const sel=i===idx;
-    btn.style.borderColor=sel?'#C9A84C':i===(new Date().getDay()+1)%7?'#1A5FA5':'#E0E5ED';
-    btn.style.background=sel?'#FFF8EC':i===(new Date().getDay()+1)%7&&!sel?'#EAF0F8':'#fff';
-    btn.style.transform=sel?'scale(1.05)':'scale(1)';
-    btn.style.boxShadow=sel?'0 3px 12px rgba(201,168,76,.3)':'';
-  }
-
-  const cb=document.getElementById('dayPickerConfirm');
-  cb.disabled=false; cb.style.opacity='1';
-  cb.innerHTML=`⚡ จัดวัน${short} — ${cnt} บิล`;
-}
-
-function closeDayPicker(){
-  document.getElementById('dayPickerOverlay').classList.remove('open');
-  _pickedDay=null;
-}
-
-function confirmAutoAssign(){
-  if(!_pickedDay)return;
-  const {short:tmrShort,full:tmrFull,idx:tmrIdx}=_pickedDay;
-  closeDayPicker();
-
-  // ── คำนวณวันที่จริงของวันที่เลือก ──
-  const today=new Date();
-  let daysAhead=tmrIdx-today.getDay();
-  if(daysAhead<0)daysAhead+=7;
-  const deliveryDateObj=new Date(today);
-  deliveryDateObj.setDate(today.getDate()+daysAhead);
-  setDeliveryDate(deliveryDateObj);
-
-  const btn=document.getElementById('btn-auto');
-  btn.disabled=true; btn.textContent='⏳ กำลังจัด...';
-
-  setTimeout(()=>{
-    function matchDay(daysStr){
-      if(!daysStr)return false;
-      return daysStr.split(/[,\s\/]+/).some(d=>{d=d.trim();return d===tmrShort||d===tmrFull||d.startsWith(tmrShort);});
-    }
-
-    const tmrBills=bills.filter(b=>matchDay(b.days));
-    const tmrRefs=new Set(tmrBills.map(b=>b.ref));
-
-    if(!tmrBills.length){
-      showToast(`ไม่พบบิลวัน${tmrFull}`,'warn');
-      btn.disabled=false; btn.innerHTML='⚡ จัดอัตโนมัติ';
-      return;
-    }
-
-    const newQ={};
-    const newTripMap={};
-
-    // loads เริ่มจากบิลวันอื่นที่จัดไปแล้ว — แยก เที่ยว 1/2
-    const loads={};
-    TRUCKS.forEach(t=>{
-      let w1=0,v1=0,w2=0,v2=0;
-      Object.entries(queue).forEach(([ref,plate])=>{
-        if(plate===t.plate&&!tmrRefs.has(ref)&&billMap[ref]){
-          const tr=tripMap[ref]||1;
-          if(tr===1){w1+=billMap[ref].totalW;v1+=billMap[ref].totalV;}
-          else      {w2+=billMap[ref].totalW;v2+=billMap[ref].totalV;}
-        }
-      });
-      loads[t.plate]={w1,v1,w2,v2};
-    });
-
-    const assigned=new Set(), routeTruck={};
-    const priority={'12 ล้อ':1,'10 ล้อ':2,'6 ล้อ':3,'4 ล้อจัมโบ้':4,'กระบะ':5};
-    // ── กรองรถพ่วง (EXCLUDE_AUTO) ออกจาก auto-assign ──
-    const trucks=[...TRUCKS]
-      .filter(t=>t.maxW>0 && !EXCLUDE_AUTO.has(t.plate))
-      .sort((a,b)=>(priority[a.type]||9)-(priority[b.type]||9)||b.maxW-a.maxW);
-
-    const medLargeTruckTypes=new Set(['12 ล้อ','10 ล้อ','6 ล้อ']); // เติมก่อน
-
-    function fitsTrip(t,b){
-      const ld=loads[t.plate];
-      if((ld.w1+b.totalW)<=t.maxW&&(t.maxV<=0||(ld.v1+b.totalV)<=t.maxV))return 1;
-      if((ld.w2+b.totalW)<=t.maxW&&(t.maxV<=0||(ld.v2+b.totalV)<=t.maxV))return 2;
-      return 0;
-    }
-    function fits(t,b){return fitsTrip(t,b)>0;}
-    function bearing(b){
-      const lat1=HQ.lat*Math.PI/180,lat2=(b.lat||HQ.lat)*Math.PI/180;
-      const dLng=((b.lng||HQ.lng)-HQ.lng)*Math.PI/180;
-      return(Math.atan2(Math.sin(dLng)*Math.cos(lat2),Math.cos(lat1)*Math.sin(lat2)-Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLng))*180/Math.PI+360)%360;
-    }
-
-    // ── centroid ของบิลที่อยู่บนรถแล้ว ──
-    function truckCentroid(plate){
-      const on=Object.entries(newQ).filter(([,p])=>p===plate).map(([r])=>billMap[r]).filter(x=>x&&x.lat&&x.lng);
-      if(!on.length)return null;
-      return{lat:on.reduce((s,b)=>s+b.lat,0)/on.length, lng:on.reduce((s,b)=>s+b.lng,0)/on.length};
-    }
-    // ── ระยะจากจุด b ไปยัง centroid ของรถ (กม.) ──
-    const MAX_CENTROID_DIST=35; // กม. — ถ้าไกลกว่านี้ถือว่าข้ามแถบ
-    function farFromCentroid(plate,b){
-      if(!b.lat||!b.lng)return false;
-      const c=truckCentroid(plate);
-      if(!c)return false;
-      return haversine(c.lat,c.lng,b.lat,b.lng)>MAX_CENTROID_DIST;
-    }
-
-    // ── ข้อ 1: ติดตามร้านค้าที่จัดไปแล้ว → ใส่รอบเดียวกัน ──
-    const storeTrip={}; // key → {plate, trip}
-
-    // ── Normalize store name: ลบ (FN),(เครดิต),(สด) ฯลฯ ──
-    function normName(n){ return (n||'').replace(/\s*\([^)]*\)/g,'').replace(/\s+/g,' ').trim(); }
-    const billNormName={}; // billRef → normalized name
-    tmrBills.forEach(b=>{ billNormName[b.ref]=normName(b.arName); });
-
-    // ── Pre-compute: GPS เดียวกัน (< 200ม.) = ร้านเดียวกัน → pre-link ไว้ใน gpsGroup ──
-    // สร้าง gpsGroup: {gpsKey → gpsKey ของตัวแทน} เพื่อ merge GPS ที่ใกล้มากๆ
-    const GPS_SAME_KM = 0.2; // 200 เมตร
-    const gpsAnchors = []; // [{lat,lng,key}] ตัวแทนของแต่ละ GPS cluster เล็กๆ
-    const billGpsKey = {}; // billRef → gpsKey มาตรฐาน
-
-    tmrBills.filter(b=>b.lat&&b.lng).forEach(b=>{
-      const key=`G:${b.lat.toFixed(4)},${b.lng.toFixed(4)}`;
-      // หา anchor ที่ใกล้ที่สุด
-      let found=null;
-      for(const a of gpsAnchors){
-        if(haversine(a.lat,a.lng,b.lat,b.lng)<=GPS_SAME_KM){found=a;break;}
-      }
-      if(!found){
-        found={lat:b.lat,lng:b.lng,key};
-        gpsAnchors.push(found);
-      }
-      billGpsKey[b.ref]=found.key;
-    });
-
-    // ── Pre-cluster bills by larger GPS proximity (18กม.) ──
-    const GEO_CLUSTER_KM = 18;
-    const geoClusters = []; // [{centLat,centLng,bills:[],plate:null}]
-
-    tmrBills.filter(b=>b.lat&&b.lng).forEach(b=>{
-      let nearest=null, minD=Infinity;
-      geoClusters.forEach((c,i)=>{
-        const d=haversine(c.centLat,c.centLng,b.lat,b.lng);
-        if(d<minD){minD=d;nearest=i;}
-      });
-      if(nearest!==null && minD<=GEO_CLUSTER_KM){
-        geoClusters[nearest].bills.push(b);
-        // Update centroid (running average)
-        const bs=geoClusters[nearest].bills;
-        geoClusters[nearest].centLat=bs.reduce((s,x)=>s+(x.lat||0),0)/bs.length;
-        geoClusters[nearest].centLng=bs.reduce((s,x)=>s+(x.lng||0),0)/bs.length;
-      } else {
-        geoClusters.push({centLat:b.lat,centLng:b.lng,bills:[b],plate:null});
-      }
-    });
-    // billRef → clusterId map
-    const billCluster={};
-    geoClusters.forEach((c,i)=>c.bills.forEach(b=>{billCluster[b.ref]=i;}));
-    const clusterTruck={}; // clusterId → plate
-
-    const routeGroups={};
-    tmrBills.forEach(b=>{
-      const baseKey=(b.routeCode||b.route||'').trim();
-      // แบ่ง sub-group ด้วย bearing sector 45° ป้องกัน route เดียวกันแต่ต่างทิศ
-      const bearSec=Math.round(bearing(b)/45)*45;
-      const key=baseKey?`${baseKey}_${bearSec}`:`DIR_${bearSec}`;
-      if(!routeGroups[key])routeGroups[key]={key,bills:[],routeCode:b.routeCode||b.route||'',days:b.days||'',totalAmt:0,avgAmt:0,avgDist:0};
-      routeGroups[key].bills.push(b);
-    });
-    Object.values(routeGroups).forEach(g=>{
-      const bs=g.bills.filter(b=>b.lat&&b.lng);
-      g.avgDist=bs.length?bs.reduce((s,b)=>s+distOrInf(b),0)/bs.length:0;
-      g.totalAmt=g.bills.reduce((s,b)=>s+b.totalAmt,0);
-      g.avgAmt=g.bills.length?g.totalAmt/g.bills.length:0;
-    });
-
-    const groups=Object.values(routeGroups).sort((a,b)=>b.totalAmt-a.totalAmt||b.avgDist-a.avgDist);
-    const sortedAmts=groups.map(g=>g.avgAmt).sort((a,b)=>a-b);
-    const AMT_HIGH=sortedAmts[Math.floor(sortedAmts.length*0.6)]||30000;
-    const AMT_LOW =sortedAmts[Math.floor(sortedAmts.length*0.3)]||5000;
-    const bigT=new Set(['12 ล้อ','10 ล้อ','6 ล้อ']),smallT=new Set(['4 ล้อจัมโบ้','กระบะ']);
-
-    groups.forEach(grp=>{
-      const isHi=grp.avgAmt>=AMT_HIGH;
-      [...grp.bills].sort((a,b)=>b.totalAmt-a.totalAmt||distOrInf(a)-distOrInf(b)).forEach(b=>{
-        if(assigned.has(b.ref))return;
-        let best=null;
-        const bDist=distOrInf(b), bBear=bearing(b);
-
-        // 0a. GPS anchor: บิล GPS เดียวกับที่จัดไปแล้ว → รถ+เที่ยวเดียวกัน (สูงสุด)
-        const bGpsKey=billGpsKey[b.ref]||'';
-        if(!best && bGpsKey && storeTrip[bGpsKey]){
-          const prevT=trucks.find(x=>x.plate===storeTrip[bGpsKey].plate);
-          if(prevT&&fits(prevT,b))best=prevT;
-        }
-        // 0b. Geo cluster: บิลอยู่ cluster เดิมที่จัดรถไปแล้ว → ใช้รถนั้น
-        const bCid=billCluster[b.ref];
-        if(!best && bCid!==undefined && clusterTruck[bCid]){
-          const t=trucks.find(x=>x.plate===clusterTruck[bCid]);
-          if(t&&fits(t,b)&&!farFromCentroid(t.plate,b))best=t;
-        }
-
-        // 1. Route truck + bearing check
-        if(!best && routeTruck[grp.key]){
-          const t=trucks.find(x=>x.plate===routeTruck[grp.key]);
-          if(t&&fits(t,b)&&!farFromCentroid(t.plate,b)){
-            const on=Object.entries(newQ).filter(([,p])=>p===t.plate).map(([r])=>billMap[r]).filter(x=>x&&x.lat&&x.lng);
-            if(on.length){
-              const avgB=on.reduce((s,x)=>s+bearing(x),0)/on.length;
-              const bd=Math.abs(((bBear-avgB+180)%360)-180);
-              if(bd<=40)best=t; // ทิศต่างกัน>40° → ไม่ใช้รถนี้
-            } else { best=t; }
-          }
-        }
-
-        // 2. Bearing clustering + centroid check
-        if(!best){
-          const cands=trucks.filter(t=>{
-            if(!fits(t,b))return false;
-            if(farFromCentroid(t.plate,b))return false; // ← ข้ามแถบ ตัดออก
-            const on=Object.entries(newQ).filter(([,p])=>p===t.plate).map(([r])=>billMap[r]).filter(x=>x);
-            if(!on.length)return false;
-            const tb=on.reduce((s,x)=>s+bearing(x),0)/on.length;
-            const bd=Math.abs(((bBear-tb+180)%360)-180);
-            return bd<=30||on.some(x=>(x.routeCode||x.route)===grp.routeCode&&grp.routeCode)||(grp.days&&on.some(x=>x.days===grp.days));
-          });
-          if(cands.length){
-            best=cands.sort((a,b_)=>{
-              const bA=Object.entries(newQ).filter(([,p])=>p===a.plate).map(([r])=>billMap[r]).filter(x=>x);
-              const bB=Object.entries(newQ).filter(([,p])=>p===b_.plate).map(([r])=>billMap[r]).filter(x=>x);
-              const bearA=bA.length?bA.reduce((s,x)=>s+bearing(x),0)/bA.length:999;
-              const bearB=bB.length?bB.reduce((s,x)=>s+bearing(x),0)/bB.length:999;
-              return Math.abs(((bBear-bearA+180)%360)-180)-Math.abs(((bBear-bearB+180)%360)-180);
-            })[0];
-          }
-        }
-
-        // 3. Fallback — เลือกรถโดยสนทิศทาง (bearing) ก่อน แล้วค่อยเลือกตาม load
-        if(!best){
-          let f=trucks.filter(t=>{
-            if(!fits(t,b))return false;
-            if(bDist>80&&t.type==='กระบะ')return false;
-            if(isHi&&smallT.has(t.type)&&trucks.filter(x=>medLargeTruckTypes.has(x.type)&&fits(x,b)).length>0)return false;
-            return true;
-          });
-          const medLargeF=f.filter(t=>medLargeTruckTypes.has(t.type));
-          if(medLargeF.length) f=medLargeF;
-          if(!f.length)f=trucks.filter(t=>fits(t,b));
-          // เรียงโดย: 1) ทิศทางใกล้เคียงก่อน 2) น้ำหนักน้อยสุด
-          best=f.sort((tA,tB)=>{
-            const onA=Object.entries(newQ).filter(([,p])=>p===tA.plate).map(([r])=>billMap[r]).filter(x=>x&&x.lat&&x.lng);
-            const onB=Object.entries(newQ).filter(([,p])=>p===tB.plate).map(([r])=>billMap[r]).filter(x=>x&&x.lat&&x.lng);
-            if(!onA.length&&!onB.length) return (loads[tA.plate].w1+loads[tA.plate].w2)/tA.maxW-(loads[tB.plate].w1+loads[tB.plate].w2)/tB.maxW;
-            if(!onA.length)return 1;  // prefer truck that already has direction
-            if(!onB.length)return -1;
-            const bearA=onA.reduce((s,x)=>s+bearing(x),0)/onA.length;
-            const bearB=onB.reduce((s,x)=>s+bearing(x),0)/onB.length;
-            const dA=Math.abs(((bBear-bearA+180)%360)-180);
-            const dB=Math.abs(((bBear-bearB+180)%360)-180);
-            if(Math.abs(dA-dB)>15)return dA-dB; // ทิศต่างกันมาก → เลือกใกล้กว่า
-            return (loads[tA.plate].w1+loads[tA.plate].w2)/tA.maxW-(loads[tB.plate].w1+loads[tB.plate].w2)/tB.maxW;
-          })[0];
-        }
-
-        if(best){
-          const storeKey=b.arCode||b.arName||'';
-          const gpsKey=billGpsKey[b.ref]||'';
-          const normKey=billNormName[b.ref]?'NM:'+billNormName[b.ref]:'';
-          // 1=arCode 2=GPS 3=normalized name
-          const prevStore=storeTrip[storeKey]||(gpsKey&&storeTrip[gpsKey])||(normKey&&storeTrip[normKey]);
-          let tr;
-          if(prevStore){
-            tr=prevStore.trip;
-            // Override best ด้วยรถเดิมถ้าสามารถรับได้
-            const prevT=trucks.find(x=>x.plate===prevStore.plate);
-            if(prevT&&fits(prevT,b))best=prevT;
-          } else {
-            tr=fitsTrip(best,b)||1;
-          }
-          newQ[b.ref]=best.plate; newTripMap[b.ref]=tr; assigned.add(b.ref);
-          if(tr===1){loads[best.plate].w1+=b.totalW;loads[best.plate].v1+=b.totalV;}
-          else      {loads[best.plate].w2+=b.totalW;loads[best.plate].v2+=b.totalV;}
-          if(!routeTruck[grp.key])routeTruck[grp.key]=best.plate;
-          if(storeKey&&!storeTrip[storeKey])storeTrip[storeKey]={plate:best.plate,trip:tr};
-          if(gpsKey&&!storeTrip[gpsKey])storeTrip[gpsKey]={plate:best.plate,trip:tr};
-          if(normKey&&!storeTrip[normKey])storeTrip[normKey]={plate:best.plate,trip:tr};
-          const cid=billCluster[b.ref];
-          if(cid!==undefined&&!clusterTruck[cid])clusterTruck[cid]=best.plate;
-        }
-      });
-    });
-
-    // Overflow
-    tmrBills.filter(b=>!assigned.has(b.ref)).forEach(b=>{
-      const t=trucks.filter(t=>fits(t,b)).sort((a,b_)=>(loads[a.plate].w1+loads[a.plate].w2)/a.maxW-(loads[b_.plate].w1+loads[b_.plate].w2)/b_.maxW)[0];
-      if(t){
-        const storeKey=b.arCode||b.arName||'';
-        const gpsKey=billGpsKey[b.ref]||'';
-        const prevStore=storeTrip[storeKey]||(gpsKey&&storeTrip[gpsKey]);
-        const tr=prevStore?prevStore.trip:fitsTrip(t,b);if(!tr)return; // ห้ามเกิน
-        newQ[b.ref]=t.plate;newTripMap[b.ref]=tr;assigned.add(b.ref);
-        if(tr===1){loads[t.plate].w1+=b.totalW;loads[t.plate].v1+=b.totalV;}
-        else      {loads[t.plate].w2+=b.totalW;loads[t.plate].v2+=b.totalV;}
-        if(storeKey&&!storeTrip[storeKey])storeTrip[storeKey]={plate:t.plate,trip:tr};
-        if(gpsKey&&!storeTrip[gpsKey])storeTrip[gpsKey]={plate:t.plate,trip:tr};
-      }
-    });
-
-    // คง queue+tripMap วันอื่น + เขียนทับวันที่เลือก
-    const kept={},keptTrip={};
-    Object.entries(queue).forEach(([ref,plate])=>{if(!tmrRefs.has(ref)){kept[ref]=plate;keptTrip[ref]=tripMap[ref]||1;}});
-
-    // ══ POST-PROCESS: GPS เดียวกัน → รถเดียวกัน (ดูความจุด้วย) ══
-    const gpsBillsMap={};
-    Object.keys(newQ).forEach(ref=>{
-      const k=billGpsKey[ref];
-      if(!k)return;
-      if(!gpsBillsMap[k])gpsBillsMap[k]=[];
-      gpsBillsMap[k].push(ref);
-    });
-    Object.entries(gpsBillsMap).forEach(([,refs])=>{
-      if(refs.length<=1)return;
-      // หา plate+trip ที่ได้รับโหวตมากสุด
-      const votes={};
-      refs.forEach(r=>{const k2=`${newQ[r]}|${newTripMap[r]||1}`;votes[k2]=(votes[k2]||0)+1;});
-      const [winner]=Object.entries(votes).sort((a,b)=>b[1]-a[1])[0];
-      const [winPlate,winTripStr]=winner.split('|');
-      const winTrip=parseInt(winTripStr)||1;
-      const winTruck=TRUCKS.find(t=>t.plate===winPlate);
-
-      refs.forEach(r=>{
-        if(newQ[r]===winPlate&&(newTripMap[r]||1)===winTrip)return; // already correct
-        const b=billMap[r];if(!b)return;
-
-        // ตรวจว่า winPlate รับได้ไหม (คำนวณจาก loads ปัจจุบัน)
-        const curLd=winTrip===1?{w:loads[winPlate].w1,v:loads[winPlate].v1}:{w:loads[winPlate].w2,v:loads[winPlate].v2};
-        const canFit=winTruck&&(curLd.w+b.totalW)<=winTruck.maxW&&
-                     (winTruck.maxV<=0||(curLd.v+b.totalV)<=winTruck.maxV);
-
-        // ลอง trip อื่นของ winPlate ถ้า trip นี้เต็ม
-        let usePlate=winPlate,useTrip=winTrip;
-        if(!canFit&&winTruck){
-          const altTrip=winTrip===1?2:1;
-          const altLd=altTrip===1?{w:loads[winPlate].w1,v:loads[winPlate].v1}:{w:loads[winPlate].w2,v:loads[winPlate].v2};
-          if((altLd.w+b.totalW)<=winTruck.maxW&&(winTruck.maxV<=0||(altLd.v+b.totalV)<=winTruck.maxV)){
-            useTrip=altTrip; // trip อื่นยังรับได้
-          }
-          // ถ้าทั้ง 2 เที่ยวเต็ม → คงรถเดิมไว้ (ไม่บังคับย้าย)
-          else return;
-        }
-
-        // ย้าย load จากรถเดิมออก
-        const oldTrip=newTripMap[r]||1,oldPlate=newQ[r];
-        if(loads[oldPlate]){
-          if(oldTrip===1){loads[oldPlate].w1-=b.totalW;loads[oldPlate].v1-=b.totalV;}
-          else            {loads[oldPlate].w2-=b.totalW;loads[oldPlate].v2-=b.totalV;}
-        }
-        // ใส่รถใหม่
-        newQ[r]=usePlate; newTripMap[r]=useTrip;
-        if(useTrip===1){loads[usePlate].w1+=b.totalW;loads[usePlate].v1+=b.totalV;}
-        else           {loads[usePlate].w2+=b.totalW;loads[usePlate].v2+=b.totalV;}
-      });
-    });
-    // ════════════════════════════════════════════════
-
-    queue={...kept,...newQ};
-    tripMap={...keptTrip,...newTripMap};
-
-    selPlate=null; saveQ(); renderAll();
-    btn.disabled=false; btn.innerHTML='⚡ จัดอัตโนมัติ';
-
-    const unassigned=tmrBills.length-Object.keys(newQ).length;
-    const usedTrucks=new Set(Object.values(newQ)).size;
-    showToast(
-      `✅ วัน${tmrFull} — ${Object.keys(newQ).length} บิล / ${usedTrucks} คัน`+
-      (unassigned>0?` ⚠ ${unassigned} บิลไม่พอรถ`:''),
-      unassigned>0?'warn':'ok'
+    const q = searchQuery.toLowerCase();
+    filtered = allProducts.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      p.codeEA.toLowerCase().includes(q) ||
+      p.codePA.toLowerCase().includes(q) ||
+      p.codeBP.toLowerCase().includes(q) ||
+      p.codeCS.toLowerCase().includes(q)
     );
-  },400);
-}
-
-
-// ══════════════════════════════════════════
-// SETTINGS
-// ══════════════════════════════════════════
-const KEEPDATA_HEADERS=[
-  'วันที่บิล','วันที่ส่ง',
-  'เลขบิล','รหัสร้านค้า','ชื่อร้านค้า','จังหวัด','อำเภอ',
-  'มี GPS','Lat','Lng','ห่าง HQ (กม.)','สายส่ง','รหัสสาย','วันส่ง',
-  'ทะเบียนรถ','เที่ยว','ชื่อเล่น','คนขับ','ประเภทรถ','น้ำหนัก (กก.)','ปริมาตร (m³)',
-  'มูลค่า (บาท)','สถานะ','วันที่อัปเดต'
-];  // 24 คอลัมน์
-
-// ── Delivery Date state ──
-let _deliveryDate=''; // "DD/MM/YYYY" เช่น "13/05/2026"
-
-function setDeliveryDate(dateObj){
-  const d=String(dateObj.getDate()).padStart(2,'0');
-  const m=String(dateObj.getMonth()+1).padStart(2,'0');
-  const y=dateObj.getFullYear();
-  _deliveryDate=`${d}/${m}/${y}`;
-  const label=dateObj.toLocaleDateString('th-TH',{day:'numeric',month:'short'});
-  const btn=document.getElementById('btn-delivery-date');
-  if(btn)btn.innerHTML=`📅 ${label}`;
-}
-
-function openDeliveryDatePicker(){
-  const inp=document.getElementById('deliveryDateInput');
-  if(inp){
-    // set input value from _deliveryDate or today
-    if(_deliveryDate){
-      const [d,m,y]=_deliveryDate.split('/');
-      inp.value=`${y}-${m}-${d}`;
-    } else {
-      const t=new Date(); t.setDate(t.getDate()+1);
-      inp.value=t.toISOString().slice(0,10);
-    }
   }
-  document.getElementById('deliveryDateOverlay').classList.add('open');
+  renderList();
 }
 
-function confirmDeliveryDate(){
-  const val=document.getElementById('deliveryDateInput')?.value;
-  if(!val){showToast('กรุณาเลือกวันที่','warn');return;}
-  setDeliveryDate(new Date(val+'T00:00:00'));
-  document.getElementById('deliveryDateOverlay').classList.remove('open');
-  showToast(`✅ วันที่ส่ง: ${_deliveryDate}`,'ok');
+function clearSearch() {
+  document.getElementById('searchInput').value = '';
+  onSearch('');
 }
 
+// ═══════════════ RENDER LIST ═══════════
+function renderList() {
+  const total = filtered.length;
+  const pages = Math.max(1, Math.ceil(total / PER_PAGE));
+  if (currentPage > pages) currentPage = pages;
 
-async function copyHeaders(){
-  const txt=KEEPDATA_HEADERS.join('\t');
-  navigator.clipboard.writeText(txt).then(()=>showToast('✅ คัดลอกหัวคอลัมน์แล้ว','ok')).catch(()=>{
-    const ta=document.createElement('textarea');
-    ta.value=txt;document.body.appendChild(ta);ta.select();
-    document.execCommand('copy');document.body.removeChild(ta);
-    showToast('✅ คัดลอกแล้ว','ok');
-  });
-}
+  const start = (currentPage - 1) * PER_PAGE;
+  const end   = Math.min(start + PER_PAGE, total);
+  const slice = filtered.slice(start, end);
 
+  // Stats
+  document.getElementById('statsText').textContent =
+    searchQuery
+      ? `ค้นพบ ${total.toLocaleString()} รายการ`
+      : `สินค้าทั้งหมด ${total.toLocaleString()} รายการ`;
 
-async function doSave(){
-  const btn=document.getElementById('btn-save');
-  const scriptUrl=SCRIPT_URL;
-  if(!scriptUrl){
-    showToast('ไม่พบ Script URL','err');
+  document.getElementById('pageInfo').textContent =
+    total > 0 ? `หน้า ${currentPage}/${pages}` : '';
+
+  // List
+  const list = document.getElementById('productList');
+  if (slice.length === 0) {
+    list.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">📦</div>
+      <div class="empty-text">ไม่พบสินค้า</div>
+      <div class="empty-sub">ลองค้นหาคำอื่น</div>
+    </div>`;
+    document.getElementById('pagination').innerHTML = '';
     return;
   }
-  if(!_deliveryDate){
-    showToast('กรุณาเลือกวันที่ส่งก่อน','warn');
-    openDeliveryDatePicker();
-    return;
-  }
-  btn.disabled=true;btn.innerHTML='⏳ กำลังบันทึก...';btn.style.background='#07101F';
-  try{
-    const now=new Date().toLocaleString('th-TH',{timeZone:'Asia/Bangkok'});
-    const hdrs=KEEPDATA_HEADERS;
 
-    const rows=bills.sort((a,b)=>distOrInf(a)-distOrInf(b)).map(b=>{
-      const t=TRUCKS.find(tt=>tt.plate===queue[b.ref]);
-      const d=dist(b);
-      const hasGPS=!!(b.lat&&b.lng);
-      return[
-        b.date,           // วันที่บิล
-        _deliveryDate,    // วันที่ส่ง ← ใหม่
-        b.ref, b.arCode, b.arName, b.province, b.district,
-        hasGPS?'มี GPS':'ไม่มี GPS',
-        hasGPS?b.lat.toFixed(6):'',
-        hasGPS?b.lng.toFixed(6):'',
-        hasGPS?d.toFixed(2):'',
-        b.route||'', b.routeCode||'', b.days||'',
-        queue[b.ref]||'', tripMap[b.ref]||1, t?.nick||'', t?.driver||'', t?.type||'',
-        b.totalW.toFixed(0), b.totalV.toFixed(3),
-        Math.round(b.totalAmt||0),
-        queue[b.ref]?'จัดแล้ว':'รอจัด',
-        now
-      ];
-    });
+  list.innerHTML = slice.map((p, idx) => {
+    const chips = [
+      p.codeEA ? `<span class="code-chip ea">EA</span>` : '',
+      p.codePA ? `<span class="code-chip pa">PA</span>` : '',
+      p.codeBP ? `<span class="code-chip bp">BP</span>` : '',
+      p.codeCS ? `<span class="code-chip cs">CS</span>` : '',
+    ].filter(Boolean).join('');
 
-    const r=await fetch(scriptUrl,{
-      method:'POST',
-      body:JSON.stringify({action:'save', deliveryDate:_deliveryDate, headers:hdrs, rows})
-    });
-    const result=await r.json();
-    if(!result.ok)throw new Error(result.message||'Script ตอบผิดพลาด');
+    const cat   = findCatalog(p.name);
+    const imgUrl = cat ? driveImgUrl(cat.imgUrl) : '';
+    const thumb  = imgUrl
+      ? `<img class="thumb" src="${escHtml(imgUrl)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+        + `<div class="thumb-placeholder" style="display:none">📦</div>`
+      : `<div class="thumb-placeholder">📦</div>`;
 
-    localStorage.setItem('keepdata_bk',JSON.stringify({savedAt:now,rows}));
-    isDirty=false;
-    updateSyncBadge();
-    showToast(`✅ ${result.message}`,'ok');
-  }catch(e){
-    localStorage.setItem('keepdata_bk',JSON.stringify({savedAt:new Date().toISOString(),error:e.message}));
-    showToast('บันทึกไม่สำเร็จ: '+e.message,'err');
-  }
-  btn.disabled=false;updateSyncBadge();
-}
-
-// ══════════════════════════════════════════
-// DASHBOARD
-// ══════════════════════════════════════════
-function renderDashboard(){
-  const done=Object.keys(queue).filter(r=>queue[r]).length;
-  const pend=bills.length-done;
-  const active=TRUCKS.filter(t=>Object.values(queue).filter(p=>p===t.plate).length>0).length;
-  document.getElementById('d-total').textContent=bills.length;
-  document.getElementById('d-done').textContent=done;
-  document.getElementById('d-pend').textContent=pend;
-  document.getElementById('d-trucks').textContent=active+'/'+TRUCKS.length;
-
-  // Truck summary cards
-  document.getElementById('dashTruckList').innerHTML=
-    `<div style="font-family:Kanit;font-size:14px;font-weight:600;color:#7D6428;margin-bottom:12px">🚛 รถทั้งหมด</div>`+
-    `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">`+
-    TRUCKS.map((t,i)=>{
-      const ld=truckLoad(t.plate);
-      const {wp,vp,eff,over}=truckPct(t.plate,t);
-      const col=TRUCK_COLORS[i%TRUCK_COLORS.length];
-      const cnt=Object.values(queue).filter(p=>p===t.plate).length;
-      return`<div style="background:#F8F9FB;border:1px solid ${over?'#FCA5A5':'#E0E5ED'};border-radius:10px;padding:12px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-          <div><span style="font-family:Kanit;font-weight:700;font-size:13px">${t.plate}</span> <span style="font-size:11px;color:#6B7A90">${t.nick}</span></div>
-          <span style="font-weight:700;color:${over?'#C62828':pcColor(eff)};font-size:14px">${eff}%</span>
-        </div>
-        <div style="height:4px;background:#E0E5ED;border-radius:2px;overflow:hidden;margin-bottom:4px">
-          <div style="width:${Math.min(100,wp)}%;height:100%;background:${over?'#DC3545':pcColor(wp)};border-radius:2px"></div>
-        </div>
-        <div style="font-size:11px;color:#6B7A90;display:flex;justify-content:space-between">
-          <span>${fmtKg(ld.w)} / ${fmtKg(t.maxW)}</span>
-          <span style="color:#1A5FA5">${cnt} บิล</span>
-        </div>
-      </div>`;
-    }).join('')+'</div>';
-}
-
-// ══════════════════════════════════════════
-// BILLS VIEW
-// ══════════════════════════════════════════
-function renderBillsView(){
-  const srch=(document.getElementById('bv-srch')?.value||'').toLowerCase();
-  const fStatus=document.getElementById('bv-status')?.value||'';
-  const fSort=document.getElementById('bv-sort')?.value||'dist';
-
-  let list=[...bills].filter(b=>{
-    if(srch&&!b.arName.toLowerCase().includes(srch)&&!b.ref.toLowerCase().includes(srch))return false;
-    if(fStatus==='pending'&&queue[b.ref])return false;
-    if(fStatus==='done'&&!queue[b.ref])return false;
-    return true;
-  });
-  if(fSort==='dist')list.sort((a,b)=>distOrInf(a)-distOrInf(b));
-  else if(fSort==='weight')list.sort((a,b)=>b.totalW-a.totalW);
-  else list.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
-
-  const tbody=document.getElementById('bvTbody');
-  tbody.innerHTML=list.map((b,i)=>{
-    const plate=queue[b.ref];
-    const truck=TRUCKS.find(t=>t.plate===plate);
-    const d=dist(b);
-    const dCls=d===null?'':d<10?'dist-near':d<40?'dist-mid':'dist-far';
-    const col=plate?getTruckCol(plate):'';
-    return`<tr style="border-bottom:1px solid #EDF0F4;background:${i%2===0?'transparent':'#F8F9FB'}">
-      <td style="padding:8px 10px"><div class="${dCls}" style="font-size:12px">${d===null?'<span style="color:#FCA5A5;font-size:10px;font-weight:600">⚠ ไม่มี GPS</span>':fmtKm(d)}</div></td>
-      <td style="padding:8px 10px"><div style="font-weight:500;color:#07101F">${b.arName}</div><div style="font-size:10px;color:#6B7A90">${b.ref}</div></td>
-      <td style="padding:8px 10px;font-size:11px;color:#6B7A90">${b.province}<br/>${b.district}</td>
-      <td style="padding:8px 10px;white-space:nowrap"><div style="color:#1A5FA5;font-weight:600;font-size:12px">${fmtKg(b.totalW)}</div><div style="color:#6B7A90;font-size:10px">${fmtM3(b.totalV)}</div></td>
-      <td style="padding:8px 10px;font-weight:600">฿${fmtN(Math.round(b.totalAmt))}</td>
-      <td style="padding:8px 10px">
-        <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
-          <select id="bvp_${b.ref}" class="ts-truck" onchange="assignBill('${b.ref}')" style="background:${plate?'#EAF4FF':'#fff'};border:1px solid ${plate?'#1A5FA5':'#E0E5ED'};border-radius:7px;padding:5px 6px;color:${plate?'#1A5FA5':'#6B7A90'};font-size:11px;min-width:120px">
-            <option value="">⏳ เลือกรถ...</option>
-            ${TRUCKS.map(t=>`<option value="${t.plate}" ${plate===t.plate?'selected':''}>${t.e} ${t.plate} (${t.nick})</option>`).join('')}
-          </select>
-          <select id="bvt_${b.ref}" onchange="assignBill('${b.ref}')" style="padding:5px 5px;border-radius:7px;border:1.5px solid ${(tripMap[b.ref]||1)===3?'#97C459':(tripMap[b.ref]||1)===2?'#93B8DE':'#E4C46E'};background:${(tripMap[b.ref]||1)===3?'#EAF3DE':(tripMap[b.ref]||1)===2?'#EAF0F8':'#FFF8EC'};color:${(tripMap[b.ref]||1)===3?'#15803D':(tripMap[b.ref]||1)===2?'#1A5FA5':'#C47000'};font-size:11px;font-weight:600">
-            <option value="1" ${(tripMap[b.ref]||1)===1?'selected':''}>🔴 ท.1</option>
-            <option value="2" ${(tripMap[b.ref]||1)===2?'selected':''}>🔵 ท.2</option>
-            <option value="3" ${(tripMap[b.ref]||1)===3?'selected':''}>🟢 ท.3</option>
-          </select>
-        </div>
-      </td>
-    </tr>`;
+    return `<div class="product-card" onclick="showDetail(${p.id})">
+      ${thumb}
+      <div class="product-info">
+        <div class="product-name">${escHtml(p.name)}</div>
+        <div class="product-codes">${chips || '<span style="color:var(--muted);font-size:11px">ไม่มีบาร์โค้ด</span>'}</div>
+      </div>
+      <div class="product-arrow">›</div>
+    </div>`;
   }).join('');
-  document.getElementById('bvFoot').innerHTML=`<span>แสดง ${list.length}/${bills.length} รายการ</span>`;
+
+  renderPagination(pages);
 }
 
-function assignBillFull(ref, plate, trip){
-  const tr=parseInt(trip)||1;
-  if(plate){
-    const t=TRUCKS.find(x=>x.plate===plate);
-    const b=billMap[ref];
-    if(t&&b){
-      const ld=truckLoad(plate,tr);
-      if((ld.w+b.totalW)>t.maxW||(t.maxV>0&&(ld.v+b.totalV)>t.maxV)){
-        showToast(`❌ ${plate} เที่ยว ${tr} เต็มแล้ว`,'err');return;
-      }
+function renderPagination(pages) {
+  const pg = document.getElementById('pagination');
+  if (pages <= 1) { pg.innerHTML = ''; return; }
+
+  const show = pagesToShow(currentPage, pages);
+  let html = `<button class="page-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?'disabled':''}>‹</button>`;
+
+  let prev = null;
+  for (const p of show) {
+    if (prev !== null && p - prev > 1) {
+      html += `<span class="page-ellipsis">…</span>`;
     }
-    queue[ref]=plate; tripMap[ref]=tr;
-  } else { delete queue[ref]; delete tripMap[ref]; }
-  saveQ();renderAll();
-  showToast(plate?`✅ ${billMap[ref]?.arName} → ${plate} เที่ยว ${tr}`:`ยกเลิก`,'ok');
-}
-function assignBill(ref){
-  const plateEl=document.getElementById('bvp_'+ref);
-  const tripEl=document.getElementById('bvt_'+ref);
-  if(!plateEl)return;
-  const plate=plateEl.value;
-  const trip=parseInt(tripEl?.value||1);
-  if(plate){queue[ref]=plate;tripMap[ref]=trip;}
-  else{delete queue[ref];delete tripMap[ref];}
-  saveQ();renderAll();
-  showToast(plate?`✅ ${billMap[ref]?.arName} → ${plate} เที่ยว ${trip}`:`ยกเลิก ${ref}`,'ok');
-}
-
-// ══════════════════════════════════════════
-// ROUTES VIEW + LEAFLET MAP
-// ══════════════════════════════════════════
-// ── Route Optimizer map style ──
-const MAP_TILES = {
-  light: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-  dark:  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-};
-let mapTheme = 'light';
-let currentTileLayer = null;
-let leafletMap=null, mapLayers=[], mapFilterPlate=null, mapFilterTrip=0;
-
-function initMap(){
-  if(leafletMap||!document.getElementById('routeMap'))return;
-  try{
-    leafletMap=L.map('routeMap',{zoomControl:true,scrollWheelZoom:true})
-      .setView([HQ.lat,HQ.lng],11);
-    currentTileLayer=L.tileLayer(MAP_TILES[mapTheme],{
-      attribution:'©OpenStreetMap ©CARTO',subdomains:'abcd',maxZoom:19
-    }).addTo(leafletMap);
-    setTimeout(()=>leafletMap.invalidateSize(),100);
-  }catch(e){console.warn('Map init error',e);}
-}
-
-function makePinIcon(col,label,size,opacity,isTrip2){
-  // ── Route Optimizer style: circular pin ──
-  const s=size||30;
-  const bg=isTrip2?'transparent':col;
-  const border=isTrip2?`3px solid ${col}`:`3px solid rgba(255,255,255,.9)`;
-  const txtCol=isTrip2?col:'#fff';
-  const shadow=mapTheme==='dark'?'0 3px 10px rgba(0,0,0,.7)':'0 3px 10px rgba(0,0,0,.35)';
-  return L.divIcon({
-    html:`<div style="width:${s}px;height:${s}px;border-radius:50%;
-      background:${bg};border:${border};
-      display:flex;align-items:center;justify-content:center;
-      color:${txtCol};font-weight:700;font-size:${Math.round(s*.38)}px;
-      font-family:'Sarabun',sans-serif;
-      box-shadow:${shadow};
-      opacity:${opacity||1}">
-      ${label}
-    </div>`,
-    className:'',
-    iconSize:[s,s],iconAnchor:[s/2,s/2],popupAnchor:[0,-s/2-4]
-  });
-}
-
-function toggleMapTheme(){
-  mapTheme=mapTheme==='light'?'dark':'light';
-  if(leafletMap&&currentTileLayer){
-    leafletMap.removeLayer(currentTileLayer);
-    currentTileLayer=L.tileLayer(MAP_TILES[mapTheme],{
-      attribution:'©OpenStreetMap ©CARTO',subdomains:'abcd',maxZoom:19
-    }).addTo(leafletMap);
-  }
-  const btn=document.getElementById('mapThemeBtn');
-  if(btn)btn.textContent=mapTheme==='dark'?'☀️ Light':'🌙 Dark';
-  updateMap(mapFilterPlate);
-}
-
-function updateMap(filterPlate){
-  if(!leafletMap)return;
-  mapLayers.forEach(l=>{try{leafletMap.removeLayer(l);}catch(e){}});
-  mapLayers=[];
-
-  // กรองบิลตาม filterPlate และ mapFilterTrip
-  function passesFilter(b){
-    if(filterPlate&&queue[b.ref]!==filterPlate)return false;
-    if(mapFilterTrip&&(tripMap[b.ref]||1)!==mapFilterTrip)return false;
-    return true;
+    html += `<button class="page-btn ${p===currentPage?'active':''}" onclick="goPage(${p})">${p}</button>`;
+    prev = p;
   }
 
-  // Build stop nums per truck per trip
-  const stopNums={};
-  if(filterPlate){
-    [1,2,3].forEach(tr=>{
-      [...bills].filter(b=>queue[b.ref]===filterPlate&&(tripMap[b.ref]||1)===tr)
-        .sort((a,b)=>distOrInf(a)-distOrInf(b))
-        .forEach((b,i)=>{stopNums[b.ref]=i+1;});
-    });
-  }
-
-  // Route lines per truck per trip
-  TRUCKS.forEach(t=>{
-    if(filterPlate&&t.plate!==filterPlate)return;
-    const col=getTruckCol(t.plate);
-
-    // เที่ยว 1: solid line
-    if(!mapFilterTrip||mapFilterTrip===1){
-      const t1=bills.filter(b=>queue[b.ref]===t.plate&&b.lat&&b.lng&&(tripMap[b.ref]||1)===1)
-        .sort((a,b)=>distOrInf(a)-distOrInf(b));
-      if(t1.length){
-        const line=L.polyline([[HQ.lat,HQ.lng],...t1.map(b=>[b.lat,b.lng])],
-          {color:col,weight:4,opacity:.85,lineJoin:'round'}).addTo(leafletMap);
-        mapLayers.push(line);
-      }
-    }
-    // เที่ยว 2: dashed line (thinner, lower opacity)
-    if(!mapFilterTrip||mapFilterTrip===2){
-      const t2=bills.filter(b=>queue[b.ref]===t.plate&&b.lat&&b.lng&&(tripMap[b.ref]||1)===2)
-        .sort((a,b)=>distOrInf(a)-distOrInf(b));
-      if(t2.length){
-        const line=L.polyline([[HQ.lat,HQ.lng],...t2.map(b=>[b.lat,b.lng])],
-          {color:col,weight:2.5,opacity:.7,dashArray:'10 6',lineJoin:'round'}).addTo(leafletMap);
-        mapLayers.push(line);
-      }
-    }
-  });
-
-  // Bill markers
-  const billsToShow=filterPlate
-    ? bills.filter(b=>b.lat&&b.lng&&queue[b.ref]===filterPlate&&(!mapFilterTrip||(tripMap[b.ref]||1)===mapFilterTrip))
-    : bills.filter(b=>b.lat&&b.lng&&(!mapFilterTrip||(tripMap[b.ref]||1)===mapFilterTrip));
-
-  billsToShow.forEach(b=>{
-    const plate=queue[b.ref];
-    const tr=tripMap[b.ref]||1;
-    const col=plate?getTruckCol(plate):'#9BAAB8';
-    const truck=TRUCKS.find(t=>t.plate===plate);
-    const num=stopNums[b.ref];
-    const size=num?30:(plate?26:22);
-    const label=num?String(num):(plate?'·':'?');
-    const icon=makePinIcon(col,label,size,1,tr===2);
-    const d=dist(b);
-    const tripBadge=plate?`<span style="background:${tr===2?'#EAF0F8':'#FFF8EC'};color:${tr===2?'#1A5FA5':'#C47000'};border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700">เที่ยว ${tr}</span>`:''
-    const popup=`<div style="min-width:180px">
-      <b style="font-size:13px;color:#07101F">${b.arName}</b> ${tripBadge}<br/>
-      <span style="color:#6B7A90;font-size:11px">📍 ${b.district}, ${b.province}</span><br/>
-      <span style="color:#1A5FA5;font-size:11px">ห่าง HQ: <b>${d!==null?d.toFixed(1)+' กม.':'—'}</b></span><br/>
-      <span style="font-size:11px;color:#444">⚖ ${fmtKg(b.totalW)}</span><br/>
-      <div style="margin-top:4px;padding:3px 8px;border-radius:6px;background:${plate?col+'18':'#F5F7FA'};color:${plate?col:'#9BAAB8'};font-weight:600;font-size:11px">
-        ${plate?`🚛 ${plate} — ${truck?.nick||''}`:'⏳ รอจัดรถ'}
-      </div>
-      ${num?`<div style="color:#C9A84C;font-weight:700;font-size:11px;margin-top:3px">🚩 จุดที่ ${num}</div>`:''}
-      <div style="margin-top:4px"><a href="https://www.google.com/maps?q=${b.lat},${b.lng}" target="_blank" style="color:#1A5FA5;font-size:10px;text-decoration:none">🔗 เปิด Google Maps</a></div>
-    </div>`;
-    const marker=L.marker([b.lat,b.lng],{icon}).bindPopup(popup,{maxWidth:240}).addTo(leafletMap);
-    mapLayers.push(marker);
-  });
-
-  // HQ marker
-  const hqIcon=L.divIcon({
-    html:`<div style="width:42px;height:42px;border-radius:50%;
-      background:var(--gold,#c9a84c);border:3px solid rgba(255,255,255,.9);
-      display:flex;align-items:center;justify-content:center;
-      color:#0d1b3e;font-size:20px;font-weight:700;
-      box-shadow:0 4px 14px rgba(201,168,76,.6)">
-      ★
-    </div>`,className:'',iconSize:[42,42],iconAnchor:[21,21],popupAnchor:[0,-25]
-  });
-  const hqM=L.marker([HQ.lat,HQ.lng],{icon:hqIcon,zIndexOffset:1000})
-    .bindPopup('<b style="color:#C9A84C">★ HQ รัตนไพบูลย์ กรุ๊ป</b><br/><span style="font-size:11px;color:#6B7A90">สมุทรสงคราม</span>').addTo(leafletMap);
-  mapLayers.push(hqM);
-
-  const pts=bills.filter(b=>b.lat&&b.lng&&passesFilter(b));
-  if(pts.length){
-    try{leafletMap.fitBounds(L.latLngBounds([[HQ.lat,HQ.lng],...pts.map(b=>[b.lat,b.lng])]),{padding:[36,36],maxZoom:13});}catch(e){}
-  }
+  html += `<button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage===pages?'disabled':''}>›</button>`;
+  pg.innerHTML = html;
 }
 
-function filterMapTrip(trip,btn){
-  mapFilterTrip=mapFilterTrip===trip?0:trip;
-  document.querySelectorAll('#mapTripFilter button').forEach(b=>b.style.fontWeight='400');
-  if(mapFilterTrip&&btn){btn.style.fontWeight='700';}
-  updateMap(mapFilterPlate);
+function pagesToShow(cur, total) {
+  const set = new Set([1, total, cur]);
+  for (let d = 1; d <= 2; d++) {
+    if (cur - d >= 1)     set.add(cur - d);
+    if (cur + d <= total) set.add(cur + d);
+  }
+  return [...set].sort((a,b)=>a-b);
 }
 
-function filterMap(plate,btn){
-  mapFilterPlate=plate;
-  mapFilterTrip=0; // reset trip filter on truck change
-  document.querySelectorAll('#mapTruckFilter button').forEach(b=>b.style.background=b.style.borderColor=plate?'transparent':'#07101F');
-  if(btn){btn.style.background=plate?getTruckCol(plate):'#07101F';btn.style.borderColor=plate?getTruckCol(plate):'#07101F';}
-  // Reset trip filter buttons
-  document.querySelectorAll('#mapTripFilter button').forEach(b=>b.style.fontWeight='400');
-  document.getElementById('mapTitle').textContent=plate
-    ?`🗺️ เส้นทาง ${plate} (${TRUCKS.find(t=>t.plate===plate)?.nick})`
-    :'🗺️ แผนที่โลเคชันทั้งหมด';
-  updateMap(plate);
+function goPage(p) {
+  const pages = Math.ceil(filtered.length / PER_PAGE);
+  if (p < 1 || p > pages) return;
+  currentPage = p;
+  renderList();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function renderRoutesView(){
-  // Build truck filter buttons
-  const wrap=document.getElementById('mapTruckFilter');
-  if(wrap){
-    const trucksWithBills=TRUCKS.filter(t=>bills.some(b=>queue[b.ref]===t.plate));
-    wrap.innerHTML=`<button onclick="filterMap(null,this)"
-        style="padding:6px 14px;border-radius:8px;border:2px solid #07101F;background:#07101F;color:#E4C46E;font-size:12px;font-weight:700;cursor:pointer">
-        🌐 ทั้งหมด
-      </button>`+
-      trucksWithBills.map(t=>{
-        const col=getTruckCol(t.plate);
-        const cnt=bills.filter(b=>queue[b.ref]===t.plate).length;
-        const isSel=mapFilterPlate===t.plate;
-        return`<button onclick="filterMap('${t.plate}',this)"
-          style="padding:6px 12px;border-radius:8px;border:2px solid ${isSel?col:'#E0E5ED'};
-            background:${isSel?col:'#fff'};color:${isSel?'#fff':'#07101F'};
-            font-size:12px;font-weight:${isSel?700:400};cursor:pointer;display:flex;align-items:center;gap:6px">
-          <span style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>
-          ${t.plate} <span style="color:${isSel?'rgba(255,255,255,.75)':'#6B7A90'};font-size:11px">${t.nick} ${cnt}บิล</span>
-        </button>`;
-      }).join('');
-  }
+// ═══════════════ DETAIL VIEW ═════════
+function showDetail(id) {
+  const p = allProducts.find(x => x.id === id);
+  if (!p) return;
 
-  // Init and update map
-  if(document.getElementById('tab-routes').classList.contains('active')){
-    initMap();
-    updateMap(mapFilterPlate);
-  }
+  document.getElementById('detailHeaderTitle').textContent = p.name;
 
-  // Route cards
-  const routes={};
-  bills.forEach(b=>{
-    const key=b.routeCode||b.route||'—';
-    if(!routes[key])routes[key]={code:key,name:b.route||key,days:b.days||'',bills:[]};
-    routes[key].bills.push(b);
-  });
-  document.getElementById('routeCards').innerHTML=
-    Object.values(routes).filter(r=>r.bills.length>0)
-    .sort((a,b)=>b.bills.length-a.bills.length)
-    .map(r=>{
-      const done=r.bills.filter(b=>queue[b.ref]).length;
-      const tw=r.bills.reduce((s,b)=>s+b.totalW,0);
-      const ta=r.bills.reduce((s,b)=>s+b.totalAmt,0);
-      const pct=r.bills.length?Math.round(done/r.bills.length*100):0;
-      const pCol=pct===100?'var(--success)':pct>0?'var(--gold)':'var(--muted)';
-      return`<div class="card card-gold" style="padding:14px 16px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-          <div>
-            <div style="font-family:Kanit;font-size:14px;font-weight:700;color:var(--navy)">${r.name||r.code}</div>
-            <div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap">
-              <span style="background:var(--navy);color:var(--gold-light);border-radius:6px;padding:1px 8px;font-size:10px;font-weight:600">${r.code}</span>
-              ${r.days?`<span style="background:#FFF8EC;border:1px solid #F6C45A55;color:#C47000;border-radius:6px;padding:1px 8px;font-size:10px;font-weight:600">📅 ${r.days}</span>`:''}
-            </div>
+  // Catalog lookup
+  const cat    = findCatalog(p.name);
+  const imgUrl = cat ? driveImgUrl(cat.imgUrl) : '';
+  const catGrp = cat ? cat.catGroup : '';
+
+  const imgHtml = imgUrl
+    ? `<div class="detail-img-wrap">
+        <img class="detail-img" src="${escHtml(imgUrl)}" alt="${escHtml(p.name)}"
+             onerror="this.style.display='none'">
+       </div>`
+    : '';
+
+  const barcodes = [
+    { code: p.codeEA, unit: p.unitEA || 'EA', label: 'EA', cls: 'badge-ea' },
+    { code: p.codePA, unit: p.unitPA || 'PA', label: 'PA', cls: 'badge-pa' },
+    { code: p.codeBP, unit: p.unitBP || 'BP', label: 'BP', cls: 'badge-bp' },
+    { code: p.codeCS, unit: p.unitCS || 'CS', label: 'CS', cls: 'badge-cs' },
+  ].filter(b => b.code);
+
+  const unitInfo = p.unitEALabel ? `<div class="detail-unit-ea">📦 ${escHtml(p.unitEALabel)}</div>` : '';
+  const catGrpHtml = catGrp ? `<div><span class="cat-group-badge">🏷️ ${escHtml(catGrp)}</span></div>` : '';
+
+  const barcodesHtml = barcodes.length > 0
+    ? barcodes.map((b, i) => `
+        <div class="barcode-card">
+          <div class="barcode-card-header">
+            <span class="barcode-type-badge ${b.cls}">${b.label}</span>
+            <span class="barcode-unit">${escHtml(b.unit)}</span>
           </div>
-          <div style="text-align:right">
-            <div style="font-family:Kanit;font-size:24px;font-weight:700;color:${pCol}">${pct}%</div>
-            <div style="font-size:10px;color:var(--muted)">${done}/${r.bills.length} บิล</div>
+          <div class="barcode-canvas-wrap">
+            <svg id="bc_${id}_${i}" class="barcode-svg"></svg>
+            <div class="barcode-number">${escHtml(b.code)}</div>
           </div>
-        </div>
-        <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:8px">
-          <div style="width:${pct}%;height:100%;background:${pCol};border-radius:3px;transition:width .4s"></div>
-        </div>
-        <div style="display:flex;gap:12px;font-size:11px;flex-wrap:wrap;align-items:center">
-          <span>⚖ <strong>${fmtKg(tw)}</strong></span>
-          <span>💰 <strong style="color:#7D6428">฿${fmtN(Math.round(ta))}</strong></span>
-          <span style="margin-left:auto;font-weight:600;color:${pct===100?'var(--success)':pct>0?'var(--gold)':'var(--muted)'}">
-            ${pct===100?'✅ จัดครบแล้ว':pct>0?`⏳ เหลือ ${r.bills.length-done} บิล`:'⏳ ยังไม่ได้จัด'}
-          </span>
-        </div>
-      </div>`;
-    }).join('');
-}
+        </div>`).join('')
+    : `<div class="no-barcode">📭 ไม่มีบาร์โค้ดสำหรับสินค้านี้</div>`;
 
-// ══════════════════════════════════════════
-// CARS VIEW
-// ══════════════════════════════════════════
-function carTripHtml(assignedBills){
-  const TC=['','#C47000','#1A5FA5','#15803D'],BG=['','#FFF8EC','#EAF0F8','#EAF3DE'],BD=['','#E4C46E','#93B8DE','#97C459'],TE=['','🔴','🔵','🟢'];
-  let h='';
-  [1,2,3].forEach(tr=>{
-    const tb=assignedBills.filter(b=>(tripMap[b.ref]||1)===tr);
-    if(!tb.length)return;
-    const tw=tb.reduce((s,b)=>s+b.totalW,0);
-    h+=`<div style="margin-bottom:3px"><div style="background:${BG[tr]};border-left:3px solid ${BD[tr]};padding:2px 6px;font-size:10px;font-weight:700;color:${TC[tr]}">${TE[tr]} เที่ยว ${tr} — ${tb.length} บิล · ${fmtKg(tw)}</div>`;
-    tb.forEach((b,j)=>{h+=`<div style="display:flex;align-items:center;gap:5px;padding:2px 4px;${j?'border-top:1px solid #F0F2F6':''};font-size:11px"><span style="color:#A0ABBB;min-width:14px;font-size:10px">${j+1}.</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.arName}</span><span style="color:#1A5FA5;font-size:10px;flex-shrink:0">${dist(b)!==null?fmtKm(dist(b)):'—'}</span></div>`;});
-    h+='</div>';
-  });
-  return h;
-}
-function renderCarsView(){
-  const _sorted=[...TRUCKS].map((t,i)=>({...t,_i:i}))
-    .sort((a,b)=>Object.values(queue).filter(p=>p===b.plate).length-Object.values(queue).filter(p=>p===a.plate).length);
-  document.getElementById('carCards').innerHTML=_sorted.map(t=>{const i=t._i;{
-    const ld=truckLoad(t.plate);
-    const {wp,vp,eff,over}=truckPct(t.plate,t);
-    const col=TRUCK_COLORS[i%TRUCK_COLORS.length];
-    const assignedBills=Object.entries(queue).filter(([,p])=>p===t.plate)
-      .map(([r])=>billMap[r]).filter(Boolean)
-      .sort((a,b)=>distOrInf(a)-distOrInf(b));
-    return`<div class="car-card${over?' over':''}">
-      <div style="display:flex;justify-content:space-between;margin-bottom:10px">
-        <div>
-          <div style="font-family:Kanit;font-size:16px;font-weight:700;color:#07101F">${t.plate}</div>
-          <div style="font-size:11px;color:#6B7A90;margin-top:1px">${t.type}</div>
-        </div>
-        <div style="text-align:right"><span style="font-size:22px">${t.e}</span><div style="margin-top:4px"><span style="background:#EAF3DE;color:#1E7D45;border:1px solid #97C45988;border-radius:10px;padding:1px 8px;font-size:10px;font-weight:600">✓ ใช้งาน</span></div></div>
+  document.getElementById('detailBody').innerHTML = `
+    <div class="detail-product-header">
+      ${imgHtml}
+      <div>
+        <div class="detail-product-name">${escHtml(p.name)}</div>
+        ${catGrpHtml}
+        ${unitInfo}
       </div>
-      <div style="background:#F8F9FB;border-radius:7px;padding:8px 10px;font-size:12px;margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:3px">
-          <span style="color:#6B7A90">คนขับ</span>
-          <span><span style="font-weight:700;color:#C9A84C">${t.nick}</span> <span style="font-size:10px;color:#6B7A90">(${t.driver})</span></span>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="color:#6B7A90">⚖ รับได้</span><span style="color:#1A5FA5;font-weight:600">${fmtKg(t.maxW)}</span></div>
-        <div style="display:flex;justify-content:space-between"><span style="color:#6B7A90">📦 พื้นที่</span><span style="color:#1A5FA5;font-weight:600">${fmtM3(t.maxV)}</span></div>
-      </div>
-      ${over?`<div style="background:#FEF2F2;border:1px solid #FCA5A5;border-radius:6px;padding:4px 8px;font-size:11px;color:#C62828;text-align:center;font-weight:600;margin-bottom:6px">⚠ เกินขีดบรรทุก</div>`:''}
-      <div style="font-size:10px;color:#6B7A90;display:flex;justify-content:space-between;margin-bottom:3px">
-        <span>⚖ ${fmtKg(ld.w)} / ${fmtKg(t.maxW)}</span>
-        <span style="color:${wp>100?'#C62828':pcColor(wp)};font-weight:600">${wp}%</span>
-      </div>
-      <div style="height:5px;background:#E0E5ED;border-radius:3px;overflow:hidden;margin-bottom:3px">
-        <div style="width:${Math.min(100,wp)}%;height:100%;background:${wp>100?'#DC3545':pcColor(wp)};border-radius:3px"></div>
-      </div>
-      <div style="font-size:10px;color:#6B7A90;display:flex;justify-content:space-between;margin-bottom:3px">
-        <span>📦 ${fmtM3(ld.v)} / ${fmtM3(t.maxV)}</span>
-        <span style="color:${vp>100?'#C62828':pcColor(vp)};font-weight:600">${vp}%</span>
-      </div>
-      <div style="height:5px;background:#E0E5ED;border-radius:3px;overflow:hidden;margin-bottom:6px">
-        <div style="width:${Math.min(100,vp)}%;height:100%;background:${vp>100?'#DC3545':pcColor(vp)};border-radius:3px;opacity:.65"></div>
-      </div>
-      ${assignedBills.length>0?`<div style="border-top:1px solid #E0E5ED;padding-top:6px;margin-top:4px">${carTripHtml(assignedBills)}</div>`:''}
-    </div>`;
-  }}).join('');
-}
+    </div>
+    ${barcodes.length > 0 ? '<div class="barcode-section-title">บาร์โค้ด</div>' : ''}
+    ${barcodesHtml}
+  `;
 
-// ══════════════════════════════════════════
-// UI HELPERS
-// ══════════════════════════════════════════
-let currentTab='queue';
-function switchTab(id,el,bnav){
-  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
-  document.getElementById('tab-'+id).classList.add('active');
-  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
-  if(el)el.classList.add('active');
-  document.querySelectorAll('.bnav-item').forEach(b=>b.classList.remove('active'));
-  const bnavItems=document.querySelectorAll('.bnav-item');
-  const idx={dashboard:0,queue:1,bills:2,routes:3,cars:4}[id];
-  if(bnavItems[idx])bnavItems[idx].classList.add('active');
-  currentTab=id;
-  // Init map when routes tab opens
-  if(id==='routes'){
-    renderRoutesView();
-    setTimeout(()=>{if(leafletMap)leafletMap.invalidateSize();},150);
-  }
-}
-
-function showToast(msg,type='ok'){
-  const c=document.getElementById('toasts');
-  const t=document.createElement('div');
-  t.className='toast '+type;
-  t.textContent=(type==='ok'?'✅ ':type==='warn'?'⚠️ ':'❌ ')+msg;
-  c.appendChild(t);
-  setTimeout(()=>t.remove(),3500);
-}
-
-
-// ══ TOM SELECT INIT ══
-function initTS(){
-  document.querySelectorAll('select.ts-truck').forEach(function(el){
-    if(el.tomselect)return; // already initialized
-    new TomSelect(el,{
-      maxOptions:30,
-      placeholder:'🔍 ค้นหา...',
-      searchField:['text'],
-      create:false,
-      render:{
-        no_results:function(){return '<div class="no-results">ไม่พบ</div>';}
+  // Render barcodes
+  requestAnimationFrame(() => {
+    barcodes.forEach((b, i) => {
+      try {
+        JsBarcode(`#bc_${id}_${i}`, b.code, {
+          format: 'CODE128',
+          width: 2.2,
+          height: 80,
+          displayValue: false,
+          margin: 6,
+          lineColor: document.body.classList.contains('dark') ? '#e8eaf0' : '#0d1b3e',
+          background: 'transparent',
+        });
+      } catch(e) {
+        const el = document.getElementById(`bc_${id}_${i}`);
+        if (el) el.parentElement.innerHTML = `<div class="no-barcode">⚠️ บาร์โค้ดไม่ถูกต้อง: ${escHtml(b.code)}</div>`;
       }
     });
   });
+
+  document.getElementById('listScreen').classList.remove('active');
+  document.getElementById('detailScreen').classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'instant' });
 }
-// ══════════════════════════════════════════
-// INIT
-// ══════════════════════════════════════════
 
-// ── No login required ──
-let currentUser = null;
-function logout(){location.reload();}
-window.addEventListener('DOMContentLoaded', loadData);
+function showList() {
+  document.getElementById('detailScreen').classList.remove('active');
+  document.getElementById('listScreen').classList.add('active');
+}
 
+// ═══════════════ DARK MODE ════════════
+function toggleDark() {
+  darkMode = !darkMode;
+  document.body.classList.toggle('dark', darkMode);
+  localStorage.setItem('rattana-dark', darkMode);
+}
+
+// ═══════════════ UTILS ═══════════════
+function showSpinner(msg='กำลังโหลด...') {
+  document.getElementById('spinnerText').textContent = msg;
+  document.getElementById('spinnerOverlay').classList.add('show');
+}
+function hideSpinner() {
+  document.getElementById('spinnerOverlay').classList.remove('show');
+}
+function showToast(msg, ms=3000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), ms);
+}
+function renderEmpty(title, sub) {
+  document.getElementById('productList').innerHTML = `<div class="empty-state">
+    <div class="empty-icon">⚠️</div>
+    <div class="empty-text">${title}</div>
+    <div class="empty-sub">${sub}</div>
+  </div>`;
+  document.getElementById('statsText').textContent = '';
+  document.getElementById('pagination').innerHTML = '';
+}
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ═══════════════ PWA INSTALL ══════════
+let deferredInstall = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstall = e;
+  const btn = document.getElementById('installBtn');
+  if (btn) btn.style.display = 'flex';
+});
+window.addEventListener('appinstalled', () => {
+  deferredInstall = null;
+  const btn = document.getElementById('installBtn');
+  if (btn) btn.style.display = 'none';
+  showToast('✅ ติดตั้งแอปสำเร็จ!');
+});
+function installApp() {
+  if (!deferredInstall) {
+    showToast('📱 กด Share → Add to Home Screen (iOS) หรือ เมนู → ติดตั้ง (Android)');
+    return;
+  }
+  deferredInstall.prompt();
+  deferredInstall.userChoice.then(r => {
+    if (r.outcome === 'accepted') showToast('✅ กำลังติดตั้งแอป...');
+    deferredInstall = null;
+  });
+}
 </script>
-
 </body>
 </html>
