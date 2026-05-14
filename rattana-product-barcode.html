@@ -3,9 +3,79 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Rattana Product Barcode v1.1</title>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="R-Product">
+<meta name="theme-color" content="#0d1b3e">
+<title>Rattana Product Barcode v1.2</title>
+<link rel="manifest" id="pwaManifest">
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<script>
+// ── Inline PWA Manifest ──────────────────────────────────────────
+(function() {
+  const manifest = {
+    name: 'Rattana Product Barcode',
+    short_name: 'R-Product',
+    description: 'ค้นหาสินค้าและแสดงบาร์โค้ด',
+    start_url: './',
+    display: 'standalone',
+    orientation: 'portrait',
+    background_color: '#0d1b3e',
+    theme_color: '#0d1b3e',
+    icons: [
+      { src: 'https://placehold.co/192x192/0d1b3e/c9a84c?text=R', sizes: '192x192', type: 'image/png' },
+      { src: 'https://placehold.co/512x512/0d1b3e/c9a84c?text=R', sizes: '512x512', type: 'image/png' }
+    ]
+  };
+  const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+  document.getElementById('pwaManifest').href = URL.createObjectURL(blob);
+})();
+
+// ── Inline Service Worker ─────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  const swCode = `
+const CACHE = 'rattana-barcode-v1';
+const ASSETS = [
+  'https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap',
+  'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js',
+];
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS).catch(()=>{})));
+  self.skipWaiting();
+});
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(keys =>
+    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+  ));
+  self.clients.claim();
+});
+self.addEventListener('fetch', e => {
+  // Cache-first for CDN assets, network-first for sheets data
+  const url = e.request.url;
+  if (url.includes('googleapis.com/spreadsheets') || url.includes('lh3.googleusercontent')) {
+    e.respondWith(
+      fetch(e.request).catch(() => caches.match(e.request))
+    );
+  } else {
+    e.respondWith(
+      caches.match(e.request).then(r => r || fetch(e.request).then(res => {
+        if (res.ok) {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+        }
+        return res;
+      }))
+    );
+  }
+});
+`;
+  const swBlob = new Blob([swCode], { type: 'text/javascript' });
+  const swUrl  = URL.createObjectURL(swBlob);
+  navigator.serviceWorker.register(swUrl).catch(() => {});
+}
+</script>
 <style>
 :root {
   --navy:        #0d1b3e;
@@ -182,7 +252,8 @@ body.dark .cat-group-badge{color:var(--gold-light)}
 <div class="screen active" id="listScreen">
   <header>
     <div class="logo-text">Rattana <span>Product</span></div>
-    <span class="version-tag">v1.1 · 2026-05-14</span>
+    <span class="version-tag">v1.2 · 2026-05-14</span>
+    <button class="icon-btn" id="installBtn" onclick="installApp()" title="ติดตั้งแอป" style="display:none">📲</button>
     <button class="icon-btn" onclick="toggleDark()" title="Dark mode">🌙</button>
     <button class="icon-btn" onclick="loadData(true)" title="รีเฟรช">🔄</button>
   </header>
@@ -675,6 +746,32 @@ function renderEmpty(title, sub) {
 }
 function escHtml(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ═══════════════ PWA INSTALL ══════════
+let deferredInstall = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstall = e;
+  const btn = document.getElementById('installBtn');
+  if (btn) btn.style.display = 'flex';
+});
+window.addEventListener('appinstalled', () => {
+  deferredInstall = null;
+  const btn = document.getElementById('installBtn');
+  if (btn) btn.style.display = 'none';
+  showToast('✅ ติดตั้งแอปสำเร็จ!');
+});
+function installApp() {
+  if (!deferredInstall) {
+    showToast('📱 กด Share → Add to Home Screen (iOS) หรือ เมนู → ติดตั้ง (Android)');
+    return;
+  }
+  deferredInstall.prompt();
+  deferredInstall.userChoice.then(r => {
+    if (r.outcome === 'accepted') showToast('✅ กำลังติดตั้งแอป...');
+    deferredInstall = null;
+  });
 }
 </script>
 </body>
