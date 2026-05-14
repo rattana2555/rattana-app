@@ -657,24 +657,30 @@ function compressImg(b64, cb){
 function uploadPh(b64,orderNum){
   if(!GAS){toast('ยังไม่ได้ตั้งค่า GAS URL','err');return;}
   TXT('ph-btn','⏳ บีบอัดรูป...');
-  // บีบอัดก่อนส่ง
   compressImg(b64, function(small){
     TXT('ph-btn','⏳ กำลังอัปโหลด...');
-    // URLSearchParams → application/x-www-form-urlencoded
-    // Apps Script รับผ่าน e.parameter ได้โดยตรง ไม่มีปัญหา redirect
-    var params = new URLSearchParams();
-    params.append('action','savePhoto');
-    params.append('orderNum', orderNum);
-    params.append('b64', small);
-    fetch(GAS, {method:'POST', mode:'no-cors', body:params})
-      .then(function(){
+    // ✅ วิธีเดียวกับแอปที่ทำงานได้จริง
+    // Content-Type: text/plain → ไม่ trigger CORS preflight
+    // ไม่ใช้ no-cors → อ่าน response ได้
+    fetch(GAS, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({action:'savePhoto', b64:small, orderNum:orderNum})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(data.ok){
         toast('✓ อัปโหลด Drive สำเร็จ!','ok');
-        TXT('ph-btn','✓ สำเร็จ — ตรวจใน Drive');
-      })
-      .catch(function(e){
-        toast('Upload error: '+e.message,'err');
+        TXT('ph-btn','✓ สำเร็จ');
+      } else {
+        toast('❌ '+(data.error||'ไม่สำเร็จ'),'err');
         TXT('ph-btn','❌ ลองอีกครั้ง');
-      });
+      }
+    })
+    .catch(function(e){
+      toast('Upload error: '+e.message,'err');
+      TXT('ph-btn','❌ ลองอีกครั้ง');
+    });
   });
 }
 
