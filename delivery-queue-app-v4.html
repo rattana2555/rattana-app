@@ -712,42 +712,17 @@ function setLoad(msg,pct){
   if(pct>=100&&lb)setTimeout(()=>lb.style.width='0',600);
 }
 
-const csvURL  = s=>`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent(s)}`;
-const exportURL= s=>`https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&sheet=${encodeURIComponent(s)}`;
+// URL เดิมที่ดึงได้ — ตรงกับเวอร์ชัน working
+const csvURL = s=>`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(s)}`;
 
 async function fetchSheet(name){
-  // Try 1: gviz/tq (works for public + "Anyone with link" sheets)
-  let lastErr='';
-  try{
-    const r=await fetch(csvURL(name),{cache:'no-store'});
-    if(r.ok){
-      const txt=await r.text();
-      if(!txt.trim().startsWith('<')){   // HTML = redirected to Google login
-        const rows=parseCSV(txt);
-        if(rows.length>0)return rows;
-        throw new Error(`"${name}" ว่างเปล่า (0 rows)`);
-      }
-      lastErr=`"${name}" — Sheet ไม่ได้ตั้งเป็น Public (ได้รับ HTML แทน CSV)`;
-    } else {
-      lastErr=`"${name}" — HTTP ${r.status}`;
-    }
-  }catch(e){ lastErr=e.message||String(e); }
-
-  // Try 2: export URL (sometimes works when gviz doesn't)
-  try{
-    const r2=await fetch(exportURL(name),{cache:'no-store'});
-    if(r2.ok){
-      const txt2=await r2.text();
-      if(!txt2.trim().startsWith('<')){
-        const rows2=parseCSV(txt2);
-        if(rows2.length>0)return rows2;
-      }
-    }
-  }catch(e2){}
-
-  // Both failed
-  throw new Error(lastErr||`"${name}" โหลดไม่ได้`);
+  const r=await fetch(csvURL(name));
+  if(!r.ok)throw new Error(`"${name}" โหลดไม่ได้ (${r.status})`);
+  const txt=await r.text();
+  if(txt.trim().startsWith('<'))throw new Error(`"${name}" — Sheet ไม่ได้ตั้งเป็น Public\nวิธีแก้: Share → Anyone with the link → Viewer`);
+  return parseCSV(txt);
 }
+
 
 function parseCSV(txt){
   const lines=txt.split('\n').filter(l=>l.trim());
