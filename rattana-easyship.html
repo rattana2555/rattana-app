@@ -640,21 +640,41 @@ function onPh(ev){
   };r.readAsDataURL(f);
 }
 function delPh(){$('ph-p').style.display='none';TXT('ph-btn','📷 ถ่ายภาพหลักฐาน → Drive');}
+function compressImg(b64, cb){
+  var img = new Image();
+  img.onload = function(){
+    var W=800, H=800, w=img.width, h=img.height;
+    if(w>W){h=Math.round(h*W/w);w=W;}
+    if(h>H){w=Math.round(w*H/h);h=H;}
+    var cv=document.createElement('canvas');
+    cv.width=w; cv.height=h;
+    cv.getContext('2d').drawImage(img,0,0,w,h);
+    cb(cv.toDataURL('image/jpeg',0.7));
+  };
+  img.src=b64;
+}
+
 function uploadPh(b64,orderNum){
   if(!GAS){toast('ยังไม่ได้ตั้งค่า GAS URL','err');return;}
-  TXT('ph-btn','⏳ กำลังอัปโหลด...');
-  var payload = JSON.stringify({action:'savePhoto',b64:b64,orderNum:orderNum});
-  // ใช้ no-cors — request จะถูกส่งเสมอ
-  fetch(GAS,{method:'POST',mode:'no-cors',body:payload})
-    .then(function(){
-      // no-cors always resolves — assume success
-      toast('✓ ส่งรูปไป Drive แล้ว!','ok');
-      TXT('ph-btn','✓ ส่งแล้ว — ตรวจใน Drive');
-    })
-    .catch(function(e){
-      toast('Upload error: '+e.message,'err');
-      TXT('ph-btn','❌ ลองอีกครั้ง');
-    });
+  TXT('ph-btn','⏳ บีบอัดรูป...');
+  // บีบอัดก่อนส่ง
+  compressImg(b64, function(small){
+    TXT('ph-btn','⏳ กำลังอัปโหลด...');
+    // ส่งเป็น FormData — Apps Script รับผ่าน e.parameter
+    var fd = new FormData();
+    fd.append('action','savePhoto');
+    fd.append('b64', small);
+    fd.append('orderNum', orderNum);
+    fetch(GAS, {method:'POST', mode:'no-cors', body:fd})
+      .then(function(){
+        toast('✓ อัปโหลด Drive สำเร็จ!','ok');
+        TXT('ph-btn','✓ สำเร็จ — ตรวจใน Drive');
+      })
+      .catch(function(e){
+        toast('Upload error: '+e.message,'err');
+        TXT('ph-btn','❌ ลองอีกครั้ง');
+      });
+  });
 }
 
 // ═══ OCR ══════════════════════════════════════════════════
