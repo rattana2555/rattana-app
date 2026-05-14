@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Rattana Bplus Sales v3.9</title>
+<title>Rattana Bplus Sales v4.0</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
@@ -386,6 +386,9 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
       </div>
     </div>
 
+    <!-- Debug bar -->
+    <div id="stockDebugBar" style="margin:0 16px 10px;padding:8px 12px;background:#fff3cd;border-radius:10px;font-size:11px;color:#856404;font-weight:600;display:none"></div>
+
     <!-- Cat_BU section -->
     <div class="section">
       <div class="section-head">
@@ -448,7 +451,7 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
         </div>
         <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:14px;font-weight:600">เวอร์ชัน</span>
-          <span style="font-size:12px;color:var(--muted)">v3.7 · 2026-05-14</span>
+          <span style="font-size:12px;color:var(--muted)">v4.0 · 2026-05-14</span>
         </div>
       </div>
       <div style="margin-top:12px">
@@ -679,9 +682,6 @@ async function fetchStock(){
       w3:Number(r.w3)||0, w4:Number(r.w4)||0,
       sm:Number(r.sm)||0, c4:Number(r.c4)||0,
     }));
-    // DEBUG: แสดงค่า cat_bu จริง
-    const uniqCats=[...new Set(stockRows.map(r=>r.cat_bu).filter(Boolean))].slice(0,8);
-    alert('Cat_BU ที่ได้จาก GAS:\n\n'+uniqCats.map((c,i)=>(i+1)+'. "'+c+'"').join('\n')+'\n\nรวม '+stockRows.length+' SKU');
     stockSourceLabel='GAS ✅';
     renderStock(); renderProfile();
     toast(`สต็อก ${stockRows.length.toLocaleString()} สินค้า 📦`);
@@ -1012,8 +1012,28 @@ function renderStock(){
     $('stockProductSection').style.display='none';
     $('stockCatList').style.display='';
 
-    // Per-cat stats
-    const catData = TARGET_CATS.map(cat=>{
+    // Build cat list dynamically from data (not hardcoded TARGET_CATS)
+  const activeCats = [...new Set(stockRows.map(r=>r.cat_bu).filter(Boolean))].sort();
+  const displayCats = activeCats.length > 0 ? activeCats : TARGET_CATS;
+
+  const debugBar = document.getElementById('stockDebugBar');
+  if(debugBar){
+    if(activeCats.length>0){
+      debugBar.style.display='block';
+      debugBar.textContent='Cat_BU จากข้อมูล: '+activeCats.join(' | ');
+    } else {
+      debugBar.style.display='block';
+      debugBar.textContent='⚠️ ไม่พบค่า Cat_BU ในข้อมูล (index 36 อาจผิด)';
+    }
+  }
+
+  $('stockHeroCat').textContent = displayCats.length;
+
+  if(!stockActiveCat){
+    $('stockProductSection').style.display='none';
+    $('stockCatList').style.display='';
+
+    const catData = displayCats.map(cat=>{
       const rows = stockRows.filter(r=>r.cat_bu===cat);
       const total = rows.reduce((s,r)=>s+getStockVal(r),0);
       const hasSKU = rows.filter(r=>getStockVal(r)>0).length;
