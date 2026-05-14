@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Rattana Bplus Sales v2.2</title>
+<title>Rattana Bplus Sales v2.3</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
@@ -626,6 +626,9 @@ const CSV_URLS = [
 
 // ── State ─────────────────────────────────────────
 let allRows = [];
+let stockData = [];   // [{product, cat, w1, w2, w3, w4}] จาก PDDT
+let saleInData = [];  // [{product, cat, wh, ...R-V}] จาก Sale_IN
+let saleInHeaders = [];
 let selectedWH = 'all';
 let selectedPeriod = 'yesterday';
 let productSearch = '';
@@ -711,11 +714,23 @@ async function fetchData(){
       baht:Number(r.baht)||0,
       cs:Number(r.cs)||0
     }));
+    // Load stock data from PDDT
+    stockData = (json.stock||[]).map(r=>({
+      product:String(r.product||'').trim(),
+      cat:String(r.cat||'').trim(),
+      w1:Number(r.w1)||0, w2:Number(r.w2)||0,
+      w3:Number(r.w3)||0, w4:Number(r.w4)||0
+    }));
+    // Load Sale_IN data
+    saleInData = (json.saleIn||[]);
+    if(saleInData.length && saleInData[0]._headers){
+      saleInHeaders = saleInData[0]._headers;
+    }
     lastUpdated = json.updated ? new Date(json.updated).toLocaleString('th-TH') : '';
-    dataSourceLabel = 'Apps Script ✅';
+    dataSourceLabel = `Apps Script ✅ (${allRows.length.toLocaleString()} ขาย · ${stockData.length.toLocaleString()} Stock · ${saleInData.length.toLocaleString()} รับเข้า)`;
     hideSpinner();
     renderAll();
-    toast(`โหลดสำเร็จ ${allRows.length.toLocaleString()} รายการ 🎉`);
+    toast(`โหลดสำเร็จ ยอดขาย ${allRows.length.toLocaleString()} · Stock ${stockData.length.toLocaleString()} · รับเข้า ${saleInData.length.toLocaleString()} รายการ 🎉`);
     return;
   }catch(e){ console.warn('GAS:',e.message); }
 
@@ -1074,64 +1089,111 @@ function openStockDetail(cat){
 }
 
 function renderStockDetail(){
-  const cat=selectedStockCat;
-  const rows=allRows.filter(r=>r.cat===cat && (sdWH==='all'||r.wh===sdWH));
-  const q=sdSearch.toLowerCase();
+  const cat = selectedStockCat;
+  const salesRows = allRows.filter(r=>r.cat===cat && (sdWH==='all'||r.wh===sdWH));
+  const q = sdSearch.toLowerCase();
 
-  // Group by product
-  const grouped={};
-  rows.forEach(r=>{
-    if(!grouped[r.product]) grouped[r.product]={name:r.product,cs:0,baht:0,txn:0,byWH:{}};
-    grouped[r.product].cs+=r.cs;
-    grouped[r.product].baht+=r.baht;
-    grouped[r.product].txn++;
-    grouped[r.product].byWH[r.wh]=(grouped[r.product].byWH[r.wh]||0)+r.cs;
+  // Build stockMap from PDDT: product → {w1,w2,w3,w4,total}
+  const stockMap = {};
+  stockData.filter(r=>!r.cat||r.cat===cat||r.cat==='').forEach(r=>{
+    if(!stockMap[r.product]) stockMap[r.product]={w1:0,w2:0,w3:0,w4:0};
+    stockMap[r.product].w1 += r.w1;
+    stockMap[r.product].w2 += r.w2;
+    stockMap[r.product].w3 += r.w3;
+    stockMap[r.product].w4 += r.w4;
   });
 
-  // All SKUs for this cat
-  const allSkus = [...new Set(allRows.filter(r=>r.cat===cat).map(r=>r.product))];
-  allSkus.forEach(p=>{ if(!grouped[p]) grouped[p]={name:p,cs:0,baht:0,txn:0,byWH:{}}; });
-
-  let items=Object.values(grouped);
-  // Filter
-  if(q) items=items.filter(i=>i.name.toLowerCase().includes(q));
-  if(sdFilter==='has') items=items.filter(i=>i.cs>0);
-  if(sdFilter==='none') items=items.filter(i=>i.cs<=0);
-  // Sort
-  items.sort((a,b)=>sdSortDir==='desc'?b.cs-a.cs:a.cs-b.cs);
-
-  const totalCs = items.filter(i=>i.cs>0).reduce((s,i)=>s+i.cs,0);
-  const maxCs = Math.max(...items.map(i=>i.cs),1);
-  const maxBaht = Math.max(...items.map(i=>Math.abs(i.baht)),1);
-  const whUsed = [...new Set(rows.map(r=>r.wh))].sort();
-  const maxWhCs = {};
-  whUsed.forEach(wh=>{
-    maxWhCs[wh]=Math.max(...items.map(i=>i.byWH[wh]||0),1);
+  // Build saleInMap: product → total ซื้อเข้า (sum all R-V columns)
+  const saleInMap = {};
+  saleInData.filter(r=>!r.cat||r.cat===cat||r.cat==='').forEach(r=>{
+    const prod = String(r.product||'').trim();
+    if(!prod) return;
+    if(!saleInMap[prod]) saleInMap[prod]=0;
+    // sum all numeric values from R-V headers
+    (r._headers||saleInHeaders).forEach(h=>{
+      saleInMap[prod] += Number(r[h])||0;
+    });
   });
 
-  $('sdCatSub').textContent=`${sdWH==='all'?'ทุกคลัง':sdWH} · ${items.filter(i=>i.cs>0).length}/${allSkus.length} SKU · ${fmtBaht(totalCs)} ลัง`;
-  $('sdCount').textContent=`แสดง ${Math.min(items.length,100)}/${items.length}`;
+  // Build sales by product
+  const salesMap = {};
+  salesRows.forEach(r=>{
+    if(!salesMap[r.product]) salesMap[r.product]={cs:0,baht:0,txn:0,byWH:{W1:0,W2:0,W3:0,W4:0}};
+    salesMap[r.product].cs   += r.cs;
+    salesMap[r.product].baht += r.baht;
+    salesMap[r.product].txn++;
+    salesMap[r.product].byWH[r.wh] = (salesMap[r.product].byWH[r.wh]||0)+r.cs;
+  });
 
-  const whCols = sdWH==='all' ? ['W1','W2','W3','W4'] : [sdWH];
+  // Collect ALL product names across sales + stock + saleIn for this cat
+  const allProds = new Set([
+    ...Object.keys(salesMap),
+    ...stockData.filter(r=>!r.cat||r.cat===cat).map(r=>r.product),
+    ...saleInData.filter(r=>!r.cat||r.cat===cat).map(r=>String(r.product||'').trim())
+  ]);
 
-  $('sdProductList').innerHTML = items.slice(0,100).map((p,idx)=>{
-    const hasStock=p.cs>0;
-    const dotColor = !hasStock?'var(--red)': p.cs/maxCs>=0.3?'var(--green)':p.cs/maxCs>=0.1?'var(--amber)':'var(--red)';
-    const csPct = Math.min((p.cs/maxCs*100),100).toFixed(0);
-    const bahtPct = Math.min((Math.abs(p.baht)/maxBaht*100),100).toFixed(0);
+  let items = [...allProds].map(prod=>{
+    const sm = salesMap[prod]||{cs:0,baht:0,txn:0,byWH:{W1:0,W2:0,W3:0,W4:0}};
+    const stk = stockMap[prod]||{w1:0,w2:0,w3:0,w4:0};
+    const stk_total = (sdWH==='all') ? stk.w1+stk.w2+stk.w3+stk.w4
+      : sdWH==='W1'?stk.w1:sdWH==='W2'?stk.w2:sdWH==='W3'?stk.w3:stk.w4;
+    return {
+      name:prod, cs:sm.cs, baht:sm.baht, txn:sm.txn, byWH:sm.byWH,
+      stock:stk_total, stk:stk, saleIn:saleInMap[prod]||0
+    };
+  });
 
-    // WH breakdown grid
+  if(q) items = items.filter(i=>i.name.toLowerCase().includes(q));
+  if(sdFilter==='has')  items = items.filter(i=>i.stock>0||i.cs>0);
+  if(sdFilter==='none') items = items.filter(i=>i.stock<=0&&i.cs<=0);
+  items.sort((a,b)=>sdSortDir==='desc'?b.stock-a.stock||b.cs-a.cs:a.stock-b.stock||a.cs-b.cs);
+
+  const hasRealStock = stockData.some(r=>!r.cat||r.cat===cat);
+  const hasRealIn    = saleInData.some(r=>!r.cat||r.cat===cat);
+
+  const maxStock  = Math.max(...items.map(i=>i.stock),1);
+  const maxSales  = Math.max(...items.map(i=>i.cs),1);
+  const maxSaleIn = Math.max(...items.map(i=>i.saleIn),1);
+  const whCols    = sdWH==='all' ? ['W1','W2','W3','W4'] : [sdWH];
+  const maxWhVals = {};
+  whCols.forEach(wh=>{
+    maxWhVals[wh]=Math.max(...items.map(i=>{
+      if(wh==='W1')return(i.stk.w1||0)+(i.byWH.W1||0);
+      if(wh==='W2')return(i.stk.w2||0)+(i.byWH.W2||0);
+      if(wh==='W3')return(i.stk.w3||0)+(i.byWH.W3||0);
+      return(i.stk.w4||0)+(i.byWH.W4||0);
+    }),1);
+  });
+
+  const meta = CAT_META[cat]||{icon:'📦',color:'#888',bg:'#eee'};
+  const totalStock = items.reduce((s,i)=>s+i.stock,0);
+  const totalSales = items.reduce((s,i)=>s+i.cs,0);
+  const totalIn    = items.reduce((s,i)=>s+i.saleIn,0);
+  $('sdCatSub').textContent=`${sdWH==='all'?'ทุกคลัง':sdWH} · ${items.filter(i=>i.stock>0||i.cs>0).length}/${items.length} SKU`;
+  $('sdCount').textContent=`${Math.min(items.length,120)}/${items.length} รายการ`;
+
+  $('sdProductList').innerHTML = items.slice(0,120).map((p,idx)=>{
+    const stkPct  = Math.min(p.stock/maxStock*100,100).toFixed(0);
+    const salePct = Math.min(p.cs/maxSales*100,100).toFixed(0);
+    const inPct   = Math.min(p.saleIn/maxSaleIn*100,100).toFixed(0);
+    const dotColor = p.stock>0?(p.stock/maxStock>=0.3?'var(--green)':p.stock/maxStock>=0.1?'var(--amber)':'var(--red)'):p.cs>0?'var(--amber)':'var(--red)';
+
+    // WH grid — show stock bar (blue) + sales bar (green) stacked
     const whGrid = whCols.map(wh=>{
-      const val=p.byWH[wh]||0;
-      const maxW=Math.max(...items.map(i=>i.byWH[wh]||0),1);
-      const hPct=Math.min((val/maxW*100),100).toFixed(0);
-      const col = val>0 ? (val/maxW>=0.3?'var(--green)':val/maxW>=0.1?'var(--amber)':'var(--red)') : 'var(--border)';
+      const stkVal  = wh==='W1'?p.stk.w1:wh==='W2'?p.stk.w2:wh==='W3'?p.stk.w3:p.stk.w4;
+      const salesVal = p.byWH[wh]||0;
+      const maxV = maxWhVals[wh];
+      const stkH  = Math.min(stkVal/maxV*100,100).toFixed(0);
+      const saleH = Math.min(salesVal/maxV*100,100).toFixed(0);
+      const showVal = stkVal>0?fmtBaht(stkVal):salesVal>0?fmtBaht(salesVal):'—';
+      const barColor = stkVal>0?'var(--blue)':'var(--green)';
+      const barH = stkVal>0?stkH:saleH;
       return `<div style="text-align:center;min-width:0">
         <div style="font-size:9px;color:var(--muted);font-weight:700;margin-bottom:3px">${wh}</div>
-        <div style="height:24px;background:var(--border);border-radius:4px;overflow:hidden;position:relative">
-          <div style="position:absolute;bottom:0;left:0;right:0;height:${hPct}%;background:${col};border-radius:3px"></div>
+        <div style="height:28px;background:var(--border);border-radius:4px;overflow:hidden;position:relative">
+          <div style="position:absolute;bottom:0;left:0;right:0;height:${barH}%;background:${barColor};border-radius:3px;opacity:.85"></div>
         </div>
-        <div style="font-size:10px;font-weight:700;color:var(--text);margin-top:3px">${val>0?fmtBaht(val):'—'}</div>
+        <div style="font-size:10px;font-weight:700;color:var(--text);margin-top:3px">${showVal}</div>
       </div>`;
     }).join('');
 
@@ -1142,30 +1204,34 @@ function renderStockDetail(){
           <div class="stock-pname">${p.name}</div>
         </div>
         <div class="stock-total">
-          <div class="stock-total-val num">${fmtBaht(p.cs)}</div>
-          <div class="stock-total-unit">ลัง รวม</div>
+          <div class="stock-total-val num">${fmtBaht(hasRealStock?p.stock:p.cs)}</div>
+          <div class="stock-total-unit">${hasRealStock?'ลัง คงเหลือ':'ลัง ขาย'}</div>
         </div>
       </div>
-      <!-- WH breakdown -->
       <div style="display:grid;grid-template-columns:repeat(${whCols.length},1fr);gap:6px;margin-bottom:10px">
         ${whGrid}
       </div>
-      <!-- Metric bars -->
       <div class="metric-bars">
         <div class="metric-row">
+          <div class="metric-label" style="color:var(--blue)">สต็อก</div>
+          <div class="metric-bar-wrap">
+            <div class="metric-bar-fill" style="width:${hasRealStock?stkPct:0}%;background:var(--blue)"></div>
+          </div>
+          <div class="metric-val num">${hasRealStock?fmtBaht(p.stock):'—'}</div>
+        </div>
+        <div class="metric-row">
           <div class="metric-label" style="color:var(--green)">ขาย (ลัง)</div>
-          <div class="metric-bar-wrap"><div class="metric-bar-fill" style="width:${csPct}%;background:var(--green)"></div></div>
+          <div class="metric-bar-wrap">
+            <div class="metric-bar-fill" style="width:${salePct}%;background:var(--green)"></div>
+          </div>
           <div class="metric-val num">${fmtBaht(p.cs)}</div>
         </div>
         <div class="metric-row">
-          <div class="metric-label" style="color:var(--amber)">ยอด (฿)</div>
-          <div class="metric-bar-wrap"><div class="metric-bar-fill" style="width:${bahtPct}%;background:var(--amber)"></div></div>
-          <div class="metric-val num">฿${fmtBaht(p.baht)}</div>
-        </div>
-        <div class="metric-row">
-          <div class="metric-label" style="color:var(--muted)">รายการ</div>
-          <div class="metric-bar-wrap"><div class="metric-bar-fill" style="width:${Math.min(p.txn/Math.max(...items.map(i=>i.txn),1)*100,100).toFixed(0)}%;background:var(--blue)"></div></div>
-          <div class="metric-val num">${p.txn}</div>
+          <div class="metric-label" style="color:var(--amber)">ซื้อเข้า</div>
+          <div class="metric-bar-wrap">
+            <div class="metric-bar-fill" style="width:${hasRealIn?inPct:0}%;background:var(--amber)"></div>
+          </div>
+          <div class="metric-val num">${hasRealIn?fmtBaht(p.saleIn):'—'}</div>
         </div>
       </div>
     </div>`;
@@ -1175,7 +1241,7 @@ function renderStockDetail(){
 function renderProfile(){
   $('dataSource').textContent = dataSourceLabel;
   $('lastUpdated').textContent = lastUpdated || '—';
-  $('totalRows').textContent = allRows.length.toLocaleString()+' รายการ';
+  $('totalRows').textContent = `${allRows.length.toLocaleString()} ยอดขาย · ${stockData.length.toLocaleString()} Stock · ${saleInData.length.toLocaleString()} ซื้อเข้า`;
 }
 
 // ── Events ────────────────────────────────────────
