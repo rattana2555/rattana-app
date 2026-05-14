@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Rattana Bplus Sales v3.1</title>
+<title>Rattana Bplus Sales v3.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
@@ -430,7 +430,7 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
         </div>
         <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:14px;font-weight:600">เวอร์ชัน</span>
-          <span style="font-size:12px;color:var(--muted)">v3.1 · 2026-05-14</span>
+          <span style="font-size:12px;color:var(--muted)">v3.2 · 2026-05-14</span>
         </div>
       </div>
       <div style="margin-top:12px">
@@ -475,7 +475,7 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
 
 <script>
 // ── Config ───────────────────────────────────────
-const GAS_URL = 'https://script.google.com/macros/s/AKfycby4h3bvctWeLWRUCOy7VMtKhzxuCtWCYiFp_1HhCtTy_705TS2UmSpykZv9p01hkqc_IQ/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxSjbHO8-RhuDBkJSQGgLAqu8yvgVkB4q_mm6CZfnJbmvtqPTcEn3YaKlGaelS8BGPm4w/exec';
 const SHEET_ID  = '1QIusvLuKv38mYDszVd093qzuD6DD8462QkZCTHpUw6s';
 const SHEET_GID = '1606652398';
 const TARGET_CATS = ['Bplus FMCG','Bplus Thaibev Al','Bplus บุหรี่','F&N'];
@@ -592,11 +592,32 @@ async function fetchData(){
       baht:Number(r.baht)||0,
       cs:Number(r.cs)||0
     }));
+    // ── Stock from PDDT ──
+    if(json.stock && json.stock.length){
+      allStockRaw = json.stock.map(r=>({
+        product:String(r.product||'').trim(),
+        cat:String(r.cat||'').trim(),
+        wh:String(r.wh||'').trim(),
+        stock_cs:Number(r.stock_cs)||0
+      }));
+    }
+    // ── Purchase from Sale_IN ──
+    if(json.purchase && json.purchase.length){
+      allPurchaseRaw = json.purchase.map(r=>({
+        product:String(r.product||'').trim(),
+        cat:String(r.cat||'').trim(),
+        wh:String(r.wh||'').trim(),
+        purchase_cs:Number(r.purchase_cs)||0
+      }));
+    }
+    // Mark stock loaded so renderStock won't re-fetch CSV
+    if(allStockRaw.length||allPurchaseRaw.length) stockDataLoaded=true;
     lastUpdated = json.updated ? new Date(json.updated).toLocaleString('th-TH') : '';
     dataSourceLabel = 'Apps Script ✅';
     hideSpinner();
     renderAll();
-    toast(`โหลดสำเร็จ ${allRows.length.toLocaleString()} รายการ 🎉`);
+    const stockTxt = allStockRaw.length ? ` | 📦 ${allStockRaw.length.toLocaleString()} SKU` : '';
+    toast(`โหลดสำเร็จ ${allRows.length.toLocaleString()} รายการ${stockTxt} 🎉`);
     return;
   }catch(e){ console.warn('GAS:',e.message); }
 
