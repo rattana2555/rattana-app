@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Rattana Bplus Sales v3.2</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<style>
+/* ── DESIGN TOKENS ── */
+:root{
+  --navy:#0d1b3e; --navy-mid:#1a2f5e; --navy-light:#243b73;
+  --gold:#c9a84c; --gold-light:#e8c86a;
+  --green:#00b96b; --green-dark:#009955; --cerulean-glow:rgba(0,133,199,.28);
+  --success:#2ecc71; --danger:#e74c3c; --warning:#f39c12; --info:#3498db;
+  --bg:#f2f4f8; --card:#ffffff; --text:#0d1b3e; --muted:#7a87a0;
+  --border:#e4e8f0; --row-alt:#fafbfd;
+  --r-sm:8px; --r-md:14px; --r-lg:20px; --r-xl:28px; --r-pill:999px;
+  --sh-sm:0 1px 4px rgba(0,0,0,.06); --sh-md:0 2px 10px rgba(0,0,0,.08);
+  --sh-lg:0 8px 28px rgba(13,27,62,.13); --sh-gold:0 4px 14px rgba(201,168,76,.35);
+}
+body.dark{
+  --bg:#09111f; --card:#0f1c32; --text:#e4e8f0; --muted:#7a87a0;
+  --border:#1a2f5e; --row-alt:#0c1828;
+}
+
+/* ── BASE ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);min-height:100dvh;overflow-x:hidden;transition:background .25s,color .25s;-webkit-text-size-adjust:100%}
+button{font-family:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation;background:none}
+input,select{font-family:inherit;font-size:16px;background:var(--card);color:var(--text)}
+a{color:inherit;text-decoration:none}
+
+/* ── STICKY HEADER ── */
+.app-header{background:var(--navy);padding:max(14px,env(safe-area-inset-top)) 16px 12px;position:sticky;top:0;z-index:200;border-bottom:3px solid var(--gold);display:flex;align-items:center;gap:10px}
+.header-logo{flex:1}
+.header-logo h1{font-size:16px;font-weight:800;color:#fff;letter-spacing:.5px;line-height:1.1}
+.header-logo h1 span{color:var(--gold)}
+.header-logo small{font-size:10px;color:rgba(255,255,255,.45);letter-spacing:.3px}
+.hbtn{width:36px;height:36px;border-radius:var(--r-sm);border:1.5px solid rgba(255,255,255,.18);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;transition:background .15s;flex-shrink:0}
+.hbtn:hover{background:rgba(255,255,255,.1)}
+
+/* ── DATA SOURCE PILL ── */
+.src-bar{background:var(--navy-mid);padding:5px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(255,255,255,.06)}
+.src-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);animation:pulse 2s ease infinite}
+.src-dot.live{background:var(--green)}
+.src-dot.baked{background:var(--gold)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.src-text{font-size:11px;color:rgba(255,255,255,.55);font-weight:500}
+.src-text strong{color:rgba(255,255,255,.85)}
+.baked-notice{background:#fff8e0;border-bottom:2px solid var(--gold);padding:7px 14px;font-size:11px;color:#7a5800;text-align:center;display:none}
+
+/* ── MAIN CONTENT ── */
+.main{max-width:480px;margin:0 auto;padding-bottom:max(24px,env(safe-area-inset-bottom))}
+
+/* ── WH CHIPS ── */
+.wh-row{padding:12px 14px 4px;display:flex;gap:7px;overflow-x:auto;scrollbar-width:none}
+.wh-row::-webkit-scrollbar{display:none}
+.wh-chip{padding:7px 18px;border-radius:var(--r-pill);font-size:13px;font-weight:600;white-space:nowrap;flex-shrink:0;border:1.5px solid var(--border);color:var(--muted);background:var(--card);box-shadow:var(--sh-sm);transition:all .16s}
+.wh-chip.active{background:var(--navy);color:#fff;border-color:var(--navy);box-shadow:0 2px 8px rgba(13,27,62,.2)}
+
+/* ── HERO CARD ── */
+.hero-wrap{padding:8px 14px 12px}
+.hero{border-radius:var(--r-xl);background:linear-gradient(145deg,#1ab8e8,#0085c7 60%,#005f96);padding:20px 22px 18px;position:relative;overflow:hidden;box-shadow:0 10px 36px var(--cerulean-glow)}
+.hero::before{content:'';position:absolute;top:-50px;right:-50px;width:180px;height:180px;border-radius:50%;background:rgba(255,255,255,.07);pointer-events:none}
+.hero::after{content:'';position:absolute;bottom:-70px;left:-30px;width:160px;height:160px;border-radius:50%;background:rgba(0,0,0,.04);pointer-events:none}
+.hero-meta{font-size:12px;color:rgba(255,255,255,.7);margin-bottom:6px;position:relative;z-index:1}
+.hero-amount{position:relative;z-index:1;margin-bottom:18px}
+.hero-amount .cur{font-size:26px;font-weight:700;color:rgba(255,255,255,.85);vertical-align:top;margin-top:6px;display:inline-block;margin-right:2px}
+.hero-amount .val{font-size:46px;font-weight:800;color:#fff;letter-spacing:-1px;line-height:1}
+.hero-cs{font-size:13px;color:rgba(255,255,255,.65);margin-top:2px}
+.hero-progress{position:relative;z-index:1}
+.prog-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.prog-label{font-size:11px;color:rgba(255,255,255,.75);display:flex;align-items:center;gap:4px}
+.prog-pct{font-size:15px;font-weight:700;color:#fff}
+.prog-track{height:5px;background:rgba(255,255,255,.2);border-radius:3px;overflow:hidden;margin-bottom:5px}
+.prog-fill{height:100%;background:#fff;border-radius:3px;transition:width .6s ease}
+.prog-bottom{display:flex;justify-content:space-between}
+.prog-bottom span{font-size:11px;color:rgba(255,255,255,.65)}
+.prog-bottom strong{color:#fff}
+.hero-warn{display:none;align-items:center;gap:6px;margin-top:10px;background:rgba(0,0,0,.15);border-radius:10px;padding:7px 12px;font-size:12px;color:rgba(255,255,255,.9);position:relative;z-index:1}
+
+/* ── PERIOD TABS ── */
+.period-row{padding:4px 14px 12px;display:flex;gap:7px;overflow-x:auto;scrollbar-width:none}
+.period-row::-webkit-scrollbar{display:none}
+.period-btn{padding:9px 22px;border-radius:var(--r-pill);font-size:13px;font-weight:600;white-space:nowrap;flex-shrink:0;border:1.5px solid var(--border);color:var(--muted);background:var(--card);box-shadow:var(--sh-sm);transition:all .16s}
+.period-btn.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+
+/* ── SECTION HDR ── */
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;padding:4px 16px 10px}
+.sec-title{font-size:15px;font-weight:700}
+.sec-link{font-size:12px;color:var(--green);font-weight:600}
+
+/* ── CAT LIST ── */
+.cat-list{padding:0 14px;display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
+.cat-card{background:var(--card);border-radius:var(--r-lg);padding:14px 16px;display:flex;align-items:center;gap:13px;box-shadow:var(--sh-sm);border:1px solid var(--border);transition:transform .12s,box-shadow .12s;cursor:default}
+.cat-card:active{transform:scale(.98)}
+.cat-icon{width:48px;height:48px;border-radius:15px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.cat-body{flex:1;min-width:0}
+.cat-name{font-size:13px;font-weight:700;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cat-txn{font-size:11px;color:var(--muted)}
+.cat-bar{height:3px;background:var(--border);border-radius:2px;margin-top:6px;overflow:hidden}
+.cat-bar-fill{height:100%;border-radius:2px;transition:width .5s ease}
+.cat-right{text-align:right;flex-shrink:0}
+.cat-baht{font-size:14px;font-weight:700;white-space:nowrap}
+.cat-baht.neg{color:var(--danger)}
+.cat-cs{font-size:11px;color:var(--muted);margin-top:1px}
+
+/* ── TREND CARD ── */
+.trend-card{background:var(--card);border-radius:var(--r-lg);margin:0 14px 20px;padding:16px;border:1px solid var(--border);box-shadow:var(--sh-sm)}
+.trend-card h4{font-size:13px;font-weight:700;margin-bottom:12px;color:var(--muted)}
+.trend-wrap{height:150px;position:relative}
+
+/* ── TOP PRODUCTS ── */
+.prod-list{padding:0 14px;display:flex;flex-direction:column;gap:7px;margin-bottom:20px}
+.prod-item{background:var(--card);border-radius:var(--r-md);padding:11px 14px;display:flex;align-items:center;gap:11px;box-shadow:var(--sh-sm);border:1px solid var(--border)}
+.prod-no{width:28px;height:28px;border-radius:50%;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--bg);color:var(--muted)}
+.prod-no.top1{background:var(--gold);color:var(--navy)}
+.prod-no.top2{background:#d0d0d0;color:#333}
+.prod-no.top3{background:#c87533;color:#fff}
+.prod-body{flex:1;min-width:0}
+.prod-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prod-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.prod-val{font-size:13px;font-weight:700;white-space:nowrap;text-align:right;flex-shrink:0}
+
+/* ── DETAIL TABLE ── */
+.tbl-card{background:var(--card);border-radius:var(--r-lg);margin:0 14px 20px;overflow:hidden;border:1px solid var(--border);box-shadow:var(--sh-sm)}
+.tbl-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;border-bottom:1px solid var(--border)}
+.tbl-head h4{font-size:14px;font-weight:700}
+.tbl-search{width:160px;height:34px;padding:0 10px;border-radius:var(--r-pill);border:1.5px solid var(--border);font-size:13px;outline:none;transition:border-color .15s}
+.tbl-search:focus{border-color:var(--gold)}
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tbl{width:100%;border-collapse:collapse;min-width:500px}
+.tbl thead{background:var(--navy);color:#fff}
+.tbl thead th{padding:9px 10px;font-size:11px;font-weight:600;text-align:left;white-space:nowrap;border-bottom:2px solid var(--gold);cursor:pointer;user-select:none}
+.tbl thead th:hover{background:var(--navy-mid)}
+.sort-ind{font-size:9px;color:var(--gold);margin-left:3px}
+.tbl tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+.tbl tbody tr:nth-child(even){background:var(--row-alt)}
+.tbl tbody tr:hover{background:rgba(201,168,76,.07)}
+.tbl td{padding:8px 10px;font-size:12px;vertical-align:middle}
+.tbl td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+.tbl td.neg{color:var(--danger)}
+.empty-row td{text-align:center;padding:32px;color:var(--muted);font-size:13px}
+.badge{display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700}
+
+/* ── PAGINATION ── */
+.pagi{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border);flex-wrap:wrap;gap:6px}
+.pagi-info{font-size:11px;color:var(--muted)}
+.pagi-btns{display:flex;gap:4px}
+.pagi-btn{width:30px;height:30px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--card);color:var(--text);font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .14s}
+.pagi-btn:hover{border-color:var(--gold);color:var(--gold)}
+.pagi-btn.active{background:var(--gold);color:var(--navy);border-color:var(--gold);font-weight:700}
+.pagi-btn:disabled{opacity:.35;cursor:not-allowed}
+
+/* ── SPINNER ── */
+.spinner-ov{display:none;position:fixed;inset:0;background:rgba(9,17,31,.55);align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(4px)}
+.spinner-ov.on{display:flex}
+.spinner-box{background:var(--card);border-radius:var(--r-xl);padding:28px 36px;text-align:center;border-top:4px solid var(--gold)}
+.spin-ring{width:44px;height:44px;border:5px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .75s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:max(20px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(70px);background:var(--navy);color:#fff;padding:10px 22px;border-radius:var(--r-pill);font-size:13px;font-weight:500;z-index:9999;white-space:nowrap;opacity:0;transition:all .28s;pointer-events:none;border:1px solid rgba(201,168,76,.35)}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── BACK TOP ── */
+.back-top{position:fixed;bottom:max(24px,env(safe-area-inset-bottom));right:16px;width:42px;height:42px;border-radius:50%;background:var(--navy);color:var(--gold);font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--sh-gold);opacity:0;pointer-events:none;transition:opacity .25s;z-index:500;border:2px solid var(--gold)}
+.back-top.on{opacity:1;pointer-events:auto}
+
+/* ── EMPTY STATE ── */
+.empty-state{text-align:center;padding:36px 20px}
+.empty-icon{font-size:38px;margin-bottom:8px}
+.empty-msg{font-size:13px;color:var(--muted)}
+
+/* ── ANIMS ── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+.fade-in{animation:fadeUp .32s ease forwards}
+</style>
+</head>
+<body>
+
+<!-- Spinner -->
+<div class="spinner-ov" id="spinner">
+  <div class="spinner-box">
+    <div class="spin-ring"></div>
+    <div style="font-size:13px;color:var(--muted)">กำลังโหลดข้อมูล…</div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Back top -->
+<button class="back-top" id="backTop">↑</button>
+
+<!-- Header -->
+<header class="app-header">
+  <div class="header-logo">
+    <h1>Rattana <span>Bplus</span> Sales</h1>
+    <small>v3.2 · 2026-05-13</small>
+  </div>
+  <button class="hbtn" id="darkBtn" title="Dark mode">🌙</button>
+  <button class="hbtn" id="refreshBtn" title="รีเฟรชข้อมูล">↻</button>
+</header>
+
+<!-- Source bar -->
+<!-- Refresh progress bar -->
+<div id="refreshBar" style="display:none;height:3px;background:linear-gradient(90deg,var(--gold),transparent);background-size:200% 100%;animation:shimmer 1.2s linear infinite;position:sticky;top:0;z-index:199">
+</div>
+<style>
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+</style>
+<div class="src-bar">
+  <div class="src-dot" id="srcDot"></div>
+  <div class="src-text" id="srcText">กำลังโหลด…</div>
+</div>
+<div class="baked-notice" id="bakedNotice">
+  📦 ข้อมูล snapshot 13 พ.ค. 2026 · เปิดในโทรศัพท์/browser เพื่อดูข้อมูลล่าสุด
+</div>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- WH filter chips -->
+  <div class="wh-row" id="whRow">
+    <button class="wh-chip active" data-wh="">ทั้งหมด</button>
+    <button class="wh-chip" data-wh="W1">W1</button>
+    <button class="wh-chip" data-wh="W2">W2</button>
+    <button class="wh-chip" data-wh="W3">W3</button>
+    <button class="wh-chip" data-wh="W4">W4</button>
+  </div>
+
+  <!-- Hero card -->
+  <div class="hero-wrap">
+    <div class="hero">
+      <div class="hero-meta" id="heroMeta">ทุกคลัง · —</div>
+      <div class="hero-amount">
+        <span class="cur">฿</span><span class="val" id="heroVal">0</span>
+      </div>
+      <div class="hero-cs" id="heroCS">0 ลัง</div>
+      <div class="hero-progress" style="margin-top:14px">
+        <div class="prog-top">
+          <span class="prog-label">⏱ Time Use · <span id="progDays">—</span></span>
+          <span class="prog-pct" id="progPct">—</span>
+        </div>
+        <div class="prog-track"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+        <div class="prog-bottom">
+          <span>คาดสิ้น<span id="progPeriodLabel">เดือน</span></span>
+          <span><strong id="progForecast">—</strong></span>
+        </div>
+      </div>
+      <div class="hero-warn" id="heroWarn">⚠️ <span id="heroWarnMsg">ไม่มีข้อมูลในช่วงนี้</span></div>
+    </div>
+  </div>
+
+  <!-- Period tabs -->
+  <div class="period-row" id="periodRow">
+    <button class="period-btn" data-period="yesterday">เมื่อวาน</button>
+    <button class="period-btn active" data-period="week">สัปดาห์</button>
+    <button class="period-btn" data-period="month">เดือน</button>
+    <button class="period-btn" data-period="year">ปี</button>
+  </div>
+
+  <!-- Cat_BU section -->
+  <div class="sec-hdr">
+    <span class="sec-title">แยกตาม Cat_BU</span>
+    <span class="sec-link" id="catToggle">ดูทั้งหมด ›</span>
+  </div>
+  <div class="cat-list" id="catList">
+    <div class="empty-state"><div class="empty-icon">📦</div><div class="empty-msg">กำลังโหลด…</div></div>
+  </div>
+
+  <!-- Trend chart -->
+  <div class="sec-hdr"><span class="sec-title">7 วันย้อนหลัง</span></div>
+  <div class="trend-card">
+    <h4 id="trendLabel">ยอดขาย (฿) รายวัน</h4>
+    <div class="trend-wrap"><canvas id="trendChart"></canvas></div>
+  </div>
+
+  <!-- Top 5 products -->
+  <div class="sec-hdr"><span class="sec-title">สินค้าขายดี Top 5</span></div>
+  <div class="prod-list" id="prodList">
+    <div class="empty-state"><div class="empty-msg">กำลังโหลด…</div></div>
+  </div>
+
+  <!-- Detail table -->
+  <div class="sec-hdr">
+    <span class="sec-title">รายการทั้งหมด</span>
+    <span id="rawCountLabel" style="font-size:12px;color:var(--muted)"></span>
+  </div>
+  <div class="tbl-card">
+    <div class="tbl-head">
+      <h4>ข้อมูลดิบ</h4>
+      <input class="tbl-search" id="rawSearch" placeholder="🔍 ค้นหา…">
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl" id="rawTbl">
+        <thead>
+          <tr>
+            <th data-key="Doc_Date" data-type="date">วันที่ <span class="sort-ind"></span></th>
+            <th data-key="Product_Name" data-type="str">สินค้า <span class="sort-ind"></span></th>
+            <th data-key="Cat_BU" data-type="str">Cat_BU <span class="sort-ind"></span></th>
+            <th data-key="WH" data-type="str">WH <span class="sort-ind"></span></th>
+            <th data-key="EXVat" data-type="num" class="num">ยอดขาย (฿) <span class="sort-ind"></span></th>
+            <th data-key="Sales_CS" data-type="num" class="num">ยอดขาย (ลัง) <span class="sort-ind"></span></th>
+          </tr>
+        </thead>
+        <tbody id="rawBody"><tr class="empty-row"><td colspan="6">กำลังโหลด…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="pagi" id="rawPagi"></div>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+// ══════════════════════════════════════════
+//  BAKED DATA (snapshot 13 พ.ค. 2026)
+// ══════════════════════════════════════════
+const BAKED = [{"Doc_Date":"01/05/2026","Product_Name":"ฟันโอ คุกกี้รสช็อกโกแลต สอดไส้ครีมช็อกโกแลต 40.5ก.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":-91.59,"Sales_CS":-0.17},{"Doc_Date":"01/05/2026","Product_Name":"เบอร์ดี้ ลาเต้ 170มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":-369.16,"Sales_CS":-1.0},{"Doc_Date":"01/05/2026","Product_Name":"แม่ครัว ซอสหอยนางรม 600มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":-574.77,"Sales_CS":-1.0},{"Doc_Date":"01/05/2026","Product_Name":"80158@ทีพอทนมข้นถุง 2กก.","Cat_BU":"F&N","WH":"W1","EXVat":-1644.86,"Sales_CS":-2.0},{"Doc_Date":"01/05/2026","Product_Name":"อายิโนะโมะโต๊ะ72ก.10บ.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":-166.36,"Sales_CS":-0.1},{"Doc_Date":"01/05/2026","Product_Name":"รสดีหมู 155ก.27บ.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":-219.63,"Sales_CS":-0.13},{"Doc_Date":"01/05/2026","Product_Name":"โก๋แก่ ถั่วลิสงอบเกลือ 80ก.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":-90.65,"Sales_CS":-0.17},{"Doc_Date":"02/05/2026","Product_Name":"สกอร์บลู","Cat_BU":"Bplus บุหรี่","WH":"W2","EXVat":1229.91,"Sales_CS":2.0},{"Doc_Date":"02/05/2026","Product_Name":"สกอร์บลู","Cat_BU":"Bplus บุหรี่","WH":"W2","EXVat":614.95,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"สกอร์บลู","Cat_BU":"Bplus บุหรี่","WH":"W2","EXVat":1229.91,"Sales_CS":2.0},{"Doc_Date":"02/05/2026","Product_Name":"สกอร์บลู","Cat_BU":"Bplus บุหรี่","WH":"W2","EXVat":614.95,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"แอล&เอ็มแดง7.1","Cat_BU":"Bplus บุหรี่","WH":"W1","EXVat":1271.03,"Sales_CS":2.0},{"Doc_Date":"02/05/2026","Product_Name":"กระทิงแดง150มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":385.98,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"ดีโด้ สตรอเบอร์รี่ 450มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":175.7,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"ไวไว ควิกต้มโคล้ง 60ก.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":158.88,"Sales_CS":0.17},{"Doc_Date":"02/05/2026","Product_Name":"แอล&เอ็มเขียว7.1","Cat_BU":"Bplus บุหรี่","WH":"W1","EXVat":635.51,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"กุ้งน้ำปลา 720 มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":266.36,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"ดีโด้ ส้ม 450มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":175.7,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"มาม่าต้มยำกุ้ง55ก.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":160.75,"Sales_CS":0.17},{"Doc_Date":"02/05/2026","Product_Name":"ลิโพ100มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":488.79,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"เลโด้ เค้กนึ่งสอดไส้ครีมกลิ่นใบเตย 30ก.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":43.93,"Sales_CS":0.08},{"Doc_Date":"02/05/2026","Product_Name":"โค้ก 2ล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":210.28,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"ดีโด้ ส้ม 450มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":175.7,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"ไวตามิลล์ทูโก 300 มล.P6","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":305.61,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"เบียร์ช้างคลาสสิก 620 ml. ขวด","Cat_BU":"Bplus Thaibev Al","WH":"W1","EXVat":1186.92,"Sales_CS":2.0},{"Doc_Date":"02/05/2026","Product_Name":"M-150 150มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":479.44,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"คาราบาวแดง 150มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":0.0,"Sales_CS":0.04},{"Doc_Date":"02/05/2026","Product_Name":"ฮานามิ รสดั้งเดิม 13ก.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":45.79,"Sales_CS":0.1},{"Doc_Date":"02/05/2026","Product_Name":"โก๋แก่ ถั่วลิสงอบกรอบรสกะทิ 17ก.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":44.86,"Sales_CS":0.08},{"Doc_Date":"02/05/2026","Product_Name":"สแน็คแจ๊ค รสดั้งเดิม 15ก.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":45.79,"Sales_CS":0.17},{"Doc_Date":"02/05/2026","Product_Name":"ทิพรส น้ำปลาเพท 700มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":314.95,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"เอลเซ่ รสวานิลลา 15ก.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":53.27,"Sales_CS":0.08},{"Doc_Date":"02/05/2026","Product_Name":"สามแม่ครัว (ปลาซาร์ดีน) ปลากระป๋อง 155ก.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":205.61,"Sales_CS":0.1},{"Doc_Date":"02/05/2026","Product_Name":"เบอร์ดี้ โรบัสต้าแดง 170มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":766.36,"Sales_CS":2.0},{"Doc_Date":"02/05/2026","Product_Name":"แลคตาซอย300มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":308.41,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"ยูโร่ เค้ก คัสตาร์ด 17ก.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":46.73,"Sales_CS":0.08},{"Doc_Date":"02/05/2026","Product_Name":"เบอร์ดี้ แบล็ค 170มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":369.16,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"สติงค์ สตรอว์เบอร์รี่ 250มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":112.15,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"ยาตั้งไก่ 15 กรัม","Cat_BU":"Bplus บุหรี่","WH":"W1","EXVat":250.0,"Sales_CS":0.03},{"Doc_Date":"02/05/2026","Product_Name":"M-150 150มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":479.44,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"อัมพวา กะทิ 250มล.P6","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":271.03,"Sales_CS":0.5},{"Doc_Date":"02/05/2026","Product_Name":"สปอนเซอร์ขวด250มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":228.97,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"ยำยำคัพ รสต้มยำกุ้ง 60ก. P6","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":73.83,"Sales_CS":0.17},{"Doc_Date":"02/05/2026","Product_Name":"ไวตามิลล์ทูโก 300 มล.P6","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":305.61,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"เอสเอ็มเอสแดง","Cat_BU":"Bplus บุหรี่","WH":"W1","EXVat":614.02,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"มงกุฎ ปลาแมกเคอเรล 145ก.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":224.3,"Sales_CS":0.2},{"Doc_Date":"02/05/2026","Product_Name":"ยำยำคัพ รสต้มยำกุ้งน้ำข้น 60ก. P6","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":73.83,"Sales_CS":0.17},{"Doc_Date":"02/05/2026","Product_Name":"ฮอลล์ เมนโท-ลิบตัส ถุง100เม็ด 280ก.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":47.66,"Sales_CS":0.03},{"Doc_Date":"02/05/2026","Product_Name":"สปอนเซอร์ ออริจินัล 420มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":275.7,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"มาม่าต้มยำกุ้ง55ก.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":160.75,"Sales_CS":0.17},{"Doc_Date":"02/05/2026","Product_Name":"มาม่า OK แห้ง รสฮอตโคเรียน 85g. P4","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":100.93,"Sales_CS":0.06},{"Doc_Date":"02/05/2026","Product_Name":"แบรนด์ซุปไก่ ต้นตำรับ 39มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":327.1,"Sales_CS":0.17},{"Doc_Date":"02/05/2026","Product_Name":"ฮอลล์แท่ง น้ำผึ้งผสมเลมอน 27.9ก.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":92.52,"Sales_CS":0.08},{"Doc_Date":"02/05/2026","Product_Name":"แอล&เอ็มแดง7.1","Cat_BU":"Bplus บุหรี่","WH":"W1","EXVat":1271.03,"Sales_CS":2.0},{"Doc_Date":"02/05/2026","Product_Name":"ปินโต้ น้ำยาล้างจาน กลิ่นมะนาว 450มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":46.73,"Sales_CS":0.25},{"Doc_Date":"02/05/2026","Product_Name":"เอสเอ็มเอสแดง","Cat_BU":"Bplus บุหรี่","WH":"W1","EXVat":1228.04,"Sales_CS":2.0},{"Doc_Date":"02/05/2026","Product_Name":"อาราบัส สปีด กาแฟพร้อมดื่ม เอสเปรสโซ 140มล. P6.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":219.63,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"แลคตาซอย300มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":308.41,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"โสมพลัส 95 มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":359.81,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"ดัชมิลล์ รสผลไม้รวม 180มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":355.14,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"อายิโนะโมะโต๊ะ250ก. 32บ.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":546.73,"Sales_CS":0.25},{"Doc_Date":"02/05/2026","Product_Name":"1112148@คาร์เนชั่นไข่เจียว 140ก.","Cat_BU":"F&N","WH":"W1","EXVat":157.01,"Sales_CS":0.5},{"Doc_Date":"02/05/2026","Product_Name":"แอล&เอ็มแดง7.1","Cat_BU":"Bplus บุหรี่","WH":"W1","EXVat":635.51,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"มาม่า OK แห้ง รสฮอตโคเรียน 85g. P4","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":100.93,"Sales_CS":0.06},{"Doc_Date":"02/05/2026","Product_Name":"เบียร์ช้างคลาสสิก 620 ml. ขวด","Cat_BU":"Bplus Thaibev Al","WH":"W1","EXVat":1186.92,"Sales_CS":2.0},{"Doc_Date":"02/05/2026","Product_Name":"8101134@คาร์เนชั่นนมข้น 388ก.","Cat_BU":"F&N","WH":"W1","EXVat":269.16,"Sales_CS":0.25},{"Doc_Date":"02/05/2026","Product_Name":"คาราบาวแดง 150มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":401.87,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"M-150 150มล.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":479.44,"Sales_CS":1.0},{"Doc_Date":"02/05/2026","Product_Name":"เอสเอ็มเอสแดง","Cat_BU":"Bplus บุหรี่","WH":"W1","EXVat":1228.04,"Sales_CS":2.0},{"Doc_Date":"09/05/2026","Product_Name":"ชาช่า เดลี่บีนส์แอนด์ดรายด์ฟรุตส์ 30ก.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":46.73,"Sales_CS":0.13},{"Doc_Date":"11/05/2026","Product_Name":"ชาช่า เดลี่บีนส์แอนด์ดรายด์ฟรุตส์ 30ก.","Cat_BU":"Bplus FMCG","WH":"W1","EXVat":46.73,"Sales_CS":0.13}];
+
+// ══════════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════════
+const SHEET_ID   = '1NxFkxiQev0xxGir93-qt0flNfzHz848-KuE7jDRSxQE';
+const SHEET_NAME = 'BP';
+const CATS = ['Bplus FMCG','Bplus Thaibev Al','Bplus บุหรี่','F&N'];
+const CAT_CFG = {
+  'Bplus FMCG':       {icon:'🛒',bg:'#dcf5ea',bar:'#00b96b'},
+  'Bplus Thaibev Al': {icon:'🍺',bg:'#ede8ff',bar:'#7c4dff'},
+  'Bplus บุหรี่':     {icon:'🚬',bg:'#fff0e0',bar:'#f39c12'},
+  'F&N':              {icon:'🥤',bg:'#e0eeff',bar:'#3498db'},
+};
+const PAGE = 50;
+const TODAY = new Date(2026,4,13);  // 13 May 2026
+
+// ══════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════
+let allData = [];
+let activeWH = '';
+let activePeriod = 'week';
+let trendChart = null;
+let rawPage = 1;
+let rawSort = {key:'Doc_Date', dir:'desc'};
+let rawSearch = '';
+let catShowAll = false;
+
+// ══════════════════════════════════════════
+//  UTILS
+// ══════════════════════════════════════════
+const MONTHS_TH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+function fmt2(n){return isNaN(n)?'0':new Intl.NumberFormat('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n)}
+function fmtN(n){return isNaN(n)?'0':new Intl.NumberFormat('th-TH').format(Math.round(n))}
+function fmtM(n){
+  const a=Math.abs(n), s=n<0?'-':'';
+  if(a>=1e6) return s+'฿'+Number((a/1e6).toFixed(2))+'M';
+  if(a>=1e3) return s+'฿'+Number((a/1e3).toFixed(1))+'K';
+  return s+'฿'+fmt2(a);
+}
+function dateTH(d){return `${d.getDate()} ${MONTHS_TH[d.getMonth()]} ${d.getFullYear()}`}
+function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r}
+function sameDay(a,b){return a.getDate()===b.getDate()&&a.getMonth()===b.getMonth()&&a.getFullYear()===b.getFullYear()}
+
+function parseDate(s){
+  if(!s) return null;
+  if(s.includes('/')){const[d,m,y]=s.split('/');return new Date(+y,+m-1,+d)}
+  return new Date(s);
+}
+
+// ══════════════════════════════════════════
+//  PERIOD LOGIC
+// ══════════════════════════════════════════
+function getPeriod(p){
+  const t = TODAY;
+  const lastDay = n => new Date(t.getFullYear(), t.getMonth()+n, 0).getDate();
+  switch(p){
+    case 'yesterday': {
+      const y=addDays(t,-1);
+      return {from:y,to:y,used:1,total:1,label:'เมื่อวาน',endLabel:'วัน'}; }
+    case 'week':
+      return {from:addDays(t,-6),to:t,used:7,total:7,label:'7 วัน',endLabel:'สัปดาห์'};
+    case 'month':
+      return {from:new Date(t.getFullYear(),t.getMonth(),1),to:t,used:t.getDate(),total:lastDay(1),label:'เดือน',endLabel:'เดือน'};
+    case 'year':
+      const yd=Math.ceil((t-new Date(t.getFullYear(),0,1))/864e5)+1;
+      return {from:new Date(t.getFullYear(),0,1),to:t,used:yd,total:365,label:'ปี',endLabel:'ปี'};
+  }
+}
+
+// ══════════════════════════════════════════
+//  FILTER
+// ══════════════════════════════════════════
+function getFiltered(period, wh){
+  const rng = getPeriod(period);
+  const from = rng.from, to = rng.to;
+  // set time boundaries
+  const fromMs = new Date(from.getFullYear(),from.getMonth(),from.getDate()).getTime();
+  const toMs   = new Date(to.getFullYear(),to.getMonth(),to.getDate(),23,59,59).getTime();
+  return allData.filter(r => {
+    const d = parseDate(r.Doc_Date);
+    if(!d) return false;
+    const t = d.getTime();
+    if(t < fromMs || t > toMs) return false;
+    if(wh && r.WH !== wh) return false;
+    return true;
+  });
+}
+
+// ══════════════════════════════════════════
+//  RENDER HERO
+// ══════════════════════════════════════════
+function renderHero(data, period, wh){
+  const rng   = getPeriod(period);
+  const total = data.reduce((s,r)=>s+r.EXVat,0);
+  const totalCS = data.reduce((s,r)=>s+r.Sales_CS,0);
+  const pct   = Math.min(100,(rng.used/rng.total)*100);
+  const fcast = rng.used>0 ? (total/rng.used)*rng.total : 0;
+  const whLbl = wh ? `คลัง ${wh}` : 'ทุกคลัง';
+
+  document.getElementById('heroMeta').textContent = `${whLbl} · ${dateTH(TODAY)}`;
+  document.getElementById('heroVal').textContent  = fmtN(total);
+  document.getElementById('heroCS').textContent   = `${fmt2(totalCS)} ลัง`;
+  document.getElementById('progDays').textContent = `ผ่านไป ${rng.used}/${rng.total} วัน`;
+  document.getElementById('progPct').textContent  = pct.toFixed(1)+'%';
+  document.getElementById('progFill').style.width = pct+'%';
+  document.getElementById('progPeriodLabel').textContent = rng.endLabel;
+  document.getElementById('progForecast').textContent    = fmtM(fcast);
+
+  const warn = document.getElementById('heroWarn');
+  if(!data.length){
+    warn.style.display='flex';
+    document.getElementById('heroWarnMsg').textContent='ไม่มีข้อมูลใน'+rng.label+'นี้';
+  } else { warn.style.display='none'; }
+}
+
+// ══════════════════════════════════════════
+//  RENDER CAT LIST
+// ══════════════════════════════════════════
+function renderCatList(data){
+  const catData = {};
+  CATS.forEach(c=>{catData[c]={baht:0,cs:0,cnt:0}});
+  data.forEach(r=>{
+    if(catData[r.Cat_BU]){catData[r.Cat_BU].baht+=r.EXVat;catData[r.Cat_BU].cs+=r.Sales_CS;catData[r.Cat_BU].cnt++}
+  });
+  const maxB = Math.max(1,...Object.values(catData).map(v=>Math.abs(v.baht)));
+  const show = catShowAll ? CATS : CATS.slice(0,4);
+  const el = document.getElementById('catList');
+
+  if(!data.length){
+    el.innerHTML='<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-msg">ไม่มีข้อมูลในช่วงนี้</div></div>';
+    return;
+  }
+
+  el.innerHTML = show.map((c,i)=>{
+    const cfg=CAT_CFG[c]||{icon:'📦',bg:'#eee',bar:'#999'};
+    const v=catData[c];
+    const pct=Math.max(0,(Math.abs(v.baht)/maxB)*100);
+    const neg=v.baht<0;
+    return `<div class="cat-card fade-in" style="animation-delay:${i*0.06}s">
+      <div class="cat-icon" style="background:${cfg.bg}">${cfg.icon}</div>
+      <div class="cat-body">
+        <div class="cat-name">${c}</div>
+        <div class="cat-txn">${fmtN(v.cnt)} รายการ · ${fmt2(v.cs)} ลัง</div>
+        <div class="cat-bar"><div class="cat-bar-fill" style="width:${pct}%;background:${cfg.bar}"></div></div>
+      </div>
+      <div class="cat-right">
+        <div class="cat-baht${neg?' neg':''}">${fmtM(v.baht)}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('catToggle').textContent = catShowAll ? '« ย่อ' : 'ดูทั้งหมด ›';
+}
+
+// ══════════════════════════════════════════
+//  RENDER TREND CHART
+// ══════════════════════════════════════════
+function renderTrend(wh){
+  const labels=[], vals=[];
+  for(let i=6;i>=0;i--){
+    const d=addDays(TODAY,-i);
+    const dayData=allData.filter(r=>{
+      const rd=parseDate(r.Doc_Date);
+      return rd && sameDay(rd,d) && (!wh||r.WH===wh);
+    });
+    labels.push(`${d.getDate()}/${d.getMonth()+1}`);
+    vals.push(dayData.reduce((s,r)=>s+r.EXVat,0));
+  }
+
+  if(trendChart){trendChart.destroy();trendChart=null}
+  const isDark=document.body.classList.contains('dark');
+  const gc=isDark?'rgba(255,255,255,.05)':'rgba(0,0,0,.04)';
+  const tc=isDark?'#7a87a0':'#7a87a0';
+
+  trendChart=new Chart(document.getElementById('trendChart'),{
+    type:'line',
+    data:{labels,datasets:[{
+      label:'ยอดขาย (฿)',data:vals,
+      borderColor:'#00b96b',backgroundColor:'rgba(0,185,107,.08)',
+      borderWidth:2.5,fill:true,tension:0.4,
+      pointBackgroundColor:'#00b96b',pointRadius:4,pointHoverRadius:7,
+    }]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'฿ '+fmt2(c.parsed.y)}}},
+      scales:{
+        x:{grid:{display:false},ticks:{color:tc,font:{size:11,family:'Sarabun'}}},
+        y:{grid:{color:gc},ticks:{color:tc,font:{size:11,family:'Sarabun'},callback:v=>fmtM(v)}}
+      }
+    }
+  });
+}
+
+// ══════════════════════════════════════════
+//  RENDER TOP PRODUCTS
+// ══════════════════════════════════════════
+function renderTopProducts(data){
+  const map={};
+  data.forEach(r=>{
+    if(!map[r.Product_Name]) map[r.Product_Name]={name:r.Product_Name,cat:r.Cat_BU,baht:0,cs:0,cnt:0};
+    map[r.Product_Name].baht+=r.EXVat;
+    map[r.Product_Name].cs+=r.Sales_CS;
+    map[r.Product_Name].cnt++;
+  });
+  const top5=Object.values(map).filter(p=>p.baht>0).sort((a,b)=>b.baht-a.baht).slice(0,5);
+  const el=document.getElementById('prodList');
+  if(!top5.length){
+    el.innerHTML='<div class="empty-state"><div class="empty-msg">ไม่มีข้อมูล</div></div>';
+    return;
+  }
+  const rankCls=['top1','top2','top3','',''];
+  el.innerHTML=top5.map((p,i)=>`
+    <div class="prod-item fade-in" style="animation-delay:${i*0.06}s">
+      <div class="prod-no ${rankCls[i]}">${i+1}</div>
+      <div class="prod-body">
+        <div class="prod-name">${p.name}</div>
+        <div class="prod-meta">${p.cat} · ${fmtN(p.cnt)} รายการ</div>
+      </div>
+      <div class="prod-val">${fmtM(p.baht)}</div>
+    </div>`).join('');
+}
+
+// ══════════════════════════════════════════
+//  RENDER RAW TABLE
+// ══════════════════════════════════════════
+function getRawRows(data){
+  let rows=[...data];
+  if(rawSearch){
+    const q=rawSearch.toLowerCase();
+    rows=rows.filter(r=>r.Product_Name.toLowerCase().includes(q)||r.Cat_BU.toLowerCase().includes(q)||r.WH.toLowerCase().includes(q));
+  }
+  const type=document.querySelector(`#rawTbl th[data-key="${rawSort.key}"]`)?.dataset.type||'str';
+  const m=rawSort.dir==='asc'?1:-1;
+  rows.sort((a,b)=>{
+    const va=a[rawSort.key],vb=b[rawSort.key];
+    if(type==='num') return ((parseFloat(va)||0)-(parseFloat(vb)||0))*m;
+    if(type==='date') return (parseDate(va)-parseDate(vb))*m;
+    return String(va||'').localeCompare(String(vb||''),'th')*m;
+  });
+  return rows;
+}
+
+const CAT_BADGES={
+  'Bplus FMCG':'background:#dcf5ea;color:#006e38',
+  'Bplus Thaibev Al':'background:#ede8ff;color:#4527a0',
+  'Bplus บุหรี่':'background:#fff0e0;color:#a05700',
+  'F&N':'background:#e0eeff;color:#1a3a8f',
+};
+
+function renderRawTable(data){
+  const rows=getRawRows(data);
+  const total=rows.length;
+  const start=(rawPage-1)*PAGE, end=Math.min(start+PAGE,total);
+  const slice=rows.slice(start,end);
+
+  document.getElementById('rawCountLabel').textContent=`${fmtN(total)} รายการ`;
+
+  const tbody=document.getElementById('rawBody');
+  if(!slice.length){
+    tbody.innerHTML='<tr class="empty-row"><td colspan="6">ไม่มีข้อมูล</td></tr>';
+  } else {
+    tbody.innerHTML=slice.map(r=>{
+      const evNeg=r.EXVat<0, csNeg=r.Sales_CS<0;
+      const bs=CAT_BADGES[r.Cat_BU]||'';
+      return `<tr>
+        <td style="white-space:nowrap">${r.Doc_Date}</td>
+        <td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.Product_Name}</td>
+        <td><span class="badge" style="${bs}">${r.Cat_BU}</span></td>
+        <td><span class="badge" style="background:var(--navy);color:#fff">${r.WH}</span></td>
+        <td class="num${evNeg?' neg':''}">${fmt2(r.EXVat)}</td>
+        <td class="num${csNeg?' neg':''}">${fmt2(r.Sales_CS)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Sort indicators
+  document.querySelectorAll('#rawTbl thead th').forEach(th=>{
+    const ind=th.querySelector('.sort-ind');
+    if(ind) ind.textContent=th.dataset.key===rawSort.key?(rawSort.dir==='asc'?'▲':'▼'):'';
+  });
+
+  // Pagination
+  renderPagi('rawPagi',total,rawPage,pg=>{rawPage=pg;renderRawTable(data)});
+}
+
+function renderPagi(id,total,current,onPage){
+  const tp=Math.ceil(total/PAGE)||1;
+  const el=document.getElementById(id);
+  if(!el) return;
+  const s=Math.max(1,current-2), e=Math.min(tp,current+2);
+  let btns='';
+  if(s>1) btns+=`<button class="pagi-btn" data-p="1">1</button>${s>2?'<span style="padding:0 3px;color:var(--muted)">…</span>':''}`;
+  for(let i=s;i<=e;i++) btns+=`<button class="pagi-btn${i===current?' active':''}" data-p="${i}">${i}</button>`;
+  if(e<tp) btns+=`${e<tp-1?'<span style="padding:0 3px;color:var(--muted)">…</span>':''}<button class="pagi-btn" data-p="${tp}">${tp}</button>`;
+  el.innerHTML=`
+    <span class="pagi-info">แสดง ${total?start=((current-1)*PAGE+1):0}–${Math.min(current*PAGE,total)} จาก ${fmtN(total)}</span>
+    <div class="pagi-btns">
+      <button class="pagi-btn" data-p="${current-1}" ${current<=1?'disabled':''}>‹</button>
+      ${btns}
+      <button class="pagi-btn" data-p="${current+1}" ${current>=tp?'disabled':''}>›</button>
+    </div>`;
+  el.querySelectorAll('.pagi-btn[data-p]').forEach(b=>b.addEventListener('click',()=>{
+    const p=parseInt(b.dataset.p);
+    if(p>=1&&p<=tp) onPage(p);
+  }));
+}
+
+// ══════════════════════════════════════════
+//  MASTER RENDER
+// ══════════════════════════════════════════
+function renderAll(){
+  const data=getFiltered(activePeriod,activeWH);
+  renderHero(data,activePeriod,activeWH);
+  renderCatList(data);
+  renderTrend(activeWH);
+  renderTopProducts(data);
+  rawPage=1;
+  renderRawTable(data);
+}
+
+// ══════════════════════════════════════════
+//  FETCH (with 2s timeout → baked fallback)
+// ══════════════════════════════════════════
+function parseCsv(text){
+  if(!text) return [];
+  if(text.charCodeAt(0)===0xFEFF) text=text.slice(1);
+  const rows=[];let row=[],cell='',inQ=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(inQ){if(c==='"'){if(text[i+1]==='"'){cell+='"';i++;}else inQ=false;}else cell+=c;}
+    else{if(c==='"')inQ=true;else if(c===','){row.push(cell);cell='';}else if(c==='\r'){}else if(c==='\n'){row.push(cell);rows.push(row);row=[];cell='';}else cell+=c;}
+  }
+  if(cell.length||row.length){row.push(cell);rows.push(row);}
+  if(!rows.length) return [];
+  const cl=s=>String(s||'').replace(/[\u200B-\u200D\uFEFF]/g,'').replace(/\u00A0/g,' ').trim();
+  const hdrs=rows[0].map(cl);
+  return rows.slice(1).filter(r=>r.some(c=>cl(c))).map(r=>Object.fromEntries(hdrs.map((k,i)=>[k,cl(r[i])])));
+}
+
+function normalize(r){
+  return {
+    Doc_Date:     r.Doc_Date||'',
+    Product_Name: r.Product_Name||'',
+    Cat_BU:       r.Cat_BU||'',
+    WH:           r.WH||'',
+    EXVat:        parseFloat(r.EXVat||r.Exvat||'0')||0,
+    Sales_CS:     parseFloat(r.Sales_CS||'0')||0,
+  };
+}
+
+// ══ CACHE ══
+const CACHE_KEY = 'bplus_data_v3';
+const CACHE_TTL = 30 * 60 * 1000; // 30 นาที
+
+function saveCache(data){
+  try{ localStorage.setItem(CACHE_KEY, JSON.stringify({ts:Date.now(),data})); }catch(e){}
+}
+function loadCache(){
+  try{
+    const raw = localStorage.getItem(CACHE_KEY);
+    if(!raw) return null;
+    const obj = JSON.parse(raw);
+    if(Date.now() - obj.ts > CACHE_TTL) return null;
+    return obj;
+  }catch(e){ return null; }
+}
+function cacheAge(ts){
+  const m = Math.floor((Date.now()-ts)/60000);
+  return m < 1 ? 'เมื่อกี้' : m+'  นาทีที่แล้ว';
+}
+
+// ══ FETCH ══
+async function fetchWithTimeout(url, ms=8000){
+  const ctrl = new AbortController();
+  const tid  = setTimeout(()=>ctrl.abort(), ms);
+  try{ const r=await fetch(url,{signal:ctrl.signal}); clearTimeout(tid); return r; }
+  catch(e){ clearTimeout(tid); throw e; }
+}
+
+const CATS_SET = new Set(['Bplus FMCG','Bplus Thaibev Al','Bplus บุหรี่','F&N']);
+const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
+
+// ── Step 1: แสดงข้อมูล instant (cache หรือ baked) ──
+function loadInstant(){
+  const cached = loadCache();
+  if(cached){
+    allData = cached.data;
+    setSource('cache', `⚡ Cache · ${cacheAge(cached.ts)}`);
+  } else {
+    allData = BAKED.map(normalize);
+    setSource('baked', '📦 Baked · 13 พ.ค. 2026');
+    document.getElementById('bakedNotice').style.display='block';
+  }
+  renderAll(); // แสดงทันที ไม่รอ
+}
+
+// ── Step 2: refresh ข้างหลัง ไม่บล็อก UI ──
+async function refreshBackground(){
+  const bar = document.getElementById('refreshBar');
+  if(bar) bar.style.display='block';
+  try{
+    const res = await fetchWithTimeout(SHEET_URL, 15000);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const rows = parseCsv(await res.text());
+    const fresh = rows.filter(r=>CATS_SET.has(r.Cat_BU)).map(normalize);
+    if(!fresh.length) throw new Error('ไม่มีข้อมูล');
+    saveCache(fresh);
+    allData = fresh;
+    setSource('live','🟢 Live · '+new Date().toLocaleTimeString('th-TH'));
+    document.getElementById('bakedNotice').style.display='none';
+    renderAll();
+    toast(`อัพเดตแล้ว ${fmtN(fresh.length)} รายการ`);
+  }catch(e){
+    // ถ้า fetch ไม่ได้ ใช้ข้อมูลเดิม ไม่แสดง error
+    if(allData===BAKED.map(normalize)) return; // ยังเป็น baked ไม่ toast
+    toast('ใช้ข้อมูลเดิม (ไม่มี internet)');
+  }finally{
+    if(bar) bar.style.display='none';
+  }
+}
+
+// ── Entry point ──
+async function loadData(force=false){
+  if(force){
+    // กด refresh ปุ่ม: spinner + force fetch
+    document.getElementById('spinner').classList.add('on');
+    try{
+      const res = await fetchWithTimeout(SHEET_URL, 15000);
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const rows = parseCsv(await res.text());
+      const fresh = rows.filter(r=>CATS_SET.has(r.Cat_BU)).map(normalize);
+      saveCache(fresh);
+      allData = fresh;
+      setSource('live','🟢 Live · '+new Date().toLocaleTimeString('th-TH'));
+      document.getElementById('bakedNotice').style.display='none';
+      renderAll();
+      toast(`โหลดสำเร็จ ${fmtN(fresh.length)} รายการ`);
+    }catch(e){
+      toast('โหลดไม่ได้: '+e.message);
+    }finally{
+      document.getElementById('spinner').classList.remove('on');
+    }
+  } else {
+    // เปิดแอพครั้งแรก: instant render แล้ว background refresh
+    loadInstant();
+    refreshBackground(); // ไม่ await — ทำงานข้างหลัง
+  }
+}
+
+function setSource(type,label){
+  const dot=document.getElementById('srcDot');
+  const txt=document.getElementById('srcText');
+  dot.className='src-dot '+type;
+  txt.innerHTML=`<strong>${label}</strong>`;
+}
+
+// ══════════════════════════════════════════
+//  TOAST
+// ══════════════════════════════════════════
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('on');
+  clearTimeout(el._t); el._t=setTimeout(()=>el.classList.remove('on'),3000);
+}
+
+// ══════════════════════════════════════════
+//  DARK MODE
+// ══════════════════════════════════════════
+function applyDark(){
+  const isDark=document.body.classList.contains('dark');
+  document.getElementById('darkBtn').textContent=isDark?'☀️':'🌙';
+}
+(function initDark(){
+  if(localStorage.getItem('bplus_dark')==='1') document.body.classList.add('dark');
+  applyDark();
+})();
+
+// ══════════════════════════════════════════
+//  EVENTS
+// ══════════════════════════════════════════
+// WH chips
+document.getElementById('whRow').addEventListener('click',e=>{
+  const btn=e.target.closest('.wh-chip');
+  if(!btn) return;
+  document.querySelectorAll('.wh-chip').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  activeWH=btn.dataset.wh;
+  renderAll();
+});
+
+// Period tabs
+document.getElementById('periodRow').addEventListener('click',e=>{
+  const btn=e.target.closest('.period-btn');
+  if(!btn) return;
+  document.querySelectorAll('.period-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  activePeriod=btn.dataset.period;
+  rawPage=1;
+  renderAll();
+});
+
+// Cat toggle
+document.getElementById('catToggle').addEventListener('click',()=>{
+  catShowAll=!catShowAll;
+  renderCatList(getFiltered(activePeriod,activeWH));
+});
+
+// Refresh
+document.getElementById('refreshBtn').addEventListener('click',()=>loadData(true));
+
+// Dark mode
+document.getElementById('darkBtn').addEventListener('click',()=>{
+  document.body.classList.toggle('dark');
+  localStorage.setItem('bplus_dark',document.body.classList.contains('dark')?'1':'0');
+  applyDark();
+  setTimeout(()=>renderTrend(activeWH),60);
+});
+
+// Raw search
+document.getElementById('rawSearch').addEventListener('input',e=>{
+  rawSearch=e.target.value.trim();
+  rawPage=1;
+  renderRawTable(getFiltered(activePeriod,activeWH));
+});
+
+// Raw table sort headers
+document.querySelectorAll('#rawTbl thead th').forEach(th=>{
+  if(!th.dataset.key) return;
+  th.addEventListener('click',()=>{
+    const k=th.dataset.key,t=th.dataset.type||'str';
+    if(rawSort.key===k){rawSort.dir=rawSort.dir==='asc'?'desc':'asc';}
+    else{rawSort.key=k;rawSort.dir=(t==='date'||t==='num')?'desc':'asc';}
+    rawPage=1;
+    renderRawTable(getFiltered(activePeriod,activeWH));
+  });
+});
+
+// Back to top
+const btBtn=document.getElementById('backTop');
+window.addEventListener('scroll',()=>btBtn.classList.toggle('on',window.scrollY>300));
+btBtn.addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}));
+
+// ══════════════════════════════════════════
+//  BOOT
+// ══════════════════════════════════════════
+loadData();
+</script>
+</body>
+</html>
