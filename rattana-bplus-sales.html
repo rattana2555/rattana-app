@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Rattana Bplus Sales v3.3</title>
+<title>Rattana Bplus Sales v4.0</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 <style>
@@ -199,7 +199,7 @@ a{color:inherit;text-decoration:none}
 <header class="app-header">
   <div class="header-logo">
     <h1>Rattana <span>Bplus</span> Sales</h1>
-    <small>v3.3 · 2026-05-13</small>
+    <small>v4.0 · 2026-05-14</small>
   </div>
   <button class="hbtn" id="darkBtn" title="Dark mode">🌙</button>
   <button class="hbtn" id="refreshBtn" title="รีเฟรชข้อมูล">↻</button>
@@ -217,7 +217,7 @@ a{color:inherit;text-decoration:none}
   <div class="src-text" id="srcText">กำลังโหลด…</div>
 </div>
 <div class="baked-notice" id="bakedNotice">
-  📦 ข้อมูล snapshot 13 พ.ค. 2026 · เปิดในโทรศัพท์/browser เพื่อดูข้อมูลล่าสุด
+  📦 ข้อมูล snapshot 14 พ.ค. 2026 · เปิดในโทรศัพท์/browser เพื่อดูข้อมูลล่าสุด
 </div>
 
 <!-- Main -->
@@ -324,8 +324,8 @@ const BAKED = [{"Doc_Date":"01/05/2026","Product_Name":"ฟันโอ คุ�
 // ══════════════════════════════════════════
 //  CONFIG
 // ══════════════════════════════════════════
-const SHEET_ID   = '1NxFkxiQev0xxGir93-qt0flNfzHz848-KuE7jDRSxQE';
-const SHEET_NAME = 'BP';
+const SHEET_ID   = '1jim4FOu4htxBvvYbdrsKk0I0PZEiZO7RF0SbNDA25Qg/edit?gid=0#gid=0';
+const SHEET_NAME = 'BP 2026';
 const CATS = ['Bplus FMCG','Bplus Thaibev Al','Bplus บุหรี่','F&N'];
 const CAT_CFG = {
   'Bplus FMCG':       {icon:'🛒',bg:'#dcf5ea',bar:'#00b96b'},
@@ -696,36 +696,24 @@ function cacheAge(ts){
 // ══ FETCH via JSONP (ไม่มีปัญหา CORS) ══
 const CATS_SET = new Set(['Bplus FMCG','Bplus Thaibev Al','Bplus บุหรี่','F&N']);
 
-function fetchGVIZ(){
-  return new Promise((resolve, reject) => {
-    const cbName = 'gviz_cb_' + Date.now();
-    const script  = document.createElement('script');
-    const timeout = setTimeout(()=>{
-      cleanup(); reject(new Error('timeout'));
-    }, 20000);
+// ── GAS URL (วาง Web App URL จาก Apps Script Deploy ตรงนี้) ──
+// วิธีได้ URL: Deploy bplus-gas.js → Web App → Copy URL
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwGBZkAhyNYUYpG_jbf6ingqlLLFt8ljxMuSgX8K2DVnoPRi6UBhAzTLA5Hoj-j758t/exec';
 
-    function cleanup(){
-      clearTimeout(timeout);
-      try{ delete window[cbName]; }catch(e){}
-      if(script.parentNode) script.parentNode.removeChild(script);
-    }
-
-    window[cbName] = function(resp){
-      cleanup();
-      try{
-        if(resp.status !== 'ok') { reject(new Error('gviz error')); return; }
-        const cols = resp.table.cols.map(c => c.label);
-        const rows = (resp.table.rows || []).map(r =>
-          Object.fromEntries(cols.map((c,i) => [c, r.c && r.c[i] ? String(r.c[i].v ?? '') : '']))
-        );
-        resolve(rows);
-      }catch(e){ reject(e); }
-    };
-
-    script.onerror = ()=>{ cleanup(); reject(new Error('script error')); };
-    script.src = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)}&callback=${cbName}`;
-    document.head.appendChild(script);
-  });
+async function fetchGVIZ(){
+  const ctrl = new AbortController();
+  const tid  = setTimeout(()=>ctrl.abort(), 15000);
+  try{
+    const res  = await fetch(GAS_URL, {signal: ctrl.signal});
+    clearTimeout(tid);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const json = await res.json();
+    if(json.status !== 'ok') throw new Error(json.message||'error');
+    return json.data; // array of row objects
+  }catch(e){
+    clearTimeout(tid);
+    throw e;
+  }
 }
 
 // ── Step 1: แสดงข้อมูล instant (cache หรือ baked) ──
@@ -736,7 +724,7 @@ function loadInstant(){
     setSource('cache', `⚡ Cache · ${cacheAge(cached.ts)}`);
   } else {
     allData = BAKED.map(normalize);
-    setSource('baked','📦 Baked · 13 พ.ค. 2026');
+    setSource('baked','📦 Baked · 14 พ.ค. 2026');
     document.getElementById('bakedNotice').style.display='block';
   }
   renderAll();
@@ -889,5 +877,3 @@ loadData();
 </script>
 </body>
 </html>
-
-
