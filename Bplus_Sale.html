@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Rattana Bplus Sales v3.2</title>
+<title>Rattana Bplus Sales v3.4</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
@@ -365,6 +365,7 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
       <div class="page-title">📦 สต็อก PDDT</div>
       <div style="display:flex;align-items:center;gap:8px">
         <div style="font-size:11px;color:var(--muted);font-weight:600" id="stockCountLabel"></div>
+        <button class="icon-btn" onclick="showPddtDebug()" title="ดู Headers CSV" style="font-size:14px">🔍</button>
         <button class="icon-btn" id="stockRefreshBtn" title="รีเฟรชสต็อก">↻</button>
       </div>
     </div>
@@ -438,7 +439,7 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
         </div>
         <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:14px;font-weight:600">เวอร์ชัน</span>
-          <span style="font-size:12px;color:var(--muted)">v3.2 · 2026-05-14</span>
+          <span style="font-size:12px;color:var(--muted)">v3.4 · 2026-05-14</span>
         </div>
       </div>
       <div style="margin-top:12px">
@@ -674,57 +675,89 @@ async function fetchStock(){
   toast('โหลด PDDT ไม่ได้ — ลองอัปโหลด CSV','err');
 }
 
-function parsePDDT(text){
-  const lines=text.split('\n').filter(l=>l.trim());
-  if(lines.length<2) return;
+// Store raw CSV for debug
+let _pddtRawText = '';
 
-  // Auto-detect header row — find the row containing 'ชื่อสินค้า' (up to row 15)
-  let headerIdx=0;
-  for(let i=0;i<Math.min(15,lines.length);i++){
-    if(lines[i].includes('ชื่อสินค้า')||lines[i].includes('Product_Name')){
-      headerIdx=i; break;
+function parsePDDT(text){
+  // Strip BOM
+  text = text.replace(/^\uFEFF/,'');
+  _pddtRawText = text;
+
+  const lines = text.split('\n');
+  if(lines.length < 2) return;
+
+  // Scan ALL rows to find header row containing 'ชื่อสินค้า'
+  let headerIdx = -1;
+  for(let i = 0; i < lines.length; i++){
+    if(lines[i].includes('ชื่อสินค้า')){
+      headerIdx = i; break;
     }
   }
+  if(headerIdx < 0) headerIdx = 0; // fallback row 0
 
-  const headers=parseCsvLine(lines[headerIdx]).map(h=>h.replace(/\r/,'').trim());
-  const ci={};headers.forEach((h,i)=>ci[h]=i);
+  // Parse & normalize headers
+  const headers = parseCsvLine(lines[headerIdx])
+    .map(h => h.replace(/\uFEFF/g,'').replace(/\r/g,'').replace(/"/g,'').trim());
+  window._pddtHeaders = headers;
+  window._pddtHeaderIdx = headerIdx;
 
-  function getIdx(...names){ for(const n of names){ if(ci[n]!==undefined) return ci[n]; } return -1; }
-  const nameI  = getIdx('ชื่อสินค้า','Product_Name');
-  const packI  = getIdx('Cat packing size','Cat_Pack');
-  const brandI = getIdx('Cat brand','Cat_Brand');
-  const buI    = getIdx('Cat 1 (BU หลัก)','Cat_BU');
-  const typeI  = getIdx('Cat 2 (หมวดใหญ่)','Cat_Type');
-  const w1I    = getIdx('Stock W1','W1');
-  const w2I    = getIdx('Stock W2','W2');
-  const w3I    = getIdx('Stock W3','W3');
-  const w4I    = getIdx('Stock W4','W4');
-  const smI    = getIdx('Stock SM','SM');
-  const c4I    = getIdx('Stock C4','C4');
+  const ci = {};
+  headers.forEach((h, i) => ci[h] = i);
 
-  // Debug: log detected columns (visible in browser console)
-  console.log('[PDDT] headerIdx='+headerIdx,'nameI='+nameI,'w1I='+w1I,'w2I='+w2I,'w3I='+w3I,'w4I='+w4I,'smI='+smI,'c4I='+c4I);
+  // Find index — exact → case-insensitive exact → contains
+  function getIdx(...names){
+    for(const n of names){
+      if(ci[n] !== undefined) return ci[n];
+      const nl = n.toLowerCase();
+      const k1 = Object.keys(ci).find(k => k.toLowerCase() === nl);
+      if(k1) return ci[k1];
+      const k2 = Object.keys(ci).find(k => k.toLowerCase().includes(nl));
+      if(k2) return ci[k2];
+    }
+    return -1;
+  }
 
-  // Bail if can't find product name column
-  if(nameI<0){ console.error('[PDDT] หาคอลัมน์ "ชื่อสินค้า" ไม่เจอ — headers:',headers); return; }
+  // Only columns needed
+  const nameI = getIdx('ชื่อสินค้า', 'Product_Name');
+  const buI   = getIdx('Cat 1 (BU หลัก)', 'Cat_BU', 'Cat 1', 'Cat1', 'BU');
+  const w1I   = getIdx('Stock W1', 'W1');
+  const w2I   = getIdx('Stock W2', 'W2');
+  const w3I   = getIdx('Stock W3', 'W3');
+  const w4I   = getIdx('Stock W4', 'W4');
+  const smI   = getIdx('Stock SM', 'SM');
+  const c4I   = getIdx('Stock C4', 'C4');
 
-  stockRows=[];
-  for(let i=headerIdx+1;i<lines.length;i++){
-    const cols=parseCsvLine(lines[i]);
-    const name=(cols[nameI]||'').replace(/\r/,'').trim();
+  console.log('[PDDT] headerIdx='+headerIdx, 'nameI='+nameI, 'buI='+buI,
+              'w1I='+w1I, 'w2I='+w2I, 'w3I='+w3I, 'w4I='+w4I);
+  console.log('[PDDT] first 30 headers:', headers.slice(0, 30));
+
+  window._pddtDebugMode = (nameI < 0);
+  if(nameI < 0) return;
+
+  stockRows = [];
+  for(let i = headerIdx + 1; i < lines.length; i++){
+    const line = lines[i];
+    if(!line || !line.trim()) continue;
+    const cols = parseCsvLine(line);
+    const name = (cols[nameI] || '').replace(/\r/,'').trim();
     if(!name) continue;
-    const parseNum=idx=>idx>=0?parseFloat(String(cols[idx]||'0').replace(/,/g,''))||0:0;
+    const parseNum = idx => idx >= 0 ? parseFloat(String(cols[idx]||'0').replace(/,/g,''))||0 : 0;
     stockRows.push({
       name,
-      pack    : packI>=0?(cols[packI]||'').replace(/\r/,'').trim():'',
-      brand   : brandI>=0?(cols[brandI]||'').replace(/\r/,'').trim():'',
-      cat_bu  : buI>=0?(cols[buI]||'').replace(/\r/,'').trim():'',
-      cat_type: typeI>=0?(cols[typeI]||'').replace(/\r/,'').trim():'',
+      cat_bu: buI >= 0 ? (cols[buI]||'').replace(/\r/,'').trim() : '',
       w1: parseNum(w1I), w2: parseNum(w2I),
       w3: parseNum(w3I), w4: parseNum(w4I),
       sm: parseNum(smI), c4: parseNum(c4I),
     });
   }
+}
+
+function showPddtDebug(){
+  const h = window._pddtHeaders || [];
+  const idx = window._pddtHeaderIdx ?? '?';
+  const msg = `Header row พบที่แถว: ${idx}\n\nคอลัมน์ (${h.length} คอลัมน์):\n`
+    + h.slice(0, 40).map((n,i) => `[${i}] "${n}"`).join('\n');
+  alert(msg);
 }
 
 function handleStockCSV(input){
