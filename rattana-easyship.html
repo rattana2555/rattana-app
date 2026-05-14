@@ -656,13 +656,49 @@ function doOCR(ev){
   };r.readAsDataURL(f);
 }
 function handleOCR(res){
-  var txt=res.data.text;
-  var m=txt.match(/Shopee\s*Order\s*No[.\s:]*([A-Z0-9]{10,18})/i);
-  var found=null;
-  if(m)found=m[1].toUpperCase();
-  if(!found){var all=txt.toUpperCase().match(/[A-Z0-9]{12,16}/g);if(all){for(var i=0;i<all.length;i++){if(DB[all[i]]){found=all[i];break;}}if(!found)found=all[0];}}
-  if(found){OCRVAL=found;TXT('ocr-l','✓ พบหมายเลข');TXT('ocr-v',found);$('ocr-btn').style.display='block';hdOrder(found);}
-  else{TXT('ocr-l','❌ ไม่พบ — ถ่ายใหม่');TXT('ocr-v','-');}
+  var txt = res.data.text;
+  var found = null;
+
+  // 1. Shopee: "Shopee Order No. XXXXXX"
+  var mShopee = txt.match(/Shopee\s*Order\s*No[.\s:]*([A-Z0-9]{10,18})/i);
+  if(mShopee) found = mShopee[1].toUpperCase();
+
+  // 2. TikTok: "Order ID: 58334877276278034" (ตัวเลข 15-20 หลัก)
+  if(!found){
+    var mTT = txt.match(/Order\s*ID[\s:]+([0-9]{15,20})/i);
+    if(mTT) found = mTT[1];
+  }
+
+  // 3. ค้นหาจาก DB — ลอง match กับ orderNum ที่มีในระบบ
+  if(!found){
+    // แยกคำแล้วเช็คทีละคำ
+    var tokens = txt.toUpperCase().replace(/[^A-Z0-9\s]/g,' ').split(/\s+/);
+    for(var i=0;i<tokens.length;i++){
+      var t=tokens[i].trim();
+      if(t.length>=10 && DB[t]){found=t;break;}
+    }
+  }
+
+  // 4. fallback — เอาตัวเลข/ตัวอักษรยาวสุดมาแสดง
+  if(!found){
+    var allNums = txt.match(/[0-9]{15,20}/g);
+    var allAlpha = txt.toUpperCase().match(/[A-Z0-9]{12,18}/g);
+    var candidates = (allNums||[]).concat(allAlpha||[]);
+    if(candidates.length>0) found = candidates[0];
+  }
+
+  if(found){
+    OCRVAL = found;
+    // แสดงว่าเจอแพลตฟอร์มไหน
+    var platform = /^\d+$/.test(found) ? '🛍️ TikTok Order ID' : '🛒 Shopee Order No.';
+    TXT('ocr-l','✓ '+platform);
+    TXT('ocr-v', found);
+    $('ocr-btn').style.display='block';
+    hdOrder(found);
+  } else {
+    TXT('ocr-l','❌ ไม่พบเลข — ถ่ายใหม่ให้ชัด');
+    TXT('ocr-v','-');
+  }
 }
 function useOCR(){if(OCRVAL){hdOrder(OCRVAL);if(LSCANNED)setTimeout(useLast,300);}}
 
