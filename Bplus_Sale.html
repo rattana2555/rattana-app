@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Rattana Bplus Sales v3.5</title>
+<title>Rattana Bplus Sales v3.6</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
@@ -448,7 +448,7 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
         </div>
         <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:14px;font-weight:600">เวอร์ชัน</span>
-          <span style="font-size:12px;color:var(--muted)">v3.5 · 2026-05-14</span>
+          <span style="font-size:12px;color:var(--muted)">v3.6 · 2026-05-14</span>
         </div>
       </div>
       <div style="margin-top:12px">
@@ -665,7 +665,25 @@ function parseSQLBP(text){
 
 // ── PDDT Stock Fetch ──────────────────────────────
 async function fetchStock(){
-  $('stockList').innerHTML='<div class="loading-stock">⏳ กำลังโหลดข้อมูลสต็อก PDDT...</div>';
+  if($('stockCatList')) $('stockCatList').innerHTML='<div class="loading-stock">⏳ กำลังโหลดสต็อก PDDT...</div>';
+
+  // 1. GAS (same endpoint, ?type=stock)
+  try{
+    const res=await fetch(GAS_URL+'?type=stock',{redirect:'follow'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const json=await res.json();
+    if(json.error) throw new Error(json.error);
+    stockRows=json.rows.map(r=>({
+      name:String(r.name||'').trim(), cat_bu:String(r.cat_bu||'').trim(),
+      w1:Number(r.w1)||0, w2:Number(r.w2)||0, w3:Number(r.w3)||0, w4:Number(r.w4)||0,
+    }));
+    stockSourceLabel='GAS ✅';
+    renderStock(); renderProfile();
+    toast(`สต็อก ${stockRows.length.toLocaleString()} สินค้า 📦`);
+    return;
+  }catch(e){console.warn('GAS stock:',e.message);}
+
+  // 2. CSV fallback
   for(let i=0;i<PDDT_CSV_URLS.length;i++){
     try{
       const res=await fetch(PDDT_CSV_URLS[i],{redirect:'follow'});
@@ -673,16 +691,17 @@ async function fetchStock(){
       const txt=await res.text();
       if(!txt||txt.length<10) throw new Error('empty');
       parsePDDT(txt);
-      stockSourceLabel=`PDDT CSV (URL${i+1}) ✅`;
+      stockSourceLabel=`CSV (URL${i+1}) ✅`;
       renderStock(); renderProfile();
       toast(`สต็อก ${stockRows.length.toLocaleString()} สินค้า 📦`);
       return;
-    }catch(e){console.warn('PDDT URL'+i+':',e.message);}
+    }catch(e){console.warn('PDDT CSV'+i+':',e.message);}
   }
+
   stockSourceLabel='โหลดไม่ได้ ❌';
-  $('stockList').innerHTML='<div class="empty">โหลดสต็อก PDDT ไม่ได้<br><small>กรุณาอัปโหลด CSV ด้วยตนเอง (หน้าโปรไฟล์)</small></div>';
-  $('stockSource').textContent=stockSourceLabel;
-  toast('โหลด PDDT ไม่ได้ — ลองอัปโหลด CSV','err');
+  if($('stockCatList')) $('stockCatList').innerHTML='<div class="empty">⚠️ โหลด PDDT ไม่ได้<br><small>กรุณาอัปเดต GAS Script หรืออัปโหลด CSV ในหน้าโปรไฟล์</small></div>';
+  if($('stockSource')) $('stockSource').textContent=stockSourceLabel;
+  toast('โหลด PDDT ไม่ได้','err');
 }
 
 // Store raw CSV for debug
