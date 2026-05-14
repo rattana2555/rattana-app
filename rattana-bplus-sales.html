@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Rattana Bplus Sales v4.0</title>
+<title>Rattana Bplus Sales v4.1</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 <style>
@@ -199,7 +199,7 @@ a{color:inherit;text-decoration:none}
 <header class="app-header">
   <div class="header-logo">
     <h1>Rattana <span>Bplus</span> Sales</h1>
-    <small>v4.0 · 2026-05-14</small>
+    <small>v4.1 · 2026-05-14</small>
   </div>
   <button class="hbtn" id="darkBtn" title="Dark mode">🌙</button>
   <button class="hbtn" id="refreshBtn" title="รีเฟรชข้อมูล">↻</button>
@@ -701,19 +701,14 @@ const CATS_SET = new Set(['Bplus FMCG','Bplus Thaibev Al','Bplus บุหรี
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwGBZkAhyNYUYpG_jbf6ingqlLLFt8ljxMuSgX8K2DVnoPRi6UBhAzTLA5Hoj-j758t/exec';
 
 async function fetchGVIZ(){
-  const ctrl = new AbortController();
-  const tid  = setTimeout(()=>ctrl.abort(), 15000);
-  try{
-    const res  = await fetch(GAS_URL, {signal: ctrl.signal});
-    clearTimeout(tid);
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const json = await res.json();
-    if(json.status !== 'ok') throw new Error(json.message||'error');
-    return json.data; // array of row objects
-  }catch(e){
-    clearTimeout(tid);
-    throw e;
-  }
+  const timeout = new Promise((_,rej) =>
+    setTimeout(()=>rej(new Error('timeout 15s')), 15000)
+  );
+  const res  = await Promise.race([fetch(GAS_URL), timeout]);
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  const json = await res.json();
+  if(json.status !== 'ok') throw new Error(json.message||'error');
+  return json.data; // array of row objects
 }
 
 // ── Step 1: แสดงข้อมูล instant (cache หรือ baked) ──
