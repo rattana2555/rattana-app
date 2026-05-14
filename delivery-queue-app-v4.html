@@ -8,7 +8,6 @@
 <title>🚛 จัดคิวรถส่งสินค้า Rattana v5.0</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
 
@@ -236,14 +235,22 @@ select,input{font-family:inherit;font-size:16px}
 <div id="loginScreen">
   <div class="login-logo">🚛</div>
   <div class="login-title">จัดคิวรถส่งสินค้า</div>
-  <div class="login-sub">รัตนไพบูลย์ กรุ๊ป W1 — กรุณาล็อกอินด้วย Google</div>
-  <div id="g_id_onload"
-    data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com"
-    data-callback="handleGoogleLogin"
-    data-auto_prompt="false">
+  <div class="login-sub" style="color:rgba(255,255,255,.5);margin-bottom:8px">รัตนไพบูลย์ กรุ๊ป W1</div>
+  <div style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:24px 28px;width:320px;display:flex;flex-direction:column;gap:12px">
+    <div style="font-size:13px;color:rgba(255,255,255,.7);font-weight:500">กรุณาใส่ Email ของคุณ</div>
+    <input id="loginEmail" type="email" placeholder="yourname@rattanaphaiboon.com"
+      autocomplete="email"
+      style="padding:11px 14px;border-radius:8px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-size:14px;font-family:Sarabun,sans-serif;width:100%;outline:none"
+      onkeydown="if(event.key==='Enter')doEmailLogin()"/>
+    <button onclick="doEmailLogin()"
+      style="padding:12px;border-radius:8px;background:var(--gold);color:var(--navy);font-size:14px;font-weight:700;font-family:Sarabun,sans-serif;border:none;cursor:pointer;width:100%;transition:opacity .15s"
+      onmouseover="this.style.opacity='.88'" onmouseout="this.style.opacity='1'">
+      เข้าสู่ระบบ →
+    </button>
+    <div id="loginSpinner" style="display:none;text-align:center;color:rgba(255,255,255,.5);font-size:13px">⏳ กำลังตรวจสอบ...</div>
+    <div id="loginErr" style="display:none;background:#C62828;color:#fff;border-radius:8px;padding:8px 12px;font-size:12px;text-align:center"></div>
   </div>
-  <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div>
-  <div class="login-err" id="loginErr"></div>
+  <div style="font-size:11px;color:rgba(255,255,255,.25);margin-top:8px">ระบบจะตรวจสอบสิทธิ์จาก Users Sheet</div>
 </div>
 
 <!-- App Screen (shown after login) -->
@@ -2369,40 +2376,66 @@ function showToast(msg,type='ok'){
 // INIT
 // ══════════════════════════════════════════
 
-// ══ GOOGLE AUTH ══
-const AUTH_SHEET_ID='1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ';
-let currentUser=null;
+// ══ EMAIL AUTH ══
+// ตรวจ email จาก Users Sheet โดยตรง ไม่ต้อง OAuth
+const AUTH_SHEET_ID = '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ';
+let currentUser = null;
 
-function decodeJwtPayload(token){
-  const p=String(token||'').split('.');
-  if(p.length<2)throw new Error('JWT invalid');
-  let b64=p[1].replace(/-/g,'+').replace(/_/g,'/');
-  const pad=(4-b64.length%4)%4;if(pad)b64+='='.repeat(pad);
-  const bin=atob(b64),bytes=new Uint8Array(bin.length);
-  for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
-  return JSON.parse(new TextDecoder('utf-8').decode(bytes));
-}
-const normEmail=s=>String(s||'').replace(/[\u200B\u200C\u200D\uFEFF]/g,'').replace(/\s+/g,'').toLowerCase();
+const normEmail = s => String(s||'').replace(/[\u200B-\u200D\uFEFF]/g,'').replace(/\s+/g,'').toLowerCase();
 
-async function handleGoogleLogin(r){
-  document.getElementById('loginErr').style.display='none';
+async function doEmailLogin(){
+  const emailInput = document.getElementById('loginEmail');
+  const email = normEmail(emailInput?.value||'');
+  if(!email || !email.includes('@')){
+    showLoginErr('กรุณาใส่ Email ให้ถูกต้อง'); return;
+  }
+  const errEl=document.getElementById('loginErr');
+  const spinEl=document.getElementById('loginSpinner');
+  if(errEl)errEl.style.display='none';
+  if(spinEl)spinEl.style.display='block';
+
   try{
-    const email=normEmail(decodeJwtPayload(r.credential).email);
-    // Fetch users sheet
-    const url=`https://docs.google.com/spreadsheets/d/${AUTH_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1`;
-    const res=await fetch(url);
-    const txt=await res.text();
-    const rows=parseCSV(txt);
-    const user=rows.find(u=>normEmail(u['E-mail']||u['email']||'')===email);
-    if(!user){showLoginErr('Email not found — ติดต่อ Admin');return;}
-    if(String(user['Status']||'').trim().toLowerCase()!=='active'){showLoginErr('Account suspended');return;}
-    currentUser={email,name:user['ชื่อ - สกุล']||'',nickname:user['ชื่อเล่น']||'',
-      role:parseInt(user['User Role'])||1,dept:user['แผนก']||'',warehouse:user['W']||''};
-    localStorage.setItem('rattanaUser',JSON.stringify({data:currentUser,exp:Date.now()+30*24*60*60*1000}));
+    // Fetch Users Sheet as CSV (column I=Email, L=Status, B=W, G=ชื่อเล่น, E=ชื่อสกุล)
+    const url=`https://docs.google.com/spreadsheets/d/${AUTH_SHEET_ID}/gviz/tq?tqx=out:csv`;
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('โหลด Users Sheet ไม่ได้');
+    const txt = await res.text();
+    const rows = parseCSV(txt);
+
+    // Find by Email column (col I = index 8, or by header name)
+    const user = rows.find(u => {
+      const ue = normEmail(u['E-mail']||u['email']||Object.values(u)[8]||'');
+      return ue === email;
+    });
+
+    if(!user){ showLoginErr('ไม่พบ Email นี้ในระบบ — ติดต่อ Admin'); if(spinEl)spinEl.style.display='none'; return; }
+
+    const status = String(user['Status']||Object.values(user)[11]||'').trim().toLowerCase();
+    if(status !== 'active'){ showLoginErr('บัญชีถูกระงับ — ติดต่อ Admin'); if(spinEl)spinEl.style.display='none'; return; }
+
+    currentUser = {
+      email,
+      name:     user['ชื่อ - สกุล'] || Object.values(user)[4] || '',
+      nickname: user['ชื่อเล่น']     || Object.values(user)[6] || '',
+      role:     parseInt(user['User Role']||Object.values(user)[15]||'1') || 1,
+      dept:     user['แผนก']         || Object.values(user)[17] || '',
+      warehouse:user['W']            || Object.values(user)[1]  || '',
+    };
+
+    // Session 30 วัน
+    localStorage.setItem('rattanaUser', JSON.stringify({data:currentUser, exp:Date.now()+30*24*60*60*1000}));
     showApp();
-  }catch(e){showLoginErr('Error: '+e.message);}
+  }catch(e){
+    showLoginErr('เกิดข้อผิดพลาด: '+e.message);
+  }finally{
+    if(spinEl)spinEl.style.display='none';
+  }
 }
-function showLoginErr(msg){const el=document.getElementById('loginErr');if(el){el.textContent=msg;el.style.display='block';}}
+
+function showLoginErr(msg){
+  const el=document.getElementById('loginErr');
+  if(el){el.textContent=msg;el.style.display='block';}
+}
 function showApp(){
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('appScreen').style.display='block';
