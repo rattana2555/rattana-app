@@ -11,13 +11,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
 
-/* ── Login Screen ── */
-#loginScreen{position:fixed;inset:0;background:var(--navy);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;gap:20px}
-#loginScreen .login-logo{font-size:56px}
-#loginScreen .login-title{font-family:'Kanit',sans-serif;font-size:22px;font-weight:700;color:var(--gold-light)}
-#loginScreen .login-sub{font-size:13px;color:rgba(255,255,255,.5)}
-#loginScreen .login-err{background:#C62828;color:#fff;border-radius:8px;padding:8px 16px;font-size:13px;display:none;max-width:300px;text-align:center}
-#appScreen{display:none}
 
 /* ══ RATTANA DESIGN TOKENS ══ */
 :root{
@@ -231,28 +224,7 @@ select,input{font-family:inherit;font-size:16px}
 </head>
 <body>
 
-<!-- Login Screen -->
-<div id="loginScreen">
-  <div class="login-logo">🚛</div>
-  <div class="login-title">จัดคิวรถส่งสินค้า</div>
-  <div class="login-sub">รัตนไพบูลย์ กรุ๊ป W1</div>
-  <div style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:24px 28px;width:320px;display:flex;flex-direction:column;gap:12px;margin-top:8px">
-    <div style="font-size:13px;color:rgba(255,255,255,.65);font-weight:500">กรุณาใส่ Email ของคุณ</div>
-    <input id="loginEmail" type="email" placeholder="your@rattanaphaiboon.com"
-      autocomplete="email"
-      style="padding:11px 14px;border-radius:8px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-size:15px;font-family:'Sarabun',sans-serif;width:100%;outline:none"
-      onkeydown="if(event.key==='Enter')doLogin()"/>
-    <button onclick="doLogin()" id="loginBtn"
-      style="padding:12px;border-radius:8px;background:var(--gold);color:var(--navy);font-size:14px;font-weight:700;font-family:'Sarabun',sans-serif;border:none;cursor:pointer;width:100%">
-      เข้าสู่ระบบ →
-    </button>
-    <div id="loginStatus" style="display:none;text-align:center;font-size:12px;color:rgba(255,255,255,.5)">⏳ กำลังตรวจสอบ...</div>
-    <div id="loginErr" style="display:none;background:#C62828;color:#fff;border-radius:8px;padding:8px 12px;font-size:12px;text-align:center;line-height:1.5"></div>
-  </div>
-</div>
 
-<!-- App Screen (shown after login) -->
-<div id="appScreen">
 <!-- Loading -->
 <div id="loadingBar"></div>
 <div id="ls">
@@ -2374,110 +2346,12 @@ function showToast(msg,type='ok'){
 // INIT
 // ══════════════════════════════════════════
 
-// ══ AUTH — อ่าน Users Sheet ผ่าน gviz/tq (รองรับ CORS, ไม่ต้อง Apps Script) ══
-const AUTH_SHEET_ID = '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ';
+// ── No login required ──
 let currentUser = null;
-
-const normEmail = e => String(e||'').replace(/​|‌|‍|﻿/g,'').replace(/\s+/g,'').toLowerCase();
-
-// อ่าน Google Sheet ผ่าน gviz/tq JSON — ทำงานได้กับ Public Sheet โดยไม่มี CORS issue
-async function fetchUsersSheet(){
-  const url = `https://docs.google.com/spreadsheets/d/${AUTH_SHEET_ID}/gviz/tq?tqx=out:json`;
-  const res  = await fetch(url);
-  const text = await res.text();
-  // กรอก JSONP wrapper: /*O_o*/
-google.visualization.Query.setResponse({...})
-  const match = text.match(/setResponse\(([\s\S]*)\)/);
-  if(!match) throw new Error('ไม่สามารถอ่าน Users Sheet ได้');
-  const json = JSON.parse(match[1]);
-  const cols = json.table.cols.map(c => c.label || c.id || '');
-  return json.table.rows.map(row => {
-    const obj = {};
-    (row.c||[]).forEach((cell,i) => { obj[cols[i]] = cell ? (cell.v ?? '') : ''; });
-    return obj;
-  });
-}
-
-async function doLogin(){
-  const emailRaw = document.getElementById('loginEmail')?.value || '';
-  const email    = normEmail(emailRaw);
-  const errEl    = document.getElementById('loginErr');
-  const statusEl = document.getElementById('loginStatus');
-  const btn      = document.getElementById('loginBtn');
-
-  if(!email || !email.includes('@')){
-    if(errEl){ errEl.textContent='กรุณาใส่ Email ให้ถูกต้อง'; errEl.style.display='block'; }
-    return;
-  }
-  if(errEl) errEl.style.display='none';
-  if(statusEl) statusEl.style.display='block';
-  if(btn){ btn.disabled=true; btn.textContent='⏳ กำลังตรวจสอบ...'; }
-
-  try{
-    const rows = await fetchUsersSheet();
-
-    // ค้นหา row ที่ email ตรง — รองรับหลาย column name
-    const user = rows.find(u => {
-      const e2 = normEmail(u['E-mail']||u['email']||u['Email']||u['อีเมล']||'');
-      return e2 === email;
-    });
-
-    if(!user){
-      showErr(`ไม่พบ Email "${emailRaw}" ในระบบ
-กรุณาติดต่อ Admin`); return;
-    }
-
-    const status = String(user['Status']||'').trim().toLowerCase();
-    if(status !== 'active'){
-      showErr('บัญชีถูกระงับการใช้งาน — ติดต่อ Admin'); return;
-    }
-
-    currentUser = {
-      email,
-      name:      user['ชื่อ - สกุล'] || '',
-      nickname:  user['ชื่อเล่น']     || email.split('@')[0],
-      role:      parseInt(user['User Role']) || 1,
-      warehouse: user['W'] || 'W1',
-      empId:     user['รหัสพนักงาน'] || '',
-    };
-    localStorage.setItem('rattanaUser', JSON.stringify({
-      data: currentUser,
-      exp:  Date.now() + 30*24*60*60*1000  // 30 วัน
-    }));
-    showApp();
-
-  }catch(e){
-    showErr('เกิดข้อผิดพลาด: '+(e.message||e));
-    console.error(e);
-  }finally{
-    if(statusEl) statusEl.style.display='none';
-    if(btn){ btn.disabled=false; btn.textContent='เข้าสู่ระบบ →'; }
-  }
-}
-
-function showErr(msg){
-  const el = document.getElementById('loginErr');
-  if(el){ el.textContent=msg; el.style.display='block'; }
-}
-function showApp(){
-  document.getElementById('loginScreen').style.display='none';
-  document.getElementById('appScreen').style.display='block';
-  loadData();
-}
-function checkSession(){
-  try{
-    const raw = localStorage.getItem('rattanaUser');
-    if(!raw) return;
-    const {data,exp} = JSON.parse(raw);
-    if(Date.now() > exp){ localStorage.removeItem('rattanaUser'); return; }
-    currentUser = data;
-    showApp();
-  }catch{ localStorage.removeItem('rattanaUser'); }
-}
-function logout(){ localStorage.removeItem('rattanaUser'); location.reload(); }
-window.onload = checkSession;
+function logout(){location.reload();}
+window.addEventListener('DOMContentLoaded', loadData);
 
 </script>
-</div><!-- /appScreen -->
+
 </body>
 </html>
