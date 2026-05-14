@@ -8,74 +8,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="R-Product">
 <meta name="theme-color" content="#0d1b3e">
-<title>Rattana Product Barcode v1.2</title>
-<link rel="manifest" id="pwaManifest">
+<title>Rattana Product Barcode v1.4</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-<script>
-// ── Inline PWA Manifest ──────────────────────────────────────────
-(function() {
-  const manifest = {
-    name: 'Rattana Product Barcode',
-    short_name: 'R-Product',
-    description: 'ค้นหาสินค้าและแสดงบาร์โค้ด',
-    start_url: './',
-    display: 'standalone',
-    orientation: 'portrait',
-    background_color: '#0d1b3e',
-    theme_color: '#0d1b3e',
-    icons: [
-      { src: 'https://placehold.co/192x192/0d1b3e/c9a84c?text=R', sizes: '192x192', type: 'image/png' },
-      { src: 'https://placehold.co/512x512/0d1b3e/c9a84c?text=R', sizes: '512x512', type: 'image/png' }
-    ]
-  };
-  const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-  document.getElementById('pwaManifest').href = URL.createObjectURL(blob);
-})();
-
-// ── Inline Service Worker ─────────────────────────────────────────
-if ('serviceWorker' in navigator) {
-  const swCode = `
-const CACHE = 'rattana-barcode-v1';
-const ASSETS = [
-  'https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap',
-  'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js',
-];
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS).catch(()=>{})));
-  self.skipWaiting();
-});
-self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys =>
-    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-  ));
-  self.clients.claim();
-});
-self.addEventListener('fetch', e => {
-  // Cache-first for CDN assets, network-first for sheets data
-  const url = e.request.url;
-  if (url.includes('googleapis.com/spreadsheets') || url.includes('lh3.googleusercontent')) {
-    e.respondWith(
-      fetch(e.request).catch(() => caches.match(e.request))
-    );
-  } else {
-    e.respondWith(
-      caches.match(e.request).then(r => r || fetch(e.request).then(res => {
-        if (res.ok) {
-          const clone = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone));
-        }
-        return res;
-      }))
-    );
-  }
-});
-`;
-  const swBlob = new Blob([swCode], { type: 'text/javascript' });
-  const swUrl  = URL.createObjectURL(swBlob);
-  navigator.serviceWorker.register(swUrl).catch(() => {});
-}
-</script>
 <style>
 :root {
   --navy:        #0d1b3e;
@@ -223,6 +158,18 @@ body.dark .cat-group-badge{color:var(--gold-light)}
 .thumb{width:40px;height:40px;border-radius:var(--radius-sm);object-fit:contain;background:var(--bg);border:1px solid var(--border);flex-shrink:0;padding:2px}
 .thumb-placeholder{width:40px;height:40px;border-radius:var(--radius-sm);background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
 
+/* LINE browser overlay */
+.line-overlay{display:none;position:fixed;inset:0;z-index:9999;background:var(--navy);flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;text-align:center}
+.line-overlay.show{display:flex}
+.line-logo{font-size:56px;margin-bottom:16px}
+.line-title{font-size:22px;font-weight:700;color:#fff;margin-bottom:8px;line-height:1.3}
+.line-sub{font-size:14px;color:rgba(255,255,255,.65);line-height:1.6;margin-bottom:28px}
+.line-steps{background:rgba(255,255,255,.08);border-radius:var(--radius-md);padding:16px 20px;margin-bottom:28px;text-align:left;width:100%;max-width:340px}
+.line-step{display:flex;align-items:flex-start;gap:10px;font-size:14px;color:rgba(255,255,255,.85);margin-bottom:10px;line-height:1.4}
+.line-step:last-child{margin-bottom:0}
+.line-step-num{background:var(--gold);color:var(--navy);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px}
+.line-open-btn{background:var(--gold);color:var(--navy);border:none;border-radius:var(--radius-md);padding:14px 32px;font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;width:100%;max-width:340px}
+
 @media print {
   header, .search-wrap, .pagination, .icon-btn, .print-btn { display:none!important }
   .barcode-card { break-inside:avoid; page-break-inside:avoid }
@@ -236,6 +183,28 @@ body.dark .cat-group-badge{color:var(--gold-light)}
 </style>
 </head>
 <body>
+
+<!-- LINE Browser Overlay -->
+<div class="line-overlay" id="lineOverlay">
+  <div class="line-logo">🌐</div>
+  <div class="line-title">กรุณาเปิดในบราวเซอร์</div>
+  <div class="line-sub">แอปนี้ไม่รองรับ Browser ในตัว LINE<br>กรุณาเปิดด้วย Safari หรือ Chrome</div>
+  <div class="line-steps">
+    <div class="line-step">
+      <div class="line-step-num">1</div>
+      <div>กดปุ่ม <strong style="color:#fff">⋯</strong> หรือ <strong style="color:#fff">⋮</strong> ที่มุมขวาบน</div>
+    </div>
+    <div class="line-step">
+      <div class="line-step-num">2</div>
+      <div>เลือก <strong style="color:var(--gold)">"เปิดใน Browser"</strong> หรือ <strong style="color:var(--gold)">"Open in Browser"</strong></div>
+    </div>
+    <div class="line-step">
+      <div class="line-step-num">3</div>
+      <div>แอปจะเปิดใน <strong style="color:#fff">Safari / Chrome</strong> โดยอัตโนมัติ</div>
+    </div>
+  </div>
+  <button class="line-open-btn" onclick="tryOpenExternal()">🔗 คัดลอก URL เพื่อเปิดใน Browser</button>
+</div>
 
 <!-- Spinner -->
 <div class="spinner-overlay" id="spinnerOverlay">
@@ -252,7 +221,7 @@ body.dark .cat-group-badge{color:var(--gold-light)}
 <div class="screen active" id="listScreen">
   <header>
     <div class="logo-text">Rattana <span>Product</span></div>
-    <span class="version-tag">v1.2 · 2026-05-14</span>
+    <span class="version-tag">v1.4 · 2026-05-14</span>
     <button class="icon-btn" id="installBtn" onclick="installApp()" title="ติดตั้งแอป" style="display:none">📲</button>
     <button class="icon-btn" onclick="toggleDark()" title="Dark mode">🌙</button>
     <button class="icon-btn" onclick="loadData(true)" title="รีเฟรช">🔄</button>
@@ -297,10 +266,10 @@ body.dark .cat-group-badge{color:var(--gold-light)}
 <script>
 // ═══════════════ CONFIG ═══════════════
 const SHEET_ID       = '1ImkivuDxxTaluPVt2dJLX12fhVWvpU5czshn-OsRYuY';
-const CSV_URL        = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`;
-// ⚠️ ตั้งชื่อ Tab ของ Sheet ข้อมูล catalog ให้ถูกต้อง (ชื่อ tab ที่มี CAT GROUP, SKU_USAGE)
 const CATALOG_TAB    = 'Detail';   // ชื่อ tab ใน Google Sheets
-const CATALOG_URL    = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&sheet=${encodeURIComponent(CATALOG_TAB)}`;
+// ใช้ gviz API — ไม่มี redirect, ใช้ได้กับ iOS Safari
+const CSV_URL        = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=0`;
+const CATALOG_URL    = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(CATALOG_TAB)}`;
 const PER_PAGE = 8;
 
 // ═══════════════ STATE ════════════════
@@ -313,10 +282,37 @@ let catalogMap    = new Map(); // name (normalized) → { catGroup, imgUrl }
 
 // ═══════════════ INIT ════════════════
 window.addEventListener('DOMContentLoaded', () => {
+  // Detect LINE in-app browser
+  if (isLineBrowser()) {
+    document.getElementById('lineOverlay').classList.add('show');
+    return; // Stop — don't load data in LINE browser
+  }
   const saved = localStorage.getItem('rattana-dark');
   if (saved === 'true') { darkMode = true; document.body.classList.add('dark'); }
   loadData(false);
 });
+
+function isLineBrowser() {
+  const ua = navigator.userAgent || '';
+  return /Line\//i.test(ua) || /LIFF/i.test(ua);
+}
+
+function tryOpenExternal() {
+  const url = location.href;
+  // Try clipboard copy
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(() => {
+      showToast('✅ คัดลอก URL แล้ว — วางใน Safari หรือ Chrome');
+    }).catch(() => promptManual(url));
+  } else {
+    promptManual(url);
+  }
+}
+
+function promptManual(url) {
+  // As last resort, show the URL in an alert
+  window.prompt('คัดลอก URL นี้แล้วเปิดใน Safari / Chrome:', url);
+}
 
 // ═══════════════ DATA LOAD ═══════════
 async function loadData(force = false) {
@@ -341,17 +337,15 @@ async function loadData(force = false) {
 
   showSpinner('กำลังโหลดข้อมูลจาก Google Sheets...');
   try {
-    const [res1, res2] = await Promise.all([
-      fetch(CSV_URL),
-      fetch(CATALOG_URL).catch(() => null),
+    const [text1, text2] = await Promise.all([
+      fetchText(CSV_URL),
+      fetchText(CATALOG_URL).catch(() => null),
     ]);
-    if (!res1.ok) throw new Error(`HTTP ${res1.status}`);
-    const text1 = await res1.text();
+
     allProducts = parseCsv(text1);
     localStorage.setItem(cacheKey, JSON.stringify(allProducts));
 
-    if (res2 && res2.ok) {
-      const text2 = await res2.text();
+    if (text2) {
       const catRows = parseCatalogCsv(text2);
       buildCatalogMap(catRows);
       localStorage.setItem(catKey, JSON.stringify(catRows));
@@ -361,9 +355,60 @@ async function loadData(force = false) {
     afterLoad();
   } catch(err) {
     hideSpinner();
-    showToast('⚠️ โหลดข้อมูลไม่สำเร็จ: ' + err.message);
-    renderEmpty('โหลดข้อมูลไม่สำเร็จ', 'ตรวจสอบการเชื่อมต่อ หรือ กด 🔄 รีเฟรช');
+    console.error('Load error:', err);
+    // Try loading from cache even if expired
+    try {
+      const raw = localStorage.getItem('rattana-barcode-data');
+      const cat = localStorage.getItem('rattana-catalog-data');
+      if (raw) {
+        allProducts = JSON.parse(raw);
+        if (cat) buildCatalogMap(JSON.parse(cat));
+        afterLoad();
+        showToast('⚠️ ใช้ข้อมูล cache (ไม่มีเน็ต)');
+        return;
+      }
+    } catch(e2) {}
+    showToast('⚠️ โหลดข้อมูลไม่สำเร็จ — กด 🔄 รีเฟรช');
+    renderEmpty('โหลดข้อมูลไม่สำเร็จ', 'ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต แล้วกด 🔄');
   }
+}
+
+// iOS-safe fetch: ใช้ fetch ก่อน ถ้าไม่ได้ fallback ไป XHR
+function fetchText(url) {
+  return new Promise((resolve, reject) => {
+    // Try fetch first
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
+    fetch(url, {
+      method: 'GET',
+      mode: 'cors',
+      credentials: 'omit',
+      signal: ctrl.signal,
+    })
+    .then(r => {
+      clearTimeout(timer);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.text();
+    })
+    .then(resolve)
+    .catch(() => {
+      clearTimeout(timer);
+      // Fallback: XMLHttpRequest (handles iOS quirks better)
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', url, true);
+      xhr.timeout = 15000;
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(xhr.responseText);
+        } else {
+          reject(new Error(`XHR HTTP ${xhr.status}`));
+        }
+      };
+      xhr.onerror   = () => reject(new Error('XHR network error'));
+      xhr.ontimeout = () => reject(new Error('XHR timeout'));
+      xhr.send();
+    });
+  });
 }
 
 function afterLoad() {
