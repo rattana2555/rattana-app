@@ -1514,19 +1514,27 @@ function confirmAutoAssign(){
       return(Math.atan2(Math.sin(dLng)*Math.cos(lat2),Math.cos(lat1)*Math.sin(lat2)-Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLng))*180/Math.PI+360)%360;
     }
 
-    // ── centroid ของบิลที่อยู่บนรถแล้ว ──
-    function truckCentroid(plate){
-      const on=Object.entries(newQ).filter(([,p])=>p===plate).map(([r])=>billMap[r]).filter(x=>x&&x.lat&&x.lng);
-      if(!on.length)return null;
-      return{lat:on.reduce((s,b)=>s+b.lat,0)/on.length, lng:on.reduce((s,b)=>s+b.lng,0)/on.length};
+    // ── O(1) cache: centroid + bearing sum ──
+    const centCache={};  // plate→{latSum,lngSum,cnt}
+    const bearCache={};  // plate→{sum,cnt}
+    const MAX_CENTROID_DIST=35;
+
+    function addToCache(plate,b){
+      if(b.lat&&b.lng){
+        if(!centCache[plate])centCache[plate]={latSum:0,lngSum:0,cnt:0};
+        centCache[plate].latSum+=b.lat; centCache[plate].lngSum+=b.lng; centCache[plate].cnt++;
+      }
+      const br=bearing(b);
+      if(!bearCache[plate])bearCache[plate]={sum:0,cnt:0};
+      bearCache[plate].sum+=br; bearCache[plate].cnt++;
     }
-    // ── ระยะจากจุด b ไปยัง centroid ของรถ (กม.) ──
-    const MAX_CENTROID_DIST=35; // กม. — ถ้าไกลกว่านี้ถือว่าข้ามแถบ
     function farFromCentroid(plate,b){
       if(!b.lat||!b.lng)return false;
-      const c=truckCentroid(plate);
-      if(!c)return false;
-      return haversine(c.lat,c.lng,b.lat,b.lng)>MAX_CENTROID_DIST;
+      const c=centCache[plate]; if(!c||!c.cnt)return false;
+      return haversine(c.latSum/c.cnt,c.lngSum/c.cnt,b.lat,b.lng)>MAX_CENTROID_DIST;
+    }
+    function avgBear(plate){
+      const c=bearCache[plate]; return c&&c.cnt?c.sum/c.cnt:null;
     }
 
     // ── ข้อ 1: ติดตามร้านค้าที่จัดไปแล้ว → ใส่รอบเดียวกัน ──
@@ -1632,32 +1640,28 @@ function confirmAutoAssign(){
         if(!best && routeTruck[grp.key]){
           const t=trucks.find(x=>x.plate===routeTruck[grp.key]);
           if(t&&fits(t,b)&&!farFromCentroid(t.plate,b)){
-            const on=Object.entries(newQ).filter(([,p])=>p===t.plate).map(([r])=>billMap[r]).filter(x=>x&&x.lat&&x.lng);
-            if(on.length){
-              const avgB=on.reduce((s,x)=>s+bearing(x),0)/on.length;
+            const avgB=avgBear(t.plate);
+            if(avgB!==null){
               const bd=Math.abs(((bBear-avgB+180)%360)-180);
-              if(bd<=40)best=t; // ทิศต่างกัน>40° → ไม่ใช้รถนี้
+              if(bd<=40)best=t;
             } else { best=t; }
           }
         }
 
-        // 2. Bearing clustering + centroid check
+        // 2. Bearing clustering + centroid check (O(trucks) via cache)
         if(!best){
           const cands=trucks.filter(t=>{
             if(!fits(t,b))return false;
-            if(farFromCentroid(t.plate,b))return false; // ← ข้ามแถบ ตัดออก
-            const on=Object.entries(newQ).filter(([,p])=>p===t.plate).map(([r])=>billMap[r]).filter(x=>x);
-            if(!on.length)return false;
-            const tb=on.reduce((s,x)=>s+bearing(x),0)/on.length;
+            if(farFromCentroid(t.plate,b))return false;
+            const tb=avgBear(t.plate);
+            if(tb===null)return false;
             const bd=Math.abs(((bBear-tb+180)%360)-180);
-            return bd<=30||on.some(x=>(x.routeCode||x.route)===grp.routeCode&&grp.routeCode)||(grp.days&&on.some(x=>x.days===grp.days));
+            return bd<=30;
           });
           if(cands.length){
             best=cands.sort((a,b_)=>{
-              const bA=Object.entries(newQ).filter(([,p])=>p===a.plate).map(([r])=>billMap[r]).filter(x=>x);
-              const bB=Object.entries(newQ).filter(([,p])=>p===b_.plate).map(([r])=>billMap[r]).filter(x=>x);
-              const bearA=bA.length?bA.reduce((s,x)=>s+bearing(x),0)/bA.length:999;
-              const bearB=bB.length?bB.reduce((s,x)=>s+bearing(x),0)/bB.length:999;
+              const bearA=avgBear(a.plate)??999;
+              const bearB=avgBear(b_.plate)??999;
               return Math.abs(((bBear-bearA+180)%360)-180)-Math.abs(((bBear-bearB+180)%360)-180);
             })[0];
           }
@@ -1674,19 +1678,17 @@ function confirmAutoAssign(){
           const medLargeF=f.filter(t=>medLargeTruckTypes.has(t.type));
           if(medLargeF.length) f=medLargeF;
           if(!f.length)f=trucks.filter(t=>fits(t,b));
-          // เรียงโดย: 1) ทิศทางใกล้เคียงก่อน 2) น้ำหนักน้อยสุด
+          // เรียงโดย: 1) ทิศทางใกล้เคียงก่อน 2) น้ำหนักน้อยสุด (O(1) via cache)
           best=f.sort((tA,tB)=>{
-            const onA=Object.entries(newQ).filter(([,p])=>p===tA.plate).map(([r])=>billMap[r]).filter(x=>x&&x.lat&&x.lng);
-            const onB=Object.entries(newQ).filter(([,p])=>p===tB.plate).map(([r])=>billMap[r]).filter(x=>x&&x.lat&&x.lng);
-            if(!onA.length&&!onB.length) return (loads[tA.plate].w1+loads[tA.plate].w2)/tA.maxW-(loads[tB.plate].w1+loads[tB.plate].w2)/tB.maxW;
-            if(!onA.length)return 1;  // prefer truck that already has direction
-            if(!onB.length)return -1;
-            const bearA=onA.reduce((s,x)=>s+bearing(x),0)/onA.length;
-            const bearB=onB.reduce((s,x)=>s+bearing(x),0)/onB.length;
+            const bearA=avgBear(tA.plate);
+            const bearB=avgBear(tB.plate);
+            if(bearA===null&&bearB===null)return(loads[tA.plate].w1+loads[tA.plate].w2)/tA.maxW-(loads[tB.plate].w1+loads[tB.plate].w2)/tB.maxW;
+            if(bearA===null)return 1;
+            if(bearB===null)return -1;
             const dA=Math.abs(((bBear-bearA+180)%360)-180);
             const dB=Math.abs(((bBear-bearB+180)%360)-180);
-            if(Math.abs(dA-dB)>15)return dA-dB; // ทิศต่างกันมาก → เลือกใกล้กว่า
-            return (loads[tA.plate].w1+loads[tA.plate].w2)/tA.maxW-(loads[tB.plate].w1+loads[tB.plate].w2)/tB.maxW;
+            if(Math.abs(dA-dB)>15)return dA-dB;
+            return(loads[tA.plate].w1+loads[tA.plate].w2)/tA.maxW-(loads[tB.plate].w1+loads[tB.plate].w2)/tB.maxW;
           })[0];
         }
 
@@ -1709,6 +1711,7 @@ function confirmAutoAssign(){
           if(tr===1){loads[best.plate].w1+=b.totalW;loads[best.plate].v1+=b.totalV;}
           else if(tr===2){loads[best.plate].w2+=b.totalW;loads[best.plate].v2+=b.totalV;}
           else      {loads[best.plate].w3+=b.totalW;loads[best.plate].v3+=b.totalV;}
+          addToCache(best.plate,b); // อัปเดต bearing+centroid cache
           if(!routeTruck[grp.key])routeTruck[grp.key]=best.plate;
           if(storeKey&&!storeTrip[storeKey])storeTrip[storeKey]={plate:best.plate,trip:tr};
           if(gpsKey&&!storeTrip[gpsKey])storeTrip[gpsKey]={plate:best.plate,trip:tr};
@@ -1731,6 +1734,7 @@ function confirmAutoAssign(){
         if(tr===1){loads[t.plate].w1+=b.totalW;loads[t.plate].v1+=b.totalV;}
         else if(tr===2){loads[t.plate].w2+=b.totalW;loads[t.plate].v2+=b.totalV;}
         else      {loads[t.plate].w3+=b.totalW;loads[t.plate].v3+=b.totalV;}
+        addToCache(t.plate,b);
         if(storeKey&&!storeTrip[storeKey])storeTrip[storeKey]={plate:t.plate,trip:tr};
         if(gpsKey&&!storeTrip[gpsKey])storeTrip[gpsKey]={plate:t.plate,trip:tr};
       }
