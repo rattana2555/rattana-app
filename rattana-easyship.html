@@ -659,23 +659,18 @@ function uploadPh(b64,orderNum){
   TXT('ph-btn','⏳ บีบอัดรูป...');
   compressImg(b64, function(small){
     TXT('ph-btn','⏳ กำลังอัปโหลด...');
-    // ✅ วิธีเดียวกับแอปที่ทำงานได้จริง
-    // Content-Type: text/plain → ไม่ trigger CORS preflight
-    // ไม่ใช้ no-cors → อ่าน response ได้
+    // no-cors = bypass CORS response check (Safari ไม่บล็อก)
+    // text/plain body = Apps Script รับผ่าน e.postData.contents
     fetch(GAS, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      mode: 'no-cors',
       body: JSON.stringify({action:'savePhoto', b64:small, orderNum:orderNum})
     })
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-      if(data.ok){
-        toast('✓ อัปโหลด Drive สำเร็จ!','ok');
-        TXT('ph-btn','✓ สำเร็จ');
-      } else {
-        toast('❌ '+(data.error||'ไม่สำเร็จ'),'err');
-        TXT('ph-btn','❌ ลองอีกครั้ง');
-      }
+    .then(function(){
+      // no-cors always resolves — แต่ตอนนี้ Code.gs มี Logger.log แล้ว
+      // ไปเช็ค Executions ใน Apps Script เพื่อยืนยัน
+      toast('✓ ส่งข้อมูลไป Drive แล้ว!','ok');
+      TXT('ph-btn','✓ ส่งแล้ว');
     })
     .catch(function(e){
       toast('Upload error: '+e.message,'err');
