@@ -812,6 +812,44 @@ function dimg(url){
   var m=url.match(/\/d\/([a-zA-Z0-9_-]{10,})/)||url.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
   return m?'https://lh3.googleusercontent.com/d/'+m[1]:'';
 }
+// ─── REMOTE STATUS SYNC ──────────────────────────────────────
+function _done(){
+  updateStats();renderDash();renderOrderList();renderOStats();
+  toast('✅ โหลดสำเร็จ ('+Object.keys(DB).length+' ออเดอร์)','ok');
+}
+
+function loadRemoteStatus(){
+  var url='https://docs.google.com/spreadsheets/d/'+SHEET+'/gviz/tq?tqx=out:json&sheet='+encodeURIComponent(STATUS_TAB)+'&t='+Date.now();
+  fetch(url)
+    .then(function(r){return r.text();})
+    .then(function(txt){
+      var s=txt.indexOf('{'),e=txt.lastIndexOf('}');
+      if(s<0){_done();return;}
+      var j=JSON.parse(txt.substring(s,e+1));
+      var rows=j.table&&j.table.rows?j.table.rows:[];
+      rows.forEach(function(row){
+        var c=row.c||[];
+        var num=c[0]&&c[0].v?String(c[0].v).trim():'';
+        var st=c[1]&&c[1].v?String(c[1].v).trim():'';
+        if(num&&st&&DB[num]){
+          DB[num].status=st;
+          if(st==='complete'){DB[num].items.forEach(function(x){x.status='ok';x.sc=x.qty;});}
+        }
+      });
+      _done();
+    })
+    .catch(function(){_done();});
+}
+
+function saveRemoteStatus(orderNum, status){
+  if(!GAS) return;
+  fetch(GAS,{
+    method:'POST',
+    mode:'no-cors',
+    body:JSON.stringify({action:'saveStatus',orderNum:orderNum,status:status})
+  }).catch(function(){});
+}
+
 function lsSave(num,st){try{var d=JSON.parse(localStorage.getItem('re_done')||'{}');d[num]=st;localStorage.setItem('re_done',JSON.stringify(d));}catch(e){}}
 function lsGet(num){try{var d=JSON.parse(localStorage.getItem('re_done')||'{}');return d[num]||null;}catch(e){return null;}}
 function tone(f,d,t,g){try{if(!window._ax)window._ax=new(window.AudioContext||window.webkitAudioContext)();if(window._ax.state==='suspended')window._ax.resume();var o=window._ax.createOscillator(),gn=window._ax.createGain();o.connect(gn);gn.connect(window._ax.destination);o.frequency.value=f;o.type=t||'sine';gn.gain.setValueAtTime(g||.3,window._ax.currentTime);gn.gain.exponentialRampToValueAtTime(.001,window._ax.currentTime+d);o.start();o.stop(window._ax.currentTime+d);}catch(e){}}
