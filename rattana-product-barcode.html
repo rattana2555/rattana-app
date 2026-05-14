@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="R-Product">
 <meta name="theme-color" content="#0d1b3e">
-<title>Rattana Product Barcode v2.1</title>
+<title>Rattana Product Barcode v2.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 <style>
@@ -194,7 +194,7 @@ body.dark .cat-group-badge{color:var(--gold-light)}
 <div class="screen active" id="listScreen">
   <header>
     <div class="logo-text">Rattana <span>Product</span></div>
-    <span class="version-tag">v2.1 · 2026-05-14</span>
+    <span class="version-tag">v2.2 · 2026-05-14</span>
     <button class="icon-btn" id="installBtn" onclick="installApp()" title="ติดตั้งแอป" style="display:none">📲</button>
     <button class="icon-btn" onclick="toggleDark()" title="Dark mode">🌙</button>
     <button class="icon-btn" onclick="loadData(true)" title="รีเฟรช">🔄</button>
@@ -301,10 +301,19 @@ function tryOpenExternal() {
 }
 
 // ═══════════════ DATA LOAD ═══════════
+// ใช้ gviz CSV + fetch ตรงๆ — เหมือนแอปจัดคิวรถที่ work ทุก browser
+const sheetUrl = p => `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&${p}`;
+
+async function fetchSheet(param) {
+  const r = await fetch(sheetUrl(param));
+  if (!r.ok) throw new Error(`โหลดไม่ได้ (${r.status})`);
+  return parseCsv(await r.text());
+}
+
 async function loadData(force = false) {
-  const cacheKey = 'rattana-barcode-v2';
-  const catKey   = 'rattana-catalog-v2';
-  const cacheTs  = 'rattana-ts-v2';
+  const cacheKey = 'rattana-barcode-v3';
+  const catKey   = 'rattana-catalog-v3';
+  const cacheTs  = 'rattana-ts-v3';
   const CACHE_MS = 5 * 60 * 1000;
 
   if (!force) {
@@ -322,10 +331,9 @@ async function loadData(force = false) {
 
   showSpinner('กำลังโหลดข้อมูล...');
   try {
-    // JSONP — ใช้ <script> tag ไม่มี CORS ใช้ได้ทุก browser
     const [rows1, rows2] = await Promise.all([
-      fetchSheetJsonp(SHEET_ID, 'gid=0'),
-      fetchSheetJsonp(SHEET_ID, `sheet=${encodeURIComponent(CATALOG_TAB)}`).catch(() => null),
+      fetchSheet('gid=0'),
+      fetchSheet(`sheet=${encodeURIComponent(CATALOG_TAB)}`).catch(() => null),
     ]);
 
     allProducts = parseBarcodeRows(rows1);
@@ -341,10 +349,10 @@ async function loadData(force = false) {
 
   } catch(err) {
     hideSpinner();
-    // Fallback to stale cache
+    // Fallback: stale cache
     try {
-      const raw = localStorage.getItem('rattana-barcode-v2');
-      const cat = localStorage.getItem('rattana-catalog-v2');
+      const raw = localStorage.getItem('rattana-barcode-v3');
+      const cat = localStorage.getItem('rattana-catalog-v3');
       if (raw) {
         allProducts = JSON.parse(raw);
         if (cat) buildCatalogMap(JSON.parse(cat));
@@ -353,58 +361,9 @@ async function loadData(force = false) {
         return;
       }
     } catch(e) {}
-    renderEmpty('โหลดข้อมูลไม่สำเร็จ', 'กรุณาตรวจสอบว่า Sheet เปิดเป็น Public แล้วกด 🔄');
-    showToast('⚠️ โหลดไม่สำเร็จ — กด 🔄 รีเฟรช');
+    renderEmpty('โหลดข้อมูลไม่สำเร็จ', 'ตรวจสอบว่า Sheet เปิดเป็น Public แล้วกด 🔄');
+    showToast('⚠️ โหลดไม่สำเร็จ — กด 🔄');
   }
-}
-
-// ── JSONP Fetch ─────────────────────────────────────────────────
-// ใช้ <script> tag แทน fetch → ไม่มี CORS เลย ใช้ได้ทุก browser
-function fetchSheetJsonp(sheetId, sheetParam) {
-  return new Promise((resolve, reject) => {
-    const cb  = 'gviz_' + Date.now() + '_' + Math.floor(Math.random()*9999);
-    // ✅ ต้องใส่ responseHandler ใน tqx — ไม่ใช่ &callback= แยก
-    const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json;responseHandler:${cb}&${sheetParam}`;
-
-    const timer = setTimeout(() => {
-      cleanup();
-      reject(new Error('Timeout — Sheet อาจไม่ใช่ Public'));
-    }, 18000);
-
-    function cleanup() {
-      clearTimeout(timer);
-      try { delete window[cb]; } catch(e) {}
-      const el = document.getElementById(cb);
-      if (el) el.remove();
-    }
-
-    window[cb] = function(resp) {
-      cleanup();
-      if (!resp || resp.status !== 'ok') {
-        reject(new Error(resp?.errors?.[0]?.message || 'Sheet API error'));
-        return;
-      }
-      resolve(gvizToRows(resp.table));
-    };
-
-    const s = document.createElement('script');
-    s.id  = cb;
-    s.src = url;
-    s.onerror = () => { cleanup(); reject(new Error('Script load failed — ตรวจสอบ Sheet ID / ชื่อ Tab')); };
-    document.head.appendChild(s);
-  });
-}
-
-// แปลง gviz table → rows[][]  (row[0] = header labels)
-function gvizToRows(table) {
-  const header = (table.cols || []).map(c => c.label || c.id || '');
-  const rows   = (table.rows || []).map(r =>
-    (table.cols || []).map((_, i) => {
-      const cell = r.c ? r.c[i] : null;
-      return (cell && cell.v != null) ? String(cell.v) : '';
-    })
-  );
-  return [header, ...rows];
 }
 
 function afterLoad() {
@@ -414,62 +373,69 @@ function afterLoad() {
   renderList();
 }
 
+// ═══════════════ CSV PARSER (เหมือน route optimizer) ══════════
+function parseCsv(text) {
+  const lines = text.split('\n').filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const headers = parseLine(lines[0]);
+  return lines.slice(1).map(line => {
+    const v = parseLine(line);
+    const o = {};
+    headers.forEach((h, i) => o[h.trim()] = (v[i] || '').trim());
+    return o;
+  });
+}
+
+function parseLine(line) {
+  const res = []; let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { if (inQ && line[i+1] === '"') { cur += '"'; i++; } else inQ = !inQ; }
+    else if (c === ',' && !inQ) { res.push(cur); cur = ''; }
+    else cur += c;
+  }
+  res.push(cur);
+  return res.map(s => s.replace(/\r/g, ''));
+}
+
 // ═══════════════ SHEET PARSERS ════════
 function parseBarcodeRows(rows) {
-  // rows[0]=header, rows[1..]=data
-  // A=0 PRODUCT NAME, B=1 CODE EA, C=2 UNA EA, D=3 CODE PA, E=4 UNA PA
-  // F=5 CODE BP, G=6 UNA BP, H=7 CODE CS, I=8 UNA CS, J=9 UNIT EA
-  const I = { name:0, codeEA:1, unitEA:2, codePA:3, unitPA:4, codeBP:5, unitBP:6, codeCS:7, unitCS:8, unitEALabel:9 };
+  // rows = [{PRODUCT NAME, CODE EA, UNA UN, CODE PA, ...}, ...]
   const products = [];
-  for (let i = 1; i < rows.length; i++) {
-    const c = rows[i];
-    if (!c || !c[I.name] || !c[I.name].trim()) continue;
-    const name = c[I.name].trim();
-    if (name.toLowerCase() === 'product name') continue;
+  rows.forEach((r, i) => {
+    const name = (r['PRODUCT NAME'] || r['Product Name'] || '').trim();
+    if (!name || name.toLowerCase() === 'product name') return;
     products.push({
-      id: i, name,
-      codeEA: (c[I.codeEA]  ||'').trim(), unitEA: (c[I.unitEA]  ||'').trim(),
-      codePA: (c[I.codePA]  ||'').trim(), unitPA: (c[I.unitPA]  ||'').trim(),
-      codeBP: (c[I.codeBP]  ||'').trim(), unitBP: (c[I.unitBP]  ||'').trim(),
-      codeCS: (c[I.codeCS]  ||'').trim(), unitCS: (c[I.unitCS]  ||'').trim(),
-      unitEALabel: (c[I.unitEALabel]||'').trim(),
+      id: i + 1, name,
+      codeEA: (r['CODE EA'] || '').trim(),
+      unitEA: (r['UNA UN']  || r['UNIT EA'] || '').trim(),
+      codePA: (r['CODE PA'] || '').trim(),
+      unitPA: (r['UNA UN.1']|| r['UNIT PA'] || '').trim(),
+      codeBP: (r['CODE BP'] || '').trim(),
+      unitBP: (r['UNA UN.2']|| r['UNIT BP'] || '').trim(),
+      codeCS: (r['CODE CS'] || '').trim(),
+      unitCS: (r['UNA UN.3']|| r['UNIT CS'] || '').trim(),
+      unitEALabel: (r['UNIT EA'] || r['UNA UN'] || '').trim(),
     });
-  }
+  });
   return products;
 }
 
 function parseCatalogRows(rows) {
-  if (rows.length < 2) return [];
-  const header = rows[0].map(h => h.toLowerCase().trim());
-
-  const find = (...names) => {
-    for (const n of names) {
-      const idx = header.findIndex(h => h.includes(n));
-      if (idx >= 0) return idx;
-    }
-    return -1;
-  };
-
-  const iName   = find('product name','productname','sku name');
-  const iBrand  = find('cat brand','brand');
-  const iSize   = find('cat size','size');
-  const iCatGrp = find('cat group','group');
-  const iImg    = find('sku_usage','sku usage','image','img');
-
+  // rows = [{CAT TYPE, CAT GROUP, CAT BRAND, CAT SIZE, ..., SKU_USAGE}, ...]
   const result = [];
-  for (let i = 1; i < rows.length; i++) {
-    const c = rows[i];
-    if (!c || c.length < 2) continue;
-    let nameKey = '';
-    if (iName >= 0 && c[iName]) nameKey = c[iName].trim();
-    else if (iBrand >= 0 && iSize >= 0) nameKey = ((c[iBrand]||'')+' '+(c[iSize]||'')).trim();
-    if (!nameKey) continue;
+  rows.forEach(r => {
+    const brand = (r['CAT BRAND'] || '').trim();
+    const size  = (r['CAT SIZE']  || '').trim();
+    const name  = (r['PRODUCT NAME'] || r['SKU_NAME'] || '').trim();
+    const nameKey = name || (brand + ' ' + size).trim();
+    if (!nameKey) return;
     result.push({
       nameKey,
-      catGroup: iCatGrp >= 0 ? (c[iCatGrp]||'').trim() : '',
-      imgUrl:   iImg    >= 0 ? (c[iImg]   ||'').trim() : '',
+      catGroup: (r['CAT GROUP'] || '').trim(),
+      imgUrl:   (r['SKU_USAGE'] || '').trim(),
     });
-  }
+  });
   return result;
 }
 
