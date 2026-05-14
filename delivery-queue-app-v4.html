@@ -2391,44 +2391,73 @@ async function doEmailLogin(){
   }
   const errEl=document.getElementById('loginErr');
   const spinEl=document.getElementById('loginSpinner');
+  const btn=document.querySelector('#loginScreen button');
   if(errEl)errEl.style.display='none';
   if(spinEl)spinEl.style.display='block';
+  if(btn)btn.disabled=true;
 
   try{
-    // Fetch Users Sheet as CSV (column I=Email, L=Status, B=W, G=ชื่อเล่น, E=ชื่อสกุล)
+    // ลอง fetch Users Sheet
     const url=`https://docs.google.com/spreadsheets/d/${AUTH_SHEET_ID}/gviz/tq?tqx=out:csv`;
-    const res = await fetch(url);
-    if(!res.ok) throw new Error('โหลด Users Sheet ไม่ได้');
-    const txt = await res.text();
-    const rows = parseCSV(txt);
+    let rows=[];
+    try{
+      const res = await fetch(url);
+      const txt = await res.text();
+      // ถ้า sheet ไม่ public จะได้ HTML กลับมา
+      if(txt.trim().startsWith('<')){
+        throw new Error('Sheet ไม่ได้ตั้งเป็น Public — ติดต่อ Admin เพื่อแชร์ Users Sheet');
+      }
+      rows = parseCSV(txt);
+    }catch(fetchErr){
+      console.error('Users sheet fetch error:', fetchErr);
+      showLoginErr(fetchErr.message||'โหลด Users Sheet ไม่ได้ กรุณาตรวจสอบการตั้งค่าชีท');
+      return;
+    }
 
-    // Find by Email column (col I = index 8, or by header name)
+    // ค้นหา email ในชีท — ลอง header name ก่อน ถ้าไม่มีใช้ column index
     const user = rows.find(u => {
-      const ue = normEmail(u['E-mail']||u['email']||Object.values(u)[8]||'');
-      return ue === email;
+      // ลอง key ต่างๆ ที่เป็นไปได้
+      const candidates = [u['E-mail'], u['email'], u['Email'], u['อีเมล']];
+      // ถ้าไม่มี header ตรง ลอง column I (index 8)
+      if(!candidates.some(Boolean)){
+        const vals = Object.values(u);
+        candidates.push(vals[8]);
+      }
+      return candidates.some(v => normEmail(v||'') === email);
     });
 
-    if(!user){ showLoginErr('ไม่พบ Email นี้ในระบบ — ติดต่อ Admin'); if(spinEl)spinEl.style.display='none'; return; }
+    if(!user){
+      showLoginErr(`ไม่พบ Email "${email}" ในระบบ\nติดต่อ Admin เพื่อเพิ่มสิทธิ์`); return;
+    }
 
-    const status = String(user['Status']||Object.values(user)[11]||'').trim().toLowerCase();
-    if(status !== 'active'){ showLoginErr('บัญชีถูกระงับ — ติดต่อ Admin'); if(spinEl)spinEl.style.display='none'; return; }
+    // ตรวจ Status = Active (column L = index 11)
+    const vals = Object.values(user);
+    const status = String(user['Status'] || vals[11] || '').trim().toLowerCase();
+    if(status !== 'active'){
+      showLoginErr('บัญชีถูกระงับการใช้งาน — ติดต่อ Admin'); return;
+    }
 
     currentUser = {
       email,
-      name:     user['ชื่อ - สกุล'] || Object.values(user)[4] || '',
-      nickname: user['ชื่อเล่น']     || Object.values(user)[6] || '',
-      role:     parseInt(user['User Role']||Object.values(user)[15]||'1') || 1,
-      dept:     user['แผนก']         || Object.values(user)[17] || '',
-      warehouse:user['W']            || Object.values(user)[1]  || '',
+      name:     user['ชื่อ - สกุล'] || vals[4]  || '',
+      nickname: user['ชื่อเล่น']     || vals[6]  || '',
+      role:     parseInt(user['User Role'] || vals[15] || '1') || 1,
+      dept:     user['แผนก']         || vals[17] || '',
+      warehouse:user['W']            || vals[1]  || 'W1',
     };
 
-    // Session 30 วัน
-    localStorage.setItem('rattanaUser', JSON.stringify({data:currentUser, exp:Date.now()+30*24*60*60*1000}));
+    localStorage.setItem('rattanaUser', JSON.stringify({
+      data: currentUser,
+      exp:  Date.now() + 30*24*60*60*1000
+    }));
     showApp();
+
   }catch(e){
+    console.error('Login error:', e);
     showLoginErr('เกิดข้อผิดพลาด: '+e.message);
   }finally{
     if(spinEl)spinEl.style.display='none';
+    if(btn)btn.disabled=false;
   }
 }
 
