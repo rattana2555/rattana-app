@@ -345,9 +345,14 @@ var STATUS_TAB = 'สถานะ';
 var GAS   = 'https://script.google.com/macros/s/AKfycbyWyv6Fa9jiPobvfhn7j4S4cDHA7iXkxr1xU30hTtPSwuKpbiWv4QsrPQsuHEp_gtwU/exec';
 
 // ═══ STATE ════════════════════════════════════════════════
+var _pcBcs=[],_moNums=[];
 var DB={}, CUR=null, TSTART=null, SMODE='order';
 var CR=null, SS=null, SA=false, DT=null, ID=false;
 var LCODE='', LMS=0, LSCANNED=null, OCRVAL=null, TTM=null;
+
+// ═══ PRODUCT CARD HANDLERS ──────────────────────────────────
+function _pc(i){showProdOrders(_pcBcs[i]);}
+function _mo(i){$('prod-modal').style.display='none';openOrder(_moNums[i]);}
 
 // ═══ UTILS ════════════════════════════════════════════════
 function $(i){return document.getElementById(i);}
@@ -470,6 +475,7 @@ function renderOStats(){
 
 // ═══ DASHBOARD SUMMARY ════════════════════════════════════
 function renderDash(){
+  _pcBcs=[];  // reset index
   var el=$('d-sum');if(!el)return;
   var keys=Object.keys(DB);
   if(!keys.length){el.innerHTML='<div class="empty"><div class="empty-ic">📭</div><div class="empty-t">ยังไม่มีข้อมูล</div></div>';return;}
@@ -495,7 +501,7 @@ function renderDash(){
     var iu=dimg(p.img1)||dimg(p.img2);
     var ih=iu?'<img src="'+iu+'" onerror="this.parentElement.innerHTML=\'📦\'">':'📦';
     var pi=p.pcs>1?' ('+p.pieces+' ชิ้น)':'';
-    h+='<div class="pcard" data-bc="'+bc+'" style="cursor:pointer"><div class="pcard-img">'+ih+'</div>'
+    var _i=_pcBcs.length;_pcBcs.push(bc);h+='<div class="pcard" onclick="_pc('+_i+')" style="cursor:pointer"><div class="pcard-img">'+ih+'</div>'
       +'<div class="pcard-info"><div class="pcard-name">'+p.name+'</div>'
       +'<div class="pcard-qty">×'+p.qty+' '+p.unit+'</div>'
       +(p.pcs>1?'<div class="pcard-pc">'+p.pieces+' ชิ้นรวม</div>':'')
@@ -512,11 +518,6 @@ function renderDash(){
   }
   h+='</div>';
   el.innerHTML=h;
-  // กดการ์ดสินค้า → แสดงออเดอร์
-  el.querySelectorAll('.pcard[data-bc]').forEach(function(c){
-    c.style.cursor='pointer';
-    c.addEventListener('click',function(){showProdOrders(c.dataset.bc);});
-  });
 }
 
 // ═══ ORDER LIST ═══════════════════════════════════════════
@@ -891,6 +892,7 @@ function dimg(url){
 }
 // ─── PRODUCT ORDERS MODAL ────────────────────────────────────
 function showProdOrders(bc){
+  _moNums=[];  // reset
   // Find product info
   var prod=null;
   var matchOrders=[];
@@ -919,7 +921,7 @@ function showProdOrders(bc){
     var o=m.order, item=m.item, st=o.status||'pending';
     var clr=st==='complete'?'var(--gr)':st==='in-progress'?'var(--or)':'var(--gd)';
     var scInfo=item.sc>0?item.sc+'/'+item.qty+' '+item.unit+' สแกนแล้ว':'ยังไม่สแกน';
-    return'<div class="mocard" style="border-left-color:'+clr+'" data-n="'+o.num+'">'
+    var _mi=_moNums.length;_moNums.push(o.num);return'<div class="mocard" style="border-left-color:'+clr+'" onclick="_mo('+_mi+')">'
       +'<div class="mocard-n">#'+o.num+'</div>'
       +'<div class="mocard-s">'+o.store+' · '+o.code+'</div>'
       +'<div class="mocard-r">'
