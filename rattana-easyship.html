@@ -161,6 +161,23 @@ html,body{height:100%;overflow:hidden;font-family:'Sarabun',system-ui,sans-serif
 .empty-t{font-size:14px;font-weight:600;color:var(--g6);margin-bottom:4px}
 .ver{font-size:9px;color:rgba(255,255,255,.12);text-align:right;padding:2px 14px 4px;flex-shrink:0}
 input[type=file]{display:none}
+
+/* Product Orders Modal */
+.modal-bg{position:fixed;inset:0;background:rgba(1,29,61,.7);z-index:500;display:flex;align-items:flex-end;backdrop-filter:blur(2px)}
+.modal-box{background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:480px;margin:0 auto;max-height:75vh;display:flex;flex-direction:column;overflow:hidden}
+.modal-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--g1);flex-shrink:0}
+.modal-t{font-size:15px;font-weight:700;color:var(--bl);flex:1}
+.modal-cl{width:32px;height:32px;border:none;background:var(--g1);border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
+.modal-body{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 14px 20px;flex:1}
+.modal-sub{font-size:11px;color:var(--g4);margin-bottom:10px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.mocard{background:var(--g0);border-radius:12px;padding:10px 12px;margin-bottom:8px;cursor:pointer;border-left:3px solid var(--gd);border-bottom:2px solid var(--g2)}
+.mocard:active{opacity:.7}
+.mocard-n{font-size:13px;font-weight:700;color:var(--bl)}
+.mocard-s{font-size:11px;color:var(--g4);margin:2px 0 5px}
+.mocard-r{display:flex;justify-content:space-between;align-items:center}
+.pcard{cursor:pointer;transition:opacity .15s}
+.pcard:active{opacity:.7}
+.pcard-tap{font-size:9px;color:var(--g4);margin-top:3px;letter-spacing:.3px}
 </style>
 </head>
 <body>
@@ -206,7 +223,7 @@ input[type=file]{display:none}
   <div class="shdr">
     <button class="bk" onclick="goBack()">←</button>
     <span class="sht" id="sc-t">สแกนออเดอร์</span>
-    <div style="display:flex;align-items:center;gap:4px"><div class="ldot" id="ldot"></div><span id="llbl" style="font-size:11px;color:#ff3b30;font-weight:700">LIVE</span></div>
+    <div style="display:flex;align-items:center;gap:6px"><div class="ldot" id="ldot"></div><span id="llbl" style="font-size:11px;color:#ff3b30;font-weight:700">LIVE</span><span id="cam-engine" style="font-size:9px;color:rgba(255,255,255,.3);background:rgba(255,255,255,.08);padding:2px 6px;border-radius:8px"></span></div>
   </div>
   <div class="mtog">
     <button class="mbtn on" id="m-bc" onclick="setMode('bc')">📷 สแกนบาร์โค้ด</button>
@@ -478,10 +495,11 @@ function renderDash(){
     var iu=dimg(p.img1)||dimg(p.img2);
     var ih=iu?'<img src="'+iu+'" onerror="this.parentElement.innerHTML=\'📦\'">':'📦';
     var pi=p.pcs>1?' ('+p.pieces+' ชิ้น)':'';
-    h+='<div class="pcard"><div class="pcard-img">'+ih+'</div>'
+    h+='<div class="pcard" onclick="showProdOrders('"+bc+"')"><div class="pcard-img">'+ih+'</div>'
       +'<div class="pcard-info"><div class="pcard-name">'+p.name+'</div>'
       +'<div class="pcard-qty">×'+p.qty+' '+p.unit+'</div>'
       +(p.pcs>1?'<div class="pcard-pc">'+p.pieces+' ชิ้นรวม</div>':'')
+      +'<div class="pcard-tap">แตะดูออเดอร์ →</div>'
       +'</div></div>';
   });
 
@@ -767,6 +785,7 @@ function startCam(){
   try{if(!window._ax)window._ax=new(window.AudioContext||window.webkitAudioContext)();window._ax.resume();}catch(e){}
   var vid=$('camvid');
   var opts=[
+    {video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080},focusMode:'continuous'}},
     {video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}}},
     {video:{facingMode:'environment'}},
     {video:{facingMode:{ideal:'environment'}}},
@@ -789,7 +808,45 @@ function startCam(){
   next(0);
 }
 function waitZ(vid){
-  if(!window.ZXing){setTimeout(function(){waitZ(vid);},400);return;}
+  // ลอง BarcodeDetector API ก่อน (เร็วกว่า ZXing มาก — native browser API)
+  if('BarcodeDetector' in window){
+    startNativeDetector(vid);
+    return;
+  }
+  // Fallback: ZXing
+  startZXing(vid);
+}
+
+function startNativeDetector(vid){
+  var el=$('cam-engine');if(el)el.textContent='⚡ Native';
+  var formats=['code_128','code_39','ean_13','ean_8','upc_a','upc_e','itf','qr_code','data_matrix','pdf417'];
+  var det;
+  try{
+    det=new BarcodeDetector({formats:formats});
+  }catch(e){
+    // Format list not supported → try without formats
+    try{det=new BarcodeDetector();}catch(e2){startZXing(vid);return;}
+  }
+  ID=false;clearInterval(DT);
+  DT=setInterval(function(){
+    if(!SA){clearInterval(DT);return;}
+    if(vid.paused&&vid.srcObject){vid.play().catch(function(){});return;}
+    if(ID||vid.readyState<2||!vid.videoWidth)return;
+    ID=true;
+    det.detect(vid)
+      .then(function(results){
+        ID=false;
+        if(results&&results.length>0&&SA){
+          onScan(results[0].rawValue);
+        }
+      })
+      .catch(function(){ID=false;});
+  },200); // BarcodeDetector เร็วกว่า ใช้ 200ms
+}
+
+function startZXing(vid){
+  var el=$('cam-engine');if(el)el.textContent='ZXing';
+  if(!window.ZXing){setTimeout(function(){startZXing(vid);},400);return;}
   var h=new Map();h.set(ZXing.DecodeHintType.TRY_HARDER,true);
   if(SMODE==='product')h.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.CODE_128,ZXing.BarcodeFormat.CODE_39,ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8,ZXing.BarcodeFormat.UPC_A,ZXing.BarcodeFormat.ITF]);
   CR=new ZXing.BrowserMultiFormatReader(h);
@@ -817,6 +874,57 @@ function dimg(url){
   var m=url.match(/\/d\/([a-zA-Z0-9_-]{10,})/)||url.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
   return m?'https://lh3.googleusercontent.com/d/'+m[1]:'';
 }
+// ─── PRODUCT ORDERS MODAL ────────────────────────────────────
+function showProdOrders(bc){
+  // Find product info
+  var prod=null;
+  var matchOrders=[];
+  Object.values(DB).forEach(function(o){
+    var item=o.items.find(function(x){return x.bc===bc;});
+    if(item){
+      if(!prod) prod=item;
+      matchOrders.push({order:o, item:item});
+    }
+  });
+  if(!prod) return;
+
+  // Sort: in-progress first, then pending, then complete
+  var rank={'in-progress':0,'pending':1,'complete':2};
+  matchOrders.sort(function(a,b){
+    return (rank[a.order.status]||9)-(rank[b.order.status]||9);
+  });
+
+  $('modal-title').textContent=prod.name;
+  $('modal-sub').textContent='บาร์โค้ด: '+bc+' · รวม '+matchOrders.length+' ออเดอร์';
+
+  var sL={pending:'รอแพ็ก','in-progress':'กำลังแพ็ก',complete:'✓ เสร็จ',error:'ผิดพลาด'};
+  var sB={pending:'bdg-p','in-progress':'bdg-r',complete:'bdg-d',error:'bdg-e'};
+
+  $('modal-orders').innerHTML=matchOrders.map(function(m){
+    var o=m.order, item=m.item, st=o.status||'pending';
+    var clr=st==='complete'?'var(--gr)':st==='in-progress'?'var(--or)':'var(--gd)';
+    var scInfo=item.sc>0?item.sc+'/'+item.qty+' '+item.unit+' สแกนแล้ว':'ยังไม่สแกน';
+    return'<div class="mocard" style="border-left-color:'+clr+'" onclick="openFromModal(''+o.num+'')">'
+      +'<div class="mocard-n">#'+o.num+'</div>'
+      +'<div class="mocard-s">'+o.store+' · '+o.code+'</div>'
+      +'<div class="mocard-r">'
+      +'<span style="font-size:11px;color:var(--g6)">📦 '+scInfo+'</span>'
+      +'<span class="bdg '+(sB[st]||'bdg-p')+'">'+(sL[st]||'-')+'</span>'
+      +'</div></div>';
+  }).join('');
+
+  $('prod-modal').style.display='flex';
+}
+
+function openFromModal(num){
+  $('prod-modal').style.display='none';
+  openOrder(num);
+}
+
+function closeProdModal(e){
+  if(e.target===$('prod-modal')) $('prod-modal').style.display='none';
+}
+
 // ─── REMOTE STATUS SYNC ──────────────────────────────────────
 function _done(){
   try{updateStats();}catch(e){}
