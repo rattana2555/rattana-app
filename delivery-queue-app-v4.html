@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v7.9</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.0</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -316,7 +316,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v7.9</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.0</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -1030,7 +1030,9 @@ function renderBillTable(){
       <td>
         <div style="font-weight:600;color:#07101F">${b.arName}</div>
         <div style="font-size:10px;color:#6B7A90;margin-top:1px">${b.ref}</div>
-        ${b.lat&&b.lng?'':`<div style="font-size:9px;color:#FCA5A5;font-weight:600">⚠ ไม่มี GPS</div>`}
+        ${b.lat&&b.lng
+          ?`<div style="font-size:9px;color:#A0ABBB;font-family:monospace">${b.lat.toFixed(4)}, ${b.lng.toFixed(4)}</div>`
+          :`<div style="font-size:9px;color:#FCA5A5;font-weight:600">⚠ ไม่มี GPS</div>`}
       </td>
       <td>
         <div style="font-size:11px;color:#6B7A90">${b.province}</div>
@@ -1582,6 +1584,7 @@ function confirmAutoAssign(){
     const storeMap={};   // normName → plate  (rule 2)
     const clusterMap={}; // clusterIdx → plate (rule 4)
     const daysMap={};    // days string → plate (rule 3)
+    const provinceMap={}; // province → plate  (rule P: same province → same truck)
 
     const newQ={}, newTripMap={};
 
@@ -1597,6 +1600,7 @@ function confirmAutoAssign(){
       const ci=billCluster[b.ref];
       if(ci!==undefined&&!clusterMap[ci])clusterMap[ci]=plate;
       if(b.days&&!daysMap[b.days])daysMap[b.days]=plate;
+      if(b.province&&!provinceMap[b.province])provinceMap[b.province]=plate;
     }
 
     function bestTruck(b){
@@ -1613,13 +1617,18 @@ function confirmAutoAssign(){
         const t=trucks.find(x=>x.plate===clusterMap[ci]);
         if(t){const tr=tryTrip(t,b);if(tr)return{t,tr};}
       }
+      // Rule P: จังหวัดเดียวกัน → รถเดิม (ถ้า GPS cluster ไม่ตรง)
+      if(b.province&&provinceMap[b.province]){
+        const t=trucks.find(x=>x.plate===provinceMap[b.province]);
+        if(t){const tr=tryTrip(t,b);if(tr)return{t,tr};}
+      }
       // Rule 3: วันส่งเดียวกัน → รถเดิม
       if(b.days&&daysMap[b.days]){
         const t=trucks.find(x=>x.plate===daysMap[b.days]);
         if(t){const tr=tryTrip(t,b);if(tr)return{t,tr};}
       }
-      // Fallback: เติมรถที่มีของแล้วก่อน (bin-packing)
-      // 1) หารถที่มีของแล้ว และยังรับได้ — เอาที่ load %มากสุด (พอดีคัน)
+      // Fallback: เติมรถที่มีของแล้วก่อน
+      // จังหวัดเดียวกัน → ให้ priority สูงขึ้น (bonus +0.3 ให้ pct)
       let pick=null,pickTrip=0,maxPct=-1;
       trucks.forEach(t=>{
         const tr=tryTrip(t,b);
@@ -1628,7 +1637,9 @@ function confirmAutoAssign(){
         const total=ld.w1+ld.w2+ld.w3;
         if(total<=0)return; // ข้ามรถเปล่า
         const pct=t.maxW>0?total/t.maxW:0;
-        if(pct>maxPct){maxPct=pct;pick=t;pickTrip=tr;}
+        // bonus ถ้ารถนี้มีบิลจังหวัดเดียวกันอยู่แล้ว
+        const provBonus=b.province&&provinceMap[b.province]===t.plate?0.3:0;
+        if((pct+provBonus)>maxPct){maxPct=pct+provBonus;pick=t;pickTrip=tr;}
       });
       if(pick)return{t:pick,tr:pickTrip};
       // 2) ไม่มีรถที่มีของแล้ว → เริ่มรถเปล่าที่ขนาดเหมาะสมที่สุด
@@ -2168,7 +2179,7 @@ function carTripHtml(assignedBills){
     const tw=tb.reduce((s,b)=>s+b.totalW,0);
       const tv=tb.reduce((s,b)=>s+(b.totalV||0),0);
     h+=`<div style="margin-bottom:3px"><div style="background:${BG[tr]};border-left:3px solid ${BD[tr]};padding:2px 6px;font-size:10px;font-weight:700;color:${TC[tr]}">${TE[tr]} เที่ยว ${tr} — ${tb.length} บิล · ${fmtKg(tw)} · ${fmtM3(tv)}</div>`;
-    tb.forEach((b,j)=>{h+=`<div style="display:flex;align-items:center;gap:5px;padding:2px 4px;${j?'border-top:1px solid #F0F2F6':''};font-size:11px"><span style="color:#A0ABBB;min-width:14px;font-size:10px">${j+1}.</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.arName}</span></div>`;});
+    tb.forEach((b,j)=>{h+=`<div style="display:flex;align-items:center;gap:5px;padding:3px 4px;${j?'border-top:1px solid #F0F2F6':''};font-size:11px"><span style="color:#A0ABBB;min-width:14px;font-size:10px">${j+1}.</span><div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500">${b.arName}</div><div style="font-size:9px;color:#9BAAB8">${b.province||'—'}${b.lat&&b.lng?` <span style="font-family:monospace;color:#B8C6D9">${b.lat.toFixed(4)},${b.lng.toFixed(4)}</span>`:'<span style="color:#FCA5A5"> ⚠ ไม่มี GPS</span>'}</div></div></div>`;});
     h+='</div>';
   });
   return h;
