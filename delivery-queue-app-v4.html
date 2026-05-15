@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v7.6</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v7.7</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -319,7 +319,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v7.6</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v7.7</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -1481,8 +1481,9 @@ function confirmAutoAssign(){
       return (n||'').replace(/\s*\([^)]*\)/g,'').replace(/\s+/g,' ').trim();
     }
 
-    // ── GPS Cluster: รวมร้านที่อยู่ใกล้กัน ≤5กม. ──
-    const GPS_KM=5;
+    // ── GPS Cluster: รวมร้านที่อยู่ใกล้กัน ≤15กม. ──
+    // radius 15กม. = จัดกลุ่มเขต/อำเภอใกล้เคียงเข้าด้วยกัน
+    const GPS_KM=15;
     const clusters=[];       // [{cLat,cLng,cnt}]
     const billCluster={};    // ref → clusterIdx
 
@@ -1494,7 +1495,6 @@ function confirmAutoAssign(){
         if(d<minD){minD=d;found=i;}
       });
       if(found>=0&&minD<=GPS_KM){
-        // อัปเดต centroid แบบ running average
         const c=clusters[found];
         c.cLat=(c.cLat*c.cnt+b.lat)/(c.cnt+1);
         c.cLng=(c.cLng*c.cnt+b.lng)/(c.cnt+1);
@@ -1506,79 +1506,65 @@ function confirmAutoAssign(){
       }
     });
 
-    // ── เรียงบิลตาม Province + Nearest-Neighbor (ไม่ใช้ HQ เป็นศูนย์กลาง) ──
-    // เหตุผล: การเรียงตามระยะจาก HQ ทำให้บิลที่อยู่ radius เดียวกันถูกคละกัน
-    // วิธีใหม่: จัดกลุ่มตามจังหวัด → เรียงจังหวัดแบบ Nearest-Neighbor chain
-    //           → ภายในจังหวัดเรียงบิลแบบ Nearest-Neighbor เช่นกัน
+    // ── เรียงบิลตาม GPS Cluster → Nearest-Neighbor chain ──
+    // เป้าหมาย: โลเคชันเดียวกัน/ใกล้กัน → รถเดียวกัน เที่ยวเดียวกัน
 
-    // 1. จัดกลุ่มบิลตามจังหวัด (ถ้าไม่มีจังหวัด ใช้ GPS cluster แทน)
-    const provGroups={};
-    tmrBills.forEach(b=>{
-      const prov=(b.province||'').trim()||(billCluster[b.ref]!==undefined?'__gps_'+billCluster[b.ref]:'__other');
-      if(!provGroups[prov])provGroups[prov]=[];
-      provGroups[prov].push(b);
-    });
+    const billsWithGps=tmrBills.filter(b=>b.lat&&b.lng);
+    const billsNoGps=tmrBills.filter(b=>!b.lat||!b.lng);
 
-    // 2. คำนวณ centroid ของแต่ละกลุ่ม
-    function grpCentroid(bs){
-      const gps=bs.filter(x=>x.lat&&x.lng);
-      if(!gps.length)return{lat:HQ.lat,lng:HQ.lng};
-      return{lat:gps.reduce((s,x)=>s+x.lat,0)/gps.length,lng:gps.reduce((s,x)=>s+x.lng,0)/gps.length};
-    }
-    const provKeys=Object.keys(provGroups);
-    const provCent={};
-    provKeys.forEach(k=>{provCent[k]=grpCentroid(provGroups[k]);});
-
-    // 3. เรียงกลุ่มแบบ Nearest-Neighbor (เริ่มจากใกล้ HQ สุด)
-    function nnOrder(keys,centFn){
-      if(!keys.length)return[];
+    // 1. เรียง cluster index แบบ NN chain (เริ่มจาก cluster ใกล้ HQ สุด)
+    function nnClusters(idxs){
+      if(!idxs.length)return[];
       const vis=new Set();const res=[];
-      let cur=keys.reduce((best,k)=>{
-        const d=haversine(HQ.lat,HQ.lng,centFn(k).lat,centFn(k).lng);
-        const bd=haversine(HQ.lat,HQ.lng,centFn(best).lat,centFn(best).lng);
+      let cur=idxs.reduce((best,k)=>{
+        const d=haversine(HQ.lat,HQ.lng,clusters[k].cLat,clusters[k].cLng);
+        const bd=haversine(HQ.lat,HQ.lng,clusters[best].cLat,clusters[best].cLng);
         return d<bd?k:best;
-      },keys[0]);
+      },idxs[0]);
       res.push(cur);vis.add(cur);
-      while(res.length<keys.length){
-        const cc=centFn(cur);
+      while(res.length<idxs.length){
+        const cc=clusters[cur];
         let near=null,nearD=Infinity;
-        keys.forEach(k=>{
+        idxs.forEach(k=>{
           if(vis.has(k))return;
-          const d=haversine(cc.lat,cc.lng,centFn(k).lat,centFn(k).lng);
+          const d=haversine(cc.cLat,cc.cLng,clusters[k].cLat,clusters[k].cLng);
           if(d<nearD){nearD=d;near=k;}
         });
-        if(!near)break;
+        if(near===null)break;
         res.push(near);vis.add(near);cur=near;
       }
       return res;
     }
-    const orderedProvs=nnOrder(provKeys,k=>provCent[k]);
+    const orderedClusters=nnClusters([...Array(clusters.length).keys()]);
 
-    // 4. ภายในแต่ละกลุ่ม: เรียงบิลแบบ Nearest-Neighbor (ชื่อร้านเดียวกันติดกัน → หนักสุดก่อน)
-    function nnBills(bs,startLat,startLng){
-      const storeGrp={};
-      bs.forEach(b=>{
-        const nm=normName(b.arName)||'__';
-        if(!storeGrp[nm])storeGrp[nm]=[];
-        storeGrp[nm].push(b);
-      });
-      const storeKeys=Object.keys(storeGrp);
-      const storeCent={};
-      storeKeys.forEach(k=>{storeCent[k]=grpCentroid(storeGrp[k]);});
-      const orderedStores=nnOrder(storeKeys,k=>(storeCent[k]&&storeCent[k].lat!==HQ.lat)?storeCent[k]:{lat:startLat,lng:startLng});
-      const result=[];
-      orderedStores.forEach(sk=>{
-        result.push(...[...storeGrp[sk]].sort((a,b)=>b.totalW-a.totalW));
-      });
-      return result;
-    }
-
-    // 5. Build sorted array
+    // 2. ภายในแต่ละ cluster: เรียงบิลแบบ NN (ต่อเนื่องจาก cluster ก่อนหน้า)
     const sorted=[];
-    orderedProvs.forEach(provKey=>{
-      const c=provCent[provKey];
-      sorted.push(...nnBills(provGroups[provKey],c.lat,c.lng));
+    let prevLat=HQ.lat,prevLng=HQ.lng;
+    orderedClusters.forEach(ci=>{
+      const inCluster=billsWithGps.filter(b=>billCluster[b.ref]===ci);
+      const remaining=[...inCluster];
+      let curLat=prevLat,curLng=prevLng;
+      while(remaining.length){
+        let best=0,bestD=Infinity;
+        remaining.forEach((b,i)=>{
+          const d=haversine(curLat,curLng,b.lat,b.lng);
+          if(d<bestD){bestD=d;best=i;}
+        });
+        const picked=remaining.splice(best,1)[0];
+        sorted.push(picked);
+        curLat=picked.lat;curLng=picked.lng;
+      }
+      if(inCluster.length){prevLat=sorted[sorted.length-1].lat;prevLng=sorted[sorted.length-1].lng;}
     });
+
+    // 3. บิลไม่มี GPS: เรียงตามจังหวัด → ชื่อร้าน → น้ำหนัก
+    sorted.push(...billsNoGps.sort((a,b)=>{
+      const pa=a.province||'',pb=b.province||'';
+      if(pa!==pb)return pa.localeCompare(pb,'th');
+      const na=normName(a.arName)||'',nb=normName(b.arName)||'';
+      if(na!==nb)return na.localeCompare(nb,'th');
+      return b.totalW-a.totalW;
+    }));
 
     // ── loads เริ่มจากบิลวันอื่น ──
     const loads={};
