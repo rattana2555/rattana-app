@@ -336,7 +336,7 @@ input[type=file]{display:none}
 </div>
 </div>
 
-<script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+<script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js" async></script>
 <script>
 // ═══ CONFIG ═══════════════════════════════════════════════
 var SHEET = '1-KQ9dGZiQBB9CfoCObCUtHMqKWeDQZZTjIEXj9PIGDA';
@@ -928,33 +928,47 @@ function closeProdModal(e){
 // ─── REMOTE STATUS SYNC ──────────────────────────────────────
 function _done(){
   try{updateStats();}catch(e){}
-  try{renderDash();}catch(e){}
+  try{
+    renderDash();
+  }catch(e){
+    // fallback — clear spinner if renderDash fails
+    var d=$('d-sum');
+    if(d&&d.querySelector('.spin'))d.innerHTML='<div class="empty"><div class="empty-ic">📦</div><div class="empty-t">'+Object.keys(DB).length+' ออเดอร์</div></div>';
+  }
   try{renderOrderList();}catch(e){}
   try{renderOStats();}catch(e){}
   toast('✅ โหลดสำเร็จ ('+Object.keys(DB).length+' ออเดอร์)','ok');
 }
 
 function loadRemoteStatus(){
+  var called=false;
+  function done(){if(called)return;called=true;_done();}
+  // Timeout 5s — _done() จะถูกเรียกเสมอ
+  var tmr=setTimeout(done,5000);
   var url='https://docs.google.com/spreadsheets/d/'+SHEET+'/gviz/tq?tqx=out:json&sheet='+encodeURIComponent(STATUS_TAB)+'&t='+Date.now();
   fetch(url)
     .then(function(r){return r.text();})
     .then(function(txt){
-      var s=txt.indexOf('{'),e=txt.lastIndexOf('}');
-      if(s<0){_done();return;}
-      var j=JSON.parse(txt.substring(s,e+1));
-      var rows=j.table&&j.table.rows?j.table.rows:[];
-      rows.forEach(function(row){
-        var c=row.c||[];
-        var num=c[0]&&c[0].v?String(c[0].v).trim():'';
-        var st=c[1]&&c[1].v?String(c[1].v).trim():'';
-        if(num&&st&&DB[num]){
-          DB[num].status=st;
-          if(st==='complete'){DB[num].items.forEach(function(x){x.status='ok';x.sc=x.qty;});}
+      clearTimeout(tmr);
+      try{
+        var s=txt.indexOf('{'),e=txt.lastIndexOf('}');
+        if(s>=0){
+          var j=JSON.parse(txt.substring(s,e+1));
+          var rows=j.table&&j.table.rows?j.table.rows:[];
+          rows.forEach(function(row){
+            var c=row.c||[];
+            var num=c[0]&&c[0].v?String(c[0].v).trim():'';
+            var st=c[1]&&c[1].v?String(c[1].v).trim():'';
+            if(num&&st&&DB[num]){
+              DB[num].status=st;
+              if(st==='complete'){DB[num].items.forEach(function(x){x.status='ok';x.sc=x.qty;});}
+            }
+          });
         }
-      });
-      _done();
+      }catch(e){}
+      done();
     })
-    .catch(function(){_done();});
+    .catch(function(){clearTimeout(tmr);done();});
 }
 
 function saveRemoteStatus(orderNum, status){
