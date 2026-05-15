@@ -1446,11 +1446,18 @@ function confirmAutoAssign(){
   btn.disabled=true; btn.textContent='⏳ กำลังจัด...';
 
   setTimeout(()=>{
-    function matchDay(daysStr){
-      if(!daysStr)return false;
-      return daysStr.split(/[,\s\/]+/).some(d=>{d=d.trim();return d===tmrShort||d===tmrFull||d.startsWith(tmrShort);});
-    }
+    // ══════════════════════════════════════════
+    // AUTO-ASSIGN v2: 4 rules
+    //  1. ไม่ใช้ Serial Route จด
+    //  2. ชื่อร้านเหมือนกัน → รถเดียวกัน
+    //  3. วันส่งเดียวกัน → รถเดียวกัน
+    //  4. GPS ใกล้กัน (≤5กม.) → รถเดียวกัน
+    // ══════════════════════════════════════════
 
+    function matchDay(s){
+      if(!s)return false;
+      return s.split(/[,\s\/]+/).some(d=>{d=d.trim();return d===tmrShort||d===tmrFull||d.startsWith(tmrShort);});
+    }
     const tmrBills=bills.filter(b=>matchDay(b.days));
     const tmrRefs=new Set(tmrBills.map(b=>b.ref));
 
@@ -1460,318 +1467,139 @@ function confirmAutoAssign(){
       return;
     }
 
-    const newQ={};
-    const newTripMap={};
+    // ── Normalize store name (ตัด suffix วงเล็บ) ──
+    function normName(n){
+      return (n||'').replace(/\s*\([^)]*\)/g,'').replace(/\s+/g,' ').trim();
+    }
 
-    // loads เริ่มจากบิลวันอื่นที่จัดไปแล้ว — แยก เที่ยว 1/2
+    // ── GPS Cluster: รวมร้านที่อยู่ใกล้กัน ≤5กม. ──
+    const GPS_KM=5;
+    const clusters=[];       // [{cLat,cLng,cnt}]
+    const billCluster={};    // ref → clusterIdx
+
+    tmrBills.forEach(b=>{
+      if(!b.lat||!b.lng)return;
+      let found=-1,minD=Infinity;
+      clusters.forEach((c,i)=>{
+        const d=haversine(c.cLat,c.cLng,b.lat,b.lng);
+        if(d<minD){minD=d;found=i;}
+      });
+      if(found>=0&&minD<=GPS_KM){
+        // อัปเดต centroid แบบ running average
+        const c=clusters[found];
+        c.cLat=(c.cLat*c.cnt+b.lat)/(c.cnt+1);
+        c.cLng=(c.cLng*c.cnt+b.lng)/(c.cnt+1);
+        c.cnt++;
+        billCluster[b.ref]=found;
+      } else {
+        billCluster[b.ref]=clusters.length;
+        clusters.push({cLat:b.lat,cLng:b.lng,cnt:1});
+      }
+    });
+
+    // ── เรียงบิล: ชื่อร้าน → cluster → ระยะทาง ──
+    const sorted=[...tmrBills].sort((a,b)=>{
+      const nA=normName(a.arName), nB=normName(b.arName);
+      if(nA!==nB){
+        // ถ้าชื่อต่างกัน เรียงตาม cluster ก่อน
+        const cA=billCluster[a.ref]??9999;
+        const cB=billCluster[b.ref]??9999;
+        if(cA!==cB)return cA-cB;
+      }
+      return distOrInf(a)-distOrInf(b);
+    });
+
+    // ── loads เริ่มจากบิลวันอื่น ──
     const loads={};
     TRUCKS.forEach(t=>{
-      let w1=0,v1=0,w2=0,v2=0;
+      let w1=0,v1=0,w2=0,v2=0,w3=0,v3=0;
       Object.entries(queue).forEach(([ref,plate])=>{
         if(plate===t.plate&&!tmrRefs.has(ref)&&billMap[ref]){
           const tr=tripMap[ref]||1;
           if(tr===1){w1+=billMap[ref].totalW;v1+=billMap[ref].totalV;}
-          else      {w2+=billMap[ref].totalW;v2+=billMap[ref].totalV;}
+          else if(tr===2){w2+=billMap[ref].totalW;v2+=billMap[ref].totalV;}
+          else{w3+=billMap[ref].totalW;v3+=billMap[ref].totalV;}
         }
       });
-      loads[t.plate]={w1,v1,w2,v2};
+      loads[t.plate]={w1,v1,w2,v2,w3,v3};
     });
 
-    const assigned=new Set(), routeTruck={};
-    const priority={'12 ล้อ':1,'10 ล้อ':2,'6 ล้อ':3,'4 ล้อจัมโบ้':4,'กระบะ':5};
-    // ── กรองรถพ่วง (EXCLUDE_AUTO) ออกจาก auto-assign ──
-    const trucks=[...TRUCKS]
-      .filter(t=>t.maxW>0 && !EXCLUDE_AUTO.has(t.plate))
-      .sort((a,b)=>(priority[a.type]||9)-(priority[b.type]||9)||b.maxW-a.maxW);
-
-    const medLargeTruckTypes=new Set(['12 ล้อ','10 ล้อ','6 ล้อ']); // เติมก่อน
-
-    function fitsTrip(t,b){
+    // ── tryTrip: หาเที่ยวที่รับได้ (1→2→3) ──
+    function tryTrip(t,b){
       const ld=loads[t.plate];
       if((ld.w1+b.totalW)<=t.maxW&&(t.maxV<=0||(ld.v1+b.totalV)<=t.maxV))return 1;
       if((ld.w2+b.totalW)<=t.maxW&&(t.maxV<=0||(ld.v2+b.totalV)<=t.maxV))return 2;
+      if((ld.w3+b.totalW)<=t.maxW&&(t.maxV<=0||(ld.v3+b.totalV)<=t.maxV))return 3;
       return 0;
     }
-    function fits(t,b){return fitsTrip(t,b)>0;}
-    function bearing(b){
-      const lat1=HQ.lat*Math.PI/180,lat2=(b.lat||HQ.lat)*Math.PI/180;
-      const dLng=((b.lng||HQ.lng)-HQ.lng)*Math.PI/180;
-      return(Math.atan2(Math.sin(dLng)*Math.cos(lat2),Math.cos(lat1)*Math.sin(lat2)-Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLng))*180/Math.PI+360)%360;
+
+    // ── Truck list (ไม่รวม EXCLUDE_AUTO) เรียงใหญ่→เล็ก ──
+    const priority={'12 ล้อ':1,'10 ล้อ':2,'6 ล้อ':3,'4 ล้อจัมโบ้':4,'กระบะ':5};
+    const trucks=[...TRUCKS].filter(t=>!EXCLUDE_AUTO.has(t.plate)&&t.maxW>0)
+      .sort((a,b)=>(priority[a.type]||9)-(priority[b.type]||9)||b.maxW-a.maxW);
+
+    // ── Lookup tables ──
+    const storeMap={};   // normName → plate  (rule 2)
+    const clusterMap={}; // clusterIdx → plate (rule 4)
+    const daysMap={};    // days string → plate (rule 3)
+
+    const newQ={}, newTripMap={};
+
+    function assignBill(b,plate,trip){
+      newQ[b.ref]=plate; newTripMap[b.ref]=trip;
+      const ld=loads[plate];
+      if(trip===1){ld.w1+=b.totalW;ld.v1+=b.totalV;}
+      else if(trip===2){ld.w2+=b.totalW;ld.v2+=b.totalV;}
+      else{ld.w3+=b.totalW;ld.v3+=b.totalV;}
+      // อัปเดต lookup
+      const nm=normName(b.arName);
+      if(nm&&!storeMap[nm])storeMap[nm]=plate;
+      const ci=billCluster[b.ref];
+      if(ci!==undefined&&!clusterMap[ci])clusterMap[ci]=plate;
+      if(b.days&&!daysMap[b.days])daysMap[b.days]=plate;
     }
 
-    // ── centroid ของบิลที่อยู่บนรถแล้ว ──
-    function truckCentroid(plate){
-      const on=Object.entries(newQ).filter(([,p])=>p===plate).map(([r])=>billMap[r]).filter(x=>x&&x.lat&&x.lng);
-      if(!on.length)return null;
-      return{lat:on.reduce((s,b)=>s+b.lat,0)/on.length, lng:on.reduce((s,b)=>s+b.lng,0)/on.length};
-    }
-    // ── ระยะจากจุด b ไปยัง centroid ของรถ (กม.) ──
-    const MAX_CENTROID_DIST=35; // กม. — ถ้าไกลกว่านี้ถือว่าข้ามแถบ
-    function farFromCentroid(plate,b){
-      if(!b.lat||!b.lng)return false;
-      const c=truckCentroid(plate);
-      if(!c)return false;
-      return haversine(c.lat,c.lng,b.lat,b.lng)>MAX_CENTROID_DIST;
-    }
+    function bestTruck(b){
+      const nm=normName(b.arName);
+      const ci=billCluster[b.ref];
 
-    // ── ข้อ 1: ติดตามร้านค้าที่จัดไปแล้ว → ใส่รอบเดียวกัน ──
-    const storeTrip={}; // key → {plate, trip}
-
-    // ── Normalize store name: ลบ (FN),(เครดิต),(สด) ฯลฯ ──
-    function normName(n){ return (n||'').replace(/\s*\([^)]*\)/g,'').replace(/\s+/g,' ').trim(); }
-    const billNormName={}; // billRef → normalized name
-    tmrBills.forEach(b=>{ billNormName[b.ref]=normName(b.arName); });
-
-    // ── Pre-compute: GPS เดียวกัน (< 200ม.) = ร้านเดียวกัน → pre-link ไว้ใน gpsGroup ──
-    // สร้าง gpsGroup: {gpsKey → gpsKey ของตัวแทน} เพื่อ merge GPS ที่ใกล้มากๆ
-    const GPS_SAME_KM = 0.2; // 200 เมตร
-    const gpsAnchors = []; // [{lat,lng,key}] ตัวแทนของแต่ละ GPS cluster เล็กๆ
-    const billGpsKey = {}; // billRef → gpsKey มาตรฐาน
-
-    tmrBills.filter(b=>b.lat&&b.lng).forEach(b=>{
-      const key=`G:${b.lat.toFixed(4)},${b.lng.toFixed(4)}`;
-      // หา anchor ที่ใกล้ที่สุด
-      let found=null;
-      for(const a of gpsAnchors){
-        if(haversine(a.lat,a.lng,b.lat,b.lng)<=GPS_SAME_KM){found=a;break;}
+      // Rule 2: ชื่อร้านเหมือน → รถเดิม
+      if(storeMap[nm]){
+        const t=trucks.find(x=>x.plate===storeMap[nm]);
+        if(t){const tr=tryTrip(t,b);if(tr)return{t,tr};}
       }
-      if(!found){
-        found={lat:b.lat,lng:b.lng,key};
-        gpsAnchors.push(found);
+      // Rule 4: GPS cluster เดียวกัน → รถเดิม
+      if(ci!==undefined&&clusterMap[ci]){
+        const t=trucks.find(x=>x.plate===clusterMap[ci]);
+        if(t){const tr=tryTrip(t,b);if(tr)return{t,tr};}
       }
-      billGpsKey[b.ref]=found.key;
-    });
-
-    // ── Pre-cluster bills by larger GPS proximity (18กม.) ──
-    const GEO_CLUSTER_KM = 18;
-    const geoClusters = []; // [{centLat,centLng,bills:[],plate:null}]
-
-    tmrBills.filter(b=>b.lat&&b.lng).forEach(b=>{
-      let nearest=null, minD=Infinity;
-      geoClusters.forEach((c,i)=>{
-        const d=haversine(c.centLat,c.centLng,b.lat,b.lng);
-        if(d<minD){minD=d;nearest=i;}
+      // Rule 3: วันส่งเดียวกัน → รถเดิม
+      if(b.days&&daysMap[b.days]){
+        const t=trucks.find(x=>x.plate===daysMap[b.days]);
+        if(t){const tr=tryTrip(t,b);if(tr)return{t,tr};}
+      }
+      // Fallback: รถ load น้อยสุดที่รับได้
+      let pick=null,pickTrip=0,minLoad=Infinity;
+      trucks.forEach(t=>{
+        const tr=tryTrip(t,b);
+        if(!tr)return;
+        const ld=loads[t.plate];
+        const total=ld.w1+ld.w2+ld.w3;
+        if(total<minLoad){minLoad=total;pick=t;pickTrip=tr;}
       });
-      if(nearest!==null && minD<=GEO_CLUSTER_KM){
-        geoClusters[nearest].bills.push(b);
-        // Update centroid (running average)
-        const bs=geoClusters[nearest].bills;
-        geoClusters[nearest].centLat=bs.reduce((s,x)=>s+(x.lat||0),0)/bs.length;
-        geoClusters[nearest].centLng=bs.reduce((s,x)=>s+(x.lng||0),0)/bs.length;
-      } else {
-        geoClusters.push({centLat:b.lat,centLng:b.lng,bills:[b],plate:null});
-      }
-    });
-    // billRef → clusterId map
-    const billCluster={};
-    geoClusters.forEach((c,i)=>c.bills.forEach(b=>{billCluster[b.ref]=i;}));
-    const clusterTruck={}; // clusterId → plate
+      return pick?{t:pick,tr:pickTrip}:null;
+    }
 
-    const routeGroups={};
-    tmrBills.forEach(b=>{
-      const baseKey=(b.routeCode||b.route||'').trim();
-      // แบ่ง sub-group ด้วย bearing sector 45° ป้องกัน route เดียวกันแต่ต่างทิศ
-      const bearSec=Math.round(bearing(b)/45)*45;
-      const key=baseKey?`${baseKey}_${bearSec}`:`DIR_${bearSec}`;
-      if(!routeGroups[key])routeGroups[key]={key,bills:[],routeCode:b.routeCode||b.route||'',days:b.days||'',totalAmt:0,avgAmt:0,avgDist:0};
-      routeGroups[key].bills.push(b);
-    });
-    Object.values(routeGroups).forEach(g=>{
-      const bs=g.bills.filter(b=>b.lat&&b.lng);
-      g.avgDist=bs.length?bs.reduce((s,b)=>s+distOrInf(b),0)/bs.length:0;
-      g.totalAmt=g.bills.reduce((s,b)=>s+b.totalAmt,0);
-      g.avgAmt=g.bills.length?g.totalAmt/g.bills.length:0;
+    sorted.forEach(b=>{
+      const res=bestTruck(b);
+      if(res)assignBill(b,res.t.plate,res.tr);
     });
 
-    const groups=Object.values(routeGroups).sort((a,b)=>b.totalAmt-a.totalAmt||b.avgDist-a.avgDist);
-    const sortedAmts=groups.map(g=>g.avgAmt).sort((a,b)=>a-b);
-    const AMT_HIGH=sortedAmts[Math.floor(sortedAmts.length*0.6)]||30000;
-    const AMT_LOW =sortedAmts[Math.floor(sortedAmts.length*0.3)]||5000;
-    const bigT=new Set(['12 ล้อ','10 ล้อ','6 ล้อ']),smallT=new Set(['4 ล้อจัมโบ้','กระบะ']);
-
-    groups.forEach(grp=>{
-      const isHi=grp.avgAmt>=AMT_HIGH;
-      [...grp.bills].sort((a,b)=>b.totalAmt-a.totalAmt||distOrInf(a)-distOrInf(b)).forEach(b=>{
-        if(assigned.has(b.ref))return;
-        let best=null;
-        const bDist=distOrInf(b), bBear=bearing(b);
-
-        // 0a. GPS anchor: บิล GPS เดียวกับที่จัดไปแล้ว → รถ+เที่ยวเดียวกัน (สูงสุด)
-        const bGpsKey=billGpsKey[b.ref]||'';
-        if(!best && bGpsKey && storeTrip[bGpsKey]){
-          const prevT=trucks.find(x=>x.plate===storeTrip[bGpsKey].plate);
-          if(prevT&&fits(prevT,b))best=prevT;
-        }
-        // 0b. Geo cluster: บิลอยู่ cluster เดิมที่จัดรถไปแล้ว → ใช้รถนั้น
-        const bCid=billCluster[b.ref];
-        if(!best && bCid!==undefined && clusterTruck[bCid]){
-          const t=trucks.find(x=>x.plate===clusterTruck[bCid]);
-          if(t&&fits(t,b)&&!farFromCentroid(t.plate,b))best=t;
-        }
-
-        // 1. Route truck + bearing check
-        if(!best && routeTruck[grp.key]){
-          const t=trucks.find(x=>x.plate===routeTruck[grp.key]);
-          if(t&&fits(t,b)&&!farFromCentroid(t.plate,b)){
-            const on=Object.entries(newQ).filter(([,p])=>p===t.plate).map(([r])=>billMap[r]).filter(x=>x&&x.lat&&x.lng);
-            if(on.length){
-              const avgB=on.reduce((s,x)=>s+bearing(x),0)/on.length;
-              const bd=Math.abs(((bBear-avgB+180)%360)-180);
-              if(bd<=40)best=t; // ทิศต่างกัน>40° → ไม่ใช้รถนี้
-            } else { best=t; }
-          }
-        }
-
-        // 2. Bearing clustering + centroid check
-        if(!best){
-          const cands=trucks.filter(t=>{
-            if(!fits(t,b))return false;
-            if(farFromCentroid(t.plate,b))return false; // ← ข้ามแถบ ตัดออก
-            const on=Object.entries(newQ).filter(([,p])=>p===t.plate).map(([r])=>billMap[r]).filter(x=>x);
-            if(!on.length)return false;
-            const tb=on.reduce((s,x)=>s+bearing(x),0)/on.length;
-            const bd=Math.abs(((bBear-tb+180)%360)-180);
-            return bd<=30||on.some(x=>(x.routeCode||x.route)===grp.routeCode&&grp.routeCode)||(grp.days&&on.some(x=>x.days===grp.days));
-          });
-          if(cands.length){
-            best=cands.sort((a,b_)=>{
-              const bA=Object.entries(newQ).filter(([,p])=>p===a.plate).map(([r])=>billMap[r]).filter(x=>x);
-              const bB=Object.entries(newQ).filter(([,p])=>p===b_.plate).map(([r])=>billMap[r]).filter(x=>x);
-              const bearA=bA.length?bA.reduce((s,x)=>s+bearing(x),0)/bA.length:999;
-              const bearB=bB.length?bB.reduce((s,x)=>s+bearing(x),0)/bB.length:999;
-              return Math.abs(((bBear-bearA+180)%360)-180)-Math.abs(((bBear-bearB+180)%360)-180);
-            })[0];
-          }
-        }
-
-        // 3. Fallback — เลือกรถโดยสนทิศทาง (bearing) ก่อน แล้วค่อยเลือกตาม load
-        if(!best){
-          let f=trucks.filter(t=>{
-            if(!fits(t,b))return false;
-            if(bDist>80&&t.type==='กระบะ')return false;
-            if(isHi&&smallT.has(t.type)&&trucks.filter(x=>medLargeTruckTypes.has(x.type)&&fits(x,b)).length>0)return false;
-            return true;
-          });
-          const medLargeF=f.filter(t=>medLargeTruckTypes.has(t.type));
-          if(medLargeF.length) f=medLargeF;
-          if(!f.length)f=trucks.filter(t=>fits(t,b));
-          // เรียงโดย: 1) ทิศทางใกล้เคียงก่อน 2) น้ำหนักน้อยสุด
-          best=f.sort((tA,tB)=>{
-            const onA=Object.entries(newQ).filter(([,p])=>p===tA.plate).map(([r])=>billMap[r]).filter(x=>x&&x.lat&&x.lng);
-            const onB=Object.entries(newQ).filter(([,p])=>p===tB.plate).map(([r])=>billMap[r]).filter(x=>x&&x.lat&&x.lng);
-            if(!onA.length&&!onB.length) return (loads[tA.plate].w1+loads[tA.plate].w2)/tA.maxW-(loads[tB.plate].w1+loads[tB.plate].w2)/tB.maxW;
-            if(!onA.length)return 1;  // prefer truck that already has direction
-            if(!onB.length)return -1;
-            const bearA=onA.reduce((s,x)=>s+bearing(x),0)/onA.length;
-            const bearB=onB.reduce((s,x)=>s+bearing(x),0)/onB.length;
-            const dA=Math.abs(((bBear-bearA+180)%360)-180);
-            const dB=Math.abs(((bBear-bearB+180)%360)-180);
-            if(Math.abs(dA-dB)>15)return dA-dB; // ทิศต่างกันมาก → เลือกใกล้กว่า
-            return (loads[tA.plate].w1+loads[tA.plate].w2)/tA.maxW-(loads[tB.plate].w1+loads[tB.plate].w2)/tB.maxW;
-          })[0];
-        }
-
-        if(best){
-          const storeKey=b.arCode||b.arName||'';
-          const gpsKey=billGpsKey[b.ref]||'';
-          const normKey=billNormName[b.ref]?'NM:'+billNormName[b.ref]:'';
-          // 1=arCode 2=GPS 3=normalized name
-          const prevStore=storeTrip[storeKey]||(gpsKey&&storeTrip[gpsKey])||(normKey&&storeTrip[normKey]);
-          let tr;
-          if(prevStore){
-            tr=prevStore.trip;
-            // Override best ด้วยรถเดิมถ้าสามารถรับได้
-            const prevT=trucks.find(x=>x.plate===prevStore.plate);
-            if(prevT&&fits(prevT,b))best=prevT;
-          } else {
-            tr=fitsTrip(best,b)||1;
-          }
-          newQ[b.ref]=best.plate; newTripMap[b.ref]=tr; assigned.add(b.ref);
-          if(tr===1){loads[best.plate].w1+=b.totalW;loads[best.plate].v1+=b.totalV;}
-          else      {loads[best.plate].w2+=b.totalW;loads[best.plate].v2+=b.totalV;}
-          if(!routeTruck[grp.key])routeTruck[grp.key]=best.plate;
-          if(storeKey&&!storeTrip[storeKey])storeTrip[storeKey]={plate:best.plate,trip:tr};
-          if(gpsKey&&!storeTrip[gpsKey])storeTrip[gpsKey]={plate:best.plate,trip:tr};
-          if(normKey&&!storeTrip[normKey])storeTrip[normKey]={plate:best.plate,trip:tr};
-          const cid=billCluster[b.ref];
-          if(cid!==undefined&&!clusterTruck[cid])clusterTruck[cid]=best.plate;
-        }
-      });
-    });
-
-    // Overflow
-    tmrBills.filter(b=>!assigned.has(b.ref)).forEach(b=>{
-      const t=trucks.filter(t=>fits(t,b)).sort((a,b_)=>(loads[a.plate].w1+loads[a.plate].w2)/a.maxW-(loads[b_.plate].w1+loads[b_.plate].w2)/b_.maxW)[0];
-      if(t){
-        const storeKey=b.arCode||b.arName||'';
-        const gpsKey=billGpsKey[b.ref]||'';
-        const prevStore=storeTrip[storeKey]||(gpsKey&&storeTrip[gpsKey]);
-        const tr=prevStore?prevStore.trip:fitsTrip(t,b);if(!tr)return; // ห้ามเกิน
-        newQ[b.ref]=t.plate;newTripMap[b.ref]=tr;assigned.add(b.ref);
-        if(tr===1){loads[t.plate].w1+=b.totalW;loads[t.plate].v1+=b.totalV;}
-        else      {loads[t.plate].w2+=b.totalW;loads[t.plate].v2+=b.totalV;}
-        if(storeKey&&!storeTrip[storeKey])storeTrip[storeKey]={plate:t.plate,trip:tr};
-        if(gpsKey&&!storeTrip[gpsKey])storeTrip[gpsKey]={plate:t.plate,trip:tr};
-      }
-    });
-
-    // คง queue+tripMap วันอื่น + เขียนทับวันที่เลือก
+    // คง queue วันอื่น + เขียนทับวันที่เลือก
     const kept={},keptTrip={};
-    Object.entries(queue).forEach(([ref,plate])=>{if(!tmrRefs.has(ref)){kept[ref]=plate;keptTrip[ref]=tripMap[ref]||1;}});
-
-    // ══ POST-PROCESS: GPS เดียวกัน → รถเดียวกัน (ดูความจุด้วย) ══
-    const gpsBillsMap={};
-    Object.keys(newQ).forEach(ref=>{
-      const k=billGpsKey[ref];
-      if(!k)return;
-      if(!gpsBillsMap[k])gpsBillsMap[k]=[];
-      gpsBillsMap[k].push(ref);
+    Object.entries(queue).forEach(([ref,plate])=>{
+      if(!tmrRefs.has(ref)){kept[ref]=plate;keptTrip[ref]=tripMap[ref]||1;}
     });
-    Object.entries(gpsBillsMap).forEach(([,refs])=>{
-      if(refs.length<=1)return;
-      // หา plate+trip ที่ได้รับโหวตมากสุด
-      const votes={};
-      refs.forEach(r=>{const k2=`${newQ[r]}|${newTripMap[r]||1}`;votes[k2]=(votes[k2]||0)+1;});
-      const [winner]=Object.entries(votes).sort((a,b)=>b[1]-a[1])[0];
-      const [winPlate,winTripStr]=winner.split('|');
-      const winTrip=parseInt(winTripStr)||1;
-      const winTruck=TRUCKS.find(t=>t.plate===winPlate);
-
-      refs.forEach(r=>{
-        if(newQ[r]===winPlate&&(newTripMap[r]||1)===winTrip)return; // already correct
-        const b=billMap[r];if(!b)return;
-
-        // ตรวจว่า winPlate รับได้ไหม (คำนวณจาก loads ปัจจุบัน)
-        const curLd=winTrip===1?{w:loads[winPlate].w1,v:loads[winPlate].v1}:{w:loads[winPlate].w2,v:loads[winPlate].v2};
-        const canFit=winTruck&&(curLd.w+b.totalW)<=winTruck.maxW&&
-                     (winTruck.maxV<=0||(curLd.v+b.totalV)<=winTruck.maxV);
-
-        // ลอง trip อื่นของ winPlate ถ้า trip นี้เต็ม
-        let usePlate=winPlate,useTrip=winTrip;
-        if(!canFit&&winTruck){
-          const altTrip=winTrip===1?2:1;
-          const altLd=altTrip===1?{w:loads[winPlate].w1,v:loads[winPlate].v1}:{w:loads[winPlate].w2,v:loads[winPlate].v2};
-          if((altLd.w+b.totalW)<=winTruck.maxW&&(winTruck.maxV<=0||(altLd.v+b.totalV)<=winTruck.maxV)){
-            useTrip=altTrip; // trip อื่นยังรับได้
-          }
-          // ถ้าทั้ง 2 เที่ยวเต็ม → คงรถเดิมไว้ (ไม่บังคับย้าย)
-          else return;
-        }
-
-        // ย้าย load จากรถเดิมออก
-        const oldTrip=newTripMap[r]||1,oldPlate=newQ[r];
-        if(loads[oldPlate]){
-          if(oldTrip===1){loads[oldPlate].w1-=b.totalW;loads[oldPlate].v1-=b.totalV;}
-          else            {loads[oldPlate].w2-=b.totalW;loads[oldPlate].v2-=b.totalV;}
-        }
-        // ใส่รถใหม่
-        newQ[r]=usePlate; newTripMap[r]=useTrip;
-        if(useTrip===1){loads[usePlate].w1+=b.totalW;loads[usePlate].v1+=b.totalV;}
-        else           {loads[usePlate].w2+=b.totalW;loads[usePlate].v2+=b.totalV;}
-      });
-    });
-    // ════════════════════════════════════════════════
-
     queue={...kept,...newQ};
     tripMap={...keptTrip,...newTripMap};
 
@@ -1785,7 +1613,7 @@ function confirmAutoAssign(){
       (unassigned>0?` ⚠ ${unassigned} บิลไม่พอรถ`:''),
       unassigned>0?'warn':'ok'
     );
-  },400);
+  },0);
 }
 
 
