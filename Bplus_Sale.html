@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Rattana Bplus Sales v4.0</title>
+<title>Rattana Bplus Sales v4.1</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
@@ -199,19 +199,20 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
 .stock-wh-num{font-size:14px;font-weight:800;color:var(--text);line-height:1}
 .stock-wh-unit{font-size:9px;color:var(--muted);font-weight:600}
 .stock-wh-bar-track{
-  width:100%;height:3px;background:var(--bg);border-radius:2px;overflow:hidden;
+  width:20px;height:44px;background:var(--bg);border-radius:4px;overflow:hidden;
+  display:flex;align-items:flex-end;
 }
-.stock-wh-bar-fill{height:3px;border-radius:2px;transition:width .4s}
+.stock-wh-bar-fill{width:100%;border-radius:4px;transition:height .4s}
 .stock-wh-cell.zero .stock-wh-num{color:var(--muted)}
 .stock-wh-cell.zero .stock-wh-label{opacity:.5}
 
 /* WH colour tokens */
-.wh-w1{background:#e8f1fb;color:#1a6fb8}
-.wh-w2{background:#fef3cd;color:#a87800}
+.wh-w1{background:#fde8e8;color:#c0392b}
+.wh-w2{background:#dbeafe;color:#1d4ed8}
 .wh-w3{background:#fde8e8;color:#c0392b}
 .wh-w4{background:#e8f7ef;color:#1e8449}
-.bar-w1{background:#1a6fb8}
-.bar-w2{background:#f59e0b}
+.bar-w1{background:#ef4444}
+.bar-w2{background:#3b82f6}
 .bar-w3{background:#ef4444}
 .bar-w4{background:#00b14f}
 
@@ -246,6 +247,14 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
   padding:13px;border-radius:12px;cursor:pointer;font-family:inherit;margin-bottom:8px}
 .upload-cancel{background:none;border:1.5px solid var(--border);color:var(--muted);
   font-size:13px;padding:10px;border-radius:12px;cursor:pointer;width:100%;font-family:inherit}
+
+/* ── Stock filter chips ── */
+.stock-filter-bar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.stock-filter-chip{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;
+  border:1.5px solid var(--border);background:var(--card);color:var(--muted);
+  cursor:pointer;white-space:nowrap;font-family:inherit;transition:all .18s}
+.stock-filter-chip.active{background:var(--green);border-color:var(--green);color:#fff}
+.stock-filter-chip.active-out{background:#ef4444;border-color:#ef4444;color:#fff}
 
 .num{font-variant-numeric:tabular-nums}
 .empty{text-align:center;padding:40px 20px;color:var(--muted);font-size:14px}
@@ -443,6 +452,11 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
           <span style="color:var(--muted);font-size:16px">🔍</span>
           <input type="text" id="stockSearch" placeholder="ค้นหาสินค้า...">
         </div>
+        <div class="stock-filter-bar">
+          <button class="stock-filter-chip active" data-sf="all">ทั้งหมด</button>
+          <button class="stock-filter-chip" data-sf="in">✅ มีสต็อก</button>
+          <button class="stock-filter-chip" data-sf="out">⭕ ไม่มีสต็อก</button>
+        </div>
       </div>
       <div id="stockProductList"></div>
     </div>
@@ -485,7 +499,7 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
         </div>
         <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:14px;font-weight:600">เวอร์ชัน</span>
-          <span style="font-size:12px;color:var(--muted)">v4.0 · 2026-05-14</span>
+          <span style="font-size:12px;color:var(--muted)">v4.1 · 2026-05-15</span>
         </div>
       </div>
       <div style="margin-top:12px">
@@ -554,8 +568,8 @@ const CAT_META = {
 };
 const WH_LIST = ['W1','W2','W3','W4'];
 const WH_META = {
-  W1:{labelClass:'wh-w1',barClass:'bar-w1',color:'#1a6fb8'},
-  W2:{labelClass:'wh-w2',barClass:'bar-w2',color:'#f59e0b'},
+  W1:{labelClass:'wh-w1',barClass:'bar-w1',color:'#ef4444'},
+  W2:{labelClass:'wh-w2',barClass:'bar-w2',color:'#3b82f6'},
   W3:{labelClass:'wh-w3',barClass:'bar-w3',color:'#ef4444'},
   W4:{labelClass:'wh-w4',barClass:'bar-w4',color:'#00b14f'},
 };
@@ -573,6 +587,7 @@ let productSearch   = '';
 let stockWH         = 'all';
 let stockSearch     = '';
 let stockActiveCat  = null;
+let stockFilter     = 'all';
 let charts = {};
 let lastUpdated = '';
 let dataSourceLabel  = 'Apps Script';
@@ -987,8 +1002,12 @@ function renderStock(){
 }
 
 function openStockCat(cat){
-  stockActiveCat=cat; stockSearch='';
+  stockActiveCat=cat; stockSearch=''; stockFilter='all';
   $('stockSearch').value='';
+  document.querySelectorAll('.stock-filter-chip').forEach(c=>{
+    c.classList.remove('active','active-out');
+    if(c.dataset.sf==='all') c.classList.add('active');
+  });
   const m=CAT_META[cat]||{icon:'📦'};
   $('stockProductTitle').textContent=m.icon+' '+cat;
   renderStock();
@@ -999,6 +1018,8 @@ function renderStockProducts(){
   const q=stockSearch.toLowerCase();
   let rows=stockRows.filter(r=>r.cat_bu===stockActiveCat);
   if(q) rows=rows.filter(r=>r.name.toLowerCase().includes(q));
+  if(stockFilter==='in')  rows=rows.filter(r=>getStockVal(r)>0);
+  if(stockFilter==='out') rows=rows.filter(r=>getStockVal(r)===0);
   rows=rows.slice().sort((a,b)=>getStockVal(b)-getStockVal(a));
 
   if(rows.length===0){
@@ -1034,7 +1055,7 @@ function renderStockProducts(){
         <div class="stock-wh-num num">${val.toLocaleString()}</div>
         <div class="stock-wh-unit">ลัง</div>
         <div class="stock-wh-bar-track">
-          <div class="stock-wh-bar-fill ${meta.barClass}" style="width:${pct}%"></div>
+          <div class="stock-wh-bar-fill ${meta.barClass}" style="height:${pct}%"></div>
         </div>
       </div>`;
     }).join('');
@@ -1108,7 +1129,16 @@ document.querySelectorAll('[data-swh]').forEach(chip=>{
 });
 
 $('stockSearch').addEventListener('input',e=>{stockSearch=e.target.value;renderStockProducts();});
-$('stockBackBtn').addEventListener('click',()=>{stockActiveCat=null;stockSearch='';renderStock();});
+$('stockBackBtn').addEventListener('click',()=>{stockActiveCat=null;stockSearch='';stockFilter='all';renderStock();});
+document.querySelectorAll('.stock-filter-chip').forEach(chip=>{
+  chip.addEventListener('click',()=>{
+    stockFilter=chip.dataset.sf;
+    document.querySelectorAll('.stock-filter-chip').forEach(c=>c.classList.remove('active','active-out'));
+    if(stockFilter==='out') chip.classList.add('active-out');
+    else chip.classList.add('active');
+    renderStockProducts();
+  });
+});
 $('refreshBtn').addEventListener('click',()=>fetchAll());
 $('stockRefreshBtn').addEventListener('click',()=>fetchStock());
 
