@@ -495,7 +495,7 @@ function renderDash(){
     var iu=dimg(p.img1)||dimg(p.img2);
     var ih=iu?'<img src="'+iu+'" onerror="this.parentElement.innerHTML=\'📦\'">':'📦';
     var pi=p.pcs>1?' ('+p.pieces+' ชิ้น)':'';
-    h+='<div class="pcard" onclick="showProdOrders(this.dataset.bc)" data-bc="'+bc+'" style="cursor:pointer"><div class="pcard-img">'+ih+'</div>'
+    h+='<div class="pcard" data-bc="'+bc+'" style="cursor:pointer"><div class="pcard-img">'+ih+'</div>'
       +'<div class="pcard-info"><div class="pcard-name">'+p.name+'</div>'
       +'<div class="pcard-qty">×'+p.qty+' '+p.unit+'</div>'
       +(p.pcs>1?'<div class="pcard-pc">'+p.pieces+' ชิ้นรวม</div>':'')
@@ -512,6 +512,11 @@ function renderDash(){
   }
   h+='</div>';
   el.innerHTML=h;
+  // กดการ์ดสินค้า → แสดงออเดอร์
+  el.querySelectorAll('.pcard[data-bc]').forEach(function(c){
+    c.style.cursor='pointer';
+    c.addEventListener('click',function(){showProdOrders(c.dataset.bc);});
+  });
 }
 
 // ═══ ORDER LIST ═══════════════════════════════════════════
@@ -846,23 +851,33 @@ function startNativeDetector(vid){
 
 function startZXing(vid){
   var el=$('cam-engine');if(el)el.textContent='ZXing';
-  if(!window.ZXing){setTimeout(function(){startZXing(vid);},400);return;}
-  var h=new Map();h.set(ZXing.DecodeHintType.TRY_HARDER,true);
-  if(SMODE==='product')h.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.CODE_128,ZXing.BarcodeFormat.CODE_39,ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8,ZXing.BarcodeFormat.UPC_A,ZXing.BarcodeFormat.ITF]);
-  CR=new ZXing.BrowserMultiFormatReader(h);
-  ID=false;clearInterval(DT);
-  DT=setInterval(function(){
-    if(!SA){clearInterval(DT);return;}
-    if(vid.paused&&vid.srcObject){vid.play().catch(function(){});return;}
-    if(ID||vid.readyState<2||!vid.videoWidth)return;
-    ID=true;
-    CR.decodeFromVideoElement(vid)
-      .then(function(r){ID=false;if(r&&SA)onScan(r.getText());})
-      .catch(function(){ID=false;});
-  },400);
+  if(!window.ZXing){setTimeout(function(){startZXing(vid);},300);return;}
+  var hints=new Map();
+  hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
+  if(SMODE==='product'){
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[
+      ZXing.BarcodeFormat.CODE_128,ZXing.BarcodeFormat.CODE_39,
+      ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8,
+      ZXing.BarcodeFormat.UPC_A,ZXing.BarcodeFormat.ITF
+    ]);
+  }
+  CR=new ZXing.BrowserMultiFormatReader(hints);
+  ZXing.BrowserCodeReader.listVideoInputDevices().then(function(devs){
+    var back=devs.find(function(d){return /back|rear|environment/i.test(d.label);})||devs[devs.length-1];
+    return CR.decodeFromVideoDevice(back?back.deviceId:undefined,vid,function(r,e){
+      if(!SA)return;if(r)onScan(r.getText());
+    });
+  }).then(function(ctrl){scanControls=ctrl;})
+  .catch(function(){
+    CR.decodeFromConstraints({video:{facingMode:{ideal:'environment'}}},vid,function(r,e){
+      if(!SA)return;if(r)onScan(r.getText());
+    }).catch(function(){});
+  });
 }
+
 function stopCam(){
   SA=false;ID=false;clearInterval(DT);
+  if(scanControls){try{scanControls.stop();}catch(e){}scanControls=null;}
   if(CR){try{CR.reset();}catch(e){}CR=null;}
   if(SS){SS.getTracks().forEach(function(t){t.stop();});SS=null;}
   var v=$('camvid');if(v)v.srcObject=null;
@@ -875,8 +890,7 @@ function dimg(url){
   return m?'https://lh3.googleusercontent.com/d/'+m[1]:'';
 }
 // ─── PRODUCT ORDERS MODAL ────────────────────────────────────
-function showProdOrders(elOrBc){
-  var bc=typeof elOrBc==="string"?elOrBc:(elOrBc.dataset?elOrBc.dataset.bc:elOrBc);
+function showProdOrders(bc){
   // Find product info
   var prod=null;
   var matchOrders=[];
@@ -905,7 +919,7 @@ function showProdOrders(elOrBc){
     var o=m.order, item=m.item, st=o.status||'pending';
     var clr=st==='complete'?'var(--gr)':st==='in-progress'?'var(--or)':'var(--gd)';
     var scInfo=item.sc>0?item.sc+'/'+item.qty+' '+item.unit+' สแกนแล้ว':'ยังไม่สแกน';
-    return'<div class="mocard" style="border-left-color:'+clr+'" onclick="openFromModal(this.dataset.n)" data-n="'+o.num+'">'
+    return'<div class="mocard" style="border-left-color:'+clr+'" data-n="'+o.num+'">'
       +'<div class="mocard-n">#'+o.num+'</div>'
       +'<div class="mocard-s">'+o.store+' · '+o.code+'</div>'
       +'<div class="mocard-r">'
@@ -915,10 +929,12 @@ function showProdOrders(elOrBc){
   }).join('');
 
   $('prod-modal').style.display='flex';
+  $('modal-orders').querySelectorAll('.mocard[data-n]').forEach(function(c){
+    c.onclick=function(){$('prod-modal').style.display='none';openOrder(c.dataset.n);};
+  });
 }
 
-function openFromModal(elOrNum){
-  var num=typeof elOrNum==="string"?elOrNum:(elOrNum.dataset?elOrNum.dataset.n:elOrNum);
+function openFromModal(num){
   $('prod-modal').style.display='none';
   openOrder(num);
 }
