@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v7.2</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v7.3</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -319,7 +319,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v7.2</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v7.3</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -747,9 +747,13 @@ async function loadData(){
     try{const st=localStorage.getItem(STORE_KEY+'_trip');if(st)tripMap=JSON.parse(st);}catch(e){}
     setLoad('📊 โหลด Bill DS...',20);
 
-    const [billData,productData,routeData]=await Promise.all([
-      fetchSheet('Bill DS'), fetchSheet('Product'), fetchSheet('Route')
+    setLoad('📊 โหลด Bill DS + Other...',20);
+    const [billDS,otherDS,productData,routeData]=await Promise.all([
+      fetchSheet('Bill DS'),
+      fetchSheet('Other').catch(()=>[]),   // Other sheet (optional — ไม่มีก็ไม่ error)
+      fetchSheet('Product'), fetchSheet('Route')
     ]);
+    const billData=[...billDS,...otherDS]; // รวม 2 ชีทเข้าด้วยกัน
     setLoad('🔧 ประมวลผลข้อมูล...',70);
 
     // Products
@@ -1183,16 +1187,18 @@ function handleBillClick(ref){
 
 function quickAssign(ref, plate, trip){
   if(!plate)return;
+  trip=parseInt(trip)||1;   // FIX: parse string → int ก่อน (HTML select value เป็น string)
   const t=TRUCKS.find(x=>x.plate===plate);
   const b=billMap[ref];
   if(t&&b){
-    const ld=truckLoad(plate,trip||1);
+    const ld=truckLoad(plate,trip);  // ใช้ trip ที่ parse แล้ว
     if((ld.w+b.totalW)>t.maxW||(t.maxV>0&&(ld.v+b.totalV)>t.maxV)){
-      showToast(`❌ ${plate} เที่ยว ${trip} เต็มแล้ว`,'err');return;
+      // FIX: warn แล้วยังจัดได้ (manual assign ไม่ block)
+      showToast(`⚠ ${plate} เที่ยว ${trip} เกินขีดบรรทุก — บันทึกแล้ว`,'warn');
     }
   }
   queue[ref]=plate;
-  tripMap[ref]=parseInt(trip)||1;
+  tripMap[ref]=trip;
   saveQ();renderAll();
 }
 
@@ -1901,7 +1907,8 @@ function assignBillFull(ref, plate, trip){
     if(t&&b){
       const ld=truckLoad(plate,tr);
       if((ld.w+b.totalW)>t.maxW||(t.maxV>0&&(ld.v+b.totalV)>t.maxV)){
-        showToast(`❌ ${plate} เที่ยว ${tr} เต็มแล้ว`,'err');return;
+        // warn แล้วยังจัดได้ (manual assign ไม่ block)
+        showToast(`⚠ ${plate} เที่ยว ${tr} เกินขีดบรรทุก — บันทึกแล้ว`,'warn');
       }
     }
     queue[ref]=plate; tripMap[ref]=tr;
