@@ -846,11 +846,12 @@ function startCam(){
   stopCam();SA=true;
   try{if(!window._ax)window._ax=new(window.AudioContext||window.webkitAudioContext)();window._ax.resume();}catch(e){}
   var vid=$('camvid');
+  // ลำดับ: บังคับกล้องหลัง → ideal → fallback
   var opts=[
-    {video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}},
+    {video:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720}}},
+    {video:{facingMode:{exact:'environment'}}},
     {video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}}},
     {video:{facingMode:'environment'}},
-    {video:{facingMode:{ideal:'environment'}}},
     {video:true}
   ];
   function next(i){
@@ -858,12 +859,13 @@ function startCam(){
     navigator.mediaDevices.getUserMedia(opts[i])
       .then(function(s){
         SS=s;vid.srcObject=s;vid.muted=true;vid.setAttribute('playsinline','true');
-        var p=vid.play();if(p&&p.then)p.then(function(){waitZ(vid);}).catch(function(){next(i+1);});
+        var p=vid.play();
+        if(p&&p.then)p.then(function(){waitZ(vid);}).catch(function(){next(i+1);});
         else waitZ(vid);
       })
       .catch(function(err){
         if(err.name==='NotAllowedError'){toast('กรุณาอนุญาตสิทธิ์กล้อง','err');SA=false;}
-        else next(i+1);
+        else next(i+1); // ลอง option ถัดไป
       });
   }
   next(0);
@@ -894,12 +896,19 @@ function startZX(vid){
   var h=new Map();h.set(ZXing.DecodeHintType.TRY_HARDER,true);
   if(SMODE==='product')h.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.CODE_128,ZXing.BarcodeFormat.CODE_39,ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8,ZXing.BarcodeFormat.UPC_A,ZXing.BarcodeFormat.ITF]);
   CR=new ZXing.BrowserMultiFormatReader(h);
-  ZXing.BrowserCodeReader.listVideoInputDevices().then(function(devs){
-    var back=devs.find(function(d){return /back|rear|environment/i.test(d.label);})||devs[devs.length-1];
-    return CR.decodeFromVideoDevice(back?back.deviceId:undefined,vid,function(r,e){if(!SA)return;if(r)onScan(r.getText());});
-  }).then(function(ctrl){SC=ctrl;})
+  // ใช้ constraint โดยตรง — ไม่ list devices (iOS มักไม่มี label)
+  CR.decodeFromConstraints(
+    {video:{facingMode:{exact:'environment'}}},
+    vid,
+    function(r,e){if(!SA)return;if(r)onScan(r.getText());}
+  ).then(function(ctrl){SC=ctrl;})
   .catch(function(){
-    CR.decodeFromConstraints({video:{facingMode:{ideal:'environment'}}},vid,function(r,e){if(!SA)return;if(r)onScan(r.getText());}).catch(function(){});
+    // fallback: ideal
+    CR.decodeFromConstraints(
+      {video:{facingMode:{ideal:'environment'}}},
+      vid,
+      function(r,e){if(!SA)return;if(r)onScan(r.getText());}
+    ).then(function(ctrl){SC=ctrl;}).catch(function(){});
   });
 }
 
