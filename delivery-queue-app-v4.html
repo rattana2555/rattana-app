@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v7.7</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v7.8</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -319,7 +319,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v7.7</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v7.8</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -1512,15 +1512,14 @@ function confirmAutoAssign(){
     const billsWithGps=tmrBills.filter(b=>b.lat&&b.lng);
     const billsNoGps=tmrBills.filter(b=>!b.lat||!b.lng);
 
-    // 1. เรียง cluster index แบบ NN chain (เริ่มจาก cluster ใกล้ HQ สุด)
+    // 1. เรียง cluster index แบบ NN chain
+    // ไม่ใช้ HQ เป็น start point — ใช้ cluster ที่มีบิลมากสุดเป็นจุดเริ่ม
+    // แล้วหา cluster ที่อยู่ใกล้กันที่สุดเรื่อยๆ (pure geographic proximity)
     function nnClusters(idxs){
       if(!idxs.length)return[];
       const vis=new Set();const res=[];
-      let cur=idxs.reduce((best,k)=>{
-        const d=haversine(HQ.lat,HQ.lng,clusters[k].cLat,clusters[k].cLng);
-        const bd=haversine(HQ.lat,HQ.lng,clusters[best].cLat,clusters[best].cLng);
-        return d<bd?k:best;
-      },idxs[0]);
+      // เริ่มจาก cluster ที่มีบิลมากสุด (central hub ของข้อมูล)
+      let cur=idxs.reduce((best,k)=>clusters[k].cnt>clusters[best].cnt?k:best,idxs[0]);
       res.push(cur);vis.add(cur);
       while(res.length<idxs.length){
         const cc=clusters[cur];
@@ -1538,8 +1537,10 @@ function confirmAutoAssign(){
     const orderedClusters=nnClusters([...Array(clusters.length).keys()]);
 
     // 2. ภายในแต่ละ cluster: เรียงบิลแบบ NN (ต่อเนื่องจาก cluster ก่อนหน้า)
+    // ไม่ใช้ HQ เป็น prevLat/prevLng — เริ่มจาก centroid ของ cluster แรก
     const sorted=[];
-    let prevLat=HQ.lat,prevLng=HQ.lng;
+    let prevLat=clusters[orderedClusters[0]]?.cLat??billsWithGps[0]?.lat??0;
+    let prevLng=clusters[orderedClusters[0]]?.cLng??billsWithGps[0]?.lng??0;
     orderedClusters.forEach(ci=>{
       const inCluster=billsWithGps.filter(b=>billCluster[b.ref]===ci);
       const remaining=[...inCluster];
