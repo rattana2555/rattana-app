@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v9.1</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v9.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -316,7 +316,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v9.1</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v9.2</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -1671,12 +1671,21 @@ function confirmAutoAssign(){
         let remW=0,remV=0;
         g.refs.forEach(r=>{if(newQ[r]===undefined&&billMap[r]){remW+=billMap[r].totalW;remV+=billMap[r].totalV;}});
         if(remW<=0){remW=b.totalW;remV=b.totalV;}
-        // หารถมีของอยู่แล้ว ใกล้สุด ที่จุ"ทั้งกลุ่ม"ได้ → consolidate
+        // จังหวัดของรถ (จากบิลที่จัดไปแล้ว) — กันข้ามโซน
+        function truckProv(plate){
+          for(const [r,pl] of Object.entries(newQ)){
+            if(pl===plate&&billMap[r]&&billMap[r].province)return billMap[r].province;
+          }
+          return null;
+        }
+        // หารถมีของอยู่แล้ว ใกล้สุด ที่จุ"ทั้งกลุ่ม"ได้ + จังหวัดเดียวกัน → consolidate
         let pick=null,pickTr=0,pickD=Infinity;
         trucks.forEach(t=>{
           if(isOverloaded(t.plate))return;
           const tc=truckCent[t.plate];
           if(!tc||!tc.cnt)return;
+          const tp=truckProv(t.plate);
+          if(b.province&&tp&&tp!==b.province)return; // ข้ามรถคนละจังหวัด
           const fit=tripFitWhole(t,remW,remV);
           if(!fit)return;
           const d=haversine(g.cLat,g.cLng,tc.latSum/tc.cnt,tc.lngSum/tc.cnt);
@@ -2120,15 +2129,8 @@ function updateMap(filterPlate){
     return true;
   }
 
-  // Build stop nums per truck per trip
+  // Stop nums = ลำดับขับจริง (เติมตอน nnRoute ด้านล่าง เฉพาะตอนเลือกรถคันเดียว)
   const stopNums={};
-  if(filterPlate){
-    [1,2,3].forEach(tr=>{
-      [...bills].filter(b=>queue[b.ref]===filterPlate&&(tripMap[b.ref]||1)===tr)
-        .sort((a,b)=>(a.arName||'').localeCompare(b.arName||'','th'))
-        .forEach((b,i)=>{stopNums[b.ref]=i+1;});
-    });
-  }
 
   // Route lines per truck per trip
   TRUCKS.forEach(t=>{
@@ -2137,7 +2139,8 @@ function updateMap(filterPlate){
 
     // เรียงจุดแบบ Nearest-Neighbor เพื่อป้องกันเส้นตัดกัน
     function nnRoute(bs){
-      if(!bs.length)return bs;
+      if(bs.length<2)return bs;
+      // 1) greedy NN จาก HQ
       const rem=[...bs];const res=[];
       let cLat=HQ.lat,cLng=HQ.lng;
       while(rem.length){
@@ -2145,11 +2148,30 @@ function updateMap(filterPlate){
         rem.forEach((x,i)=>{const d=haversine(cLat,cLng,x.lat,x.lng);if(d<bestD){bestD=d;best=i;}});
         const p=rem.splice(best,1)[0];res.push(p);cLat=p.lat;cLng=p.lng;
       }
-      return res;
+      // 2) 2-opt: ลบเส้นไขว้/ย้อน (HQ = จุดเริ่ม)
+      const pts=[{lat:HQ.lat,lng:HQ.lng},...res];
+      const D=(a,b)=>haversine(pts[a].lat,pts[a].lng,pts[b].lat,pts[b].lng);
+      let improved=true,guard=0;
+      while(improved&&guard++<80){
+        improved=false;
+        for(let i=1;i<pts.length-1;i++){
+          for(let k=i+1;k<pts.length;k++){
+            const a=i-1,c=k,d=k+1;
+            const before=D(a,i)+(d<pts.length?D(c,d):0);
+            const after=D(a,c)+(d<pts.length?D(i,d):0);
+            if(after+1e-9<before){
+              let lo=i,hi=k;while(lo<hi){const t=pts[lo];pts[lo]=pts[hi];pts[hi]=t;lo++;hi--;}
+              improved=true;
+            }
+          }
+        }
+      }
+      return pts.slice(1);
     }
     // เที่ยว 1: solid line
     if(!mapFilterTrip||mapFilterTrip===1){
       const t1=nnRoute(bills.filter(b=>queue[b.ref]===t.plate&&b.lat&&b.lng&&(tripMap[b.ref]||1)===1));
+      if(filterPlate)t1.forEach((b,i)=>{stopNums[b.ref]=i+1;});
       if(t1.length){
         const wpts=[[HQ.lat,HQ.lng],...t1.map(b=>[b.lat,b.lng])];
         const line=L.polyline(wpts,{color:col,weight:4,opacity:.85,lineJoin:'round'}).addTo(leafletMap);
@@ -2160,6 +2182,7 @@ function updateMap(filterPlate){
     // เที่ยว 2: dashed line (thinner, lower opacity)
     if(!mapFilterTrip||mapFilterTrip===2){
       const t2=nnRoute(bills.filter(b=>queue[b.ref]===t.plate&&b.lat&&b.lng&&(tripMap[b.ref]||1)===2));
+      if(filterPlate)t2.forEach((b,i)=>{stopNums[b.ref]=i+1;});
       if(t2.length){
         const wpts=[[HQ.lat,HQ.lng],...t2.map(b=>[b.lat,b.lng])];
         const line=L.polyline(wpts,{color:col,weight:2.5,opacity:.7,dashArray:'10 6',lineJoin:'round'}).addTo(leafletMap);
@@ -2170,6 +2193,7 @@ function updateMap(filterPlate){
     // เที่ยว 3: dotted line (thinnest, most transparent)
     if(!mapFilterTrip||mapFilterTrip===3){
       const t3=nnRoute(bills.filter(b=>queue[b.ref]===t.plate&&b.lat&&b.lng&&(tripMap[b.ref]||1)===3));
+      if(filterPlate)t3.forEach((b,i)=>{stopNums[b.ref]=i+1;});
       if(t3.length){
         const wpts=[[HQ.lat,HQ.lng],...t3.map(b=>[b.lat,b.lng])];
         const line=L.polyline(wpts,{color:col,weight:2,opacity:.55,dashArray:'3 5',lineJoin:'round'}).addTo(leafletMap);
