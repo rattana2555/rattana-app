@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.4</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.5</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -316,7 +316,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.4</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.5</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -1507,18 +1507,21 @@ function confirmAutoAssign(){
 
     // 3. ภายในแต่ละจังหวัด: GPS NN (บิลมี GPS) + noGPS ท้าย
     function nnWithin(bills){
-      const withGps=bills.filter(b=>b.lat&&b.lng);
+      // เรียงหนักสุดก่อนภายใน GPS cluster (bin-packing: ใหญ่→เล็ก)
+      const withGps=bills.filter(b=>b.lat&&b.lng).sort((a,b)=>b.totalW-a.totalW);
       const noGps=bills.filter(b=>!b.lat||!b.lng).sort((a,b)=>b.totalW-a.totalW);
       if(!withGps.length)return noGps;
       const result=[];const rem=[...withGps];
-      // เริ่มจากบิลที่มี GPS ตัวแรก (ใกล้ centroid จังหวัด)
       let cLat=withGps.reduce((s,b)=>s+b.lat,0)/withGps.length;
       let cLng=withGps.reduce((s,b)=>s+b.lng,0)/withGps.length;
       while(rem.length){
-        let best=0,bestD=Infinity;
+        // เลือก: ใกล้ AND หนัก (weighted: ระยะ 70% น้ำหนัก 30%)
+        let best=0,bestScore=Infinity;
+        const maxW=rem[0].totalW||1;
         rem.forEach((b,i)=>{
           const d=haversine(cLat,cLng,b.lat,b.lng);
-          if(d<bestD){bestD=d;best=i;}
+          const score=d*0.7-(b.totalW/maxW)*15; // ใกล้+หนัก
+          if(score<bestScore){bestScore=score;best=i;}
         });
         const p=rem.splice(best,1)[0];
         result.push(p);cLat=p.lat;cLng=p.lng;
@@ -1600,9 +1603,15 @@ function confirmAutoAssign(){
         if(t){const tr=tryTrip(t,b);if(tr)return{t,tr};}
       }
       // Rule P: จังหวัดเดียวกัน → รถเดิม (FIRST — จังหวัดเป็น hard boundary)
+      // ลอง รถทุกคันที่เคยรับจังหวัดนี้ (เรียงใหญ่→เล็ก ตาม trucks order)
       if(b.province&&provinceMap[b.province]){
-        const t=trucks.find(x=>x.plate===provinceMap[b.province]);
-        if(t){const tr=tryTrip(t,b);if(tr)return{t,tr};}
+        for(const t of trucks){
+          if(!Object.values(newQ).includes(t.plate)&&loads[t.plate].w1+loads[t.plate].w2+loads[t.plate].w3===0)continue;
+          // รถนี้มีบิลจังหวัดเดียวกันไหม?
+          const hasSameProv=Object.entries(newQ).some(([ref,plate])=>plate===t.plate&&billMap[ref]?.province===b.province);
+          if(!hasSameProv)continue;
+          const tr=tryTrip(t,b);if(tr)return{t,tr};
+        }
       }
       // Rule D: อำเภอเดียวกัน → รถเดิม (ภายในจังหวัดเดียวกัน)
       if(b.district&&districtMap[b.district]){
@@ -1656,16 +1665,15 @@ function confirmAutoAssign(){
         });
         if(relaxT&&relaxD<=40)return{t:relaxT,tr:relaxTr};
       }
-      // เปิดรถเปล่าใหม่ — เลือกรถที่จุได้พอดีที่สุด
-      let ePick=null,eTr=0,eBest=Infinity;
-      trucks.forEach(t=>{
-        const tr=tryTrip(t,b);
-        if(!tr)return;
+      // เปิดรถเปล่าใหม่ — เลือกรถคันใหญ่สุด (trucks เรียง priority ใหญ่→เล็กแล้ว)
+      let ePick=null,eTr=0;
+      for(const t of trucks){   // trucks เรียงใหญ่→เล็กแล้ว → ได้คันใหญ่สุดก่อน
         const ld=loads[t.plate];
-        if(ld.w1+ld.w2+ld.w3>0)return;
-        const slack=t.maxW-b.totalW;
-        if(slack>=0&&slack<eBest){eBest=slack;ePick=t;eTr=tr;}
-      });
+        if(ld.w1+ld.w2+ld.w3>0)continue; // ไม่ใช่รถเปล่า
+        const tr=tryTrip(t,b);
+        if(!tr)continue;
+        ePick=t;eTr=tr;break;  // เจอรถใหญ่สุดที่รับได้ → ใช้เลย
+      }
       return ePick?{t:ePick,tr:eTr}:null;
     }
 
