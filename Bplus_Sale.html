@@ -804,9 +804,15 @@ async function fetchSaleIn(){
 // ── Fetch Yearly ─────────────────────────────────────────────
 async function fetchYearly(){
   try{
+    toast('กำลังโหลดข้อมูลรายปี...');
     const res=await fetch(YEARLY_GAS_URL,{redirect:'follow'});
     if(!res.ok)throw new Error('HTTP '+res.status);
-    const json=await res.json();if(json.status!=='ok')throw new Error(json.message||'error');
+    const txt=await res.text();
+    console.log('Yearly raw response (500 chars):',txt.slice(0,500));
+    let json;
+    try{json=JSON.parse(txt);}catch(pe){throw new Error('JSON parse error: '+txt.slice(0,100));}
+    if(json.status!=='ok')throw new Error(json.message||'status='+json.status);
+    if(!json.rows||!json.rows.length)throw new Error('rows ว่าง (0 แถว) — ตรวจสอบ GAS และชีต รายปี');
     yearlyRows=json.rows.map(r=>({
       date:   String(r.date||'').trim(),
       product:String(r.product||'').trim(),
@@ -816,12 +822,13 @@ async function fetchYearly(){
       cs:     Number(r.cs)||0,
     }));
     yearlySourceLabel='GAS ✅';
+    console.log('yearlyRows OK:',yearlyRows.length,'ตย:',yearlyRows[0]);
     if(selectedPeriod==='year')renderHome();
     toast(`ข้อมูลรายปี ${yearlyRows.length.toLocaleString()} รายการ 📅`);
   }catch(e){
-    console.warn('Yearly GAS:',e.message);
+    console.error('Yearly GAS Error:',e.message);
     yearlySourceLabel='โหลดไม่ได้ ❌';
-    toast('โหลดข้อมูลรายปีไม่ได้','err');
+    toast('❌ Yearly: '+e.message,'err');
   }
 }
 
