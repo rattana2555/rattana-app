@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.1</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -316,7 +316,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.1</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.2</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -1626,8 +1626,8 @@ function confirmAutoAssign(){
         if(t){const tr=tryTrip(t,b);if(tr)return{t,tr};}
       }
 
-      // Rule G: Geographic centroid — หารถที่ centroid ใกล้บิลนี้มากสุด
-      // ใช้แทน bin-packing เพื่อให้รถไปทิศเดียวกัน
+      // Rule G: Min-distance to nearest bill on truck
+      // ใช้ระยะถึงบิลที่ใกล้ที่สุดบนรถ (ไม่ใช่ centroid) — ป้องกันรถข้ามฝั่ง
       if(b.lat&&b.lng){
         let geoT=null,geoTr=0,geoD=Infinity;
         trucks.forEach(t=>{
@@ -1635,12 +1635,19 @@ function confirmAutoAssign(){
           if(!tc||tc.cnt===0)return; // ข้ามรถเปล่า
           const tr=tryTrip(t,b);
           if(!tr)return;
-          const cLat=tc.latSum/tc.cnt, cLng=tc.lngSum/tc.cnt;
-          const d=haversine(b.lat,b.lng,cLat,cLng);
-          if(d<geoD){geoD=d;geoT=t;geoTr=tr;}
+          // ใช้ min distance ถึงบิลที่ใกล้สุดบนรถนั้น (ไม่ใช่ centroid)
+          let minD=Infinity;
+          Object.entries(newQ).forEach(([ref,plate])=>{
+            if(plate!==t.plate)return;
+            const tb=billMap[ref];
+            if(!tb||!tb.lat||!tb.lng)return;
+            const d=haversine(b.lat,b.lng,tb.lat,tb.lng);
+            if(d<minD)minD=d;
+          });
+          if(minD<geoD){geoD=minD;geoT=t;geoTr=tr;}
         });
-        // ยอมรับรถที่ centroid อยู่ภายใน 60กม. เท่านั้น (ป้องกัน cross-region)
-        if(geoT&&geoD<=60)return{t:geoT,tr:geoTr};
+        // รับเฉพาะรถที่มีบิลอยู่ใน 25กม. (tight radius = ไปฝั่งเดียวกัน)
+        if(geoT&&geoD<=25)return{t:geoT,tr:geoTr};
       }
 
       // Rule P: จังหวัดเดียวกัน → รถเดิม (สำหรับบิลที่ไม่มี GPS)
@@ -1999,10 +2006,21 @@ function updateMap(filterPlate){
     if(filterPlate&&t.plate!==filterPlate)return;
     const col=getTruckCol(t.plate);
 
+    // เรียงจุดแบบ Nearest-Neighbor เพื่อป้องกันเส้นตัดกัน
+    function nnRoute(bs){
+      if(!bs.length)return bs;
+      const rem=[...bs];const res=[];
+      let cLat=HQ.lat,cLng=HQ.lng;
+      while(rem.length){
+        let best=0,bestD=Infinity;
+        rem.forEach((x,i)=>{const d=haversine(cLat,cLng,x.lat,x.lng);if(d<bestD){bestD=d;best=i;}});
+        const p=rem.splice(best,1)[0];res.push(p);cLat=p.lat;cLng=p.lng;
+      }
+      return res;
+    }
     // เที่ยว 1: solid line
     if(!mapFilterTrip||mapFilterTrip===1){
-      const t1=bills.filter(b=>queue[b.ref]===t.plate&&b.lat&&b.lng&&(tripMap[b.ref]||1)===1)
-        .sort((a,b)=>(a.arName||'').localeCompare(b.arName||'','th'));
+      const t1=nnRoute(bills.filter(b=>queue[b.ref]===t.plate&&b.lat&&b.lng&&(tripMap[b.ref]||1)===1));
       if(t1.length){
         const line=L.polyline([[HQ.lat,HQ.lng],...t1.map(b=>[b.lat,b.lng])],
           {color:col,weight:4,opacity:.85,lineJoin:'round'}).addTo(leafletMap);
@@ -2011,8 +2029,7 @@ function updateMap(filterPlate){
     }
     // เที่ยว 2: dashed line (thinner, lower opacity)
     if(!mapFilterTrip||mapFilterTrip===2){
-      const t2=bills.filter(b=>queue[b.ref]===t.plate&&b.lat&&b.lng&&(tripMap[b.ref]||1)===2)
-        .sort((a,b)=>(a.arName||'').localeCompare(b.arName||'','th'));
+      const t2=nnRoute(bills.filter(b=>queue[b.ref]===t.plate&&b.lat&&b.lng&&(tripMap[b.ref]||1)===2));
       if(t2.length){
         const line=L.polyline([[HQ.lat,HQ.lng],...t2.map(b=>[b.lat,b.lng])],
           {color:col,weight:2.5,opacity:.7,dashArray:'10 6',lineJoin:'round'}).addTo(leafletMap);
@@ -2021,8 +2038,7 @@ function updateMap(filterPlate){
     }
     // เที่ยว 3: dotted line (thinnest, most transparent)
     if(!mapFilterTrip||mapFilterTrip===3){
-      const t3=bills.filter(b=>queue[b.ref]===t.plate&&b.lat&&b.lng&&(tripMap[b.ref]||1)===3)
-        .sort((a,b)=>(a.arName||'').localeCompare(b.arName||'','th'));
+      const t3=nnRoute(bills.filter(b=>queue[b.ref]===t.plate&&b.lat&&b.lng&&(tripMap[b.ref]||1)===3));
       if(t3.length){
         const line=L.polyline([[HQ.lat,HQ.lng],...t3.map(b=>[b.lat,b.lng])],
           {color:col,weight:2,opacity:.55,dashArray:'3 5',lineJoin:'round'}).addTo(leafletMap);
