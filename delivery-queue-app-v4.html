@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.0</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.1</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -316,7 +316,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.0</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.1</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -1583,8 +1583,11 @@ function confirmAutoAssign(){
     // ── Lookup tables ──
     const storeMap={};   // normName → plate  (rule 2)
     const clusterMap={}; // clusterIdx → plate (rule 4)
-    const daysMap={};    // days string → plate (rule 3)
-    const provinceMap={}; // province → plate  (rule P: same province → same truck)
+    const provinceMap={}; // province → plate  (rule P)
+
+    // ── Running centroid ต่อรถ (อัปเดตทุก assignBill) ──
+    // ใช้ geographic centroid selection แทน bin-packing
+    const truckCent={}; // plate → {latSum,lngSum,cnt}
 
     const newQ={}, newTripMap={};
 
@@ -1594,13 +1597,18 @@ function confirmAutoAssign(){
       if(trip===1){ld.w1+=b.totalW;ld.v1+=b.totalV;}
       else if(trip===2){ld.w2+=b.totalW;ld.v2+=b.totalV;}
       else{ld.w3+=b.totalW;ld.v3+=b.totalV;}
-      // อัปเดต lookup
       const nm=normName(b.arName);
       if(nm&&!storeMap[nm])storeMap[nm]=plate;
       const ci=billCluster[b.ref];
       if(ci!==undefined&&!clusterMap[ci])clusterMap[ci]=plate;
-      if(b.days&&!daysMap[b.days])daysMap[b.days]=plate;
       if(b.province&&!provinceMap[b.province])provinceMap[b.province]=plate;
+      // อัปเดต centroid ของรถ
+      if(b.lat&&b.lng){
+        if(!truckCent[plate])truckCent[plate]={latSum:0,lngSum:0,cnt:0};
+        truckCent[plate].latSum+=b.lat;
+        truckCent[plate].lngSum+=b.lng;
+        truckCent[plate].cnt++;
+      }
     }
 
     function bestTruck(b){
@@ -1612,44 +1620,42 @@ function confirmAutoAssign(){
         const t=trucks.find(x=>x.plate===storeMap[nm]);
         if(t){const tr=tryTrip(t,b);if(tr)return{t,tr};}
       }
-      // Rule 4: GPS cluster เดียวกัน → รถเดิม
+      // Rule 4: GPS cluster เดียวกัน (≤15กม.) → รถเดิม
       if(ci!==undefined&&clusterMap[ci]){
         const t=trucks.find(x=>x.plate===clusterMap[ci]);
         if(t){const tr=tryTrip(t,b);if(tr)return{t,tr};}
       }
-      // Rule P: จังหวัดเดียวกัน → รถเดิม (ถ้า GPS cluster ไม่ตรง)
+
+      // Rule G: Geographic centroid — หารถที่ centroid ใกล้บิลนี้มากสุด
+      // ใช้แทน bin-packing เพื่อให้รถไปทิศเดียวกัน
+      if(b.lat&&b.lng){
+        let geoT=null,geoTr=0,geoD=Infinity;
+        trucks.forEach(t=>{
+          const tc=truckCent[t.plate];
+          if(!tc||tc.cnt===0)return; // ข้ามรถเปล่า
+          const tr=tryTrip(t,b);
+          if(!tr)return;
+          const cLat=tc.latSum/tc.cnt, cLng=tc.lngSum/tc.cnt;
+          const d=haversine(b.lat,b.lng,cLat,cLng);
+          if(d<geoD){geoD=d;geoT=t;geoTr=tr;}
+        });
+        // ยอมรับรถที่ centroid อยู่ภายใน 60กม. เท่านั้น (ป้องกัน cross-region)
+        if(geoT&&geoD<=60)return{t:geoT,tr:geoTr};
+      }
+
+      // Rule P: จังหวัดเดียวกัน → รถเดิม (สำหรับบิลที่ไม่มี GPS)
       if(b.province&&provinceMap[b.province]){
         const t=trucks.find(x=>x.plate===provinceMap[b.province]);
         if(t){const tr=tryTrip(t,b);if(tr)return{t,tr};}
       }
-      // Rule 3: วันส่งเดียวกัน → รถเดิม
-      if(b.days&&daysMap[b.days]){
-        const t=trucks.find(x=>x.plate===daysMap[b.days]);
-        if(t){const tr=tryTrip(t,b);if(tr)return{t,tr};}
-      }
-      // Fallback: เติมรถที่มีของแล้วก่อน
-      // จังหวัดเดียวกัน → ให้ priority สูงขึ้น (bonus +0.3 ให้ pct)
-      let pick=null,pickTrip=0,maxPct=-1;
-      trucks.forEach(t=>{
-        const tr=tryTrip(t,b);
-        if(!tr)return;
-        const ld=loads[t.plate];
-        const total=ld.w1+ld.w2+ld.w3;
-        if(total<=0)return; // ข้ามรถเปล่า
-        const pct=t.maxW>0?total/t.maxW:0;
-        // bonus ถ้ารถนี้มีบิลจังหวัดเดียวกันอยู่แล้ว
-        const provBonus=b.province&&provinceMap[b.province]===t.plate?0.3:0;
-        if((pct+provBonus)>maxPct){maxPct=pct+provBonus;pick=t;pickTrip=tr;}
-      });
-      if(pick)return{t:pick,tr:pickTrip};
-      // 2) ไม่มีรถที่มีของแล้ว → เริ่มรถเปล่าที่ขนาดเหมาะสมที่สุด
+
+      // Fallback: เปิดรถเปล่าใหม่ — เลือกรถที่จุได้พอดีที่สุด
       let ePick=null,eTr=0,eBest=Infinity;
       trucks.forEach(t=>{
         const tr=tryTrip(t,b);
         if(!tr)return;
         const ld=loads[t.plate];
-        if(ld.w1+ld.w2+ld.w3>0)return; // ไม่ใช่รถเปล่า
-        // เลือกรถที่ maxW ใกล้เคียงน้ำหนักบิลนี้ที่สุด (ไม่เปลือง)
+        if(ld.w1+ld.w2+ld.w3>0)return;
         const slack=t.maxW-b.totalW;
         if(slack>=0&&slack<eBest){eBest=slack;ePick=t;eTr=tr;}
       });
