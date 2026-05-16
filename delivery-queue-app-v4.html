@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.5</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.6</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -316,7 +316,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.5</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.6</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -1036,7 +1036,7 @@ function renderBillTable(){
       </td>
       <td>
         <div style="font-size:11px;color:#6B7A90">${b.province}</div>
-        <div style="font-size:10px;color:#A0ABBB">${b.route?`${b.route.substring(0,15)}`:(b.routeCode||'')}</div>
+        <div style="font-size:10px;color:#A0ABBB">${b.routeCode?`<span style="background:#EAF0F8;color:#1A5FA5;border-radius:4px;padding:0 4px;font-weight:600;font-size:9px">${b.routeCode}</span> `:''} ${b.route?b.route.substring(0,12):''}</div>
         ${b.days?`<span style="font-size:9px;background:#EAF3DE;color:#15803D;border-radius:8px;padding:0 5px;font-weight:600">📅 ${b.days}</span>`:''}
       </td>
       <td style="white-space:nowrap">
@@ -1491,23 +1491,28 @@ function confirmAutoAssign(){
       }
     });
 
-    // ── เรียงบิล: จังหวัดก่อน → GPS NN ภายในจังหวัด ──
-    // จังหวัดเป็น hard boundary — ไม่ข้ามจังหวัดในการเรียง
+    // ── เรียงบิล: Route Code ก่อน (สส01,สส02,สค01,รบ01...) → GPS NN ภายใน route ──
+    // Route Code = zone จริงของธุรกิจ (สำคัญกว่าจังหวัด)
+    // จาก PDF: bills ที่ route code เดียวกัน → ต้องไปรถคันเดิมเสมอ
 
-    // 1. แบ่งกลุ่มตามจังหวัด
-    const byProv={};
+    // 1. แบ่งกลุ่มตาม routeCode (หรือจังหวัดถ้าไม่มี routeCode)
+    const byRoute={};
     tmrBills.forEach(b=>{
-      const p=(b.province||'__').trim();
-      if(!byProv[p])byProv[p]=[];
-      byProv[p].push(b);
+      // ใช้ routeCode เป็น key หลัก; fallback → province
+      const key=(b.routeCode||'').trim()||(b.province||'__').trim();
+      if(!byRoute[key])byRoute[key]=[];
+      byRoute[key].push(b);
     });
 
-    // 2. เรียงจังหวัดตามจำนวนบิล (มากสุดก่อน)
-    const provOrder=Object.keys(byProv).sort((a,b)=>byProv[b].length-byProv[a].length);
+    // 2. เรียง route keys: ใหญ่สุด (น้ำหนักรวมมากสุด) ก่อน
+    const routeOrder=Object.keys(byRoute).sort((a,b)=>{
+      const wA=byRoute[a].reduce((s,x)=>s+x.totalW,0);
+      const wB=byRoute[b].reduce((s,x)=>s+x.totalW,0);
+      return wB-wA;
+    });
 
-    // 3. ภายในแต่ละจังหวัด: GPS NN (บิลมี GPS) + noGPS ท้าย
+    // 3. NN ภายใน route: หนักก่อน + ใกล้
     function nnWithin(bills){
-      // เรียงหนักสุดก่อนภายใน GPS cluster (bin-packing: ใหญ่→เล็ก)
       const withGps=bills.filter(b=>b.lat&&b.lng).sort((a,b)=>b.totalW-a.totalW);
       const noGps=bills.filter(b=>!b.lat||!b.lng).sort((a,b)=>b.totalW-a.totalW);
       if(!withGps.length)return noGps;
@@ -1515,12 +1520,11 @@ function confirmAutoAssign(){
       let cLat=withGps.reduce((s,b)=>s+b.lat,0)/withGps.length;
       let cLng=withGps.reduce((s,b)=>s+b.lng,0)/withGps.length;
       while(rem.length){
-        // เลือก: ใกล้ AND หนัก (weighted: ระยะ 70% น้ำหนัก 30%)
         let best=0,bestScore=Infinity;
         const maxW=rem[0].totalW||1;
         rem.forEach((b,i)=>{
           const d=haversine(cLat,cLng,b.lat,b.lng);
-          const score=d*0.7-(b.totalW/maxW)*15; // ใกล้+หนัก
+          const score=d*0.7-(b.totalW/maxW)*15;
           if(score<bestScore){bestScore=score;best=i;}
         });
         const p=rem.splice(best,1)[0];
@@ -1530,7 +1534,7 @@ function confirmAutoAssign(){
     }
 
     const sorted=[];
-    provOrder.forEach(prov=>{sorted.push(...nnWithin(byProv[prov]));});
+    routeOrder.forEach(rk=>{sorted.push(...nnWithin(byRoute[rk]));});
 
     // ── loads เริ่มจากบิลวันอื่น ──
     const loads={};
@@ -1563,6 +1567,7 @@ function confirmAutoAssign(){
     // ── Lookup tables ──
     const storeMap={};   // normName → plate  (rule 2)
     const clusterMap={}; // clusterIdx → plate (rule 4)
+    const routeCodeMap={}; // routeCode → plate (rule R: สส01,สค02,รบ03...)
     const districtMap={}; // district → plate  (rule D)
     const provinceMap={}; // province → plate  (rule P)
 
@@ -1582,6 +1587,7 @@ function confirmAutoAssign(){
       if(nm&&!storeMap[nm])storeMap[nm]=plate;
       const ci=billCluster[b.ref];
       if(ci!==undefined&&!clusterMap[ci])clusterMap[ci]=plate;
+      if(b.routeCode&&!routeCodeMap[b.routeCode])routeCodeMap[b.routeCode]=plate;
       if(b.district&&!districtMap[b.district])districtMap[b.district]=plate;
       if(b.province&&!provinceMap[b.province])provinceMap[b.province]=plate;
       // อัปเดต centroid ของรถ
@@ -1602,12 +1608,15 @@ function confirmAutoAssign(){
         const t=trucks.find(x=>x.plate===storeMap[nm]);
         if(t){const tr=tryTrip(t,b);if(tr)return{t,tr};}
       }
-      // Rule P: จังหวัดเดียวกัน → รถเดิม (FIRST — จังหวัดเป็น hard boundary)
-      // ลอง รถทุกคันที่เคยรับจังหวัดนี้ (เรียงใหญ่→เล็ก ตาม trucks order)
+      // Rule R: Route Code เดียวกัน → รถเดิม (สำคัญสุด! สส01=zone เดิมเสมอ)
+      if(b.routeCode&&routeCodeMap[b.routeCode]){
+        const t=trucks.find(x=>x.plate===routeCodeMap[b.routeCode]);
+        if(t){const tr=tryTrip(t,b);if(tr)return{t,tr};}
+      }
+      // Rule P: จังหวัดเดียวกัน → รถเดิม (hard boundary)
       if(b.province&&provinceMap[b.province]){
         for(const t of trucks){
           if(!Object.values(newQ).includes(t.plate)&&loads[t.plate].w1+loads[t.plate].w2+loads[t.plate].w3===0)continue;
-          // รถนี้มีบิลจังหวัดเดียวกันไหม?
           const hasSameProv=Object.entries(newQ).some(([ref,plate])=>plate===t.plate&&billMap[ref]?.province===b.province);
           if(!hasSameProv)continue;
           const tr=tryTrip(t,b);if(tr)return{t,tr};
