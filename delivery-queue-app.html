@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v9.0</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v9.1</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -316,7 +316,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v9.0</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v9.1</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -1511,25 +1511,50 @@ function confirmAutoAssign(){
       return wB-wA;
     });
 
-    // 3. NN ภายใน route: หนักก่อน + ใกล้
-    function nnWithin(bills){
-      const withGps=bills.filter(b=>b.lat&&b.lng).sort((a,b)=>b.totalW-a.totalW);
-      const noGps=bills.filter(b=>!b.lat||!b.lng).sort((a,b)=>b.totalW-a.totalW);
+    // ── Location Group: มัดร้านจุดเดียวกัน (≤1.5กม.) เป็นกลุ่มเดียว ──
+    // ทั้งกลุ่มไปรถคันเดียวกันเสมอ; ถ้ารถเต็มย้ายทั้งกลุ่มไปคันอื่น
+    const LOC_KM=1.5;
+    const locGroups={};   // gid → {refs,totW,totV,cLat,cLng,n}
+    const billLoc={};     // ref → gid
+    let _locSeq=0;
+
+    // 3. NN ภายใน route แบบ group-aware: มัดโลเคชันเดียวกัน → เรียงกลุ่มหนักก่อน+NN
+    function nnWithin(rbills){
+      const withGps=rbills.filter(b=>b.lat&&b.lng);
+      const noGps=rbills.filter(b=>!b.lat||!b.lng).sort((a,b)=>b.totalW-a.totalW);
       if(!withGps.length)return noGps;
-      const result=[];const rem=[...withGps];
-      let cLat=withGps.reduce((s,b)=>s+b.lat,0)/withGps.length;
-      let cLng=withGps.reduce((s,b)=>s+b.lng,0)/withGps.length;
+      // 3a. cluster เป็น location groups (≤LOC_KM)
+      const grps=[];
+      withGps.forEach(b=>{
+        let gi=-1,gd=Infinity;
+        grps.forEach((g,i)=>{const d=haversine(g.cLat,g.cLng,b.lat,b.lng);if(d<gd){gd=d;gi=i;}});
+        if(gi>=0&&gd<=LOC_KM){
+          const g=grps[gi];
+          g.cLat=(g.cLat*g.bills.length+b.lat)/(g.bills.length+1);
+          g.cLng=(g.cLng*g.bills.length+b.lng)/(g.bills.length+1);
+          g.bills.push(b);g.totW+=b.totalW;g.totV+=b.totalV;
+        } else {
+          grps.push({bills:[b],totW:b.totalW,totV:b.totalV,cLat:b.lat,cLng:b.lng});
+        }
+      });
+      // 3b. register groups + เรียงสมาชิกหนักก่อน
+      grps.forEach(g=>{
+        const gid='L'+(_locSeq++);
+        g.bills.sort((a,b)=>b.totalW-a.totalW);
+        g.bills.forEach(b=>billLoc[b.ref]=gid);
+        locGroups[gid]={refs:g.bills.map(b=>b.ref),totW:g.totW,totV:g.totV,cLat:g.cLat,cLng:g.cLng,n:g.bills.length};
+      });
+      // 3c. เรียงกลุ่ม: กลุ่มหนักสุดเป็น seed → NN ตาม centroid
+      const rem=[...grps].sort((a,b)=>b.totW-a.totW);
+      const ord=[rem.shift()];
+      let cLat=ord[0].cLat,cLng=ord[0].cLng;
       while(rem.length){
-        let best=0,bestScore=Infinity;
-        const maxW=rem[0].totalW||1;
-        rem.forEach((b,i)=>{
-          const d=haversine(cLat,cLng,b.lat,b.lng);
-          const score=d*0.7-(b.totalW/maxW)*15;
-          if(score<bestScore){bestScore=score;best=i;}
-        });
-        const p=rem.splice(best,1)[0];
-        result.push(p);cLat=p.lat;cLng=p.lng;
+        let bi=0,bd=Infinity;
+        rem.forEach((g,i)=>{const d=haversine(cLat,cLng,g.cLat,g.cLng);if(d<bd){bd=d;bi=i;}});
+        const g=rem.splice(bi,1)[0];ord.push(g);cLat=g.cLat;cLng=g.cLng;
       }
+      const result=[];
+      ord.forEach(g=>g.bills.forEach(b=>result.push(b)));
       return[...result,...noGps];
     }
 
@@ -1571,6 +1596,7 @@ function confirmAutoAssign(){
     const routeCodeMap={}; // routeCode → plate (rule R: สส01,สค02,รบ03...)
     const districtMap={}; // district → plate  (rule D)
     const provinceMap={}; // province → plate  (rule P)
+    const locMap={};      // gid → plate  (rule L: โลเคชันเดียวกัน)
 
     // ── Running centroid ต่อรถ (อัปเดตทุก assignBill) ──
     // ใช้ geographic centroid selection แทน bin-packing
@@ -1586,6 +1612,8 @@ function confirmAutoAssign(){
       else{ld.w3+=b.totalW;ld.v3+=b.totalV;}
       const nm=normName(b.arName);
       if(nm&&!storeMap[nm]){storeMap[nm]=plate;storeTripMap[nm]=trip;}
+      const gid=billLoc[b.ref];
+      if(gid)locMap[gid]=plate; // location group → รถล่าสุดเสมอ (overflow ตามกลุ่ม)
       const ci=billCluster[b.ref];
       if(ci!==undefined&&!clusterMap[ci])clusterMap[ci]=plate;
       if(b.routeCode&&!routeCodeMap[b.routeCode])routeCodeMap[b.routeCode]=plate;
@@ -1611,6 +1639,14 @@ function confirmAutoAssign(){
         return(ld.w1+ld.w2+ld.w3)>t2.maxW||(t2.maxV>0&&(ld.v1+ld.v2+ld.v3)>t2.maxV);
       }
 
+      // helper: รถนี้รับ "ทั้งกลุ่มโลเคชัน" ได้ในเที่ยวไหน (1/2) — 0=ไม่ได้
+      function tripFitWhole(t,gW,gV){
+        const ld=loads[t.plate];
+        if((ld.w1+gW)<=t.maxW&&(t.maxV<=0||(ld.v1+gV)<=t.maxV))return 1;
+        if((ld.w2+gW)<=t.maxW&&(t.maxV<=0||(ld.v2+gV)<=t.maxV))return 2;
+        return 0;
+      }
+
       // Rule 2: ชื่อร้านเหมือน → FORCE รถ+เที่ยวเดิม (สำคัญสุด ไม่มีข้อยกเว้น)
       if(storeMap[nm]){
         const t=trucks.find(x=>x.plate===storeMap[nm]);
@@ -1620,6 +1656,43 @@ function confirmAutoAssign(){
           if(tr===preferTrip||!tr)return{t,tr:preferTrip}; // เที่ยวเดิม
           return{t,tr};                                     // เที่ยวอื่นที่จุได้
         }
+      }
+      // Rule L: โลเคชันเดียวกัน (≤1.5กม.) → มัดทั้งกลุ่มไปรถคันเดียว
+      // ถ้ารถกลุ่มเต็ม → ย้ายทั้งกลุ่มที่เหลือไปคันใหม่ที่จุได้ทั้งกลุ่ม + ใกล้สุด
+      const gid=billLoc[b.ref];
+      if(gid){
+        const g=locGroups[gid];
+        if(locMap[gid]){
+          const t=trucks.find(x=>x.plate===locMap[gid]);
+          if(t){const tr=tryTrip(t,b);if(tr)return{t,tr};}
+          // รถกลุ่มเต็ม → ย้ายทั้งกลุ่มที่เหลือ (ด้านล่าง)
+        }
+        // น้ำหนัก/ปริมาตรกลุ่มส่วนที่ยังไม่ถูกจัด
+        let remW=0,remV=0;
+        g.refs.forEach(r=>{if(newQ[r]===undefined&&billMap[r]){remW+=billMap[r].totalW;remV+=billMap[r].totalV;}});
+        if(remW<=0){remW=b.totalW;remV=b.totalV;}
+        // หารถมีของอยู่แล้ว ใกล้สุด ที่จุ"ทั้งกลุ่ม"ได้ → consolidate
+        let pick=null,pickTr=0,pickD=Infinity;
+        trucks.forEach(t=>{
+          if(isOverloaded(t.plate))return;
+          const tc=truckCent[t.plate];
+          if(!tc||!tc.cnt)return;
+          const fit=tripFitWhole(t,remW,remV);
+          if(!fit)return;
+          const d=haversine(g.cLat,g.cLng,tc.latSum/tc.cnt,tc.lngSum/tc.cnt);
+          if(d<pickD){pickD=d;pick=t;pickTr=fit;}
+        });
+        if(pick&&pickD<=25)return{t:pick,tr:pickTr};
+        // ไม่งั้นเปิดรถเปล่าคันใหญ่สุดที่จุทั้งกลุ่มได้
+        for(const t of trucks){
+          const ld=loads[t.plate];
+          if(ld.w1+ld.w2+ld.w3>0)continue;
+          const fit=tripFitWhole(t,remW,remV);
+          if(fit)return{t,tr:fit};
+        }
+        // กลุ่มใหญ่เกินรถเปล่า → ใช้รถใกล้สุดที่จุได้ (แม้ไกล) แล้วค่อย overflow
+        if(pick)return{t:pick,tr:pickTr};
+        // สุดท้าย fall through ให้ rule อื่นจัดทีละบิล
       }
       // Rule R: Route Code เดียวกัน → SOFT prefer รถเดิม (ถ้าเต็มให้หารถอื่น)
       if(b.routeCode&&routeCodeMap[b.routeCode]){
