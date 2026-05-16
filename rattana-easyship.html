@@ -702,7 +702,7 @@ function setMode(m){
   $('ui-ocr').style.display=m==='ocr'?'flex':'none';
   $('ldot').style.display=m==='bc'?'':'none';
   $('llbl').style.display=m==='bc'?'':'none';
-  if(m==='bc')startCam();else stopCam();
+  if(m==='bc')startCam();else{stopCam();loadTess();}
 }
 
 var LLC='',LLT=0;
@@ -815,16 +815,35 @@ function loadTess(){
 }
 function doOCR(ev){
   var f=ev.target.files[0];if(!f)return;ev.target.value='';
-  if(!window.Tesseract){toast('OCR กำลังโหลด...','');return;}
   TXT('ocr-l','⏳ กำลังอ่าน...');TXT('ocr-v','กรุณารอ...');
   var r=new FileReader();
   r.onload=function(e){
-    var proc=function(w){return w.recognize(e.target.result).then(handleOCR).catch(function(){TXT('ocr-l','❌ ถ่ายใหม่');});};
-    if(!TESS)Tesseract.createWorker('eng',1,{logger:function(){}}).then(function(w){
-      TESS=w;return TESS.setParameters({tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .'});
-    }).then(function(){proc(TESS);});
-    else proc(TESS);
-  };r.readAsDataURL(f);
+    var dataUrl=e.target.result;
+    function runRecog(w){
+      w.recognize(dataUrl)
+        .then(handleOCR)
+        .catch(function(){TXT('ocr-l','❌ อ่านไม่ได้ — ถ่ายใหม่');TXT('ocr-v','-');});
+    }
+    function initWorker(){
+      Tesseract.createWorker('eng',1,{logger:function(){}})
+        .then(function(w){
+          TESS=w;
+          return TESS.setParameters({tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .'});
+        })
+        .then(function(){runRecog(TESS);})
+        .catch(function(){TXT('ocr-l','❌ โหลด OCR ไม่ได้');});
+    }
+    if(TESS){runRecog(TESS);return;}
+    if(window.Tesseract){initWorker();return;}
+    // Tesseract ยังไม่โหลด — โหลดแล้วรอ
+    TXT('ocr-l','⏳ โหลด OCR engine...');
+    loadTess();
+    var chk=setInterval(function(){
+      if(window.Tesseract){clearInterval(chk);initWorker();}
+    },300);
+    setTimeout(function(){clearInterval(chk);if(!window.Tesseract)TXT('ocr-l','❌ โหลดไม่ได้ — ลองใหม่');},15000);
+  };
+  r.readAsDataURL(f);
 }
 function handleOCR(res){
   var txt=res.data.text,found=null;
