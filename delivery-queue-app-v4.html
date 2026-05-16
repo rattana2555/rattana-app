@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.8</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.9</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -316,7 +316,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.8</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.9</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -1736,12 +1736,12 @@ function confirmAutoAssign(){
 // SETTINGS
 // ══════════════════════════════════════════
 const KEEPDATA_HEADERS=[
-  'วันที่บิล','วันที่ส่ง',
-  'เลขบิล','รหัสร้านค้า','ชื่อร้านค้า','จังหวัด','อำเภอ',
-  'มี GPS','Lat','Lng','สายส่ง','รหัสสาย','วันส่ง',
-  'ทะเบียนรถ','เที่ยว','ชื่อเล่น','คนขับ','ประเภทรถ','น้ำหนัก (กก.)','ปริมาตร (m³)',
-  'มูลค่า (บาท)','สถานะ','วันที่อัปเดต'
-];  // 24 คอลัมน์
+  'วันที่บิล','วันที่ส่ง',                                                    // A B
+  'เลขบิล','รหัสร้านค้า','ชื่อร้านค้า','จังหวัด','อำเภอ',                    // C D E F G
+  'มี GPS','Lat','Lng','ห่าง HQ (กม.)','สายส่ง','รหัสสาย','วันส่ง',          // H I J K L M N
+  'ทะเบียนรถ','เที่ยว','ชื่อเล่น','คนขับ','ประเภทรถ',                        // O P Q R S
+  'น้ำหนัก (กก.)','ปริมาตร (m³)','มูลค่า (บาท)','สถานะ','วันที่อัปเดต'      // T U V W X
+];  // 24 คอลัมน์ (A–X) ตรงกับ GAS sheet
 
 // ── Delivery Date state ──
 let _deliveryDate=''; // "DD/MM/YYYY" เช่น "13/05/2026"
@@ -1818,6 +1818,7 @@ async function doSave(){
         hasGPS?'มี GPS':'ไม่มี GPS',
         hasGPS?b.lat.toFixed(6):'',
         hasGPS?b.lng.toFixed(6):'',
+        '',                            // K: ห่าง HQ — ลบออกจาก UI แล้ว ส่งเป็นค่าว่าง
         b.route||'', b.routeCode||'', b.days||'',
         queue[b.ref]||'', tripMap[b.ref]||1, t?.nick||'', t?.driver||'', t?.type||'',
         b.totalW.toFixed(0), b.totalV.toFixed(3),
@@ -1827,12 +1828,18 @@ async function doSave(){
       ];
     });
 
-    const r=await fetch(scriptUrl,{
-      method:'POST',
-      body:JSON.stringify({action:'save', deliveryDate:_deliveryDate, headers:hdrs, rows})
-    });
-    const result=await r.json();
-    if(!result.ok)throw new Error(result.message||'Script ตอบผิดพลาด');
+    // Google Apps Script รองรับ POST แบบ JSON (ต้องเปิด "Anyone" access)
+    const payload=JSON.stringify({action:'save',deliveryDate:_deliveryDate,headers:hdrs,rows});
+    let result;
+    try{
+      const r=await fetch(scriptUrl,{method:'POST',headers:{'Content-Type':'text/plain'},body:payload});
+      result=await r.json();
+    }catch(fetchErr){
+      // fallback: GET with encoded data (for CORS-restricted environments)
+      const rGet=await fetch(scriptUrl+'?action=save&data='+encodeURIComponent(payload));
+      result=await rGet.json();
+    }
+    if(!result.ok)throw new Error(result.message||'Script ตอบผิดพลาด: '+JSON.stringify(result));
 
     localStorage.setItem('keepdata_bk',JSON.stringify({savedAt:now,rows}));
     isDirty=false;
