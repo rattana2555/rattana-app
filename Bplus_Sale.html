@@ -363,6 +363,27 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
       <button class="period-btn" data-period="month">เดือน</button>
       <button class="period-btn" data-period="year">ปี</button>
     </div>
+
+    <!-- Year chip bar (shown when period=year) -->
+    <div id="yearChipBar" style="display:none;padding:0 16px 12px;overflow-x:auto;white-space:nowrap">
+      <div id="yearChips" style="display:inline-flex;gap:8px"></div>
+    </div>
+
+    <!-- Previous month card (shown when period=year) -->
+    <div id="prevMonthCard" style="display:none;margin:0 16px 16px">
+      <div style="background:var(--card);border-radius:var(--radius-lg);padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.06)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div style="font-size:13px;font-weight:700;color:var(--text)" id="pmLabel">ยอดเดือนก่อนหน้า</div>
+          <div style="font-size:11px;color:var(--muted);font-weight:600" id="pmPct">—</div>
+        </div>
+        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:12px">
+          <div style="font-size:22px;font-weight:800;color:var(--text)" class="num" id="pmBaht">—</div>
+          <div style="font-size:12px;color:var(--muted);font-weight:600" id="pmCs">—</div>
+        </div>
+        <div id="pmCatList"></div>
+      </div>
+    </div>
+
     <div class="section">
       <div class="section-head"><div class="section-title">แยกตาม Cat_BU</div><div class="section-link" id="seeAllCat">ดูทั้งหมด →</div></div>
       <div class="cat-list" id="catList"></div>
@@ -574,6 +595,7 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
 const GAS_URL        = 'https://script.google.com/macros/s/AKfycby4h3bvctWeLWRUCOy7VMtKhzxuCtWCYiFp_1HhCtTy_705TS2UmSpykZv9p01hkqc_IQ/exec';
 const STOCK_GAS_URL  = 'https://script.google.com/macros/s/AKfycbzps0d73Utoxo0vDBNQJhL6Wbcb3o4MuKx_gQufkPMU4r1QqproIAu2eCC8KE82HMdHlA/exec';
 const SALE_IN_GAS_URL= 'https://script.google.com/macros/s/AKfycbyYpsynRXlHm5fwQzi3PG9gRoi35VdaY9QmXYLIgZAoX441JqWkgF_NIL6U6XZO3keWrg/exec';
+const YEARLY_GAS_URL = 'https://script.google.com/macros/s/AKfycbwvDa8SnKx7VNXbGmP3ErVuxHqAki4a2s6TwkYNYr-JkUCRoWRMSd2DmRSiR0kGH1hh3Q/exec';
 
 const SHEET_ID  = '1QIusvLuKv38mYDszVd093qzuD6DD8462QkZCTHpUw6s';
 const SHEET_GID = '1606652398';
@@ -598,8 +620,10 @@ const WH_META={W1:{lc:'wh-w1',bc:'bar-w1'},W2:{lc:'wh-w2',bc:'bar-w2'},W3:{lc:'w
 const WH_COLORS={'W1':'#f59e0b','W2':'#3b82f6','W3':'#ef4444','W4':'#00b14f'};
 
 // ── State ────────────────────────────────────────────────────
-let allRows=[],stockRows=[],targetRows=[],saleInRows=[];
+let allRows=[],stockRows=[],targetRows=[],saleInRows=[],yearlyRows=[];
 let selectedWH='all',selectedPeriod='yesterday',productSearch='';
+let selectedYear=new Date().getFullYear();
+let yearlySourceLabel='—';
 let stockWH='all',stockSearch='',stockActiveCat=null,stockFilter='all';
 let _prodDetailData=[]; // stores detail data for each rendered product card
 let charts={};
@@ -629,7 +653,12 @@ function getRange(period){
   if(period==='yesterday')return{from:toISO(y),to:toISO(y),label:'เมื่อวาน '+y.toLocaleDateString('th-TH',{day:'2-digit',month:'short',year:'2-digit'})};
   if(period==='week'){const w=new Date(t);w.setDate(w.getDate()-6);return{from:toISO(w),to:toISO(t),label:'7 วันย้อนหลัง'};}
   if(period==='month'){const m=new Date(t.getFullYear(),t.getMonth(),1);return{from:toISO(m),to:toISO(t),label:'เดือนนี้'};}
-  if(period==='year'){const yr=new Date(t.getFullYear(),0,1);return{from:toISO(yr),to:toISO(t),label:'ปีนี้ '+t.getFullYear()};}
+  if(period==='year'){
+    const curY=new Date().getFullYear();
+    const yr=new Date(selectedYear,0,1);
+    const to2=selectedYear===curY?toISO(t):toISO(new Date(selectedYear,11,31));
+    return{from:toISO(yr),to:to2,label:(selectedYear===curY?'ปีนี้ ':'ปี ')+(selectedYear+543)};
+  }
   return{from:'',to:toISO(t),label:'ทั้งหมด'};
 }
 function filterRows(period,wh){
@@ -772,6 +801,30 @@ async function fetchSaleIn(){
   }
 }
 
+// ── Fetch Yearly ─────────────────────────────────────────────
+async function fetchYearly(){
+  try{
+    const res=await fetch(YEARLY_GAS_URL,{redirect:'follow'});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const json=await res.json();if(json.status!=='ok')throw new Error(json.message||'error');
+    yearlyRows=json.rows.map(r=>({
+      date:   String(r.date||'').trim(),
+      product:String(r.product||'').trim(),
+      cat:    String(r.cat||'').trim(),
+      wh:     String(r.wh||'').trim(),
+      baht:   Number(r.baht)||0,
+      cs:     Number(r.cs)||0,
+    }));
+    yearlySourceLabel='GAS ✅';
+    if(selectedPeriod==='year')renderHome();
+    toast(`ข้อมูลรายปี ${yearlyRows.length.toLocaleString()} รายการ 📅`);
+  }catch(e){
+    console.warn('Yearly GAS:',e.message);
+    yearlySourceLabel='โหลดไม่ได้ ❌';
+    toast('โหลดข้อมูลรายปีไม่ได้','err');
+  }
+}
+
 // ── Fetch Target ─────────────────────────────────────────────
 async function fetchTarget(){
   for(let i=0;i<TARGET_CSV_URLS.length;i++){
@@ -847,7 +900,7 @@ function parseStockCSV(text){
   }
 }
 
-async function fetchAll(){await Promise.all([fetchData(),fetchStock(),fetchTarget(),fetchSaleIn()]);}
+async function fetchAll(){await Promise.all([fetchData(),fetchStock(),fetchTarget(),fetchSaleIn(),fetchYearly()]);}
 
 // ── Render ───────────────────────────────────────────────────
 // ── %TimeUse ─────────────────────────────────────────────────
@@ -881,6 +934,73 @@ function renderHome(){
   $('heroCs').textContent=fmtCs(total.cs);$('heroTxn').textContent=total.txn.toLocaleString();
   $('heroTopCat').textContent=m?m.icon+' '+(topCat.replace('Bplus ','').replace(' Al','')):'—';
   $('heroDiff').textContent=diff;
+  // ── Year chip bar ──
+  const ycBar=$('yearChipBar');
+  if(selectedPeriod==='year'){
+    const years=[...new Set(allRows.map(r=>{const d=parseTHDate(r.date);return d?d.getFullYear():null}).filter(Boolean))].sort();
+    if(!years.includes(new Date().getFullYear()))years.push(new Date().getFullYear());
+    years.sort();
+    $('yearChips').innerHTML=years.map(y=>`<button class="wh-chip${y===selectedYear?' active':''}" data-year="${y}">${y+543}</button>`).join('');
+    ycBar.style.display='';
+    $('yearChips').querySelectorAll('[data-year]').forEach(btn=>{btn.addEventListener('click',()=>{
+      selectedYear=+btn.dataset.year;renderHome();});});
+  }else{ycBar.style.display='none';}
+
+  // ── Previous month card (year view only) ──
+  const pmCard=$('prevMonthCard');
+  if(selectedPeriod==='year'){
+    const now=new Date();
+    const pmY=now.getMonth()===0?now.getFullYear()-1:now.getFullYear();
+    const pmM=now.getMonth()===0?11:now.getMonth()-1;
+    const pmRows=allRows.filter(r=>{
+      if(selectedWH!=='all'&&r.wh!==selectedWH)return false;
+      const d=parseTHDate(r.date);return d&&d.getFullYear()===pmY&&d.getMonth()===pmM;});
+    const pmTotal=pmRows.reduce((s,r)=>({baht:s.baht+r.baht,cs:s.cs+r.cs}),{baht:0,cs:0});
+    const thMonths=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    const pct=total.baht>0?Math.round(pmTotal.baht/total.baht*100):0;
+    const byCatPm={};TARGET_CATS.forEach(c=>byCatPm[c]={baht:0,cs:0});
+    pmRows.forEach(r=>{byCatPm[r.cat].baht+=r.baht;byCatPm[r.cat].cs+=r.cs;});
+    const thMonthsFull=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+    const curY=now.getFullYear();const curM=now.getMonth();
+    const isCurrentYear=selectedYear===curY;
+    const lastMonth=isCurrentYear?curM:11;
+    // build per-month totals for selectedYear
+    // เดือนปัจจุบัน → allRows, เดือนที่ผ่านมา + ปีก่อน → yearlyRows
+    const monthData=[];
+    for(let m=0;m<=lastMonth;m++){
+      const isCurMonth=isCurrentYear&&m===curM;
+      const src=isCurMonth?allRows:yearlyRows;
+      const mRows=src.filter(r=>{
+        if(selectedWH!=='all'&&r.wh!==selectedWH)return false;
+        const d=parseTHDate(r.date);return d&&d.getFullYear()===selectedYear&&d.getMonth()===m;});
+      const tot=mRows.reduce((s,r)=>({baht:s.baht+r.baht,cs:s.cs+r.cs}),{baht:0,cs:0});
+      monthData.push({m,label:thMonths[m],baht:tot.baht,cs:tot.cs,isCur:isCurMonth});
+    }
+    const grandTotal=monthData.reduce((s,d)=>({baht:s.baht+d.baht,cs:s.cs+d.cs}),{baht:0,cs:0});
+    const maxBaht=Math.max(...monthData.map(d=>d.baht),1);
+    $('pmLabel').textContent='ยอดขายรายเดือน '+(selectedYear+543);
+    $('pmBaht').textContent='฿'+fmtBaht(grandTotal.baht);
+    $('pmCs').textContent=fmtCs(grandTotal.cs)+' ลัง';
+    $('pmPct').textContent=(lastMonth+1)+' เดือน';
+    $('pmCatList').innerHTML=monthData.map(d=>{
+      const pctBar=Math.round(d.baht/maxBaht*100);
+      return `<div style="padding:5px 0;${d===monthData[monthData.length-1]?'':'border-bottom:1px solid var(--border)'}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div style="font-size:12px;font-weight:${d.isCur?'800':'600'};color:${d.isCur?'var(--green)':'var(--text)'}">${d.label}${d.isCur?' (ปัจจุบัน)':''}</div>
+          <div style="text-align:right">
+            <span style="font-size:13px;font-weight:800;color:var(--text)" class="num">฿${fmtBaht(d.baht)}</span>
+            <span style="font-size:10px;color:var(--muted);margin-left:4px" class="num">${fmtCs(d.cs)} ลัง</span>
+          </div>
+        </div>
+        <div style="height:5px;background:var(--bg);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${pctBar}%;background:${d.isCur?'var(--green)':'#94a3b8'};border-radius:3px;transition:width .4s"></div>
+        </div>
+      </div>`;
+    }).join('');
+    pmCard.style.display='';
+  }else{
+    pmCard.style.display='none';
+  }
   const tgtByCat=getTargetByCat(selectedWH);
   const actByCat=getMonthActualByCat(selectedWH);
   const totalTgt=Object.values(tgtByCat).reduce((s,v)=>s+v,0);
@@ -1440,6 +1560,7 @@ fetchData();
 fetchStock();
 fetchTarget();
 fetchSaleIn();
+fetchYearly();
 </script>
 </body>
 </html>
