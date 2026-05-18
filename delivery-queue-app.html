@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v9.4</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v9.6</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -316,7 +316,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v9.4</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v9.6</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -1650,6 +1650,14 @@ function confirmAutoAssign(){
         return 0;
       }
 
+      // helper: จังหวัดหลักของรถ (จากบิลที่จัดไปแล้ว) — กันข้ามจังหวัด
+      function truckMainProv(plate){
+        for(const [r,pl] of Object.entries(newQ)){
+          if(pl===plate&&billMap[r]&&billMap[r].province)return billMap[r].province;
+        }
+        return null;
+      }
+
       // Rule 2: ชื่อร้านเหมือน → FORCE รถ+เที่ยวเดิม (สำคัญสุด ไม่มีข้อยกเว้น)
       if(storeMap[nm]){
         const t=trucks.find(x=>x.plate===storeMap[nm]);
@@ -1704,13 +1712,17 @@ function confirmAutoAssign(){
         if(pick)return{t:pick,tr:pickTr};
         // สุดท้าย fall through ให้ rule อื่นจัดทีละบิล
       }
-      // Rule R: Route Code เดียวกัน → SOFT prefer รถเดิม (ถ้าเต็มให้หารถอื่น)
+      // Rule R: Route Code เดียวกัน + จังหวัดเดียวกัน → SOFT prefer รถเดิม
+      // (รหัสสายบางอันคร่อมหลายจังหวัด → ต้องเช็คจังหวัดด้วย ไม่งั้นรถวิ่งไกลข้ามจังหวัด)
       if(b.routeCode&&routeCodeMap[b.routeCode]){
         const t=trucks.find(x=>x.plate===routeCodeMap[b.routeCode]);
         if(t){
-          const tr=tryTrip(t,b);
-          if(tr)return{t,tr}; // มีที่ว่าง → ไปรถเดิม
-          // เต็มแล้ว → fall through หาคันอื่นในโซนเดียวกัน
+          const tp=truckMainProv(t.plate);
+          if(!(b.province&&tp&&tp!==b.province)){ // จังหวัดตรง (หรือยังไม่รู้จังหวัด)
+            const tr=tryTrip(t,b);
+            if(tr)return{t,tr}; // มีที่ว่าง → ไปรถเดิม
+          }
+          // คนละจังหวัด/เต็ม → fall through หาคันอื่นในโซนเดียวกัน
         }
       }
       // Rule P: จังหวัดเดียวกัน → รถเดิม (ข้ามรถที่ overloaded แล้ว)
@@ -1723,19 +1735,23 @@ function confirmAutoAssign(){
           const tr=tryTrip(t,b);if(tr)return{t,tr};
         }
       }
-      // Rule D: อำเภอเดียวกัน → รถเดิม (ข้ามรถ overloaded)
+      // Rule D: อำเภอเดียวกัน + จังหวัดเดียวกัน → รถเดิม (ข้ามรถ overloaded)
+      // (ชื่ออำเภอซ้ำข้ามจังหวัดได้ เช่น "เมือง" → ต้องเช็คจังหวัดด้วย)
       if(b.district&&districtMap[b.district]){
         const t=trucks.find(x=>x.plate===districtMap[b.district]);
-        if(t&&!isOverloaded(t.plate)){const tr=tryTrip(t,b);if(tr)return{t,tr};}
+        if(t&&!isOverloaded(t.plate)){
+          const tp=truckMainProv(t.plate);
+          if(!(b.province&&tp&&tp!==b.province)){
+            const tr=tryTrip(t,b);if(tr)return{t,tr};
+          }
+        }
       }
-      // Rule 4: GPS cluster เดียวกัน — เฉพาะถ้าจังหวัดตรงกัน
+      // Rule 4: GPS cluster เดียวกัน — เฉพาะถ้าจังหวัดของรถตรงกัน
       if(ci!==undefined&&clusterMap[ci]){
         const t=trucks.find(x=>x.plate===clusterMap[ci]);
         if(t){
-          // ตรวจว่ารถนี้มีบิลจังหวัดเดียวกันอยู่แล้ว (ป้องกันข้ามจังหวัด)
-          const tProv=Object.entries(newQ).find(([,p])=>p===t.plate&&billMap[_ref=Object.keys(newQ).find(r=>newQ[r]===t.plate)]?.province);
-          const clusterOk=!b.province||provinceMap[b.province]===t.plate||!provinceMap[b.province];
-          if(clusterOk){const tr=tryTrip(t,b);if(tr)return{t,tr};}
+          const tp=truckMainProv(t.plate);
+          if(!(b.province&&tp&&tp!==b.province)){const tr=tryTrip(t,b);if(tr)return{t,tr};}
         }
       }
       // Rule G: Min-distance ≤25กม. — เฉพาะรถที่จังหวัดตรง+ไม่ overloaded
@@ -1745,7 +1761,7 @@ function confirmAutoAssign(){
           const tc=truckCent[t.plate];
           if(!tc||tc.cnt===0)return;
           if(isOverloaded(t.plate))return; // ข้ามรถ force-overloaded
-          if(b.province&&provinceMap[b.province]&&provinceMap[b.province]!==t.plate)return;
+          {const tp=truckMainProv(t.plate);if(b.province&&tp&&tp!==b.province)return;}
           const tr=tryTrip(t,b);if(!tr)return;
           let minD=Infinity;
           Object.entries(newQ).forEach(([ref,plate])=>{
@@ -1765,7 +1781,7 @@ function confirmAutoAssign(){
           const tc=truckCent[t.plate];
           if(!tc||tc.cnt===0)return;
           if(isOverloaded(t.plate))return; // ข้ามรถ overloaded
-          if(b.province&&provinceMap[b.province]&&provinceMap[b.province]!==t.plate)return;
+          {const tp=truckMainProv(t.plate);if(b.province&&tp&&tp!==b.province)return;}
           const tr=tryTrip(t,b);if(!tr)return;
           Object.entries(newQ).forEach(([ref,plate])=>{
             if(plate!==t.plate)return;
