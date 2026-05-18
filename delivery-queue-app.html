@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v9.6</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v9.9</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -316,7 +316,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v9.6</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v9.9</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -791,7 +791,8 @@ async function loadData(){
         routeMap[code]={
           route:r['ชื่อสายจด']||r['สาย']||'',
           days:newDays,
-          routeCode:r['Serial Route จด']||r['รูทจด']||'',
+          routeCode:r['Serial Route จด']||'',
+          saiSong:(r['สายส่ง']||'').trim(), // สรุปรูท (สส09, รบ02...) = ตัวจัดกลุ่มหลัก
           lat:isNaN(lat)?null:lat, lng:isNaN(lng)?null:lng
         };
       }
@@ -806,7 +807,7 @@ async function loadData(){
         const ri=routeMap[arCode]||{};
         billMap[ref]={ref,arCode,arName:b['AR_NAME']||'',date:b['DI_DATE']||'',
           district:b['ADDB_DISTRICT']||'',province:b['ADDB_PROVINCE']||'',
-          route:ri.route||'',days:ri.days||'',routeCode:ri.routeCode||'',
+          route:ri.route||'',days:ri.days||'',routeCode:ri.routeCode||'',saiSong:ri.saiSong||'',
           lat:ri.lat,lng:ri.lng, totalW:0,totalV:0,totalAmt:0};
       }
       const sku=b['SKU_NAME']||'';
@@ -1498,11 +1499,10 @@ function confirmAutoAssign(){
     // Route Code = zone จริงของธุรกิจ (สำคัญกว่าจังหวัด)
     // จาก PDF: bills ที่ route code เดียวกัน → ต้องไปรถคันเดิมเสมอ
 
-    // 1. แบ่งกลุ่มตาม routeCode (หรือจังหวัดถ้าไม่มี routeCode)
+    // 1. แบ่งกลุ่มตาม "สายส่ง" (สรุปรูท: สส09, รบ02...) — fallback → จังหวัด
     const byRoute={};
     tmrBills.forEach(b=>{
-      // ใช้ routeCode เป็น key หลัก; fallback → province
-      const key=(b.routeCode||'').trim()||(b.province||'__').trim();
+      const key=(b.saiSong||'').trim()||(b.province||'__').trim();
       if(!byRoute[key])byRoute[key]=[];
       byRoute[key].push(b);
     });
@@ -1596,7 +1596,8 @@ function confirmAutoAssign(){
     const storeMap={};   // normName → plate  (rule 2)
     const storeTripMap={}; // normName → trip  (ชื่อร้านเดียวกัน → เที่ยวเดิม)
     const clusterMap={}; // clusterIdx → plate (rule 4)
-    const routeCodeMap={}; // routeCode → plate (rule R: สส01,สค02,รบ03...)
+    const routeCodeMap={}; // saiSong → plate (rule R: สส01,สค02,รบ03...)
+    const saiSongTripMap={}; // saiSong → trip (สายส่งเดียวกัน → เที่ยวเดิม)
     const districtMap={}; // district → plate  (rule D)
     const provinceMap={}; // province → plate  (rule P)
     const locMap={};      // gid → plate  (rule L: โลเคชันเดียวกัน)
@@ -1619,7 +1620,7 @@ function confirmAutoAssign(){
       if(gid)locMap[gid]=plate; // location group → รถล่าสุดเสมอ (overflow ตามกลุ่ม)
       const ci=billCluster[b.ref];
       if(ci!==undefined&&!clusterMap[ci])clusterMap[ci]=plate;
-      if(b.routeCode&&!routeCodeMap[b.routeCode])routeCodeMap[b.routeCode]=plate;
+      if(b.saiSong&&!routeCodeMap[b.saiSong]){routeCodeMap[b.saiSong]=plate;saiSongTripMap[b.saiSong]=trip;} // สายส่ง → รถ+เที่ยว
       if(b.district&&!districtMap[b.district])districtMap[b.district]=plate;
       if(b.province&&!provinceMap[b.province])provinceMap[b.province]=plate;
       // อัปเดต centroid ของรถ
@@ -1664,6 +1665,18 @@ function confirmAutoAssign(){
         if(t){
           const preferTrip=storeTripMap[nm]||1;
           return{t,tr:preferTrip}; // ชื่อร้านเดียวกัน → รถเดิม + เที่ยวเดิมเสมอ (ไม่แยกเที่ยว)
+        }
+      }
+      // Rule R: "สายส่ง" เดียวกัน + จังหวัดเดียวกัน → FORCE รถ+เที่ยวเดิม (ตัวจัดกลุ่มหลัก)
+      // (สายส่งบางอันคร่อมหลายจังหวัด → เช็คจังหวัดด้วย ไม่งั้นรถวิ่งไกลข้ามจังหวัด)
+      if(b.saiSong&&routeCodeMap[b.saiSong]){
+        const t=trucks.find(x=>x.plate===routeCodeMap[b.saiSong]);
+        if(t){
+          const tp=truckMainProv(t.plate);
+          if(!(b.province&&tp&&tp!==b.province)){ // จังหวัดตรง (หรือยังไม่รู้จังหวัด)
+            return{t,tr:saiSongTripMap[b.saiSong]||1}; // FORCE สายส่งเดียวกัน → รถ+เที่ยวเดิมเสมอ
+          }
+          // คนละจังหวัด → fall through หาคันอื่นในโซนเดียวกัน
         }
       }
       // Rule L: โลเคชันเดียวกัน (≤1.5กม.) → มัดทั้งกลุ่มไปรถคันเดียว
@@ -1711,19 +1724,6 @@ function confirmAutoAssign(){
         // กลุ่มใหญ่เกินรถเปล่า → ใช้รถใกล้สุดที่จุได้ (แม้ไกล) แล้วค่อย overflow
         if(pick)return{t:pick,tr:pickTr};
         // สุดท้าย fall through ให้ rule อื่นจัดทีละบิล
-      }
-      // Rule R: Route Code เดียวกัน + จังหวัดเดียวกัน → SOFT prefer รถเดิม
-      // (รหัสสายบางอันคร่อมหลายจังหวัด → ต้องเช็คจังหวัดด้วย ไม่งั้นรถวิ่งไกลข้ามจังหวัด)
-      if(b.routeCode&&routeCodeMap[b.routeCode]){
-        const t=trucks.find(x=>x.plate===routeCodeMap[b.routeCode]);
-        if(t){
-          const tp=truckMainProv(t.plate);
-          if(!(b.province&&tp&&tp!==b.province)){ // จังหวัดตรง (หรือยังไม่รู้จังหวัด)
-            const tr=tryTrip(t,b);
-            if(tr)return{t,tr}; // มีที่ว่าง → ไปรถเดิม
-          }
-          // คนละจังหวัด/เต็ม → fall through หาคันอื่นในโซนเดียวกัน
-        }
       }
       // Rule P: จังหวัดเดียวกัน → รถเดิม (ข้ามรถที่ overloaded แล้ว)
       if(b.province&&provinceMap[b.province]){
