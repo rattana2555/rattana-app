@@ -546,7 +546,20 @@ function renderDash(){
       if(pk)packs[pk]=(packs[pk]||0)+1;
     });
   });
-  var pk=Object.keys(prods),pakk=Object.keys(packs);
+  // เรียงสินค้า: ลัง(CS) → แพ็ค(PA) → ชิ้น(EA) → อื่นๆ, ภายในกลุ่มเรียง qty มาก→น้อย
+  function unitRank(u){
+    var s=String(u||'').toLowerCase();
+    if(/ลัง|cs|case|carton/.test(s))return 0;
+    if(/แพ็ค|แพค|pa|pack/.test(s))return 1;
+    if(/ชิ้น|ea|piece|each/.test(s))return 2;
+    return 3;
+  }
+  var pk=Object.keys(prods).sort(function(a,b){
+    var ra=unitRank(prods[a].unit),rb=unitRank(prods[b].unit);
+    if(ra!==rb)return ra-rb;          // กลุ่ม unit ก่อน
+    return prods[b].qty-prods[a].qty;  // qty มาก→น้อย
+  });
+  var pakk=Object.keys(packs);
   // Store barcodes for click handlers
   _pcBcs=pk.slice();
   var h='<div style="padding-bottom:4px">';
