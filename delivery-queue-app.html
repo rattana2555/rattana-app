@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v9.2</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v9.3</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -316,7 +316,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v9.2</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v9.3</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -512,6 +512,9 @@ select,input{font-family:inherit;font-size:16px}
       <div style="padding:10px 16px;border-bottom:1px solid #E0E5ED;background:#F5F7FA;font-family:Kanit;font-size:13px;font-weight:600;color:#7D6428" id="mapTitle">🗺️ แผนที่โลเคชันทั้งหมด</div>
       <div id="routeMap" style="height:380px;width:100%"></div>
     </div>
+
+    <!-- Trip Time Bar -->
+    <div id="tripTimeBar" style="display:none;background:#fff;border:1px solid #E0E5ED;border-radius:10px;padding:12px 16px;margin-bottom:14px"></div>
 
     <!-- Route cards -->
     <div style="font-family:Kanit;font-size:13px;font-weight:600;color:#7D6428;margin-bottom:10px">📋 รายการตามสาย</div>
@@ -2055,6 +2058,34 @@ const MAP_TILES = {
 let mapTheme = 'light';
 let currentTileLayer = null;
 let leafletMap=null, mapLayers=[], mapFilterPlate=null, mapFilterTrip=0;
+const _tripDur={}; // plate → {1:{min,est}, 2:{min,est}, 3:{min,est}}
+
+function fmtTime(min){
+  if(!min||min<1)return '<1 นาที';
+  const h=Math.floor(min/60),m=Math.round(min%60);
+  return h>0?(m>0?`${h} ชม. ${m} นาที`:`${h} ชม.`):`${m} นาที`;
+}
+function renderTripTimeBar(plate){
+  const bar=document.getElementById('tripTimeBar');
+  if(!bar)return;
+  if(!plate||!_tripDur[plate]){bar.style.display='none';return;}
+  const truck=TRUCKS.find(t=>t.plate===plate);
+  const trips=_tripDur[plate];
+  const TC={1:'#C47000',2:'#1A5FA5',3:'#15803D'},BG={1:'#FFF8EC',2:'#EAF0F8',3:'#EAF3DE'},IC={1:'🔴',2:'🔵',3:'🟢'};
+  let h=`<div style="font-size:12px;font-weight:700;color:#07101F;margin-bottom:8px;font-family:Kanit">⏱ เวลาขับรถโดยประมาณ — ${truck?.nick||plate}</div><div style="display:flex;gap:12px;flex-wrap:wrap">`;
+  [1,2,3].forEach(tr=>{
+    const d=trips[tr];if(!d)return;
+    const t=d.min!==null?d.min:d.est;
+    const lbl=d.min!==null?'🛣 เส้นจริง':'📐 ประมาณ';
+    h+=`<div style="background:${BG[tr]};border-radius:8px;padding:8px 14px;min-width:110px">
+      <div style="font-size:11px;font-weight:600;color:${TC[tr]}">${IC[tr]} เที่ยว ${tr}</div>
+      <div style="font-size:18px;font-weight:700;color:#07101F;margin-top:2px;font-family:Kanit">${fmtTime(t)}</div>
+      <div style="font-size:9px;color:#9BAAB8;margin-top:1px">${lbl}</div>
+    </div>`;
+  });
+  h+='</div>';
+  bar.innerHTML=h;bar.style.display='block';
+}
 
 function initMap(){
   if(leafletMap||!document.getElementById('routeMap'))return;
@@ -2113,7 +2144,7 @@ async function fetchOsrmRoute(wpts){
     const r=await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`,{signal:ctrl.signal});
     const d=await r.json();
     if(d.code!=='Ok'||!d.routes?.length)return null;
-    return d.routes[0].geometry.coordinates.map(([lng,lat])=>[lat,lng]);
+    return{coords:d.routes[0].geometry.coordinates.map(([lng,lat])=>[lat,lng]),duration:d.routes[0].duration};
   }catch(e){return null;}
 }
 
@@ -2173,10 +2204,13 @@ function updateMap(filterPlate){
       const t1=nnRoute(bills.filter(b=>queue[b.ref]===t.plate&&b.lat&&b.lng&&(tripMap[b.ref]||1)===1));
       if(filterPlate)t1.forEach((b,i)=>{stopNums[b.ref]=i+1;});
       if(t1.length){
-        const wpts=[[HQ.lat,HQ.lng],...t1.map(b=>[b.lat,b.lng])];
+        const wpts=[[HQ.lat,HQ.lng],...t1.map(b=>[b.lat,b.lng]),[HQ.lat,HQ.lng]];
+        // haversine estimate
+        let estD=0;for(let i=1;i<wpts.length;i++)estD+=haversine(wpts[i-1][0],wpts[i-1][1],wpts[i][0],wpts[i][1]);
+        if(filterPlate){if(!_tripDur[t.plate])_tripDur[t.plate]={};_tripDur[t.plate][1]={min:null,est:estD/45*60};renderTripTimeBar(filterPlate);}
         const line=L.polyline(wpts,{color:col,weight:4,opacity:.85,lineJoin:'round'}).addTo(leafletMap);
         mapLayers.push(line);
-        fetchOsrmRoute(wpts).then(rd=>{if(rd&&line._map)line.setLatLngs(rd);});
+        fetchOsrmRoute(wpts).then(rd=>{if(rd&&line._map){line.setLatLngs(rd.coords);if(filterPlate){_tripDur[t.plate][1].min=rd.duration/60;renderTripTimeBar(filterPlate);}}});
       }
     }
     // เที่ยว 2: dashed line (thinner, lower opacity)
@@ -2184,10 +2218,12 @@ function updateMap(filterPlate){
       const t2=nnRoute(bills.filter(b=>queue[b.ref]===t.plate&&b.lat&&b.lng&&(tripMap[b.ref]||1)===2));
       if(filterPlate)t2.forEach((b,i)=>{stopNums[b.ref]=i+1;});
       if(t2.length){
-        const wpts=[[HQ.lat,HQ.lng],...t2.map(b=>[b.lat,b.lng])];
+        const wpts=[[HQ.lat,HQ.lng],...t2.map(b=>[b.lat,b.lng]),[HQ.lat,HQ.lng]];
+        let estD=0;for(let i=1;i<wpts.length;i++)estD+=haversine(wpts[i-1][0],wpts[i-1][1],wpts[i][0],wpts[i][1]);
+        if(filterPlate){if(!_tripDur[t.plate])_tripDur[t.plate]={};_tripDur[t.plate][2]={min:null,est:estD/45*60};renderTripTimeBar(filterPlate);}
         const line=L.polyline(wpts,{color:col,weight:2.5,opacity:.7,dashArray:'10 6',lineJoin:'round'}).addTo(leafletMap);
         mapLayers.push(line);
-        fetchOsrmRoute(wpts).then(rd=>{if(rd&&line._map)line.setLatLngs(rd);});
+        fetchOsrmRoute(wpts).then(rd=>{if(rd&&line._map){line.setLatLngs(rd.coords);if(filterPlate){_tripDur[t.plate][2].min=rd.duration/60;renderTripTimeBar(filterPlate);}}});
       }
     }
     // เที่ยว 3: dotted line (thinnest, most transparent)
@@ -2195,10 +2231,12 @@ function updateMap(filterPlate){
       const t3=nnRoute(bills.filter(b=>queue[b.ref]===t.plate&&b.lat&&b.lng&&(tripMap[b.ref]||1)===3));
       if(filterPlate)t3.forEach((b,i)=>{stopNums[b.ref]=i+1;});
       if(t3.length){
-        const wpts=[[HQ.lat,HQ.lng],...t3.map(b=>[b.lat,b.lng])];
+        const wpts=[[HQ.lat,HQ.lng],...t3.map(b=>[b.lat,b.lng]),[HQ.lat,HQ.lng]];
+        let estD=0;for(let i=1;i<wpts.length;i++)estD+=haversine(wpts[i-1][0],wpts[i-1][1],wpts[i][0],wpts[i][1]);
+        if(filterPlate){if(!_tripDur[t.plate])_tripDur[t.plate]={};_tripDur[t.plate][3]={min:null,est:estD/45*60};renderTripTimeBar(filterPlate);}
         const line=L.polyline(wpts,{color:col,weight:2,opacity:.55,dashArray:'3 5',lineJoin:'round'}).addTo(leafletMap);
         mapLayers.push(line);
-        fetchOsrmRoute(wpts).then(rd=>{if(rd&&line._map)line.setLatLngs(rd);});
+        fetchOsrmRoute(wpts).then(rd=>{if(rd&&line._map){line.setLatLngs(rd.coords);if(filterPlate){_tripDur[t.plate][3].min=rd.duration/60;renderTripTimeBar(filterPlate);}}});
       }
     }
   });
@@ -2262,6 +2300,8 @@ function filterMapTrip(trip,btn){
 function filterMap(plate,btn){
   mapFilterPlate=plate;
   mapFilterTrip=0; // reset trip filter on truck change
+  if(plate)_tripDur[plate]={}; // reset time cache for this truck
+  renderTripTimeBar(plate);   // hide bar if all-trucks, show placeholder if single
   document.querySelectorAll('#mapTruckFilter button').forEach(b=>b.style.background=b.style.borderColor=plate?'transparent':'#07101F');
   if(btn){btn.style.background=plate?getTruckCol(plate):'#07101F';btn.style.borderColor=plate?getTruckCol(plate):'#07101F';}
   // Reset trip filter buttons
