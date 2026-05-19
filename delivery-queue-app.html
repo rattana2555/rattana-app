@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v10.0</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v10.1</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -316,7 +316,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v10.0</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v10.1</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -632,6 +632,9 @@ let tripMap={};    // {billRef: 1|2} — เที่ยว (default=1)
 let selTrip=1;     // เที่ยวที่กำลังจะใส่ (1 หรือ 2) — toggle โดยผู้ใช้
 let selPlate=null;
 let selRefs=new Set();
+// บิลที่จัดรถ + บันทึกลงชีทแล้ว → ซ่อนจากหน้าจัดรถ (แต่ยังนับน้ำหนักรถ)
+let savedRefs=new Set();
+try{savedRefs=new Set(JSON.parse(localStorage.getItem('dq_v4_saved')||'[]'));}catch(e){}
 
 // ── Helpers ──
 const fmtN = n => Number(n).toLocaleString('th-TH');
@@ -983,6 +986,7 @@ function getFilteredBills(){
   const fSort=document.getElementById('fSort')?.value||'weight';
 
   let list=bills.filter(b=>{
+    if(savedRefs.has(b.ref))return false; // บันทึกลงชีทแล้ว → หายจากหน้าจัดรถ
     if(srch&&!b.arName.toLowerCase().includes(srch)&&!b.ref.toLowerCase().includes(srch))return false;
     if(fDate&&b.date!==fDate)return false;
     if(fStatus==='pending'&&queue[b.ref])return false;
@@ -1109,14 +1113,17 @@ function updateQueueSub(){
   const tmrShort=THAI_DAYS[tmr.getDay()];
   const THAI_DAYS_FULL=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
   const tmrFull=THAI_DAYS_FULL[tmr.getDay()];
-  const done=Object.keys(queue).filter(r=>queue[r]).length;
-  const pend=bills.length-done;
+  const savedN=bills.filter(b=>savedRefs.has(b.ref)).length;
+  const done=Object.keys(queue).filter(r=>queue[r]&&!savedRefs.has(r)).length;
+  const pend=bills.length-done-savedN;
   const tmrCnt=bills.filter(b=>{
+    if(savedRefs.has(b.ref))return false;
     if(!b.days)return false;
     return b.days.split(/[,\s\/]+/).some(d=>d.trim()===tmrShort||d.trim()===tmrFull);
   }).length;
   document.getElementById('q-sub').innerHTML=
     `<span style="color:#15803D;font-weight:600">${done} จัดแล้ว</span> / <span style="color:#B45309;font-weight:600">${pend} รอจัด</span>`+
+    (savedN?` / <span style="color:#1A5FA5;font-weight:600">💾 ${savedN} บันทึกแล้ว</span>`:'')+
     (tmrCnt?` — <span style="color:#1A5FA5;font-weight:600">📅 พรุ่งนี้ (วัน${tmrShort}): ${tmrCnt} บิล</span>`:'');
 }
 
@@ -1941,9 +1948,13 @@ async function doSave(){
     if(!result.ok)throw new Error(result.message||'Script ตอบผิดพลาด: '+JSON.stringify(result));
 
     localStorage.setItem('keepdata_bk',JSON.stringify({savedAt:now,rows}));
+    // mark บิลที่จัดรถแล้ว ว่า "บันทึกแล้ว" → หายจากหน้าจัดรถ
+    Object.keys(queue).forEach(r=>{if(queue[r])savedRefs.add(r);});
+    try{localStorage.setItem('dq_v4_saved',JSON.stringify([...savedRefs]));}catch(e){}
     isDirty=false;
     updateSyncBadge();
     showToast(`✅ ${result.message}`,'ok');
+    renderAll();
   }catch(e){
     localStorage.setItem('keepdata_bk',JSON.stringify({savedAt:new Date().toISOString(),error:e.message}));
     showToast('บันทึกไม่สำเร็จ: '+e.message,'err');
@@ -1954,7 +1965,15 @@ async function doSave(){
 // ══════════════════════════════════════════
 // DASHBOARD
 // ══════════════════════════════════════════
+function gotoTruckQueue(plate){
+  const qTab=document.querySelector('.nav-tab[onclick*="\'queue\'"]');
+  switchTab('queue',qTab||null);
+  selPlate=plate;
+  renderTruckCards();renderBillTable();updateQueueSub();
+}
+
 function renderDashboard(){
+  const savedBills=bills.filter(b=>savedRefs.has(b.ref)&&queue[b.ref]);
   const done=Object.keys(queue).filter(r=>queue[r]).length;
   const pend=bills.length-done;
   const active=TRUCKS.filter(t=>Object.values(queue).filter(p=>p===t.plate).length>0).length;
@@ -1963,29 +1982,65 @@ function renderDashboard(){
   document.getElementById('d-pend').textContent=pend;
   document.getElementById('d-trucks').textContent=active+'/'+TRUCKS.length;
 
-  // Truck summary cards
-  document.getElementById('dashTruckList').innerHTML=
-    `<div style="font-family:Kanit;font-size:14px;font-weight:600;color:#7D6428;margin-bottom:12px">🚛 รถทั้งหมด</div>`+
-    `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">`+
-    TRUCKS.map((t,i)=>{
-      const ld=truckLoad(t.plate);
-      const {wp,vp,eff,over}=truckPct(t.plate,t);
-      const col=TRUCK_COLORS[i%TRUCK_COLORS.length];
-      const cnt=Object.values(queue).filter(p=>p===t.plate).length;
-      return`<div style="background:#F8F9FB;border:1px solid ${over?'#FCA5A5':'#E0E5ED'};border-radius:10px;padding:12px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-          <div><span style="font-family:Kanit;font-weight:700;font-size:13px">${t.plate}</span> <span style="font-size:11px;color:#6B7A90">${t.nick}</span></div>
-          <span style="font-weight:700;color:${over?'#C62828':pcColor(eff)};font-size:14px">${eff}%</span>
+  // ── สรุปเฉพาะข้อมูลที่บันทึกแล้ว ต่อรถ ต่อเที่ยว ──
+  function savedLoad(plate,trip){
+    let w=0,v=0,n=0;
+    savedBills.forEach(b=>{
+      if(queue[b.ref]!==plate||(tripMap[b.ref]||1)!==trip)return;
+      w+=b.totalW;v+=b.totalV;n++;
+    });
+    return{w,v,n};
+  }
+  const trucksWithSaved=TRUCKS.filter(t=>savedBills.some(b=>queue[b.ref]===t.plate));
+
+  let html=`<div style="font-family:Kanit;font-size:14px;font-weight:600;color:#7D6428;margin-bottom:12px">💾 สรุปที่บันทึกแล้ว — ${savedBills.length} บิล / ${trucksWithSaved.length} คัน</div>`;
+  if(!trucksWithSaved.length){
+    html+=`<div style="text-align:center;padding:30px;color:#A0ABBB">ยังไม่มีข้อมูลที่บันทึก — จัดรถแล้วกด 💾 Keepdata</div>`;
+  } else {
+    html+=trucksWithSaved.map(t=>{
+      let trips='';
+      let anyFree=false;
+      [1,2,3].forEach(tr=>{
+        const ld=savedLoad(t.plate,tr);
+        if(!ld.n)return;
+        const wp=t.maxW>0?Math.round(ld.w/t.maxW*100):0;
+        const vp=t.maxV>0?Math.round(ld.v/t.maxV*100):0;
+        const eff=Math.max(wp,vp);
+        const freeW=Math.max(0,t.maxW-ld.w);
+        const canAdd=eff<100&&freeW>50;
+        if(canAdd)anyFree=true;
+        const TE=tr===3?'🟢':tr===2?'🔵':'🔴';
+        trips+=`<div style="border-top:1px solid #EDF0F4;padding:8px 0">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+            <span style="font-weight:700">${TE} เที่ยว ${tr} · ${ld.n} บิล</span>
+            <span style="font-weight:700;color:${eff>100?'#C62828':pcColor(eff)}">${eff}%</span>
+          </div>
+          <div style="height:5px;background:#E0E5ED;border-radius:3px;overflow:hidden;margin-bottom:4px">
+            <div style="width:${Math.min(100,eff)}%;height:100%;background:${eff>100?'#DC3545':pcColor(eff)};border-radius:3px"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:#6B7A90">
+            <span>⚖ ${fmtKg(ld.w)}/${fmtKg(t.maxW)} · 📦 ${fmtM3(ld.v)}/${fmtM3(t.maxV)}</span>
+            ${canAdd
+              ?`<span style="color:#15803D;font-weight:600">ว่าง ${fmtKg(freeW)}</span>`
+              :`<span style="color:#C62828;font-weight:600">เต็ม</span>`}
+          </div>
+        </div>`;
+      });
+      const col=getTruckCol(t.plate);
+      return`<div style="background:#fff;border:1px solid #E0E5ED;border-radius:12px;padding:14px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${col};margin-right:6px"></span>
+            <span style="font-family:Kanit;font-weight:700;font-size:14px">${t.plate}</span>
+            <span style="font-size:12px;color:#6B7A90"> ${t.nick} · ${t.type}</span></div>
+          ${anyFree
+            ?`<button onclick="gotoTruckQueue('${t.plate}')" style="background:#15803D;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">➕ เพิ่มบิล</button>`
+            :`<span style="background:#FDECEC;color:#C62828;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700">เต็มแล้ว</span>`}
         </div>
-        <div style="height:4px;background:#E0E5ED;border-radius:2px;overflow:hidden;margin-bottom:4px">
-          <div style="width:${Math.min(100,wp)}%;height:100%;background:${over?'#DC3545':pcColor(wp)};border-radius:2px"></div>
-        </div>
-        <div style="font-size:11px;color:#6B7A90;display:flex;justify-content:space-between">
-          <span>${fmtKg(ld.w)} / ${fmtKg(t.maxW)}</span>
-          <span style="color:#1A5FA5">${cnt} บิล</span>
-        </div>
+        ${trips}
       </div>`;
-    }).join('')+'</div>';
+    }).join('');
+  }
+  document.getElementById('dashTruckList').innerHTML=html;
 }
 
 // ══════════════════════════════════════════
