@@ -466,8 +466,9 @@ function parseGviz(j){
       var pcs=um?parseInt(um[1]):1;
       var cases=pcs>1?Math.round(rq/pcs):rq;
       var lm=us.match(/^([^\dxX×]+)/);var ul=(lm?lm[1]:'').trim()||'ลัง';
+      var ucm=us.match(/(CS|PA|EA|BP)/i);var ucode=ucm?ucm[1].toUpperCase():'';
       var oi=DB[oNum]&&DB[oNum].items&&DB[oNum].items.find(function(x){return x.bc===bc;});
-      nDB[oNum].items.push({bc:bc,name:s(idx('ชื่อสินค้า',7)),unit:ul,qty:cases,pieces:rq,pcs:pcs,price:n(idx('ราคา',10)),pack:s(idx('วิธีแพ็คสินค้า',12)),img1:s(idx('รูปภาพสินค้า 1',13)),img2:s(idx('รูปภาพสินค้า 2',14)),sc:(oi&&oi.sc)||0,status:(oi&&oi.status)||'pending'});
+      nDB[oNum].items.push({bc:bc,name:s(idx('ชื่อสินค้า',7)),unit:ul,ucode:ucode,qty:cases,pieces:rq,pcs:pcs,price:n(idx('ราคา',10)),pack:s(idx('วิธีแพ็คสินค้า',12)),img1:s(idx('รูปภาพสินค้า 1',13)),img2:s(idx('รูปภาพสินค้า 2',14)),sc:(oi&&oi.sc)||0,status:(oi&&oi.status)||'pending'});
     }
   });
   DB=nDB;
@@ -539,14 +540,28 @@ function renderDash(){
   var prods={},packs={};
   keys.forEach(function(k){
     DB[k].items.forEach(function(item){
-      if(!prods[item.bc])prods[item.bc]={name:item.name,unit:item.unit||'ลัง',qty:0,pieces:0,pcs:item.pcs||1,img1:item.img1,img2:item.img2};
+      if(!prods[item.bc])prods[item.bc]={name:item.name,unit:item.unit||'ลัง',ucode:item.ucode||'',qty:0,pieces:0,pcs:item.pcs||1,img1:item.img1,img2:item.img2};
       prods[item.bc].qty+=item.qty;
       prods[item.bc].pieces+=item.pieces||(item.qty*(item.pcs||1));
       var pk=(item.pack||'').trim();
       if(pk)packs[pk]=(packs[pk]||0)+1;
     });
   });
-  var pk=Object.keys(prods),pakk=Object.keys(packs);
+  // เรียงสินค้า: ลัง(CS) → แพ็ค(PA) → ชิ้น(EA) → อื่นๆ, ภายในกลุ่มเรียง qty มาก→น้อย
+  function unitRank(code){
+    var c=String(code||'').toUpperCase();
+    if(c==='CS')return 0;  // ลัง
+    if(c==='PA')return 1;  // แพ็ค
+    if(c==='BP')return 2;  // BP
+    if(c==='EA')return 3;  // ชิ้น
+    return 4;
+  }
+  var pk=Object.keys(prods).sort(function(a,b){
+    var ra=unitRank(prods[a].ucode),rb=unitRank(prods[b].ucode);
+    if(ra!==rb)return ra-rb;          // กลุ่ม unit ก่อน
+    return prods[b].qty-prods[a].qty;  // qty มาก→น้อย
+  });
+  var pakk=Object.keys(packs);
   // Store barcodes for click handlers
   _pcBcs=pk.slice();
   var h='<div style="padding-bottom:4px">';
