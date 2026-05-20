@@ -639,6 +639,8 @@ try{savedRefs=new Set(JSON.parse(localStorage.getItem('dq_v4_saved')||'[]'));}ca
 let savedDates={};
 try{savedDates=JSON.parse(localStorage.getItem('dq_v4_saved_dates')||'{}');}catch(e){}
 let dashFilterDate=null;  // วันที่กรองใน Dashboard
+let keepData=[];          // ข้อมูลจากชีท Keepdata (โหลดจาก Google Sheet)
+let keepDataLoading=false;
 
 // ── Helpers ──
 const fmtN = n => Number(n).toLocaleString('th-TH');
@@ -838,6 +840,9 @@ async function loadData(){
       new Date().toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'});
 
     setLoad(`✅ ${bills.length} บิล พร้อมแล้ว`,100);
+
+    // โหลดข้อมูลจากชีท Keepdata เงียบๆ (background)
+    loadKeepdata().catch(e=>console.warn('Keepdata load failed:',e.message));
 
     renderAll();
     showToast(`โหลดสำเร็จ — ${bills.length} บิล`,'ok');
@@ -1959,6 +1964,8 @@ async function doSave(){
     isDirty=false;
     updateSyncBadge();
     showToast(`✅ ${result.message}`,'ok');
+    // โหลด Keepdata ใหม่เพื่อให้แดชบอร์ดเห็นข้อมูลที่เพิ่งบันทึก
+    loadKeepdata(true).catch(()=>{});
     renderAll();
   }catch(e){
     localStorage.setItem('keepdata_bk',JSON.stringify({savedAt:new Date().toISOString(),error:e.message}));
@@ -1987,21 +1994,49 @@ function parseDateTH(s){
 }
 function setDashDate(d){dashFilterDate=d;renderDashboard();}
 
+// ── โหลดข้อมูลจากชีท Keepdata บน Google Sheet ──
+async function loadKeepdata(silent=false){
+  if(keepDataLoading)return;
+  keepDataLoading=true;
+  try{
+    const rows=await fetchSheet('Keepdata');
+    keepData=rows.map(r=>({
+      billDate    : r['วันที่บิล']||'',
+      deliveryDate: r['วันที่ส่ง']||'',
+      ref         : r['เลขบิล']||'',
+      arCode      : r['รหัสร้านค้า']||'',
+      arName      : r['ชื่อร้านค้า']||'',
+      province    : r['จังหวัด']||'',
+      district    : r['อำเภอ']||'',
+      plate       : r['ทะเบียนรถ']||'',
+      trip        : parseInt(r['เที่ยว']||'1')||1,
+      nick        : r['ชื่อเล่น']||'',
+      driver      : r['คนขับ']||'',
+      truckType   : r['ประเภทรถ']||'',
+      weight      : parseFloat(r['น้ำหนัก (กก.)']||'0')||0,
+      volume      : parseFloat(r['ปริมาตร (m³)']||'0')||0,
+      amount      : parseFloat(r['มูลค่า (บาท)']||'0')||0,
+      status      : r['สถานะ']||''
+    })).filter(r=>r.plate&&r.deliveryDate);  // เก็บเฉพาะแถวที่มีรถและวันส่ง
+    if(!silent)showToast(`โหลด Keepdata ${keepData.length} แถว`,'ok');
+    if(currentTab==='dashboard')renderDashboard();
+  }catch(e){
+    if(!silent)showToast('โหลด Keepdata ไม่ได้: '+e.message,'err');
+    throw e;
+  }finally{
+    keepDataLoading=false;
+  }
+}
+
+function refreshKeepdata(){
+  const btn=document.getElementById('btn-refresh-keepdata');
+  if(btn){btn.disabled=true;btn.innerHTML='⏳ กำลังโหลด...';}
+  loadKeepdata(false).finally(()=>{
+    if(btn){btn.disabled=false;btn.innerHTML='🔄 รีเฟรช';}
+  });
+}
+
 function renderDashboard(){
-  const savedBillsAll=bills.filter(b=>savedRefs.has(b.ref)&&queue[b.ref]);
-
-  // รวบรวมวันที่ที่มีข้อมูลบันทึก (เรียงใหม่→เก่า)
-  const allDates=[...new Set(savedBillsAll.map(b=>savedDates[b.ref]).filter(Boolean))];
-  allDates.sort((a,b)=>parseDateTH(b)-parseDateTH(a));
-
-  // auto-select วันล่าสุดถ้ายังไม่ได้เลือก หรือวันที่เลือกไม่มีข้อมูลแล้ว
-  if(dashFilterDate&&!allDates.includes(dashFilterDate))dashFilterDate=null;
-  if(!dashFilterDate&&allDates.length)dashFilterDate=allDates[0];
-
-  const savedBills=dashFilterDate
-    ? savedBillsAll.filter(b=>savedDates[b.ref]===dashFilterDate)
-    : savedBillsAll;
-
   const done=Object.keys(queue).filter(r=>queue[r]).length;
   const pend=bills.length-done;
   const active=TRUCKS.filter(t=>Object.values(queue).filter(p=>p===t.plate).length>0).length;
@@ -2010,81 +2045,125 @@ function renderDashboard(){
   document.getElementById('d-pend').textContent=pend;
   document.getElementById('d-trucks').textContent=active+'/'+TRUCKS.length;
 
+  // ── อ่านข้อมูลจาก Keepdata (ชีท Google Sheet) ──
+  const allDates=[...new Set(keepData.map(r=>r.deliveryDate))]
+    .sort((a,b)=>parseDateTH(b)-parseDateTH(a));
+
+  // auto-select วันล่าสุด
+  if(dashFilterDate&&!allDates.includes(dashFilterDate))dashFilterDate=null;
+  if(!dashFilterDate&&allDates.length)dashFilterDate=allDates[0];
+
+  const rowsForDate=dashFilterDate
+    ? keepData.filter(r=>r.deliveryDate===dashFilterDate)
+    : keepData;
+
+  // ── Header bar: refresh button ──
+  let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+    <div style="font-family:Kanit;font-size:14px;font-weight:600;color:#7D6428">💾 สรุปจากชีท Keepdata</div>
+    <button id="btn-refresh-keepdata" onclick="refreshKeepdata()" style="background:#EAF0F8;border:1.5px solid #93B8DE;color:#1A5FA5;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer">🔄 รีเฟรช</button>
+  </div>`;
+
   // ── Date filter tabs ──
-  let dateTabsHtml='';
-  if(allDates.length>1){
+  if(allDates.length>0){
     const btnStyle=(active,color='#1A5FA5',bg='#EAF0F8')=>
       `padding:5px 14px;border-radius:20px;border:1.5px solid ${active?color:'#E0E5ED'};`+
       `background:${active?bg:'#fff'};color:${active?color:'#6B7A90'};`+
       `font-size:12px;font-weight:600;cursor:pointer`;
-    dateTabsHtml=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+    html+=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
       <span style="font-size:12px;color:#6B7A90;font-weight:600;margin-right:2px">📅 วันส่ง:</span>
-      <button onclick="setDashDate(null)" style="${btnStyle(!dashFilterDate,'#C9A84C','#FEF6EC')}">ทั้งหมด (${savedBillsAll.length})</button>
+      <button onclick="setDashDate(null)" style="${btnStyle(!dashFilterDate,'#C9A84C','#FEF6EC')}">ทั้งหมด (${keepData.length})</button>
       ${allDates.map(d=>{
-        const cnt=savedBillsAll.filter(b=>savedDates[b.ref]===d).length;
+        const cnt=keepData.filter(r=>r.deliveryDate===d).length;
         return`<button onclick="setDashDate('${d}')" style="${btnStyle(dashFilterDate===d)}">📅 ${d} <span style="font-size:11px;opacity:.7">(${cnt})</span></button>`;
       }).join('')}
     </div>`;
-  } else if(allDates.length===1){
-    dateTabsHtml=`<div style="font-size:12px;color:#6B7A90;margin-bottom:10px">📅 วันส่ง: <strong style="color:#07101F">${allDates[0]}</strong></div>`;
   }
 
-  // ── สรุปเฉพาะข้อมูลที่บันทึกแล้ว ต่อรถ ต่อเที่ยว ──
-  function savedLoad(plate,trip){
-    let w=0,v=0,n=0;
-    savedBills.forEach(b=>{
-      if(queue[b.ref]!==plate||(tripMap[b.ref]||1)!==trip)return;
-      w+=b.totalW;v+=b.totalV;n++;
-    });
-    return{w,v,n};
-  }
-  const trucksWithSaved=TRUCKS.filter(t=>savedBills.some(b=>queue[b.ref]===t.plate));
+  // ── Group by ทะเบียนรถ ──
+  const byPlate={};
+  rowsForDate.forEach(r=>{
+    if(!byPlate[r.plate])byPlate[r.plate]={info:r,rows:[]};
+    byPlate[r.plate].rows.push(r);
+  });
+  const platesSorted=Object.keys(byPlate).sort((a,b)=>{
+    const ia=TRUCKS.findIndex(t=>t.plate===a);
+    const ib=TRUCKS.findIndex(t=>t.plate===b);
+    return (ia<0?999:ia)-(ib<0?999:ib);
+  });
 
-  let html=dateTabsHtml;
-  html+=`<div style="font-family:Kanit;font-size:14px;font-weight:600;color:#7D6428;margin-bottom:12px">💾 สรุปที่บันทึกแล้ว — ${savedBills.length} บิล / ${trucksWithSaved.length} คัน</div>`;
-  if(!trucksWithSaved.length){
-    html+=`<div style="text-align:center;padding:30px;color:#A0ABBB">ยังไม่มีข้อมูลที่บันทึก — จัดรถแล้วกด 💾 Keepdata</div>`;
+  html+=`<div style="font-size:12px;color:#6B7A90;margin-bottom:10px">รวม ${rowsForDate.length} บิล · ${platesSorted.length} คัน${dashFilterDate?` · วัน ${dashFilterDate}`:''}</div>`;
+
+  if(!platesSorted.length){
+    if(keepDataLoading){
+      html+=`<div style="text-align:center;padding:30px;color:#A0ABBB">⏳ กำลังโหลดข้อมูลจากชีท Keepdata...</div>`;
+    } else if(keepData.length===0){
+      html+=`<div style="text-align:center;padding:30px;color:#A0ABBB">ยังไม่มีข้อมูลในชีท Keepdata — จัดรถแล้วกด 💾 Keepdata เพื่อบันทึก<br/><button onclick="refreshKeepdata()" style="margin-top:10px;background:#1A5FA5;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer">🔄 ลองรีเฟรช</button></div>`;
+    } else {
+      html+=`<div style="text-align:center;padding:30px;color:#A0ABBB">ไม่มีข้อมูลในวันที่เลือก</div>`;
+    }
   } else {
-    html+=trucksWithSaved.map(t=>{
-      let trips='';
+    html+=platesSorted.map(plate=>{
+      const grp=byPlate[plate];
+      const truck=TRUCKS.find(t=>t.plate===plate);
+      const nick=grp.info.nick||truck?.nick||'-';
+      const tType=grp.info.truckType||truck?.type||'';
+      const driver=grp.info.driver||truck?.driver||'';
+      const maxW=truck?.maxW||0;
+      const maxV=truck?.maxV||0;
+      const col=getTruckCol(plate);
+
+      // group by trip
+      const byTrip={};
+      grp.rows.forEach(r=>{
+        if(!byTrip[r.trip])byTrip[r.trip]={w:0,v:0,amt:0,n:0,bills:[]};
+        byTrip[r.trip].w+=r.weight;
+        byTrip[r.trip].v+=r.volume;
+        byTrip[r.trip].amt+=r.amount;
+        byTrip[r.trip].n++;
+        byTrip[r.trip].bills.push(r);
+      });
+      const tripKeys=Object.keys(byTrip).map(Number).sort((a,b)=>a-b);
+
       let anyFree=false;
-      [1,2,3].forEach(tr=>{
-        const ld=savedLoad(t.plate,tr);
-        if(!ld.n)return;
-        const wp=t.maxW>0?Math.round(ld.w/t.maxW*100):0;
-        const vp=t.maxV>0?Math.round(ld.v/t.maxV*100):0;
+      const tripsHtml=tripKeys.map(tr=>{
+        const ld=byTrip[tr];
+        const wp=maxW>0?Math.round(ld.w/maxW*100):0;
+        const vp=maxV>0?Math.round(ld.v/maxV*100):0;
         const eff=Math.max(wp,vp);
-        const freeW=Math.max(0,t.maxW-ld.w);
+        const freeW=Math.max(0,maxW-ld.w);
         const canAdd=eff<100&&freeW>50;
         if(canAdd)anyFree=true;
         const TE=tr===3?'🟢':tr===2?'🔵':'🔴';
-        trips+=`<div style="border-top:1px solid #EDF0F4;padding:8px 0">
+        return`<div style="border-top:1px solid #EDF0F4;padding:8px 0">
           <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
-            <span style="font-weight:700">${TE} เที่ยว ${tr} · ${ld.n} บิล</span>
+            <span style="font-weight:700">${TE} เที่ยว ${tr} · ${ld.n} บิล · ฿${fmtN(Math.round(ld.amt))}</span>
             <span style="font-weight:700;color:${eff>100?'#C62828':pcColor(eff)}">${eff}%</span>
           </div>
           <div style="height:5px;background:#E0E5ED;border-radius:3px;overflow:hidden;margin-bottom:4px">
             <div style="width:${Math.min(100,eff)}%;height:100%;background:${eff>100?'#DC3545':pcColor(eff)};border-radius:3px"></div>
           </div>
           <div style="display:flex;justify-content:space-between;font-size:11px;color:#6B7A90">
-            <span>⚖ ${fmtKg(ld.w)}/${fmtKg(t.maxW)} · 📦 ${fmtM3(ld.v)}/${fmtM3(t.maxV)}</span>
-            ${canAdd
+            <span>⚖ ${fmtKg(ld.w)}${maxW?'/'+fmtKg(maxW):''} · 📦 ${fmtM3(ld.v)}${maxV?'/'+fmtM3(maxV):''}</span>
+            ${maxW?(canAdd
               ?`<span style="color:#15803D;font-weight:600">ว่าง ${fmtKg(freeW)}</span>`
-              :`<span style="color:#C62828;font-weight:600">เต็ม</span>`}
+              :`<span style="color:#C62828;font-weight:600">เต็ม</span>`):''}
           </div>
         </div>`;
-      });
-      const col=getTruckCol(t.plate);
+      }).join('');
+
       return`<div style="background:#fff;border:1px solid #E0E5ED;border-radius:12px;padding:14px;margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${col};margin-right:6px"></span>
-            <span style="font-family:Kanit;font-weight:700;font-size:14px">${t.plate}</span>
-            <span style="font-size:12px;color:#6B7A90"> ${t.nick} · ${t.type}</span></div>
-          ${anyFree
-            ?`<button onclick="gotoTruckQueue('${t.plate}')" style="background:#15803D;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">➕ เพิ่มบิล</button>`
-            :`<span style="background:#FDECEC;color:#C62828;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700">เต็มแล้ว</span>`}
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;flex-wrap:wrap;gap:6px">
+          <div>
+            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${col};margin-right:6px"></span>
+            <span style="font-family:Kanit;font-weight:700;font-size:14px">${plate}</span>
+            <span style="font-size:12px;color:#6B7A90"> ${nick}${tType?' · '+tType:''}</span>
+            ${driver?`<div style="font-size:11px;color:#A0ABBB;margin-left:16px">🧑‍✈️ ${driver}</div>`:''}
+          </div>
+          ${truck&&anyFree
+            ?`<button onclick="gotoTruckQueue('${plate}')" style="background:#15803D;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">➕ เพิ่มบิล</button>`
+            :truck?`<span style="background:#FDECEC;color:#C62828;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700">เต็มแล้ว</span>`:''}
         </div>
-        ${trips}
+        ${tripsHtml}
       </div>`;
     }).join('');
   }
