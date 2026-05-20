@@ -404,6 +404,8 @@ function openScan(m){
   TXT('sc-t',m==='product'?'สแกนสินค้า':'สแกนออเดอร์');
   TXT('m-lbl',m==='product'?'ป้อนบาร์โคดสินค้า':'ป้อนหมายเลขออเดอร์');
   show('s-scan'); setMode('bc');
+  // Auto-focus input สำหรับ hardware scanner (handheld)
+  setTimeout(function(){var mi=$('minp');if(mi){mi.focus();mi.value='';}},250);
 }
 
 // ═══ DATA LOADING ══════════════════════════════════════════
@@ -750,6 +752,8 @@ function doManual(){
   var v=$('minp').value.trim();if(!v)return;$('minp').value='';
   if(SMODE==='product')hdProd(v);
   else{hdOrder(v);if(LSCANNED)setTimeout(useLast,300);}
+  // re-focus เพื่อพร้อมรับการยิงครั้งถัดไปจาก hardware scanner
+  setTimeout(function(){var mi=$('minp');if(mi&&$('s-scan').classList.contains('on'))mi.focus();},150);
 }
 
 // ═══ COMPLETE ════════════════════════════════════════════════
@@ -977,7 +981,19 @@ function initDash(){
   var mo=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
   TXT('d-date',dy[d.getDay()]+' '+d.getDate()+' '+mo[d.getMonth()]+' '+(d.getFullYear()+543));
 }
-$('minp').addEventListener('keydown',function(e){if(e.key==='Enter')doManual();});
+$('minp').addEventListener('keydown',function(e){
+  // Hardware barcode scanner: ส่ง Enter (13/10) หรือบางรุ่นส่ง Tab (9)
+  if(e.key==='Enter'||e.keyCode===13||e.keyCode===10||e.key==='Tab'||e.keyCode===9){
+    e.preventDefault();
+    doManual();
+  }
+});
+// re-focus input หลัง doManual เพื่อพร้อมรับการยิงครั้งถัดไป
+$('minp').addEventListener('blur',function(){
+  if($('s-scan').classList.contains('on')){
+    setTimeout(function(){var mi=$('minp');if(mi&&$('s-scan').classList.contains('on'))mi.focus();},100);
+  }
+});
 window.addEventListener('pageshow',function(e){if(e.persisted)doRefresh();});
 initDash();
 doRefresh();
