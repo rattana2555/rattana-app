@@ -635,6 +635,10 @@ let selRefs=new Set();
 // บิลที่จัดรถ + บันทึกลงชีทแล้ว → ซ่อนจากหน้าจัดรถ (แต่ยังนับน้ำหนักรถ)
 let savedRefs=new Set();
 try{savedRefs=new Set(JSON.parse(localStorage.getItem('dq_v4_saved')||'[]'));}catch(e){}
+// เก็บว่าแต่ละบิลบันทึกวันไหน {ref: "20/05/2568"}
+let savedDates={};
+try{savedDates=JSON.parse(localStorage.getItem('dq_v4_saved_dates')||'{}');}catch(e){}
+let dashFilterDate=null;  // วันที่กรองใน Dashboard
 
 // ── Helpers ──
 const fmtN = n => Number(n).toLocaleString('th-TH');
@@ -1949,8 +1953,9 @@ async function doSave(){
 
     localStorage.setItem('keepdata_bk',JSON.stringify({savedAt:now,rows}));
     // mark บิลที่จัดรถแล้ว ว่า "บันทึกแล้ว" → หายจากหน้าจัดรถ
-    Object.keys(queue).forEach(r=>{if(queue[r])savedRefs.add(r);});
+    Object.keys(queue).forEach(r=>{if(queue[r]){savedRefs.add(r);savedDates[r]=_deliveryDate;}});
     try{localStorage.setItem('dq_v4_saved',JSON.stringify([...savedRefs]));}catch(e){}
+    try{localStorage.setItem('dq_v4_saved_dates',JSON.stringify(savedDates));}catch(e){}
     isDirty=false;
     updateSyncBadge();
     showToast(`✅ ${result.message}`,'ok');
@@ -1972,8 +1977,31 @@ function gotoTruckQueue(plate){
   renderTruckCards();renderBillTable();updateQueueSub();
 }
 
+function parseDateTH(s){
+  if(!s)return 0;
+  const p=String(s).split('/');
+  if(p.length!==3)return 0;
+  let y=parseInt(p[2]);
+  if(y>2500)y-=543;
+  return new Date(y,parseInt(p[1])-1,parseInt(p[0])).getTime();
+}
+function setDashDate(d){dashFilterDate=d;renderDashboard();}
+
 function renderDashboard(){
-  const savedBills=bills.filter(b=>savedRefs.has(b.ref)&&queue[b.ref]);
+  const savedBillsAll=bills.filter(b=>savedRefs.has(b.ref)&&queue[b.ref]);
+
+  // รวบรวมวันที่ที่มีข้อมูลบันทึก (เรียงใหม่→เก่า)
+  const allDates=[...new Set(savedBillsAll.map(b=>savedDates[b.ref]).filter(Boolean))];
+  allDates.sort((a,b)=>parseDateTH(b)-parseDateTH(a));
+
+  // auto-select วันล่าสุดถ้ายังไม่ได้เลือก หรือวันที่เลือกไม่มีข้อมูลแล้ว
+  if(dashFilterDate&&!allDates.includes(dashFilterDate))dashFilterDate=null;
+  if(!dashFilterDate&&allDates.length)dashFilterDate=allDates[0];
+
+  const savedBills=dashFilterDate
+    ? savedBillsAll.filter(b=>savedDates[b.ref]===dashFilterDate)
+    : savedBillsAll;
+
   const done=Object.keys(queue).filter(r=>queue[r]).length;
   const pend=bills.length-done;
   const active=TRUCKS.filter(t=>Object.values(queue).filter(p=>p===t.plate).length>0).length;
@@ -1981,6 +2009,25 @@ function renderDashboard(){
   document.getElementById('d-done').textContent=done;
   document.getElementById('d-pend').textContent=pend;
   document.getElementById('d-trucks').textContent=active+'/'+TRUCKS.length;
+
+  // ── Date filter tabs ──
+  let dateTabsHtml='';
+  if(allDates.length>1){
+    const btnStyle=(active,color='#1A5FA5',bg='#EAF0F8')=>
+      `padding:5px 14px;border-radius:20px;border:1.5px solid ${active?color:'#E0E5ED'};`+
+      `background:${active?bg:'#fff'};color:${active?color:'#6B7A90'};`+
+      `font-size:12px;font-weight:600;cursor:pointer`;
+    dateTabsHtml=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+      <span style="font-size:12px;color:#6B7A90;font-weight:600;margin-right:2px">📅 วันส่ง:</span>
+      <button onclick="setDashDate(null)" style="${btnStyle(!dashFilterDate,'#C9A84C','#FEF6EC')}">ทั้งหมด (${savedBillsAll.length})</button>
+      ${allDates.map(d=>{
+        const cnt=savedBillsAll.filter(b=>savedDates[b.ref]===d).length;
+        return`<button onclick="setDashDate('${d}')" style="${btnStyle(dashFilterDate===d)}">📅 ${d} <span style="font-size:11px;opacity:.7">(${cnt})</span></button>`;
+      }).join('')}
+    </div>`;
+  } else if(allDates.length===1){
+    dateTabsHtml=`<div style="font-size:12px;color:#6B7A90;margin-bottom:10px">📅 วันส่ง: <strong style="color:#07101F">${allDates[0]}</strong></div>`;
+  }
 
   // ── สรุปเฉพาะข้อมูลที่บันทึกแล้ว ต่อรถ ต่อเที่ยว ──
   function savedLoad(plate,trip){
@@ -1993,7 +2040,8 @@ function renderDashboard(){
   }
   const trucksWithSaved=TRUCKS.filter(t=>savedBills.some(b=>queue[b.ref]===t.plate));
 
-  let html=`<div style="font-family:Kanit;font-size:14px;font-weight:600;color:#7D6428;margin-bottom:12px">💾 สรุปที่บันทึกแล้ว — ${savedBills.length} บิล / ${trucksWithSaved.length} คัน</div>`;
+  let html=dateTabsHtml;
+  html+=`<div style="font-family:Kanit;font-size:14px;font-weight:600;color:#7D6428;margin-bottom:12px">💾 สรุปที่บันทึกแล้ว — ${savedBills.length} บิล / ${trucksWithSaved.length} คัน</div>`;
   if(!trucksWithSaved.length){
     html+=`<div style="text-align:center;padding:30px;color:#A0ABBB">ยังไม่มีข้อมูลที่บันทึก — จัดรถแล้วกด 💾 Keepdata</div>`;
   } else {
