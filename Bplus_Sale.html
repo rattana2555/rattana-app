@@ -1502,12 +1502,19 @@ function renderStockProducts(){
   const hasSI=saleInRows.length>0;
   const hasSales=allRows.length>0;
   // common scale across stock, sale-in, sales
-  const allVals=rows.flatMap(r=>{
+  // ใช้ reduce แทน spread เพื่อรองรับ array ขนาดใหญ่ (ไม่ crash call stack)
+  let maxCombined=1;
+  rows.forEach(r=>{
     const si=siMap[r.name]||{W1:0,W2:0,W3:0,W4:0};
     const sale=salesMap[r.name]||{W1:0,W2:0,W3:0,W4:0};
-    return WH_LIST.flatMap(w=>[r['w'+w.slice(1).toLowerCase()]||0,si[w]||0,sale[w]||0]);
+    WH_LIST.forEach(w=>{
+      const v1=r['w'+w.slice(1).toLowerCase()]||0;
+      const v2=si[w]||0;const v3=sale[w]||0;
+      if(v1>maxCombined)maxCombined=v1;
+      if(v2>maxCombined)maxCombined=v2;
+      if(v3>maxCombined)maxCombined=v3;
+    });
   });
-  const maxCombined=Math.max(...allVals,1);
 
   $('stockProductList').innerHTML=rows.slice(0,200).map(r=>{
     const displayTotal=isFilt?getStockVal(r):r.w1+r.w2+r.w3+r.w4;
