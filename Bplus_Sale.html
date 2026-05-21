@@ -383,11 +383,20 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
       </div>
     </div>
 
-    <div class="section">
+    <!-- year view: monthly bar chart -->
+    <div class="section" id="yearMonthSection" style="display:none">
+      <div class="section-head"><div class="section-title" id="yearMonthTitle">ยอดขายรายเดือน</div></div>
+      <div class="chart-card" style="margin-bottom:12px">
+        <div class="big-chart-wrap"><canvas id="yearMonthChart"></canvas></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px" id="yearMonthList"></div>
+    </div>
+    <!-- normal view: cat list + mini chart -->
+    <div class="section" id="catSection">
       <div class="section-head"><div class="section-title">แยกตาม Cat_BU</div><div class="section-link" id="seeAllCat">ดูทั้งหมด →</div></div>
       <div class="cat-list" id="catList"></div>
     </div>
-    <div class="section">
+    <div class="section" id="miniChartSection">
       <div class="section-head"><div class="section-title">7 วันย้อนหลัง</div></div>
       <div class="chart-card"><div class="chart-wrap"><canvas id="miniChart"></canvas></div></div>
     </div>
@@ -1097,7 +1106,12 @@ function renderHome(){
       </div>
     </div>`;
   }).join('');
-  renderMiniChart(getLast7Days());
+  const isYear=selectedPeriod==='year';
+  $('yearMonthSection').style.display=isYear?'':'none';
+  $('catSection').style.display=isYear?'none':'';
+  $('miniChartSection').style.display=isYear?'none':'';
+  if(isYear)renderYearMonthChart();
+  else renderMiniChart(getLast7Days());
 }
 function prevPeriodRows(){
   const t=new Date();t.setHours(0,0,0,0);
@@ -1111,6 +1125,61 @@ function getLast7Days(){
     const sum=allRows.filter(r=>{if(selectedWH!=='all'&&r.wh!==selectedWH)return false;const rd=parseTHDate(r.date);return rd&&toISO(rd)===ds;}).reduce((s,r)=>s+r.baht,0);
     result.push({baht:sum,label:`${d.getDate()}/${d.getMonth()+1}`});}
   return result;
+}
+function renderYearMonthChart(){
+  const TH_M=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const curY=new Date().getFullYear();
+  const src=[...yearlyRows,...(selectedYear===curY?allRows:[])];
+  // monthly totals per Cat_BU
+  const byMonthCat={};
+  TARGET_CATS.forEach(c=>{byMonthCat[c]=Array(12).fill(0);});
+  src.forEach(r=>{
+    const d=parseTHDate(r.date);if(!d||d.getFullYear()!==selectedYear)return;
+    if(selectedWH!=='all'&&r.wh!==selectedWH)return;
+    const mo=d.getMonth();
+    if(byMonthCat[r.cat]!==undefined)byMonthCat[r.cat][mo]+=r.baht;
+  });
+  const monthTotals=Array(12).fill(0);
+  TARGET_CATS.forEach(c=>byMonthCat[c].forEach((v,i)=>monthTotals[i]+=v));
+  $('yearMonthTitle').textContent=`ยอดขายรายเดือน ปี ${selectedYear+543}`;
+  if(charts.yearMonth)charts.yearMonth.destroy();
+  const CAT_COLORS={
+    'Bplus FMCG':'#1a6fb8','Bplus Thaibev Al':'#f59e0b','Bplus บุหรี่':'#ef4444','F&N':'#00b14f'
+  };
+  charts.yearMonth=new Chart($('yearMonthChart').getContext('2d'),{
+    type:'bar',
+    data:{
+      labels:TH_M,
+      datasets:TARGET_CATS.map(cat=>({
+        label:cat.replace('Bplus ',''),
+        data:byMonthCat[cat],
+        backgroundColor:CAT_COLORS[cat]+'cc',
+        borderRadius:4,stack:'s'
+      }))
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:true,position:'bottom',labels:{font:{size:10,family:'Sarabun'},boxWidth:10,padding:8}},
+        tooltip:{callbacks:{label:c=>`${c.dataset.label}: ฿${fmtBaht(c.parsed.y)}`}}},
+      scales:{
+        x:{stacked:true,ticks:{color:'#8a9e8f',font:{size:10,family:'Sarabun'}},grid:{display:false},border:{display:false}},
+        y:{stacked:true,ticks:{color:'#8a9e8f',font:{size:9,family:'Sarabun'},callback:v=>fmtBaht(v)},grid:{color:'rgba(0,0,0,.04)'},border:{display:false}}
+      }}
+  });
+  // month summary list
+  const maxV=Math.max(...monthTotals,1);
+  $('yearMonthList').innerHTML=TH_M.map((lbl,i)=>{
+    if(monthTotals[i]===0)return'';
+    const pct=Math.round(monthTotals[i]/maxV*100);
+    return`<div style="background:var(--card);border-radius:var(--radius-md);padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,.04)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-size:13px;font-weight:700;color:var(--text)">${lbl}</div>
+        <div style="font-size:13px;font-weight:800;color:var(--text)" class="num">฿${fmtBaht(monthTotals[i])}</div>
+      </div>
+      <div style="height:5px;background:var(--bg);border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:var(--green);border-radius:3px;transition:width .4s"></div>
+      </div>
+    </div>`;
+  }).join('');
 }
 function renderMiniChart(data){
   if(charts.mini)charts.mini.destroy();
