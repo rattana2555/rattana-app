@@ -409,6 +409,15 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
     <div class="header-row"><div class="page-title">📊 รายงาน</div><button class="icon-btn" id="uploadBtn">📂</button></div>
   </div>
   <div class="scroll-area">
+    <!-- Top 20 section (แสดงเมื่อกด Cat จาก Home) -->
+    <div class="section" id="top20Section" style="display:none">
+      <div class="section-head">
+        <div class="section-title" id="top20Title">🏆 Top 20 สินค้า</div>
+        <div class="section-link" id="top20CloseBtn">✕ ปิด</div>
+      </div>
+      <div id="top20List"></div>
+    </div>
+
     <div class="section"><div class="stat-grid" id="reportStats"></div></div>
 
     <!-- Target section -->
@@ -1027,6 +1036,57 @@ function getTimeUse(){
   return{totalWD,elapsedWD,pct:totalWD>0?Math.round(elapsedWD/totalWD*100):0};
 }
 
+function openCatReport(cat){
+  // ไปหน้า Reports แล้วแสดง Top 20 ของ cat นั้น
+  showPage('Reports');
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
+  document.querySelector('.nav-item[data-page="Reports"]').classList.add('active');
+  renderReports();
+  renderTop20(cat);
+  // scroll ขึ้นบนสุด
+  const sa=document.querySelector('#pageReports .scroll-area');
+  if(sa)sa.scrollTop=0;
+}
+
+function renderTop20(cat){
+  const sec=$('top20Section');
+  const rows=filterRows(selectedPeriod,selectedWH).filter(r=>r.cat===cat);
+  const prodMap={};
+  rows.forEach(r=>{
+    if(!prodMap[r.product])prodMap[r.product]={name:r.product,baht:0,cs:0};
+    prodMap[r.product].baht+=r.baht;
+    prodMap[r.product].cs+=r.cs;
+  });
+  const top20=Object.values(prodMap).sort((a,b)=>b.baht-a.baht).slice(0,20);
+  const meta=CAT_META[cat]||{icon:'📦',color:'#1a6fb8'};
+  $('top20Title').textContent=`${meta.icon} Top 20 สินค้า — ${cat}`;
+  if(!top20.length){
+    $('top20List').innerHTML='<div class="empty">ไม่มีข้อมูลในช่วงนี้</div>';
+    sec.style.display='';return;
+  }
+  const maxBaht=top20[0].baht;
+  $('top20List').innerHTML=top20.map((p,i)=>{
+    const pct=Math.round(p.baht/maxBaht*100);
+    return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span style="font-size:11px;font-weight:800;color:var(--muted);width:20px;text-align:center">${i+1}</span>
+        <div style="flex:1;font-size:13px;font-weight:600;color:var(--text);line-height:1.3">${p.name}</div>
+        <div style="text-align:right;flex-shrink:0">
+          <div class="num" style="font-size:13px;font-weight:700;color:var(--green)">฿${fmtBaht(p.baht)}</div>
+          <div class="num" style="font-size:11px;color:var(--muted)">${fmtCs(p.cs)} ลัง</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;padding-left:28px">
+        <div style="flex:1;height:4px;background:var(--border);border-radius:2px">
+          <div style="width:${pct}%;height:100%;background:${meta.color||'var(--green)'};border-radius:2px"></div>
+        </div>
+        <span style="font-size:10px;color:var(--muted);width:30px;text-align:right">${pct}%</span>
+      </div>
+    </div>`;
+  }).join('');
+  sec.style.display='';
+}
+
 function renderAll(){renderHome();renderReports();renderProducts();renderStock();renderProfile();}
 
 function renderHome(){
@@ -1134,7 +1194,7 @@ function renderHome(){
     const meta=CAT_META[cat];const d=byCat[cat];
     const tgt=tgtByCat[cat]||0,act=actByCat[cat]||0;
     const pct=tgt>0?Math.round(act/tgt*100):0;const hasT=tgt>0;const rem=tgt-act;
-    return `<div class="cat-item">
+    return `<div class="cat-item" onclick="openCatReport('${cat}')" style="cursor:pointer">
       <div class="cat-item-top">
         <div class="cat-icon" style="background:${meta.bg}">${meta.icon}</div>
         <div class="cat-info"><div class="cat-name">${cat}</div><div class="cat-txn">${d.txn.toLocaleString()} transactions</div></div>
@@ -1723,6 +1783,7 @@ $('profileStockCsvInput').addEventListener('change',function(){handleStockCSV(th
 $('profileTargetCsvInput').addEventListener('change',function(){handleTargetCSV(this);});
 $('profileYearlyCsvInput').addEventListener('change',function(){handleYearlyCSV(this);});
 $('seeAllCat').addEventListener('click',()=>{document.querySelector('[data-page="Reports"]').click();});
+$('top20CloseBtn').addEventListener('click',()=>{$('top20Section').style.display='none';});
 
 // ── Boot ─────────────────────────────────────────────────────
 fetchData();
