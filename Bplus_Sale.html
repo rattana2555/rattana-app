@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Rattana Bplus Sales v6.1</title>
+<title>Rattana Bplus Sales v6.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
@@ -567,7 +567,7 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
         <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;font-weight:600">ข้อมูลยอดขาย</span><span style="font-size:12px;color:var(--muted)" id="totalRows">—</span></div>
         <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;font-weight:600">ข้อมูลสต็อก</span><span style="font-size:12px;color:var(--muted)" id="totalStockRows">—</span></div>
         <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;font-weight:600">ข้อมูลซื้อเข้า</span><span style="font-size:12px;color:var(--muted)" id="totalSaleInRows">—</span></div>
-        <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;font-weight:600">เวอร์ชัน</span><span style="font-size:12px;color:var(--muted)">v6.1 · 2026-05-21</span></div>
+        <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;font-weight:600">เวอร์ชัน</span><span style="font-size:12px;color:var(--muted)">v6.2 · 2026-05-21</span></div>
       </div>
       <div style="margin-top:12px">
         <button onclick="fetchAll()" style="width:100%;padding:14px;background:var(--green);color:#fff;border:none;border-radius:var(--radius-md);font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">🔄 รีเฟรชทั้งหมด</button>
@@ -610,8 +610,11 @@ const YEARLY_GAS_URL = 'https://script.google.com/macros/s/AKfycbwvDa8SnKx7VNXbG
 const SHEET_ID  = '1QIusvLuKv38mYDszVd093qzuD6DD8462QkZCTHpUw6s';
 const YEARLY_GID= '457977006';
 const SHEET_GID = '1606652398';
+const PDDT_GID = '1116946300';
 const PDDT_CSV_URLS = [
+  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${PDDT_GID}`,
   `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&sheet=PDDT`,
+  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${PDDT_GID}`,
   `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=PDDT`,
 ];
 const TARGET_GID= '835856164';
@@ -937,31 +940,46 @@ function handleTargetCSV(input){
 // ── Fetch Stock ──────────────────────────────────────────────
 async function fetchStock(){
   if($('stockCatList'))$('stockCatList').innerHTML='<div class="loading-stock">⏳ กำลังโหลดสต็อก...</div>';
-  // ลอง GAS ก่อน
-  try{
-    const res=await fetch(STOCK_GAS_URL,{redirect:'follow'});if(!res.ok)throw new Error('HTTP '+res.status);
-    const json=await res.json();if(json.error)throw new Error(json.error);
-    stockRows=json.rows.map(r=>({name:String(r.name||'').trim(),cat_bu:String(r.cat_bu||'').trim(),
-      w1:Number(r.w1)||0,w2:Number(r.w2)||0,w3:Number(r.w3)||0,w4:Number(r.w4)||0}));
-    if(stockRows.length){
-      stockSourceLabel='Stock GAS ✅';renderStock();renderReports();renderProfile();
-      toast(`สต็อก ${stockRows.length.toLocaleString()} สินค้า 📦`);return;
-    }
-  }catch(e){console.warn('Stock GAS:',e.message);}
-  // fallback: CSV จาก PDDT
+  // ลอง GAS ก่อน (ถ้ามี URL)
+  if(STOCK_GAS_URL){
+    try{
+      const res=await fetch(STOCK_GAS_URL,{redirect:'follow'});if(!res.ok)throw new Error('HTTP '+res.status);
+      const json=await res.json();if(json.error)throw new Error(json.error);
+      stockRows=json.rows.map(r=>({name:String(r.name||'').trim(),cat_bu:String(r.cat_bu||'').trim(),
+        w1:Number(r.w1)||0,w2:Number(r.w2)||0,w3:Number(r.w3)||0,w4:Number(r.w4)||0}));
+      if(stockRows.length){
+        stockSourceLabel='Stock GAS ✅';renderStock();renderReports();renderProfile();
+        toast(`สต็อก ${stockRows.length.toLocaleString()} สินค้า 📦`);return;
+      }
+    }catch(e){console.warn('Stock GAS:',e.message);}
+  }
+  // โหลด CSV จาก PDDT sheet
+  const csvErrors=[];
   for(let i=0;i<PDDT_CSV_URLS.length;i++){
     try{
       const res=await fetch(PDDT_CSV_URLS[i],{redirect:'follow'});if(!res.ok)throw new Error('HTTP '+res.status);
-      const txt=await res.text();if(!txt||txt.length<10)throw new Error('empty');
+      const txt=await res.text();
+      if(!txt||txt.length<10)throw new Error('empty response');
+      if(txt.trimStart().startsWith('<'))throw new Error('ได้ HTML กลับมา — sheet ยังไม่ได้ตั้งค่า Share public');
       parseStockCSV(txt);
       if(stockRows.length){
         stockSourceLabel='PDDT CSV ✅';renderStock();renderReports();renderProfile();
         toast(`สต็อก ${stockRows.length.toLocaleString()} สินค้า 📦`);return;
-      }
-    }catch(e){console.warn('PDDT CSV '+i+':',e.message);}
+      }else{throw new Error('parse OK แต่ไม่พบสินค้า — ตรวจสอบ column Product_Name');}
+    }catch(e){csvErrors.push(`URL${i+1}: ${e.message}`);console.warn('PDDT CSV '+i+':',e.message);}
   }
   stockSourceLabel='โหลดไม่ได้ ❌';
-  if($('stockCatList'))$('stockCatList').innerHTML='<div class="empty">⚠️ โหลดสต็อกไม่ได้<br><small>อัปโหลด CSV ในโปรไฟล์</small></div>';
+  if($('stockCatList'))$('stockCatList').innerHTML=`
+    <div class="empty" style="padding:24px 16px;text-align:center">
+      <div style="font-size:32px;margin-bottom:8px">📦</div>
+      <div style="font-weight:700;margin-bottom:4px">โหลดสต็อกไม่ได้</div>
+      <div style="font-size:12px;color:var(--red);background:#fff0f0;border-radius:8px;padding:8px 12px;margin:8px 0 16px;text-align:left;line-height:1.6">${csvErrors.map(e=>`• ${e}`).join('<br>')}</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:16px">หรืออัปโหลดไฟล์ CSV จาก PDDT sheet</div>
+      <label style="display:inline-flex;align-items:center;gap:6px;padding:10px 20px;background:var(--green);color:#fff;border-radius:20px;font-weight:700;font-size:14px;cursor:pointer">
+        📂 อัปโหลด CSV สต็อก
+        <input type="file" accept=".csv" style="display:none" onchange="handleStockCSV(this)">
+      </label>
+    </div>`;
   if($('stockSource'))$('stockSource').textContent=stockSourceLabel;
   toast('โหลดสต็อกไม่ได้','err');
 }
