@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v10.4</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v10.5</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -316,7 +316,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v10.4</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v10.5</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -2027,6 +2027,7 @@ async function loadKeepdata(silent=false){
     const rows=await fetchSheet('Keepdata');
     keepData=rows.map(r=>({
       billDate    : r['วันที่บิล']||'',
+      _rawDate    : r['วันที่ส่ง']||'',                // ดิบจากชีท (debug)
       deliveryDate: fmtDateKey(r['วันที่ส่ง']||''),  // normalize format
       ref         : r['เลขบิล']||'',
       arCode      : r['รหัสร้านค้า']||'',
@@ -2122,6 +2123,16 @@ function renderDashboard(){
   });
 
   html+=`<div style="font-size:12px;color:#6B7A90;margin-bottom:10px">รวม ${rowsForDate.length} บิล · ${platesSorted.length} คัน${dashFilterDate?` · วัน ${dashFilterDate}`:''}</div>`;
+
+  // ── Debug panel: แสดงวันที่ทั้งหมดที่เจอในชีท (raw + normalized) ──
+  const rawSample=[...new Set(keepData.slice(0,200).map(r=>r._rawDate))].slice(0,10);
+  const normCounts=allDates.map(d=>`${d}(${keepData.filter(r=>r.deliveryDate===d).length})`).join(' · ');
+  html+=`<details style="margin-bottom:12px;font-size:11px;color:#6B7A90;background:#F8F9FB;border:1px solid #E0E5ED;border-radius:8px;padding:8px 12px">
+    <summary style="cursor:pointer;font-weight:600">🔍 Debug: วันที่ที่อ่านได้จากชีท (กดเปิด)</summary>
+    <div style="margin-top:6px"><b>วันที่ normalize แล้ว:</b> ${normCounts||'(ว่าง)'}</div>
+    <div style="margin-top:4px"><b>วันที่ดิบจากชีท (ตัวอย่าง):</b> ${rawSample.map(s=>`"${s}"`).join(', ')||'(ว่าง)'}</div>
+    <div style="margin-top:4px"><b>กำลังกรอง:</b> ${dashFilterDate||'(ทั้งหมด)'} → ${rowsForDate.length} แถว</div>
+  </details>`;
 
   if(!platesSorted.length){
     if(keepDataLoading){
