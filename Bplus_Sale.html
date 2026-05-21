@@ -603,7 +603,7 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
 <script>
 // ── Config ──────────────────────────────────────────────────
 const GAS_URL        = 'https://script.google.com/macros/s/AKfycby4h3bvctWeLWRUCOy7VMtKhzxuCtWCYiFp_1HhCtTy_705TS2UmSpykZv9p01hkqc_IQ/exec';
-const STOCK_GAS_URL  = 'https://script.google.com/macros/s/AKfycbzps0d73Utoxo0vDBNQJhL6Wbcb3o4MuKx_gQufkPMU4r1QqproIAu2eCC8KE82HMdHlA/exec';
+const STOCK_GAS_URL  = 'https://script.google.com/macros/s/AKfycbyvlUUdRy_zz6Wbkhs5v2vJJK2229FN8mn11zwJ2Imo0NaFRQrDuOaRE5LwFh0E4JAGSg/exec';
 const SALE_IN_GAS_URL= 'https://script.google.com/macros/s/AKfycbyYpsynRXlHm5fwQzi3PG9gRoi35VdaY9QmXYLIgZAoX441JqWkgF_NIL6U6XZO3keWrg/exec';
 const YEARLY_GAS_URL = 'https://script.google.com/macros/s/AKfycbwvDa8SnKx7VNXbGmP3ErVuxHqAki4a2s6TwkYNYr-JkUCRoWRMSd2DmRSiR0kGH1hh3Q/exec';
 
@@ -937,13 +937,25 @@ function handleTargetCSV(input){
 // ── Fetch Stock ──────────────────────────────────────────────
 async function fetchStock(){
   if($('stockCatList'))$('stockCatList').innerHTML='<div class="loading-stock">⏳ กำลังโหลดสต็อก...</div>';
+  // ลอง GAS ก่อน
+  try{
+    const res=await fetch(STOCK_GAS_URL,{redirect:'follow'});if(!res.ok)throw new Error('HTTP '+res.status);
+    const json=await res.json();if(json.error)throw new Error(json.error);
+    stockRows=json.rows.map(r=>({name:String(r.name||'').trim(),cat_bu:String(r.cat_bu||'').trim(),
+      w1:Number(r.w1)||0,w2:Number(r.w2)||0,w3:Number(r.w3)||0,w4:Number(r.w4)||0}));
+    if(stockRows.length){
+      stockSourceLabel='Stock GAS ✅';renderStock();renderReports();renderProfile();
+      toast(`สต็อก ${stockRows.length.toLocaleString()} สินค้า 📦`);return;
+    }
+  }catch(e){console.warn('Stock GAS:',e.message);}
+  // fallback: CSV จาก PDDT
   for(let i=0;i<PDDT_CSV_URLS.length;i++){
     try{
       const res=await fetch(PDDT_CSV_URLS[i],{redirect:'follow'});if(!res.ok)throw new Error('HTTP '+res.status);
       const txt=await res.text();if(!txt||txt.length<10)throw new Error('empty');
       parseStockCSV(txt);
       if(stockRows.length){
-        stockSourceLabel='PDDT ✅';renderStock();renderReports();renderProfile();
+        stockSourceLabel='PDDT CSV ✅';renderStock();renderReports();renderProfile();
         toast(`สต็อก ${stockRows.length.toLocaleString()} สินค้า 📦`);return;
       }
     }catch(e){console.warn('PDDT CSV '+i+':',e.message);}
@@ -951,7 +963,7 @@ async function fetchStock(){
   stockSourceLabel='โหลดไม่ได้ ❌';
   if($('stockCatList'))$('stockCatList').innerHTML='<div class="empty">⚠️ โหลดสต็อกไม่ได้<br><small>อัปโหลด CSV ในโปรไฟล์</small></div>';
   if($('stockSource'))$('stockSource').textContent=stockSourceLabel;
-  toast('โหลด PDDT ไม่ได้','err');
+  toast('โหลดสต็อกไม่ได้','err');
 }
 function handleStockCSV(input){
   const file=input.files[0];if(!file)return;showSpinner('อ่านไฟล์ Stock...');
@@ -963,14 +975,15 @@ function handleStockCSV(input){
 function parseStockCSV(text){
   text=text.replace(/^\uFEFF/,'');const lines=text.split('\n');if(lines.length<2)return;
   const headers=parseCsvLine(lines[0]).map(h=>h.replace(/\r/,'').trim());
-  const ci={};headers.forEach((h,i)=>ci[h]=i);
-  // \u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A\u0E17\u0E31\u0E49\u0E07 PDDT (PRODUCT NAME, STOCK W1) \u0E41\u0E25\u0E30 format \u0E40\u0E01\u0E48\u0E32 (Product_Name, W1)
-  const nI =ci['PRODUCT NAME']??ci['Product_Name']??ci['product_name']??-1;
-  const buI=ci['CAT BU']??ci['Cat_BU']??ci['cat_bu']??-1;
-  const w1I=ci['STOCK W1']??ci['W1']??ci['w1']??-1;
-  const w2I=ci['STOCK W2']??ci['W2']??ci['w2']??-1;
-  const w3I=ci['STOCK W3']??ci['W3']??ci['w3']??-1;
-  const w4I=ci['STOCK W4']??ci['W4']??ci['w4']??-1;
+  // case-insensitive + normalize spaces/underscore
+  const norm=s=>s.toLowerCase().replace(/[\s_]+/g,'');
+  const ci={};headers.forEach((h,i)=>ci[norm(h)]=i);
+  const nI =ci['productname']??-1;
+  const buI=ci['catbu']??-1;
+  const w1I=ci['stockw1']??ci['w1']??-1;
+  const w2I=ci['stockw2']??ci['w2']??-1;
+  const w3I=ci['stockw3']??ci['w3']??-1;
+  const w4I=ci['stockw4']??ci['w4']??-1;
   if(nI<0)return;
   stockRows=[];
   for(let i=1;i<lines.length;i++){
