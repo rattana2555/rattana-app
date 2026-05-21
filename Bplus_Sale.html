@@ -610,6 +610,10 @@ const YEARLY_GAS_URL = 'https://script.google.com/macros/s/AKfycbwvDa8SnKx7VNXbG
 const SHEET_ID  = '1QIusvLuKv38mYDszVd093qzuD6DD8462QkZCTHpUw6s';
 const YEARLY_GID= '457977006';
 const SHEET_GID = '1606652398';
+const PDDT_CSV_URLS = [
+  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&sheet=PDDT`,
+  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=PDDT`,
+];
 const TARGET_GID= '835856164';
 const TARGET_CSV_URLS = [
   `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${TARGET_GID}`,
@@ -933,19 +937,21 @@ function handleTargetCSV(input){
 // ── Fetch Stock ──────────────────────────────────────────────
 async function fetchStock(){
   if($('stockCatList'))$('stockCatList').innerHTML='<div class="loading-stock">⏳ กำลังโหลดสต็อก...</div>';
-  try{
-    const res=await fetch(STOCK_GAS_URL,{redirect:'follow'});if(!res.ok)throw new Error('HTTP '+res.status);
-    const json=await res.json();if(json.error)throw new Error(json.error);
-    stockRows=json.rows.map(r=>({name:String(r.name||'').trim(),cat_bu:String(r.cat_bu||'').trim(),
-      w1:Number(r.w1)||0,w2:Number(r.w2)||0,w3:Number(r.w3)||0,w4:Number(r.w4)||0}));
-    stockSourceLabel='Stock GAS ✅';renderStock();renderReports();renderProfile();
-    toast(`สต็อก ${stockRows.length.toLocaleString()} สินค้า 📦`);return;
-  }catch(e){
-    console.warn('Stock GAS:',e.message);stockSourceLabel='โหลดไม่ได้ ❌';
-    if($('stockCatList'))$('stockCatList').innerHTML='<div class="empty">⚠️ โหลดสต็อกไม่ได้<br><small>อัปโหลด CSV ในโปรไฟล์</small></div>';
-    if($('stockSource'))$('stockSource').textContent=stockSourceLabel;
-    toast('โหลดสต็อกไม่ได้','err');
+  for(let i=0;i<PDDT_CSV_URLS.length;i++){
+    try{
+      const res=await fetch(PDDT_CSV_URLS[i],{redirect:'follow'});if(!res.ok)throw new Error('HTTP '+res.status);
+      const txt=await res.text();if(!txt||txt.length<10)throw new Error('empty');
+      parseStockCSV(txt);
+      if(stockRows.length){
+        stockSourceLabel='PDDT ✅';renderStock();renderReports();renderProfile();
+        toast(`สต็อก ${stockRows.length.toLocaleString()} สินค้า 📦`);return;
+      }
+    }catch(e){console.warn('PDDT CSV '+i+':',e.message);}
   }
+  stockSourceLabel='โหลดไม่ได้ ❌';
+  if($('stockCatList'))$('stockCatList').innerHTML='<div class="empty">⚠️ โหลดสต็อกไม่ได้<br><small>อัปโหลด CSV ในโปรไฟล์</small></div>';
+  if($('stockSource'))$('stockSource').textContent=stockSourceLabel;
+  toast('โหลด PDDT ไม่ได้','err');
 }
 function handleStockCSV(input){
   const file=input.files[0];if(!file)return;showSpinner('อ่านไฟล์ Stock...');
@@ -958,12 +964,19 @@ function parseStockCSV(text){
   text=text.replace(/^\uFEFF/,'');const lines=text.split('\n');if(lines.length<2)return;
   const headers=parseCsvLine(lines[0]).map(h=>h.replace(/\r/,'').trim());
   const ci={};headers.forEach((h,i)=>ci[h]=i);
-  const nI=ci['Product_Name'],buI=ci['Cat_BU'],w1I=ci['W1'],w2I=ci['W2'],w3I=ci['W3'],w4I=ci['W4'];
+  // \u0E23\u0E2D\u0E07\u0E23\u0E31\u0E1A\u0E17\u0E31\u0E49\u0E07 PDDT (PRODUCT NAME, STOCK W1) \u0E41\u0E25\u0E30 format \u0E40\u0E01\u0E48\u0E32 (Product_Name, W1)
+  const nI =ci['PRODUCT NAME']??ci['Product_Name']??ci['product_name']??-1;
+  const buI=ci['CAT BU']??ci['Cat_BU']??ci['cat_bu']??-1;
+  const w1I=ci['STOCK W1']??ci['W1']??ci['w1']??-1;
+  const w2I=ci['STOCK W2']??ci['W2']??ci['w2']??-1;
+  const w3I=ci['STOCK W3']??ci['W3']??ci['w3']??-1;
+  const w4I=ci['STOCK W4']??ci['W4']??ci['w4']??-1;
+  if(nI<0)return;
   stockRows=[];
   for(let i=1;i<lines.length;i++){
     const cols=parseCsvLine(lines[i]);const name=(cols[nI]||'').replace(/\r/,'').trim();if(!name)continue;
-    const n=j=>j!==undefined?parseFloat(String(cols[j]||'0').replace(/,/g,''))||0:0;
-    stockRows.push({name,cat_bu:buI!==undefined?String(cols[buI]||'').trim():'',w1:n(w1I),w2:n(w2I),w3:n(w3I),w4:n(w4I)});
+    const n=j=>j>=0?parseFloat(String(cols[j]||'0').replace(/,/g,''))||0:0;
+    stockRows.push({name,cat_bu:buI>=0?String(cols[buI]||'').replace(/\r/,'').trim():'',w1:n(w1I),w2:n(w2I),w3:n(w3I),w4:n(w4I)});
   }
 }
 
