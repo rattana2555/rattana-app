@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Rattana Bplus Sales v7.1</title>
+<title>Rattana Bplus Sales v7.0</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
@@ -422,6 +422,8 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
       <div class="section-head"><div class="section-title">แยกตาม Cat_BU</div><div class="section-link" id="seeAllCat">ดูทั้งหมด →</div></div>
       <div class="cat-list" id="catList"></div>
     </div>
+    <!-- catDetailSection removed — Top 20 แสดงในหน้ารายงานแทน -->
+    <div style="display:none" id="catDetailSection"><span id="catDetailTitle"></span><span id="catDetailBack"></span><div id="catDetailList"></div></div>
     <div class="section" id="miniChartSection">
       <div class="section-head"><div class="section-title">7 วันย้อนหลัง</div></div>
       <div class="chart-card"><div class="chart-wrap"><canvas id="miniChart"></canvas></div></div>
@@ -470,6 +472,7 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
     <div style="display:none" id="targetSection"><div id="targetCardList"></div><span id="targetMonthLabel"></span></div>
     <div style="display:none" id="saleInSection"><span id="saleInCountLabel"></span><span id="saleInTotalCs"></span><span id="saleInTotalSKU"></span><div id="saleInCatList"></div><div id="saleInChartWrap"></div><div id="saleInHero"></div></div>
     <div style="display:none" id="stockVsSaleInSection"></div>
+    <div style="display:none" id="top20Section"><span id="top20Title"></span><div id="top20List"></div><span id="top20CloseBtn"></span></div>
   </div>
 </div>
 
@@ -541,7 +544,7 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
         <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;font-weight:600">ข้อมูลยอดขาย</span><span style="font-size:12px;color:var(--muted)" id="totalRows">—</span></div>
         <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;font-weight:600">ข้อมูลสต็อก</span><span style="font-size:12px;color:var(--muted)" id="totalStockRows">—</span></div>
         <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;font-weight:600">ข้อมูลซื้อเข้า</span><span style="font-size:12px;color:var(--muted)" id="totalSaleInRows">—</span></div>
-        <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;font-weight:600">เวอร์ชัน</span><span style="font-size:12px;color:var(--muted)">v7.1 · 2026-05-22</span></div>
+        <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;font-weight:600">เวอร์ชัน</span><span style="font-size:12px;color:var(--muted)">v6.4 · 2026-05-22</span></div>
       </div>
       <div style="margin-top:12px">
         <button onclick="fetchAll()" style="width:100%;padding:14px;background:var(--green);color:#fff;border:none;border-radius:var(--radius-md);font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">🔄 รีเฟรชทั้งหมด</button>
@@ -1005,7 +1008,7 @@ function getTimeUse(){
 function openCatReport(cat){
   // ตั้ง filter cat แล้วข้ามไปหน้ารายงาน
   const meta=CAT_META[cat]||{icon:'📦',color:'#1a6fb8'};
-  reportCat=cat;syncReportWH();
+  reportCat=cat;
   // สลับ page ไป Reports
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -1235,12 +1238,6 @@ function renderMiniChart(data){
 }
 
 let reportWH='all', reportCat='all';
-function syncReportWH(){
-  reportWH=selectedWH;
-  document.querySelectorAll('[data-rwh]').forEach(b=>{
-    b.classList.toggle('active',b.dataset.rwh===selectedWH);
-  });
-}
 function renderReports(){
   const rows=filterRows(selectedPeriod, reportWH==='all'?selectedWH:reportWH);
   const catRows=reportCat==='all'?rows:rows.filter(r=>r.cat===reportCat);
@@ -1261,18 +1258,13 @@ function renderReports(){
       </div>
     </div>`;
 
-  // Cat filter chips — ซ่อนเมื่อเลือก cat เฉพาะ (header แสดงอยู่แล้ว)
+  // Cat filter chips
   const catBar=$('reportCatBar');
-  if(reportCat==='all'){
-    catBar.style.display='';
-    catBar.innerHTML=`<button class="wh-chip active" data-rcat="all">ทุก Cat</button>`
-      +TARGET_CATS.map(c=>{const m=CAT_META[c];return`<button class="wh-chip" data-rcat="${c}">${m.icon} ${c.replace('Bplus ','')}</button>`;}).join('');
-    catBar.querySelectorAll('[data-rcat]').forEach(b=>b.addEventListener('click',()=>{
-      reportCat=b.dataset.rcat;renderReports();
-    }));
-  }else{
-    catBar.style.display='none';
-  }
+  catBar.innerHTML=`<button class="wh-chip${reportCat==='all'?' active':''}" data-rcat="all">ทุก Cat</button>`
+    +TARGET_CATS.map(c=>{const m=CAT_META[c];return`<button class="wh-chip${reportCat===c?' active':''}" data-rcat="${c}">${m.icon} ${c.replace('Bplus ','')}</button>`;}).join('');
+  catBar.querySelectorAll('[data-rcat]').forEach(b=>b.addEventListener('click',()=>{
+    reportCat=b.dataset.rcat;renderReports();
+  }));
 
   // Top 20 — เรียงตามลัง (cs)
   const prodMap={};
@@ -1314,7 +1306,7 @@ function renderReports(){
   if($('saleInSection'))$('saleInSection').style.display='none';
   if($('stockVsSaleInSection'))$('stockVsSaleInSection').style.display='none';
 }
-function renderReports_unused_DELETED(){if(false){
+function renderReports_unused(){
   // Target section
   const tgtByCat=getTargetByCat(selectedWH);
   const actByCat=getMonthActualByCat(selectedWH);
@@ -1482,7 +1474,7 @@ function renderReports_unused_DELETED(){if(false){
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${fmtNum(c.parsed.y)} ลัง`}}},
       scales:{x:{ticks:{color:'#8a9e8f',font:{size:9,family:'Sarabun'},maxRotation:0,maxTicksLimit:8},grid:{display:false},border:{display:false}},
               y:{ticks:{color:'#8a9e8f',font:{size:9,family:'Sarabun'},callback:v=>fmtNum(v)},grid:{color:'rgba(0,0,0,.04)'},border:{display:false}}}}});
-}} // end renderReports_unused_DELETED
+} // end renderReports_unused
 
 function renderProducts(){
   const rows=filterRows(selectedPeriod,selectedWH);const q=productSearch.toLowerCase();
@@ -1751,7 +1743,7 @@ document.querySelectorAll('.nav-btn').forEach(btn=>{
     document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
     document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
     btn.classList.add('active');$('page'+page).classList.add('active');
-    if(page==='Reports'){syncReportWH();renderReports();}if(page==='Products')renderProducts();
+    if(page==='Reports')renderReports();if(page==='Products')renderProducts();
     if(page==='Stock')renderStock();if(page==='Profile')renderProfile();
   });
 });
@@ -1786,17 +1778,19 @@ function handleCSV(input){
 }
 $('csvInput').addEventListener('change',function(){handleCSV(this);});
 $('profileCsvInput').addEventListener('change',function(){handleCSV(this);});
+$('uploadBtn').addEventListener('click',()=>$('csvInput').click());
 $('uploadCancel').addEventListener('click',()=>$('uploadOverlay').classList.remove('show'));
 $('profileStockCsvInput').addEventListener('change',function(){handleStockCSV(this);});
 $('profileTargetCsvInput').addEventListener('change',function(){handleTargetCSV(this);});
 $('profileYearlyCsvInput').addEventListener('change',function(){handleYearlyCSV(this);});
+if($('top20CloseBtn'))$('top20CloseBtn').addEventListener('click',()=>{$('top20Section').style.display='none';});
 document.querySelectorAll('[data-rwh]').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('[data-rwh]').forEach(x=>x.classList.remove('active'));
   b.classList.add('active');reportWH=b.dataset.rwh;renderReports();
 }));
 // ดูทั้งหมด → ไปหน้ารายงาน ทุก Cat
 $('seeAllCat').addEventListener('click',()=>{
-  reportCat='all';syncReportWH();
+  reportCat='all';
   document.querySelector('[data-page="Reports"]').click();
 });
 
