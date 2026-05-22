@@ -439,23 +439,47 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
 
 <!-- REPORTS -->
 <div class="page" id="pageReports">
-  <!-- placeholder IDs ที่ JS อ้างถึง -->
-  <div style="display:none" id="reportWhBar"></div>
-  <div style="display:none" id="reportCatBar"></div>
-  <div style="display:none" id="reportStats"></div>
-  <div style="display:none" id="reportTop20Title"></div>
-  <div style="display:none" id="reportTop20Sub"></div>
-  <div style="display:none" id="reportTop20List"></div>
-  <div style="display:none">
-    <canvas id="reportCatChart"></canvas><canvas id="reportCatCsChart"></canvas>
-    <canvas id="reportWhChart"></canvas><canvas id="reportWhCsChart"></canvas>
-    <canvas id="reportDailyChart"></canvas><canvas id="reportDailyCsChart"></canvas>
-    <canvas id="saleInWhChart"></canvas><canvas id="stockVsCatChart"></canvas><canvas id="stockVsWhChart"></canvas>
+  <div class="app-header">
+    <div class="header-row">
+      <div class="page-title" id="reportPageTitle">📊 รายงาน</div>
+      <button class="icon-btn" id="reportBackBtn" style="display:none;font-size:16px" onclick="reportCat='all';renderReports();document.getElementById('reportPageTitle').textContent='📊 รายงาน';document.getElementById('reportBackBtn').style.display='none'">✕</button>
+    </div>
   </div>
-  <div style="display:none" id="targetSection"><div id="targetCardList"></div><span id="targetMonthLabel"></span></div>
-  <div style="display:none" id="saleInSection"><span id="saleInCountLabel"></span><span id="saleInTotalCs"></span><span id="saleInTotalSKU"></span><div id="saleInCatList"></div><div id="saleInChartWrap"></div><div id="saleInHero"></div></div>
-  <div style="display:none" id="stockVsSaleInSection"></div>
-  <div style="display:none" id="top20Section"><span id="top20Title"></span><div id="top20List"></div><span id="top20CloseBtn"></span></div>
+  <!-- WH filter -->
+  <div class="wh-bar" id="reportWhBar">
+    <button class="wh-chip active" data-rwh="all">ทั้งหมด</button>
+    <button class="wh-chip" data-rwh="W1">W1</button>
+    <button class="wh-chip" data-rwh="W2">W2</button>
+    <button class="wh-chip" data-rwh="W3">W3</button>
+    <button class="wh-chip" data-rwh="W4">W4</button>
+  </div>
+  <div class="scroll-area">
+    <!-- Cat filter chips -->
+    <div class="wh-bar" style="padding:0 16px 12px" id="reportCatBar">
+      <button class="wh-chip active" data-rcat="all">ทุก Cat</button>
+    </div>
+    <!-- Stats hero -->
+    <div class="section"><div id="reportStats"></div></div>
+    <!-- Top 20 list -->
+    <div class="section">
+      <div class="section-head">
+        <div class="section-title" id="reportTop20Title">🏆 Top 20 สินค้า</div>
+        <div style="font-size:11px;color:var(--muted);font-weight:600" id="reportTop20Sub"></div>
+      </div>
+      <div id="reportTop20List"></div>
+    </div>
+    <!-- hidden placeholders -->
+    <div style="display:none">
+      <canvas id="reportCatChart"></canvas><canvas id="reportCatCsChart"></canvas>
+      <canvas id="reportWhChart"></canvas><canvas id="reportWhCsChart"></canvas>
+      <canvas id="reportDailyChart"></canvas><canvas id="reportDailyCsChart"></canvas>
+      <canvas id="saleInWhChart"></canvas><canvas id="stockVsCatChart"></canvas><canvas id="stockVsWhChart"></canvas>
+    </div>
+    <div style="display:none" id="targetSection"><div id="targetCardList"></div><span id="targetMonthLabel"></span></div>
+    <div style="display:none" id="saleInSection"><span id="saleInCountLabel"></span><span id="saleInTotalCs"></span><span id="saleInTotalSKU"></span><div id="saleInCatList"></div><div id="saleInChartWrap"></div><div id="saleInHero"></div></div>
+    <div style="display:none" id="stockVsSaleInSection"></div>
+    <div style="display:none" id="top20Section"><span id="top20Title"></span><div id="top20List"></div><span id="top20CloseBtn"></span></div>
+  </div>
 </div>
 
 <!-- PRODUCTS -->
@@ -988,45 +1012,22 @@ function getTimeUse(){
 }
 
 function openCatReport(cat){
-  // แสดง Top 20 inline ใน Home page
+  // ตั้ง filter cat แล้วข้ามไปหน้ารายงาน
   const meta=CAT_META[cat]||{icon:'📦',color:'#1a6fb8'};
-  const rows=filterRows(selectedPeriod,selectedWH).filter(r=>r.cat===cat);
-  const prodMap={};
-  rows.forEach(r=>{
-    if(!prodMap[r.product])prodMap[r.product]={name:r.product,baht:0,cs:0};
-    prodMap[r.product].baht+=r.baht;
-    prodMap[r.product].cs+=r.cs;
-  });
-  const top20=Object.values(prodMap).sort((a,b)=>b.baht-a.baht).slice(0,20);
-  const maxBaht=top20.length?top20[0].baht:1;
-
-  $('catDetailTitle').innerHTML=`${meta.icon} Top 20 — ${cat}`;
-  $('catDetailList').innerHTML=top20.length?top20.map((p,i)=>`
-    <div style="padding:10px 0;border-bottom:1px solid var(--border)">
-      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:5px">
-        <span style="font-size:11px;font-weight:800;color:var(--muted);min-width:20px;text-align:center;padding-top:2px">${i+1}</span>
-        <div style="flex:1;font-size:13px;font-weight:600;color:var(--text);line-height:1.35">${p.name}</div>
-        <div style="text-align:right;flex-shrink:0">
-          <div class="num" style="font-size:13px;font-weight:700;color:var(--green)">฿${fmtBaht(p.baht)}</div>
-          <div class="num" style="font-size:11px;color:var(--muted)">${fmtCs(p.cs)} ลัง</div>
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;padding-left:28px">
-        <div style="flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
-          <div style="width:${Math.round(p.baht/maxBaht*100)}%;height:100%;background:${meta.color||'var(--green)'};border-radius:2px"></div>
-        </div>
-        <span class="num" style="font-size:10px;color:var(--muted);min-width:28px;text-align:right">${Math.round(p.baht/maxBaht*100)}%</span>
-      </div>
-    </div>`).join('')
-    :'<div class="empty">ไม่มีข้อมูลในช่วงนี้</div>';
-
-  // ซ่อน catSection, miniChart → แสดง detail
-  $('catSection').style.display='none';
-  $('miniChartSection').style.display='none';
-  $('catDetailSection').style.display='';
-  // scroll ขึ้นบน
-  const sa=document.querySelector('#pageHome .scroll-area');
-  if(sa)sa.scrollTo({top:sa.scrollHeight*0.3,behavior:'smooth'});
+  reportCat=cat;
+  // สลับ page ไป Reports
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  const rBtn=document.querySelector('[data-page="Reports"]');
+  if(rBtn)rBtn.classList.add('active');
+  $('pageReports').classList.add('active');
+  // อัปเดต header ให้แสดงชื่อ Cat + ปุ่มล้าง
+  $('reportPageTitle').textContent=`${meta.icon} ${cat.replace('Bplus ','')}`;
+  $('reportBackBtn').style.display='';
+  renderReports();
+  // scroll to top
+  const sa=document.querySelector('#pageReports .scroll-area');
+  if(sa)sa.scrollTo({top:0,behavior:'smooth'});
 }
 
 function renderTop20(cat){
