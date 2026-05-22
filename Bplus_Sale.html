@@ -400,7 +400,7 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
     <div class="section" id="catDetailSection" style="display:none">
       <div class="section-head">
         <div class="section-title" id="catDetailTitle">🏆 Top 20 สินค้า</div>
-        <div class="section-link" id="catDetailBack" onclick="closeCatDetail()">← กลับ</div>
+        <div class="section-link" id="catDetailBack">← กลับ</div>
       </div>
       <div id="catDetailList"></div>
     </div>
@@ -984,9 +984,45 @@ function getTimeUse(){
 }
 
 function openCatReport(cat){
-  // นำทางไปหน้า Reports พร้อมกรอง cat นั้น
-  reportCat=cat;
-  document.querySelector('[data-page="Reports"]').click();
+  // แสดง Top 20 inline ใน Home page
+  const meta=CAT_META[cat]||{icon:'📦',color:'#1a6fb8'};
+  const rows=filterRows(selectedPeriod,selectedWH).filter(r=>r.cat===cat);
+  const prodMap={};
+  rows.forEach(r=>{
+    if(!prodMap[r.product])prodMap[r.product]={name:r.product,baht:0,cs:0};
+    prodMap[r.product].baht+=r.baht;
+    prodMap[r.product].cs+=r.cs;
+  });
+  const top20=Object.values(prodMap).sort((a,b)=>b.baht-a.baht).slice(0,20);
+  const maxBaht=top20.length?top20[0].baht:1;
+
+  $('catDetailTitle').innerHTML=`${meta.icon} Top 20 — ${cat}`;
+  $('catDetailList').innerHTML=top20.length?top20.map((p,i)=>`
+    <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:5px">
+        <span style="font-size:11px;font-weight:800;color:var(--muted);min-width:20px;text-align:center;padding-top:2px">${i+1}</span>
+        <div style="flex:1;font-size:13px;font-weight:600;color:var(--text);line-height:1.35">${p.name}</div>
+        <div style="text-align:right;flex-shrink:0">
+          <div class="num" style="font-size:13px;font-weight:700;color:var(--green)">฿${fmtBaht(p.baht)}</div>
+          <div class="num" style="font-size:11px;color:var(--muted)">${fmtCs(p.cs)} ลัง</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;padding-left:28px">
+        <div style="flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+          <div style="width:${Math.round(p.baht/maxBaht*100)}%;height:100%;background:${meta.color||'var(--green)'};border-radius:2px"></div>
+        </div>
+        <span class="num" style="font-size:10px;color:var(--muted);min-width:28px;text-align:right">${Math.round(p.baht/maxBaht*100)}%</span>
+      </div>
+    </div>`).join('')
+    :'<div class="empty">ไม่มีข้อมูลในช่วงนี้</div>';
+
+  // ซ่อน catSection, miniChart → แสดง detail
+  $('catSection').style.display='none';
+  $('miniChartSection').style.display='none';
+  $('catDetailSection').style.display='';
+  // scroll ขึ้นบน
+  const sa=document.querySelector('#pageHome .scroll-area');
+  if(sa)sa.scrollTo({top:sa.scrollHeight*0.3,behavior:'smooth'});
 }
 
 function renderTop20(cat){
@@ -1781,13 +1817,11 @@ document.querySelectorAll('[data-rwh]').forEach(b=>b.addEventListener('click',()
   document.querySelectorAll('[data-rwh]').forEach(x=>x.classList.remove('active'));
   b.classList.add('active');reportWH=b.dataset.rwh;renderReports();
 }));
-function closeCatDetail(){
+$('catDetailBack').addEventListener('click',()=>{
   $('catDetailSection').style.display='none';
   $('catSection').style.display='';
   $('miniChartSection').style.display='';
-  const sa=document.querySelector('#pageHome .scroll-area');
-  if(sa)sa.scrollTo({top:0,behavior:'smooth'});
-}
+});
 
 // ── Boot ─────────────────────────────────────────────────────
 fetchData();
