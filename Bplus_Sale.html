@@ -396,14 +396,6 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
       <div class="section-head"><div class="section-title">แยกตาม Cat_BU</div><div class="section-link" id="seeAllCat">ดูทั้งหมด →</div></div>
       <div class="cat-list" id="catList"></div>
     </div>
-    <!-- cat detail: Top 20 inline -->
-    <div class="section" id="catDetailSection" style="display:none">
-      <div class="section-head">
-        <div class="section-title" id="catDetailTitle">🏆 Top 20 สินค้า</div>
-        <div class="section-link" id="catDetailBack">← กลับ</div>
-      </div>
-      <div id="catDetailList"></div>
-    </div>
     <div class="section" id="miniChartSection">
       <div class="section-head"><div class="section-title">7 วันย้อนหลัง</div></div>
       <div class="chart-card"><div class="chart-wrap"><canvas id="miniChart"></canvas></div></div>
@@ -431,8 +423,16 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
     <div class="wh-bar" style="padding:0 16px 12px" id="reportCatBar">
       <button class="wh-chip active" data-rcat="all">ทุก Cat</button>
     </div>
+    <!-- cat detail: Top 20 from Home -->
+    <div class="section" id="catDetailSection" style="display:none">
+      <div class="section-head">
+        <div class="section-title" id="catDetailTitle">🏆 Top 20 สินค้า</div>
+        <div class="section-link" id="catDetailBack">← กลับ</div>
+      </div>
+      <div id="catDetailList"></div>
+    </div>
     <!-- Top 20 list -->
-    <div class="section">
+    <div class="section" id="reportTop20Section">
       <div class="section-head">
         <div class="section-title" id="reportTop20Title">🏆 Top 20 สินค้า</div>
         <div style="font-size:11px;color:var(--muted);font-weight:600" id="reportTop20Sub"></div>
@@ -1016,13 +1016,12 @@ function openCatReport(cat){
     </div>`).join('')
     :'<div class="empty">ไม่มีข้อมูลในช่วงนี้</div>';
 
-  // ซ่อน catSection, miniChart → แสดง detail
-  $('catSection').style.display='none';
-  $('miniChartSection').style.display='none';
+  // นำทางไปหน้า Reports แล้วแสดง detail
+  document.querySelector('[data-page="Reports"]').click();
+  $('reportTop20Section').style.display='none';
   $('catDetailSection').style.display='';
-  // scroll ขึ้นบน
-  const sa=document.querySelector('#pageHome .scroll-area');
-  if(sa)sa.scrollTo({top:sa.scrollHeight*0.3,behavior:'smooth'});
+  const sa=document.querySelector('#pageReports .scroll-area');
+  if(sa)sa.scrollTo({top:0,behavior:'smooth'});
 }
 
 function renderTop20(cat){
@@ -1278,6 +1277,9 @@ function renderMiniChart(data){
 
 let reportWH='all', reportCat='all';
 function renderReports(){
+  // ถ้า catDetail เปิดอยู่ → ปิดแล้วกลับ reportTop20Section
+  $('catDetailSection').style.display='none';
+  $('reportTop20Section').style.display='';
   const rows=filterRows(selectedPeriod, reportWH==='all'?selectedWH:reportWH);
   const catRows=reportCat==='all'?rows:rows.filter(r=>r.cat===reportCat);
   const total=catRows.reduce((s,r)=>({baht:s.baht+r.baht,cs:s.cs+r.cs,txn:s.txn+1}),{baht:0,cs:0,txn:0});
@@ -1775,8 +1777,8 @@ document.querySelectorAll('.nav-btn').forEach(btn=>{
     if(page==='Stock')renderStock();if(page==='Profile')renderProfile();
   });
 });
-document.querySelectorAll('.wh-chip').forEach(chip=>{chip.addEventListener('click',()=>{
-  document.querySelectorAll('.wh-chip').forEach(c=>c.classList.remove('active'));
+document.querySelectorAll('.wh-chip[data-wh]').forEach(chip=>{chip.addEventListener('click',()=>{
+  document.querySelectorAll('.wh-chip[data-wh]').forEach(c=>c.classList.remove('active'));
   chip.classList.add('active');selectedWH=chip.dataset.wh;renderHome();});});
 document.querySelectorAll('.period-btn').forEach(btn=>{btn.addEventListener('click',()=>{
   document.querySelectorAll('.period-btn').forEach(b=>b.classList.remove('active'));
@@ -1819,8 +1821,7 @@ document.querySelectorAll('[data-rwh]').forEach(b=>b.addEventListener('click',()
 }));
 $('catDetailBack').addEventListener('click',()=>{
   $('catDetailSection').style.display='none';
-  $('catSection').style.display='';
-  $('miniChartSection').style.display='';
+  $('reportTop20Section').style.display='';
 });
 
 // ── Boot ─────────────────────────────────────────────────────
