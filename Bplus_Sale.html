@@ -377,6 +377,9 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
     <!-- year view: monthly bar chart -->
     <div class="section" id="yearMonthSection" style="display:none">
       <div class="section-head"><div class="section-title" id="yearMonthTitle">ยอดขายรายเดือน</div></div>
+      <div class="wh-bar" style="padding:0 0 12px" id="yearCatBar">
+        <button class="wh-chip active" data-ycat="all">ทั้งหมด</button>
+      </div>
       <div class="chart-card" style="margin-bottom:12px">
         <div style="height:240px;position:relative"><canvas id="yearLineChart"></canvas></div>
       </div>
@@ -579,7 +582,7 @@ const WH_COLORS={'W1':'#f59e0b','W2':'#3b82f6','W3':'#ef4444','W4':'#00b14f'};
 
 // ── State ────────────────────────────────────────────────────
 let allRows=[],stockRows=[],targetRows=[],saleInRows=[],yearlyRows=[];
-let selectedWH='all',selectedPeriod='yesterday';
+let selectedWH='all',selectedPeriod='yesterday',selectedYearCat='all';
 let selectedYear=new Date().getFullYear();
 let yearlySourceLabel='—';
 let stockWH='all',stockSearch='',stockActiveCat=null,stockFilter='all';
@@ -1227,19 +1230,29 @@ function renderYearMonthChart(){
     if(byMonthCat[r.cat]!==undefined)byMonthCat[r.cat][mo]+=r.baht;
   });
   const monthTotals=Array(12).fill(0);
-  TARGET_CATS.forEach(c=>byMonthCat[c].forEach((v,i)=>monthTotals[i]+=v));
+  const catsToSum=selectedYearCat==='all'?TARGET_CATS:[selectedYearCat];
+  catsToSum.forEach(c=>byMonthCat[c]?.forEach((v,i)=>monthTotals[i]+=v));
+  // render cat chips
+  const bar=$('yearCatBar');
+  bar.innerHTML=`<button class="wh-chip${selectedYearCat==='all'?' active':''}" data-ycat="all">ทั้งหมด</button>`
+    +TARGET_CATS.map(c=>{const m=CAT_META[c]||{icon:'📦'};return`<button class="wh-chip${selectedYearCat===c?' active':''}" data-ycat="${c}">${m.icon} ${c.replace('Bplus ','')}</button>`;}).join('');
+  bar.querySelectorAll('[data-ycat]').forEach(btn=>btn.addEventListener('click',()=>{
+    selectedYearCat=btn.dataset.ycat;renderYearMonthChart();
+  }));
   $('yearMonthTitle').textContent=`ยอดขายรายเดือน ปี ${selectedYear+543}`;
   if(charts.yearMonth)charts.yearMonth.destroy();
   // line chart — total per month
   const activeMonths=monthTotals.map((v,i)=>v>0?i:-1).filter(i=>i>=0);
   const lineLabels=activeMonths.map(i=>TH_M[i]);
   const lineData=activeMonths.map(i=>monthTotals[i]);
+  const lineColor=selectedYearCat==='all'?'#0F52BA':(CAT_META[selectedYearCat]?.color||'#0F52BA');
+  const lineColorRgb=lineColor==='#0F52BA'?'15,82,186':lineColor==='#f59e0b'?'245,158,11':lineColor==='#ef4444'?'239,68,68':'0,177,79';
   if(charts.yearLine)charts.yearLine.destroy();
   charts.yearLine=new Chart($('yearLineChart').getContext('2d'),{
     type:'line',
     data:{labels:lineLabels,datasets:[{data:lineData,
-      borderColor:'#0F52BA',backgroundColor:'rgba(15,82,186,.08)',fill:true,tension:.35,
-      pointRadius:5,pointBackgroundColor:'#0F52BA',pointBorderColor:'#fff',pointBorderWidth:2,
+      borderColor:lineColor,backgroundColor:`rgba(${lineColorRgb},.08)`,fill:true,tension:.35,
+      pointRadius:5,pointBackgroundColor:lineColor,pointBorderColor:'#fff',pointBorderWidth:2,
       pointHoverRadius:7}]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`฿${fmtBahtFull(c.parsed.y)}`}}},
