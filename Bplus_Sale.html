@@ -380,6 +380,9 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
       <div class="chart-card" style="margin-bottom:12px">
         <div class="big-chart-wrap"><canvas id="yearMonthChart"></canvas></div>
       </div>
+      <div class="chart-card" style="margin-bottom:12px">
+        <div style="height:180px;position:relative"><canvas id="yearLineChart"></canvas></div>
+      </div>
       <div style="display:flex;flex-direction:column;gap:8px" id="yearMonthList"></div>
     </div>
     <!-- normal view: cat list + mini chart -->
@@ -1252,18 +1255,41 @@ function renderYearMonthChart(){
         y:{stacked:true,ticks:{color:'#8a9e8f',font:{size:9,family:'Sarabun'},callback:v=>fmtBaht(v)},grid:{color:'rgba(0,0,0,.04)'},border:{display:false}}
       }}
   });
-  // month summary list
-  const maxV=Math.max(...monthTotals,1);
-  $('yearMonthList').innerHTML=TH_M.map((lbl,i)=>{
-    if(monthTotals[i]===0)return'';
-    const pct=Math.round(monthTotals[i]/maxV*100);
-    return`<div style="background:var(--card);border-radius:var(--radius-md);padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,.04)">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <div style="font-size:13px;font-weight:700;color:var(--text)">${lbl}</div>
-        <div style="font-size:13px;font-weight:800;color:var(--text)" class="num">฿${fmtBaht(monthTotals[i])}</div>
-      </div>
-      <div style="height:5px;background:var(--bg);border-radius:3px;overflow:hidden">
-        <div style="height:100%;width:${pct}%;background:var(--green);border-radius:3px;transition:width .4s"></div>
+  // line chart — total per month
+  const activeMonths=monthTotals.map((v,i)=>v>0?i:-1).filter(i=>i>=0);
+  const lineLabels=activeMonths.map(i=>TH_M[i]);
+  const lineData=activeMonths.map(i=>monthTotals[i]);
+  if(charts.yearLine)charts.yearLine.destroy();
+  charts.yearLine=new Chart($('yearLineChart').getContext('2d'),{
+    type:'line',
+    data:{labels:lineLabels,datasets:[{data:lineData,
+      borderColor:'#0F52BA',backgroundColor:'rgba(15,82,186,.08)',fill:true,tension:.35,
+      pointRadius:5,pointBackgroundColor:'#0F52BA',pointBorderColor:'#fff',pointBorderWidth:2,
+      pointHoverRadius:7}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`฿${fmtBahtFull(c.parsed.y)}`}}},
+      scales:{
+        x:{ticks:{color:'#8a9e8f',font:{size:10,family:'Sarabun'}},grid:{display:false},border:{display:false}},
+        y:{ticks:{color:'#8a9e8f',font:{size:9,family:'Sarabun'},callback:v=>fmtBaht(v)},grid:{color:'rgba(0,0,0,.04)'},border:{display:false}}
+      }}
+  });
+  // month summary list with MoM badge
+  $('yearMonthList').innerHTML=activeMonths.map((mi,idx)=>{
+    const cur=monthTotals[mi];
+    const prev=idx>0?monthTotals[activeMonths[idx-1]]:null;
+    let badge='';
+    if(prev){
+      const pct=(cur-prev)/Math.abs(prev)*100;
+      const up=pct>=0;
+      badge=`<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;
+        background:${up?'rgba(0,177,79,.12)':'rgba(239,68,68,.1)'};
+        color:${up?'#00943f':'#dc2626'}">${up?'▲':'▼'} ${Math.abs(pct).toFixed(1)}%</span>`;
+    }
+    return`<div style="background:var(--card);border-radius:var(--radius-md);padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,.04);display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:13px;font-weight:700;color:var(--text)">${TH_M[mi]}</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        ${badge}
+        <div style="font-size:13px;font-weight:800;color:var(--text)" class="num">฿${fmtBaht(cur)}</div>
       </div>
     </div>`;
   }).join('');
