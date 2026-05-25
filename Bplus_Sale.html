@@ -402,6 +402,12 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);
   <div class="app-header">
     <div class="header-row"><div class="page-title">📊 รายงาน</div></div>
   </div>
+  <!-- Period tabs for Reports -->
+  <div class="period-tabs" style="margin:0 16px 10px" id="reportPeriodTabs">
+    <button class="report-period-btn period-btn active" data-rperiod="yesterday">เมื่อวาน</button>
+    <button class="report-period-btn period-btn" data-rperiod="week">สัปดาห์</button>
+    <button class="report-period-btn period-btn" data-rperiod="month">เดือน</button>
+  </div>
   <!-- WH filter -->
   <div class="wh-bar" id="reportWhBar">
     <button class="wh-chip active" data-rwh="all">ทั้งหมด</button>
@@ -1322,6 +1328,10 @@ function renderReports(){
   // ถ้า catDetail เปิดอยู่ → ปิดแล้วกลับ reportTop20Section
   $('catDetailSection').style.display='none';
   $('reportTop20Section').style.display='';
+  // sync WH chip active state
+  document.querySelectorAll('[data-rwh]').forEach(x=>{x.classList.toggle('active',x.dataset.rwh===reportWH);});
+  // sync period tab active state
+  document.querySelectorAll('[data-rperiod]').forEach(x=>{x.classList.toggle('active',x.dataset.rperiod===selectedPeriod);});
   const rows=filterRows(selectedPeriod, reportWH);
   const catRows=reportCat==='all'?rows:rows.filter(r=>r.cat===reportCat);
   const total=catRows.reduce((s,r)=>({baht:s.baht+r.baht,cs:s.cs+r.cs,txn:s.txn+1}),{baht:0,cs:0,txn:0});
@@ -1804,11 +1814,23 @@ document.querySelectorAll('.nav-btn').forEach(btn=>{
 document.querySelectorAll('.wh-chip[data-wh]').forEach(chip=>{chip.addEventListener('click',()=>{
   document.querySelectorAll('.wh-chip[data-wh]').forEach(c=>c.classList.remove('active'));
   chip.classList.add('active');selectedWH=chip.dataset.wh;renderHome();});});
-document.querySelectorAll('.period-btn').forEach(btn=>{btn.addEventListener('click',()=>{
-  document.querySelectorAll('.period-btn').forEach(b=>b.classList.remove('active'));
+document.querySelectorAll('.period-btn:not(.report-period-btn)').forEach(btn=>{btn.addEventListener('click',()=>{
+  document.querySelectorAll('.period-btn:not(.report-period-btn)').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');selectedPeriod=btn.dataset.period;
   const titles={today:'ยอดขายวันนี้',yesterday:'ยอดขายเมื่อวาน',week:'ยอดขาย 7 วัน',month:'ยอดขายเดือนนี้',year:'ยอดขายปีนี้'};
   $('homeTitle').textContent=titles[selectedPeriod]||'ยอดขาย';renderHome();});});
+// Report period tabs
+$('reportPeriodTabs').addEventListener('click',e=>{
+  const btn=e.target.closest('[data-rperiod]');if(!btn)return;
+  $('reportPeriodTabs').querySelectorAll('[data-rperiod]').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');selectedPeriod=btn.dataset.rperiod;renderReports();
+});
+// Report WH chips (event delegation)
+$('reportWhBar').addEventListener('click',e=>{
+  const btn=e.target.closest('[data-rwh]');if(!btn)return;
+  $('reportWhBar').querySelectorAll('[data-rwh]').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');reportWH=btn.dataset.rwh;renderReports();
+});
 $('prodDetailClose').addEventListener('click',()=>$('prodDetailOverlay').classList.remove('open'));
 $('prodDetailOverlay').addEventListener('click',e=>{if(e.target===$('prodDetailOverlay'))$('prodDetailOverlay').classList.remove('open');});
 document.querySelectorAll('[data-swh]').forEach(chip=>{chip.addEventListener('click',()=>{
@@ -1838,10 +1860,6 @@ $('profileTargetCsvInput').addEventListener('change',function(){handleTargetCSV(
 $('profileYearlyCsvInput').addEventListener('change',function(){handleYearlyCSV(this);});
 $('seeAllCat').addEventListener('click',()=>{document.querySelector('[data-page="Reports"]').click();});
 if($('top20CloseBtn'))$('top20CloseBtn').addEventListener('click',()=>{$('top20Section').style.display='none';});
-document.querySelectorAll('[data-rwh]').forEach(b=>b.addEventListener('click',()=>{
-  document.querySelectorAll('[data-rwh]').forEach(x=>x.classList.remove('active'));
-  b.classList.add('active');reportWH=b.dataset.rwh;renderReports();
-}));
 $('catDetailBack').addEventListener('click',()=>{
   $('catDetailSection').style.display='none';
   $('reportTop20Section').style.display='';
