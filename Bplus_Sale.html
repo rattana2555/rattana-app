@@ -1191,7 +1191,15 @@ function renderHome(){
   $('catSection').style.display=isYear?'none':'';
   $('miniChartSection').style.display=isYear?'none':'';
   if(isYear)renderYearMonthChart();
-  else renderMiniChart(getMonthlyComparison(6));
+  else{
+    const p=selectedPeriod;
+    let chartData,chartTitle,compareLabel;
+    if(p==='yesterday'||p==='today'){chartData=getDailyComparison(10);chartTitle='ย้อนหลัง 10 วัน';compareLabel='จากวันก่อน';}
+    else if(p==='week'){chartData=getWeeklyComparison(8);chartTitle='ย้อนหลัง 8 สัปดาห์';compareLabel='จากสัปดาห์ก่อน';}
+    else{chartData=getMonthlyComparisonYear();chartTitle='รายเดือนปีนี้';compareLabel='จากเดือนก่อน';}
+    document.querySelector('#miniChartSection .section-title').textContent=chartTitle;
+    renderMiniChart(chartData,compareLabel);
+  }
 }
 function prevPeriodRows(){
   const t=new Date();t.setHours(0,0,0,0);
@@ -1232,6 +1240,49 @@ function getMonthlyComparison(n=6){
       const rd=parseTHDate(r.date);return rd&&rd.getFullYear()===y&&rd.getMonth()===m;
     }).reduce((s,r)=>s+r.baht,0);
     result.push({baht:sum,label:TH_M[m],isCurrent:i===0});
+  }
+  return result;
+}
+function getMonthlyComparisonYear(){
+  const TH_M=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const now=new Date();const curM=now.getMonth();const result=[];
+  const src=[...yearlyRows,...allRows];
+  for(let m=0;m<=curM;m++){
+    const sum=src.filter(r=>{
+      if(selectedWH!=='all'&&r.wh!==selectedWH)return false;
+      const rd=parseTHDate(r.date);return rd&&rd.getFullYear()===now.getFullYear()&&rd.getMonth()===m;
+    }).reduce((s,r)=>s+r.baht,0);
+    result.push({baht:sum,label:TH_M[m],isCurrent:m===curM});
+  }
+  return result;
+}
+function getDailyComparison(n=10){
+  const t=new Date();t.setHours(0,0,0,0);
+  const result=[];
+  for(let i=n-1;i>=0;i--){
+    const d=new Date(t);d.setDate(d.getDate()-i);
+    const ds=toISO(d);
+    const sum=allRows.filter(r=>{
+      if(selectedWH!=='all'&&r.wh!==selectedWH)return false;
+      const rd=parseTHDate(r.date);return rd&&toISO(rd)===ds;
+    }).reduce((s,r)=>s+r.baht,0);
+    result.push({baht:sum,label:`${d.getDate()}/${d.getMonth()+1}`,isCurrent:i===0});
+  }
+  return result;
+}
+function getWeeklyComparison(n=8){
+  const t=new Date();t.setHours(0,0,0,0);
+  const result=[];
+  for(let i=n-1;i>=0;i--){
+    const to=new Date(t);to.setDate(to.getDate()-i*7);
+    const from=new Date(to);from.setDate(from.getDate()-6);
+    const fromISO=toISO(from),toISO2=toISO(to);
+    const sum=allRows.filter(r=>{
+      if(selectedWH!=='all'&&r.wh!==selectedWH)return false;
+      const rd=parseTHDate(r.date);if(!rd)return false;
+      const ds=toISO(rd);return ds>=fromISO&&ds<=toISO2;
+    }).reduce((s,r)=>s+r.baht,0);
+    result.push({baht:sum,label:`${from.getDate()}/${from.getMonth()+1}`,isCurrent:i===0});
   }
   return result;
 }
@@ -1301,7 +1352,7 @@ function renderYearMonthChart(){
     </div>`;
   }).join('');
 }
-function renderMiniChart(data){
+function renderMiniChart(data,compareLabel='จากก่อนหน้า'){
   if(charts.mini)charts.mini.destroy();
   const ptColors=data.map(d=>d.isCurrent?'#0F52BA':'rgba(15,82,186,.5)');
   charts.mini=new Chart($('miniChart').getContext('2d'),{type:'line',
@@ -1314,7 +1365,7 @@ function renderMiniChart(data){
           const cur=data[c.dataIndex];
           const prev=data[c.dataIndex-1];
           let s=`฿${fmtBahtFull(c.parsed.y)}`;
-          if(prev&&prev.baht){const pct=(cur.baht-prev.baht)/Math.abs(prev.baht)*100;s+=`  ${pct>=0?'▲':'▼'} ${Math.abs(pct).toFixed(1)}% จากเดือนก่อน`;}
+          if(prev&&prev.baht){const pct=(cur.baht-prev.baht)/Math.abs(prev.baht)*100;s+=`  ${pct>=0?'▲':'▼'} ${Math.abs(pct).toFixed(1)}% ${compareLabel}`;}
           return s;
         }
       }}},
