@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v11.2</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v11.3</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -316,7 +316,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v11.2</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v11.3</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -2184,21 +2184,48 @@ function renderDashboard(){
         const canAdd=eff<100&&freeW>50;
         if(canAdd)anyFree=true;
         const TE=tr===3?'🟢':tr===2?'🔵':'🔴';
-        return`<div style="border-top:1px solid #EDF0F4;padding:8px 0">
-          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
-            <span style="font-weight:700">${TE} เที่ยว ${tr} · ${ld.n} บิล · ฿${fmtN(Math.round(ld.amt))}</span>
-            <span style="font-weight:700;color:${eff>100?'#C62828':pcColor(eff)}">${eff}%</span>
+        // เรียงบิล: ไกล HQ → ใกล้ HQ (ตรงกับลำดับวิ่งจริง)
+        const billsList=[...ld.bills].sort((a,b)=>{
+          const da=haversine(HQ.lat,HQ.lng,a.lat||0,a.lng||0);
+          const db=haversine(HQ.lat,HQ.lng,b.lat||0,b.lng||0);
+          return db-da;
+        });
+        const billsHtml=billsList.map((bb,idx)=>{
+          const dHQ=bb.lat&&bb.lng?haversine(HQ.lat,HQ.lng,bb.lat,bb.lng).toFixed(1)+' กม.':'—';
+          return`<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-top:1px solid #F4F6FA;font-size:12px">
+            <span style="background:#FEF6EC;color:#7D6428;border:1px solid #E4C46E;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0">${idx+1}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;color:#07101F;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${bb.arName||'—'}</div>
+              <div style="font-size:10px;color:#9BAAB8">${bb.district||''}${bb.district&&bb.province?', ':''}${bb.province||''} · 📏 ${dHQ}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-size:11px;color:#6B7A90">⚖ ${fmtKg(bb.weight)}</div>
+              ${bb.amount?`<div style="font-size:10px;color:#7D6428;font-weight:600">฿${fmtN(Math.round(bb.amount))}</div>`:''}
+            </div>
+            ${bb.lat&&bb.lng?`<a href="https://www.google.com/maps?q=${bb.lat},${bb.lng}" target="_blank" style="color:#1A5FA5;font-size:14px;text-decoration:none;flex-shrink:0" title="เปิดแผนที่">📍</a>`:''}
+          </div>`;
+        }).join('');
+        return`<details style="border-top:1px solid #EDF0F4;padding:8px 0">
+          <summary style="cursor:pointer;list-style:none;outline:none">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+              <span style="font-weight:700">${TE} เที่ยว ${tr} · ${ld.n} บิล · ฿${fmtN(Math.round(ld.amt))} <span style="color:#A0ABBB;font-size:10px;font-weight:500">▾ คลิกดูร้าน</span></span>
+              <span style="font-weight:700;color:${eff>100?'#C62828':pcColor(eff)}">${eff}%</span>
+            </div>
+            <div style="height:5px;background:#E0E5ED;border-radius:3px;overflow:hidden;margin-bottom:4px">
+              <div style="width:${Math.min(100,eff)}%;height:100%;background:${eff>100?'#DC3545':pcColor(eff)};border-radius:3px"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:#6B7A90">
+              <span>⚖ ${fmtKg(ld.w)}${maxW?'/'+fmtKg(maxW):''} · 📦 ${fmtM3(ld.v)}${maxV?'/'+fmtM3(maxV):''}</span>
+              ${maxW?(canAdd
+                ?`<span style="color:#15803D;font-weight:600">ว่าง ${fmtKg(freeW)}</span>`
+                :`<span style="color:#C62828;font-weight:600">เต็ม</span>`):''}
+            </div>
+          </summary>
+          <div style="margin-top:6px;background:#FAFBFD;border:1px solid #EDF0F4;border-radius:8px;overflow:hidden">
+            <div style="padding:6px 10px;background:#F4F6FA;font-size:10px;color:#6B7A90;font-weight:600">📋 รายการร้าน (เรียงไกล HQ → ใกล้ HQ)</div>
+            ${billsHtml||'<div style="padding:10px;text-align:center;color:#A0ABBB;font-size:11px">ไม่มีรายการ</div>'}
           </div>
-          <div style="height:5px;background:#E0E5ED;border-radius:3px;overflow:hidden;margin-bottom:4px">
-            <div style="width:${Math.min(100,eff)}%;height:100%;background:${eff>100?'#DC3545':pcColor(eff)};border-radius:3px"></div>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:11px;color:#6B7A90">
-            <span>⚖ ${fmtKg(ld.w)}${maxW?'/'+fmtKg(maxW):''} · 📦 ${fmtM3(ld.v)}${maxV?'/'+fmtM3(maxV):''}</span>
-            ${maxW?(canAdd
-              ?`<span style="color:#15803D;font-weight:600">ว่าง ${fmtKg(freeW)}</span>`
-              :`<span style="color:#C62828;font-weight:600">เต็ม</span>`):''}
-          </div>
-        </div>`;
+        </details>`;
       }).join('');
 
       return`<div style="background:#fff;border:1px solid #E0E5ED;border-radius:12px;padding:14px;margin-bottom:10px">
