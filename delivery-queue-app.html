@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v10.6</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v10.7</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -316,7 +316,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v10.6</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v10.7</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -2032,13 +2032,17 @@ async function loadKeepdata(silent=false){
     const rows=await fetchSheet('Keepdata');
     keepData=rows.map(r=>({
       billDate    : r['วันที่บิล']||'',
-      _rawDate    : r['วันที่ส่ง']||'',                // ดิบจากชีท (debug)
       deliveryDate: fmtDateKey(r['วันที่ส่ง']||''),  // normalize format
       ref         : r['เลขบิล']||'',
       arCode      : r['รหัสร้านค้า']||'',
       arName      : r['ชื่อร้านค้า']||'',
       province    : r['จังหวัด']||'',
       district    : r['อำเภอ']||'',
+      lat         : parseFloat(r['Lat']||'0')||0,
+      lng         : parseFloat(r['Lng']||'0')||0,
+      route       : r['สายส่ง']||'',
+      routeCode   : r['รหัสสาย']||'',
+      days        : r['วันส่ง']||'',
       plate       : r['ทะเบียนรถ']||'',
       trip        : parseInt(r['เที่ยว']||'1')||1,
       nick        : r['ชื่อเล่น']||'',
@@ -2386,10 +2390,17 @@ function updateMap(filterPlate){
   mapLayers.forEach(l=>{try{leafletMap.removeLayer(l);}catch(e){}});
   mapLayers=[];
 
+  // ── รวม queue ปัจจุบัน + ข้อมูลที่บันทึกแล้วจาก Keepdata ──
+  const assign=mapAssignments();
+  const allBills=mapBillsForRoute();
+  const plateOf = ref => assign[ref]?.plate || null;
+  const tripOf  = ref => assign[ref]?.trip || 1;
+  const isSaved = ref => assign[ref]?.saved === true;
+
   // กรองบิลตาม filterPlate และ mapFilterTrip
   function passesFilter(b){
-    if(filterPlate&&queue[b.ref]!==filterPlate)return false;
-    if(mapFilterTrip&&(tripMap[b.ref]||1)!==mapFilterTrip)return false;
+    if(filterPlate&&plateOf(b.ref)!==filterPlate)return false;
+    if(mapFilterTrip&&tripOf(b.ref)!==mapFilterTrip)return false;
     return true;
   }
 
@@ -2434,7 +2445,7 @@ function updateMap(filterPlate){
     }
     // เที่ยว 1: solid line
     if(!mapFilterTrip||mapFilterTrip===1){
-      const t1=nnRoute(bills.filter(b=>queue[b.ref]===t.plate&&b.lat&&b.lng&&(tripMap[b.ref]||1)===1));
+      const t1=nnRoute(allBills.filter(b=>plateOf(b.ref)===t.plate&&b.lat&&b.lng&&tripOf(b.ref)===1));
       if(filterPlate)t1.forEach((b,i)=>{stopNums[b.ref]=i+1;});
       if(t1.length){
         const wpts=[[HQ.lat,HQ.lng],...t1.map(b=>[b.lat,b.lng]),[HQ.lat,HQ.lng]];
@@ -2448,7 +2459,7 @@ function updateMap(filterPlate){
     }
     // เที่ยว 2: dashed line (thinner, lower opacity)
     if(!mapFilterTrip||mapFilterTrip===2){
-      const t2=nnRoute(bills.filter(b=>queue[b.ref]===t.plate&&b.lat&&b.lng&&(tripMap[b.ref]||1)===2));
+      const t2=nnRoute(allBills.filter(b=>plateOf(b.ref)===t.plate&&b.lat&&b.lng&&tripOf(b.ref)===2));
       if(filterPlate)t2.forEach((b,i)=>{stopNums[b.ref]=i+1;});
       if(t2.length){
         const wpts=[[HQ.lat,HQ.lng],...t2.map(b=>[b.lat,b.lng]),[HQ.lat,HQ.lng]];
@@ -2461,7 +2472,7 @@ function updateMap(filterPlate){
     }
     // เที่ยว 3: dotted line (thinnest, most transparent)
     if(!mapFilterTrip||mapFilterTrip===3){
-      const t3=nnRoute(bills.filter(b=>queue[b.ref]===t.plate&&b.lat&&b.lng&&(tripMap[b.ref]||1)===3));
+      const t3=nnRoute(allBills.filter(b=>plateOf(b.ref)===t.plate&&b.lat&&b.lng&&tripOf(b.ref)===3));
       if(filterPlate)t3.forEach((b,i)=>{stopNums[b.ref]=i+1;});
       if(t3.length){
         const wpts=[[HQ.lat,HQ.lng],...t3.map(b=>[b.lat,b.lng]),[HQ.lat,HQ.lng]];
@@ -2476,21 +2487,23 @@ function updateMap(filterPlate){
 
   // Bill markers
   const billsToShow=filterPlate
-    ? bills.filter(b=>b.lat&&b.lng&&queue[b.ref]===filterPlate&&(!mapFilterTrip||(tripMap[b.ref]||1)===mapFilterTrip))
-    : bills.filter(b=>b.lat&&b.lng&&(!mapFilterTrip||(tripMap[b.ref]||1)===mapFilterTrip));
+    ? allBills.filter(b=>b.lat&&b.lng&&plateOf(b.ref)===filterPlate&&(!mapFilterTrip||tripOf(b.ref)===mapFilterTrip))
+    : allBills.filter(b=>b.lat&&b.lng&&(!mapFilterTrip||tripOf(b.ref)===mapFilterTrip));
 
   billsToShow.forEach(b=>{
-    const plate=queue[b.ref];
-    const tr=tripMap[b.ref]||1;
+    const plate=plateOf(b.ref);
+    const tr=tripOf(b.ref);
+    const saved=isSaved(b.ref);
     const col=plate?getTruckCol(plate):'#9BAAB8';
     const truck=TRUCKS.find(t=>t.plate===plate);
     const num=stopNums[b.ref];
     const size=num?30:(plate?26:22);
-    const label=num?String(num):(plate?'·':'?');
+    const label=num?String(num):(plate?(saved?'✓':'·'):'?');
     const icon=makePinIcon(col,label,size,1,tr);
     const tripBadge=plate?`<span style="background:${tr===3?'#F0FDF4':tr===2?'#EAF0F8':'#FFF8EC'};color:${tr===3?'#15803D':tr===2?'#1A5FA5':'#C47000'};border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700">เที่ยว ${tr}</span>`:''
+    const savedBadge=saved?` <span style="background:#FEF6EC;color:#7D6428;border:1px solid #E4C46E;border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700">💾 บันทึกแล้ว</span>`:'';
     const popup=`<div style="min-width:180px">
-      <b style="font-size:13px;color:#07101F">${b.arName}</b> ${tripBadge}<br/>
+      <b style="font-size:13px;color:#07101F">${b.arName}</b> ${tripBadge}${savedBadge}<br/>
       <span style="color:#6B7A90;font-size:11px">📍 ${b.district}, ${b.province}</span><br/>
       <span style="font-size:11px;color:#444">⚖ ${fmtKg(b.totalW)}</span><br/>
       <div style="margin-top:4px;padding:3px 8px;border-radius:6px;background:${plate?col+'18':'#F5F7FA'};color:${plate?col:'#9BAAB8'};font-weight:600;font-size:11px">
@@ -2517,7 +2530,7 @@ function updateMap(filterPlate){
     .bindPopup('<b style="color:#C9A84C">★ HQ รัตนไพบูลย์ กรุ๊ป</b><br/><span style="font-size:11px;color:#6B7A90">สมุทรสงคราม</span>').addTo(leafletMap);
   mapLayers.push(hqM);
 
-  const pts=bills.filter(b=>b.lat&&b.lng&&passesFilter(b));
+  const pts=allBills.filter(b=>b.lat&&b.lng&&passesFilter(b));
   if(pts.length){
     try{leafletMap.fitBounds(L.latLngBounds([[HQ.lat,HQ.lng],...pts.map(b=>[b.lat,b.lng])]),{padding:[36,36],maxZoom:13});}catch(e){}
   }
@@ -2545,18 +2558,61 @@ function filterMap(plate,btn){
   updateMap(plate);
 }
 
+// ── Helpers: รวมข้อมูล queue ปัจจุบัน + ข้อมูลบันทึกจาก Keepdata ──
+// ใช้ตอน render Routes Map เพื่อให้เห็นบิลที่บันทึกแล้วด้วย
+function mapAssignments(){
+  // คืน {ref:{plate,trip,saved,row}} รวม queue + keepData (กรองตาม dashFilterDate ถ้ามี)
+  const m={};
+  Object.keys(queue).forEach(r=>{
+    if(queue[r]) m[r]={plate:queue[r],trip:tripMap[r]||1,saved:false};
+  });
+  const rows=dashFilterDate
+    ? keepData.filter(r=>r.deliveryDate===dashFilterDate)
+    : keepData;
+  rows.forEach(r=>{
+    if(r.ref&&r.plate&&!m[r.ref]){
+      m[r.ref]={plate:r.plate,trip:r.trip||1,saved:true,row:r};
+    }
+  });
+  return m;
+}
+function mapBillsForRoute(){
+  // คืนรายการบิลสำหรับแสดงบนแผนที่: bills จริง + saved-only จาก keepData ที่ไม่มีใน bills
+  const out=[...bills];
+  const seen=new Set(bills.map(b=>b.ref));
+  const rows=dashFilterDate
+    ? keepData.filter(r=>r.deliveryDate===dashFilterDate)
+    : keepData;
+  rows.forEach(r=>{
+    if(r.ref&&!seen.has(r.ref)&&r.lat&&r.lng){
+      seen.add(r.ref);
+      out.push({
+        ref:r.ref, arName:r.arName, arCode:r.arCode,
+        province:r.province, district:r.district,
+        lat:r.lat, lng:r.lng,
+        totalW:r.weight, totalV:r.volume, totalAmt:r.amount,
+        route:r.route, routeCode:r.routeCode, days:r.days,
+        _saved:true
+      });
+    }
+  });
+  return out;
+}
+
 function renderRoutesView(){
   // Build truck filter buttons
   const wrap=document.getElementById('mapTruckFilter');
+  const assign=mapAssignments();
   if(wrap){
-    const trucksWithBills=TRUCKS.filter(t=>bills.some(b=>queue[b.ref]===t.plate));
+    const platesInUse=new Set(Object.values(assign).map(a=>a.plate));
+    const trucksWithBills=TRUCKS.filter(t=>platesInUse.has(t.plate));
     wrap.innerHTML=`<button onclick="filterMap(null,this)"
         style="padding:6px 14px;border-radius:8px;border:2px solid #07101F;background:#07101F;color:#E4C46E;font-size:12px;font-weight:700;cursor:pointer">
         🌐 ทั้งหมด
       </button>`+
       trucksWithBills.map(t=>{
         const col=getTruckCol(t.plate);
-        const cnt=bills.filter(b=>queue[b.ref]===t.plate).length;
+        const cnt=Object.values(assign).filter(a=>a.plate===t.plate).length;
         const isSel=mapFilterPlate===t.plate;
         return`<button onclick="filterMap('${t.plate}',this)"
           style="padding:6px 12px;border-radius:8px;border:2px solid ${isSel?col:'#E0E5ED'};
@@ -2574,9 +2630,10 @@ function renderRoutesView(){
     updateMap(mapFilterPlate);
   }
 
-  // Route cards
+  // Route cards — รวมบิลที่ยังไม่จัด + บิลที่บันทึกแล้ว
   const routes={};
-  bills.forEach(b=>{
+  const mergedBills=mapBillsForRoute();
+  mergedBills.forEach(b=>{
     const key=b.routeCode||b.route||'—';
     if(!routes[key])routes[key]={code:key,name:b.route||key,days:b.days||'',bills:[]};
     routes[key].bills.push(b);
@@ -2585,7 +2642,7 @@ function renderRoutesView(){
     Object.values(routes).filter(r=>r.bills.length>0)
     .sort((a,b)=>b.bills.length-a.bills.length)
     .map(r=>{
-      const done=r.bills.filter(b=>queue[b.ref]).length;
+      const done=r.bills.filter(b=>queue[b.ref]||assign[b.ref]).length;
       const tw=r.bills.reduce((s,b)=>s+b.totalW,0);
       const ta=r.bills.reduce((s,b)=>s+b.totalAmt,0);
       const pct=r.bills.length?Math.round(done/r.bills.length*100):0;
