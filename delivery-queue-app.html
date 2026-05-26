@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v10.7</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v10.8</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -316,7 +316,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v10.7</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v10.8</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -2412,36 +2412,100 @@ function updateMap(filterPlate){
     if(filterPlate&&t.plate!==filterPlate)return;
     const col=getTruckCol(t.plate);
 
-    // เรียงจุดแบบ Nearest-Neighbor เพื่อป้องกันเส้นตัดกัน
+    // เรียงจุดแบบ Multi-start NN + 2-opt + Or-opt (วิ่งกลับ HQ ด้วย)
     function nnRoute(bs){
       if(bs.length<2)return bs;
-      // 1) greedy NN จาก HQ
-      const rem=[...bs];const res=[];
-      let cLat=HQ.lat,cLng=HQ.lng;
-      while(rem.length){
-        let best=0,bestD=Infinity;
-        rem.forEach((x,i)=>{const d=haversine(cLat,cLng,x.lat,x.lng);if(d<bestD){bestD=d;best=i;}});
-        const p=rem.splice(best,1)[0];res.push(p);cLat=p.lat;cLng=p.lng;
+      const dist=(a,b)=>haversine(a.lat,a.lng,b.lat,b.lng);
+      const HQp={lat:HQ.lat,lng:HQ.lng};
+      // total cost: HQ -> tour -> HQ
+      function tourCost(o){
+        if(!o.length)return 0;
+        let d=dist(HQp,o[0]);
+        for(let i=1;i<o.length;i++)d+=dist(o[i-1],o[i]);
+        d+=dist(o[o.length-1],HQp);
+        return d;
       }
-      // 2) 2-opt: ลบเส้นไขว้/ย้อน (HQ = จุดเริ่ม)
-      const pts=[{lat:HQ.lat,lng:HQ.lng},...res];
-      const D=(a,b)=>haversine(pts[a].lat,pts[a].lng,pts[b].lat,pts[b].lng);
-      let improved=true,guard=0;
-      while(improved&&guard++<80){
-        improved=false;
-        for(let i=1;i<pts.length-1;i++){
-          for(let k=i+1;k<pts.length;k++){
-            const a=i-1,c=k,d=k+1;
-            const before=D(a,i)+(d<pts.length?D(c,d):0);
-            const after=D(a,c)+(d<pts.length?D(i,d):0);
-            if(after+1e-9<before){
-              let lo=i,hi=k;while(lo<hi){const t=pts[lo];pts[lo]=pts[hi];pts[hi]=t;lo++;hi--;}
-              improved=true;
+      // Greedy NN เริ่มจาก start point (HQ ถ้าไม่ระบุ)
+      function greedyNN(startIdx){
+        const rem=[...bs];
+        const out=[];
+        let cur;
+        if(startIdx!=null&&startIdx>=0&&startIdx<rem.length){
+          out.push(rem.splice(startIdx,1)[0]);cur=out[0];
+        } else cur=HQp;
+        while(rem.length){
+          let best=0,bestD=Infinity;
+          rem.forEach((x,i)=>{const d=dist(cur,x);if(d<bestD){bestD=d;best=i;}});
+          const p=rem.splice(best,1)[0];out.push(p);cur=p;
+        }
+        return out;
+      }
+      // 2-opt (รวม leg กลับ HQ)
+      function twoOpt(o){
+        const n=o.length;if(n<3)return o;
+        let improved=true,g=0;
+        while(improved&&g++<300){
+          improved=false;
+          for(let i=0;i<n-1;i++){
+            for(let k=i+1;k<n;k++){
+              const A=i===0?HQp:o[i-1];
+              const B=o[i];
+              const C=o[k];
+              const D=k===n-1?HQp:o[k+1];
+              const before=dist(A,B)+dist(C,D);
+              const after=dist(A,C)+dist(B,D);
+              if(after+1e-9<before){
+                let lo=i,hi=k;while(lo<hi){const t=o[lo];o[lo]=o[hi];o[hi]=t;lo++;hi--;}
+                improved=true;
+              }
             }
           }
         }
+        return o;
       }
-      return pts.slice(1);
+      // Or-opt: ลองย้ายชิ้น 1-3 จุดไปแทรกตำแหน่งอื่น
+      function orOpt(o){
+        const n=o.length;if(n<4)return o;
+        let improved=true,g=0;
+        while(improved&&g++<100){
+          improved=false;
+          for(let segLen=1;segLen<=Math.min(3,n-2);segLen++){
+            for(let i=0;i<=n-segLen;i++){
+              const seg=o.slice(i,i+segLen);
+              const rest=[...o.slice(0,i),...o.slice(i+segLen)];
+              // คำนวณ cost ปัจจุบัน
+              const cur=tourCost(o);
+              let bestPos=-1,bestCost=cur;
+              for(let j=0;j<=rest.length;j++){
+                if(j===i)continue;
+                const trial=[...rest.slice(0,j),...seg,...rest.slice(j)];
+                const c=tourCost(trial);
+                if(c+1e-9<bestCost){bestCost=c;bestPos=j;}
+              }
+              if(bestPos>=0){
+                o=[...rest.slice(0,bestPos),...seg,...rest.slice(bestPos)];
+                improved=true;break;
+              }
+            }
+            if(improved)break;
+          }
+        }
+        return o;
+      }
+      // Multi-start: เริ่มจาก HQ + จากแต่ละจุด (ถ้า N เล็ก) แล้วเลือกเส้นสั้นสุด
+      let bestTour=null,bestC=Infinity;
+      const starts=[null]; // HQ
+      const maxStarts=bs.length<=20?bs.length:Math.min(10,bs.length);
+      for(let i=0;i<maxStarts;i++)starts.push(i);
+      for(const s of starts){
+        let t=greedyNN(s);
+        t=twoOpt(t);
+        t=orOpt(t);
+        t=twoOpt(t); // 2-opt อีกรอบหลัง or-opt
+        const c=tourCost(t);
+        if(c<bestC){bestC=c;bestTour=t;}
+      }
+      return bestTour||bs;
     }
     // เที่ยว 1: solid line
     if(!mapFilterTrip||mapFilterTrip===1){
