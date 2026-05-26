@@ -319,6 +319,7 @@
                 style="width:100%;max-width:340px;height:210px;object-fit:cover;border-radius:var(--radius-md);border:2px solid var(--gold);display:block;cursor:pointer"
                 onclick="viewPhotoFull()">
               <div id="photoSize" style="font-size:11px;color:var(--muted);margin-top:4px;text-align:right"></div>
+              <div id="photoUploadStatus" style="font-size:12px;margin-top:4px"></div>
             </div>
           </div>
 
@@ -408,7 +409,7 @@
 // ════════════════════════════════════════════
 const SHEET_ID   = '19XHdS_Ft7NpQVkFEd2InNjH1CD6y6w6Vgd38Zyx8j0w';
 const SHEET_NAME = 'App Data Center';
-const GAS_WRITE_URL = 'https://script.google.com/macros/s/AKfycbyG-LFG2xsGFQ8QwPoRF9J3o5QTsRVxQyOXQxr3cYIXF5i2PUUuRmHpjecGv6YrTHNUhw/exec';
+const GAS_WRITE_URL = 'https://script.google.com/macros/s/AKfycbxXqafRBdMe5xHKBoA__O9LUuYvjyn4WMuIFGEl29WKqDN514FIzWcwQaidjq__9iyUaA/exec';
 const COL_TYPE       = 'ประเภทร้านค้า';
 const COL_ADDR       = 'ตำบล,อำเภอ,จังหวัด ส่วนกลาง';
 const COL_ZIP        = 'รหัสไปรษณีย์';
@@ -722,6 +723,7 @@ function saveStore() {
     routeName: selRouteName,
     gpsCoords,
     photo,
+    photoUrl:   currentPhotoUrl,
     address:    selAddress,
     postalCode: String(selZip),   // store as string
     savedAt:    new Date().toLocaleString('th-TH'),
@@ -747,7 +749,7 @@ async function submitToSheet(entry) {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify(entry)
+      body: JSON.stringify({ type: 'store', ...entry })
     });
     showToast('☁ บันทึกลง Google Sheet แล้ว', 'info');
   } catch (err) {
@@ -843,9 +845,11 @@ function renderTable() {
       <td style="color:var(--muted)">${s.routeName || '—'}</td>
       <td style="font-family:'Courier New',monospace;font-size:11px;color:var(--muted)">${s.gpsCoords || '—'}</td>
       <td style="text-align:center">
-        ${s.photo
-          ? `<img src="${s.photo}" style="width:60px;height:44px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="viewPhoto('${s.id}')" title="คลิกดูรูปขยาย">`
-          : '<span style="color:var(--muted);font-size:11px">—</span>'}
+        ${s.photoUrl
+          ? `<a href="${s.photoUrl}" target="_blank" style="display:inline-flex;align-items:center;gap:3px;font-size:12px;color:var(--info);font-weight:600;text-decoration:none" title="${s.photoUrl}">🖼 ดูรูป</a>`
+          : s.photo
+            ? `<img src="${s.photo}" style="width:60px;height:44px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="viewPhoto('${s.id}')" title="คลิกดูรูปขยาย">`
+            : '<span style="color:var(--muted);font-size:11px">—</span>'}
       </td>
       <td style="text-align:center">
         <button class="btn btn-danger btn-sm" onclick="deleteStore(${s.id})" title="ลบ">🗑</button>
@@ -895,7 +899,7 @@ function exportExcel() {
     'รูทตำบล':            s.routeSub,
     'ชื่อรูท':             s.routeName,
     'พิกัด GPS':          s.gpsCoords,
-    'มีรูปถ่าย':          s.photo ? 'มี' : 'ไม่มี',
+    'รูปถ่าย':            s.photoUrl || (s.photo ? 'มี (local)' : 'ไม่มี'),
     'บันทึกเมื่อ':        s.savedAt,
   }));
   const ws = XLSX.utils.json_to_sheet(data);
@@ -950,6 +954,7 @@ async function refreshData() {
 //  PHOTO
 // ════════════════════════════════════════════
 let currentPhoto = '';
+let currentPhotoUrl = '';
 
 function togglePhotoMenu() {
   const menu = document.getElementById('photoMenu');
@@ -984,12 +989,14 @@ function handlePhoto(input) {
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
       const b64 = canvas.toDataURL('image/jpeg', 0.72);
       currentPhoto = b64;
+      currentPhotoUrl = '';
       document.getElementById('photoImg').src = b64;
       document.getElementById('photoPreview').style.display = 'block';
       document.getElementById('btnClearPhoto').style.display = '';
       document.getElementById('btnAddPhoto').textContent = '📸 เปลี่ยนรูป';
       const kb = Math.round(b64.length * 0.75 / 1024);
       document.getElementById('photoSize').textContent = `${w}×${h}px · ~${kb} KB`;
+      uploadPhotoToDrive(b64);
     };
     img.src = e.target.result;
   };
@@ -997,13 +1004,37 @@ function handlePhoto(input) {
   input.value = '';
 }
 
+async function uploadPhotoToDrive(base64) {
+  const statusEl = document.getElementById('photoUploadStatus');
+  statusEl.innerHTML = '<span style="color:var(--warning)">⏳ กำลังอัพโหลดรูปไป Google Drive...</span>';
+  try {
+    const resp = await fetch(GAS_WRITE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ type: 'photo', base64, name: 'shop_' + Date.now() })
+    });
+    const result = await resp.json();
+    if (result.ok && result.url) {
+      currentPhotoUrl = result.url;
+      statusEl.innerHTML = `✓ อัพโหลดแล้ว · <a href="${result.url}" target="_blank" style="color:var(--info);font-weight:600">ดูรูปใน Drive 🔗</a>`;
+    } else {
+      throw new Error(result.error || 'unknown');
+    }
+  } catch(err) {
+    statusEl.innerHTML = '<span style="color:var(--danger)">⚠ อัพโหลด Drive ไม่สำเร็จ (บันทึกแบบ local แทน)</span>';
+    currentPhotoUrl = '';
+  }
+}
+
 function clearPhoto() {
   currentPhoto = '';
+  currentPhotoUrl = '';
   document.getElementById('photoImg').src = '';
   document.getElementById('photoPreview').style.display = 'none';
   document.getElementById('btnClearPhoto').style.display = 'none';
   document.getElementById('btnAddPhoto').textContent = '📸 เพิ่มรูปถ่าย';
   document.getElementById('photoSize').textContent = '';
+  document.getElementById('photoUploadStatus').innerHTML = '';
 }
 
 function viewPhotoFull() {
