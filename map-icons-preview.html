@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>📍 Marker Icons Preview — Rattana</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun','Segoe UI',sans-serif;background:#f4f6fb;color:#0d1b3e;padding:20px}
+h1{font-size:22px;margin-bottom:8px;color:#0d1b3e}
+.sub{font-size:13px;color:#6b7896;margin-bottom:16px}
+.note{background:#fff8ec;border:1px solid #e4c46e;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#7d6428}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:16px}
+.card{background:#fff;border:1px solid #dde3f0;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.head{padding:10px 14px;background:#0d1b3e;color:#e8c86a;display:flex;justify-content:space-between;align-items:center}
+.head .name{font-weight:700;font-size:14px}
+.head .num{background:#c9a84c;color:#0d1b3e;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+.desc{padding:8px 14px;font-size:12px;color:#6b7896;background:#fafbfd;border-bottom:1px solid #eef0f5}
+.map{height:300px;width:100%}
+.legend{padding:8px 14px;background:#f8f9fb;border-top:1px solid #eef0f5;font-size:11px;color:#6b7896;display:flex;gap:14px;flex-wrap:wrap}
+.legend span{display:inline-flex;align-items:center;gap:4px}
+.legend span::before{content:'';width:10px;height:10px;border-radius:50%;background:var(--c)}
+</style>
+</head>
+<body>
+<h1>📍 Marker Icons Preview</h1>
+<div class="sub">แต่ละแบบมี 5 หมุดสาธิต — สีต่างกัน + เลข + รถ HQ ★ — เลือกแบบที่ชอบแล้วบอกหมายเลข</div>
+<div class="note">💡 รูปแบบ trip 1/2/3 (solid/ring/dotted) ใช้ได้ทุกแบบ · ทั้งหมดเขียนด้วย SVG/CSS ไม่ต้องโหลดรูป</div>
+<div class="grid" id="grid"></div>
+
+<script>
+const HQ=[13.412, 99.991];
+// 5 sample points around HQ
+const SAMPLES=[
+  {pos:[13.418, 99.985], col:'#C47000', num:1},
+  {pos:[13.405, 100.005], col:'#1A5FA5', num:2},
+  {pos:[13.395, 99.978], col:'#15803D', num:3},
+  {pos:[13.425, 100.000], col:'#7D6428', num:4},
+  {pos:[13.402, 99.965], col:'#B91C1C', num:5},
+];
+
+// Icon style builders — each returns L.divIcon
+const ICONS={
+
+  // 1. ปัจจุบัน — วงกลม
+  current:(col,num)=>L.divIcon({
+    html:`<div style="width:30px;height:30px;border-radius:50%;background:${col};border:3px solid rgba(255,255,255,.95);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;box-shadow:0 3px 10px rgba(0,0,0,.35)">${num}</div>`,
+    className:'',iconSize:[30,30],iconAnchor:[15,15]
+  }),
+
+  // 2. Google Maps Pin — หยดน้ำ
+  pin:(col,num)=>L.divIcon({
+    html:`<svg width="32" height="42" viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 3px 4px rgba(0,0,0,.35))">
+      <path d="M16 0 C7 0 0 7 0 16 C0 28 16 42 16 42 C16 42 32 28 32 16 C32 7 25 0 16 0 Z" fill="${col}" stroke="#fff" stroke-width="2"/>
+      <circle cx="16" cy="16" r="9" fill="#fff"/>
+      <text x="16" y="20" text-anchor="middle" font-family="Sarabun" font-weight="700" font-size="12" fill="${col}">${num}</text>
+    </svg>`,
+    className:'',iconSize:[32,42],iconAnchor:[16,42],popupAnchor:[0,-40]
+  }),
+
+  // 3. Material Pin — แบบ flat สมัยใหม่
+  material:(col,num)=>L.divIcon({
+    html:`<div style="position:relative;width:36px;height:42px;filter:drop-shadow(0 4px 6px rgba(0,0,0,.3))">
+      <div style="position:absolute;top:0;left:0;width:36px;height:36px;background:${col};border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2.5px solid #fff"></div>
+      <div style="position:absolute;top:7px;left:7px;width:22px;height:22px;background:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;color:${col};font-weight:800;font-size:13px;font-family:Sarabun">${num}</div>
+    </div>`,
+    className:'',iconSize:[36,42],iconAnchor:[18,42],popupAnchor:[0,-40]
+  }),
+
+  // 4. Hexagon
+  hex:(col,num)=>L.divIcon({
+    html:`<svg width="34" height="38" viewBox="0 0 34 38" style="filter:drop-shadow(0 3px 5px rgba(0,0,0,.3))">
+      <polygon points="17,1 33,10 33,28 17,37 1,28 1,10" fill="${col}" stroke="#fff" stroke-width="2"/>
+      <text x="17" y="23" text-anchor="middle" font-family="Sarabun" font-weight="800" font-size="14" fill="#fff">${num}</text>
+    </svg>`,
+    className:'',iconSize:[34,38],iconAnchor:[17,19]
+  }),
+
+  // 5. Shield (เกราะ)
+  shield:(col,num)=>L.divIcon({
+    html:`<svg width="34" height="40" viewBox="0 0 34 40" style="filter:drop-shadow(0 3px 5px rgba(0,0,0,.3))">
+      <path d="M17 1 L33 6 L33 22 C33 32 17 39 17 39 C17 39 1 32 1 22 L1 6 Z" fill="${col}" stroke="#fff" stroke-width="2"/>
+      <text x="17" y="23" text-anchor="middle" font-family="Sarabun" font-weight="800" font-size="14" fill="#fff">${num}</text>
+    </svg>`,
+    className:'',iconSize:[34,40],iconAnchor:[17,20]
+  }),
+
+  // 6. Speech bubble
+  bubble:(col,num)=>L.divIcon({
+    html:`<svg width="40" height="38" viewBox="0 0 40 38" style="filter:drop-shadow(0 3px 5px rgba(0,0,0,.3))">
+      <rect x="2" y="2" width="36" height="26" rx="8" fill="${col}" stroke="#fff" stroke-width="2"/>
+      <path d="M16 28 L20 36 L24 28 Z" fill="${col}" stroke="#fff" stroke-width="2"/>
+      <text x="20" y="20" text-anchor="middle" font-family="Sarabun" font-weight="800" font-size="14" fill="#fff">${num}</text>
+    </svg>`,
+    className:'',iconSize:[40,38],iconAnchor:[20,36],popupAnchor:[0,-34]
+  }),
+
+  // 7. Diamond
+  diamond:(col,num)=>L.divIcon({
+    html:`<svg width="34" height="34" viewBox="0 0 34 34" style="filter:drop-shadow(0 3px 5px rgba(0,0,0,.3))">
+      <polygon points="17,1 33,17 17,33 1,17" fill="${col}" stroke="#fff" stroke-width="2"/>
+      <text x="17" y="22" text-anchor="middle" font-family="Sarabun" font-weight="800" font-size="13" fill="#fff">${num}</text>
+    </svg>`,
+    className:'',iconSize:[34,34],iconAnchor:[17,17]
+  }),
+
+  // 8. Glass / 3D ball
+  glass:(col,num)=>L.divIcon({
+    html:`<div style="width:34px;height:34px;border-radius:50%;background:radial-gradient(circle at 30% 25%,#fff 5%,${col} 60%,${col}cc 100%);border:2px solid rgba(255,255,255,.85);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px;text-shadow:0 1px 2px rgba(0,0,0,.5);box-shadow:0 4px 12px rgba(0,0,0,.4),inset 0 -3px 6px rgba(0,0,0,.25)">${num}</div>`,
+    className:'',iconSize:[34,34],iconAnchor:[17,17]
+  }),
+
+  // 9. Flag
+  flag:(col,num)=>L.divIcon({
+    html:`<svg width="34" height="42" viewBox="0 0 34 42" style="filter:drop-shadow(0 3px 5px rgba(0,0,0,.3))">
+      <line x1="3" y1="2" x2="3" y2="42" stroke="#444" stroke-width="2.5"/>
+      <path d="M3 4 L30 4 L26 14 L30 24 L3 24 Z" fill="${col}" stroke="#fff" stroke-width="1.5"/>
+      <text x="15" y="18" text-anchor="middle" font-family="Sarabun" font-weight="800" font-size="11" fill="#fff">${num}</text>
+    </svg>`,
+    className:'',iconSize:[34,42],iconAnchor:[3,42]
+  }),
+
+  // 10. Square tag
+  square:(col,num)=>L.divIcon({
+    html:`<div style="width:32px;height:32px;background:${col};border:2.5px solid #fff;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px;font-family:Sarabun;box-shadow:0 3px 8px rgba(0,0,0,.3);transform:rotate(0deg)">${num}</div>`,
+    className:'',iconSize:[32,32],iconAnchor:[16,16]
+  }),
+
+  // 11. Numbered chip (ยาวๆ มีชื่อรถได้)
+  chip:(col,num)=>L.divIcon({
+    html:`<div style="display:inline-flex;align-items:center;background:#fff;border:2px solid ${col};border-radius:18px;padding:2px 4px 2px 2px;box-shadow:0 3px 8px rgba(0,0,0,.25)">
+      <span style="background:${col};color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;font-family:Sarabun">${num}</span>
+      <span style="padding:0 8px;color:${col};font-weight:700;font-size:11px;font-family:Sarabun">บิล</span>
+    </div>`,
+    className:'',iconSize:[60,30],iconAnchor:[30,15]
+  }),
+
+  // 12. Truck emoji
+  truck:(col,num)=>L.divIcon({
+    html:`<div style="position:relative;width:36px;height:36px">
+      <div style="width:36px;height:36px;border-radius:50%;background:${col};border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 3px 8px rgba(0,0,0,.3)">🚛</div>
+      <div style="position:absolute;top:-4px;right:-4px;background:#fff;color:${col};border:2px solid ${col};border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;font-family:Sarabun">${num}</div>
+    </div>`,
+    className:'',iconSize:[40,40],iconAnchor:[20,20]
+  })
+
+};
+
+const STYLES=[
+  {key:'current',  name:'1. วงกลม (ปัจจุบัน)', desc:'แบบที่ใช้อยู่ตอนนี้ — เรียบ ดูสะอาด'},
+  {key:'pin',      name:'2. Google Pin', desc:'หยดน้ำคลาสสิก แบบ Google Maps'},
+  {key:'material', name:'3. Material Pin', desc:'flat design — โมเดิร์น มีหางชี้พื้น'},
+  {key:'hex',      name:'4. Hexagon', desc:'หกเหลี่ยม — เป็นเอกลักษณ์'},
+  {key:'shield',   name:'5. Shield', desc:'รูปโล่ — ดูเป็นทางการ'},
+  {key:'bubble',   name:'6. Speech Bubble', desc:'กรอบคำพูด — มีหางชี้ที่จุด'},
+  {key:'diamond',  name:'7. Diamond', desc:'ข้าวหลามตัด — เด่นชัด แตกต่าง'},
+  {key:'glass',    name:'8. Glass / 3D', desc:'ลูกแก้ว 3D — สวยหรู'},
+  {key:'flag',     name:'9. Flag', desc:'ธง — สำหรับลำดับจุดวิ่ง'},
+  {key:'square',   name:'10. Square Tag', desc:'สี่เหลี่ยมมุมโค้ง — เรียบง่าย'},
+  {key:'chip',     name:'11. Chip + Label', desc:'มีพื้นที่ใส่ชื่อสั้นๆ ได้'},
+  {key:'truck',    name:'12. Truck + Badge', desc:'อีโมจิรถ + เลขมุม'},
+];
+
+const grid=document.getElementById('grid');
+STYLES.forEach((s,i)=>{
+  const card=document.createElement('div');
+  card.className='card';
+  card.innerHTML=`
+    <div class="head"><span class="name">${s.name}</span><span class="num">${i+1}</span></div>
+    <div class="desc">${s.desc}</div>
+    <div class="map" id="m${i}"></div>
+  `;
+  grid.appendChild(card);
+  setTimeout(()=>{
+    const m=L.map('m'+i,{zoomControl:true,attributionControl:false}).setView(HQ,11);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:19,subdomains:'abcd'}).addTo(m);
+    // HQ
+    L.marker(HQ,{icon:L.divIcon({
+      html:`<div style="width:38px;height:38px;border-radius:50%;background:#c9a84c;border:3px solid #fff;display:flex;align-items:center;justify-content:center;color:#0d1b3e;font-size:18px;font-weight:700;box-shadow:0 4px 12px rgba(201,168,76,.6)">★</div>`,
+      className:'',iconSize:[38,38],iconAnchor:[19,19]
+    })}).addTo(m).bindPopup('★ HQ');
+    // Samples
+    SAMPLES.forEach(p=>{
+      L.marker(p.pos,{icon:ICONS[s.key](p.col,p.num)}).addTo(m).bindPopup(`บิลที่ ${p.num}`);
+    });
+    // Fit
+    const all=[HQ,...SAMPLES.map(p=>p.pos)];
+    m.fitBounds(L.latLngBounds(all),{padding:[24,24]});
+  },80*i);
+});
+</script>
+</body>
+</html>
