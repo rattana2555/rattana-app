@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v10.8</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v10.9</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -316,7 +316,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v10.8</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v10.9</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -494,6 +494,15 @@ select,input{font-family:inherit;font-size:16px}
       <div style="margin-left:auto;font-size:10px;color:#A0ABBB">
         ● = เที่ยว 1 (solid) &nbsp; ○ = เที่ยว 2 (dashed) &nbsp; ◌ = เที่ยว 3 (dotted)
       </div>
+    </div>
+
+    <!-- Date filter (จากชีท Keepdata) -->
+    <div style="background:#fff;border:1px solid #E0E5ED;border-radius:12px;padding:12px 16px;margin-bottom:14px" id="mapDateFilterBox">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">
+        <div style="font-size:11px;color:#6B7A90;font-weight:500">📅 เลือกวันส่ง (จากชีท Keepdata)</div>
+        <button onclick="refreshKeepdata()" style="background:#EAF0F8;border:1px solid #93B8DE;color:#1A5FA5;border-radius:7px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer">🔄 รีเฟรช</button>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center" id="mapDateFilter"></div>
     </div>
 
     <!-- Truck filter -->
@@ -2663,7 +2672,33 @@ function mapBillsForRoute(){
   return out;
 }
 
+function setRoutesDate(d){
+  dashFilterDate=d;
+  renderRoutesView();
+}
+
 function renderRoutesView(){
+  // ── Date filter (จากชีท Keepdata) ──
+  const dateWrap=document.getElementById('mapDateFilter');
+  if(dateWrap){
+    const allDates=[...new Set(keepData.map(r=>r.deliveryDate))]
+      .sort((a,b)=>parseDateTH(b)-parseDateTH(a));
+    if(dashFilterDate&&!allDates.includes(dashFilterDate))dashFilterDate=null;
+    if(!allDates.length){
+      dateWrap.innerHTML=`<span style="font-size:11px;color:#A0ABBB">ไม่มีข้อมูลในชีท Keepdata — กด 🔄 รีเฟรช</span>`;
+    } else {
+      const btnS=(active,color='#1A5FA5',bg='#EAF0F8')=>
+        `padding:5px 12px;border-radius:18px;border:1.5px solid ${active?color:'#E0E5ED'};`+
+        `background:${active?bg:'#fff'};color:${active?color:'#6B7A90'};`+
+        `font-size:11px;font-weight:600;cursor:pointer`;
+      dateWrap.innerHTML=`<button onclick="setRoutesDate(null)" style="${btnS(!dashFilterDate,'#C9A84C','#FEF6EC')}">ทั้งหมด (${keepData.length})</button>`+
+        allDates.map(d=>{
+          const cnt=keepData.filter(r=>r.deliveryDate===d).length;
+          return`<button onclick="setRoutesDate('${d}')" style="${btnS(dashFilterDate===d)}">📅 ${d} (${cnt})</button>`;
+        }).join('');
+    }
+  }
+
   // Build truck filter buttons
   const wrap=document.getElementById('mapTruckFilter');
   const assign=mapAssignments();
