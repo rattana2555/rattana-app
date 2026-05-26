@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v12.3</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v12.4</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -365,7 +365,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v12.3</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v12.4</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -2835,16 +2835,23 @@ function renderRoutesView(){
   // Build truck filter buttons
   const wrap=document.getElementById('mapTruckFilter');
   const assign=mapAssignments();
+  const allBillsMap=mapBillsForRoute();
+  // นับเฉพาะบิลที่มี GPS (ขึ้นบนแผนที่ได้จริง)
+  const cntByPlate={};
+  allBillsMap.forEach(b=>{
+    if(!b.lat||!b.lng)return;
+    const p=assign[b.ref]?.plate;
+    if(p)cntByPlate[p]=(cntByPlate[p]||0)+1;
+  });
   if(wrap){
-    const platesInUse=new Set(Object.values(assign).map(a=>a.plate));
-    const trucksWithBills=TRUCKS.filter(t=>platesInUse.has(t.plate));
+    const trucksWithBills=TRUCKS.filter(t=>cntByPlate[t.plate]>0);
     wrap.innerHTML=`<button onclick="filterMap(null,this)"
         style="padding:6px 14px;border-radius:8px;border:2px solid #07101F;background:#07101F;color:#E4C46E;font-size:12px;font-weight:700;cursor:pointer">
         🌐 ทั้งหมด
       </button>`+
       trucksWithBills.map(t=>{
         const col=getTruckCol(t.plate);
-        const cnt=Object.values(assign).filter(a=>a.plate===t.plate).length;
+        const cnt=cntByPlate[t.plate]||0;
         const isSel=mapFilterPlate===t.plate;
         return`<button onclick="filterMap('${t.plate}',this)"
           style="padding:6px 12px;border-radius:8px;border:2px solid ${isSel?col:'#E0E5ED'};
