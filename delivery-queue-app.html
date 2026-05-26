@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v11.1</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v11.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -316,7 +316,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v11.1</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v11.2</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -2421,48 +2421,42 @@ function updateMap(filterPlate){
     if(filterPlate&&t.plate!==filterPlate)return;
     const col=getTruckCol(t.plate);
 
-    // เรียงจุดแบบ Multi-start NN + 2-opt + Or-opt (วิ่งกลับ HQ ด้วย)
+    // เริ่มจากร้านไกลสุดจาก HQ → ใกล้ขึ้นเรื่อยๆ (ไม่นับเส้นกลับ HQ)
     function nnRoute(bs){
       if(bs.length<2)return bs;
       const dist=(a,b)=>haversine(a.lat,a.lng,b.lat,b.lng);
       const HQp={lat:HQ.lat,lng:HQ.lng};
-      // total cost: HQ -> tour -> HQ
-      function tourCost(o){
+      // คอสต์: HQ → first → ... → last (open path, ไม่นับกลับ HQ)
+      function pathCost(o){
         if(!o.length)return 0;
         let d=dist(HQp,o[0]);
         for(let i=1;i<o.length;i++)d+=dist(o[i-1],o[i]);
-        d+=dist(o[o.length-1],HQp);
         return d;
       }
-      // Greedy NN เริ่มจาก start point (HQ ถ้าไม่ระบุ)
+      // Greedy NN เริ่มจากจุดที่ระบุ
       function greedyNN(startIdx){
         const rem=[...bs];
-        const out=[];
-        let cur;
-        if(startIdx!=null&&startIdx>=0&&startIdx<rem.length){
-          out.push(rem.splice(startIdx,1)[0]);cur=out[0];
-        } else cur=HQp;
+        const out=[rem.splice(startIdx,1)[0]];
+        let cur=out[0];
         while(rem.length){
           let best=0,bestD=Infinity;
           rem.forEach((x,i)=>{const d=dist(cur,x);if(d<bestD){bestD=d;best=i;}});
-          const p=rem.splice(best,1)[0];out.push(p);cur=p;
+          out.push(rem.splice(best,1)[0]);cur=out[out.length-1];
         }
         return out;
       }
-      // 2-opt (รวม leg กลับ HQ)
+      // 2-opt — FIX จุดแรก (จุดไกลสุด) + ไม่นับ leg กลับ HQ
       function twoOpt(o){
         const n=o.length;if(n<3)return o;
         let improved=true,g=0;
         while(improved&&g++<300){
           improved=false;
-          for(let i=0;i<n-1;i++){
+          for(let i=1;i<n-1;i++){          // i=1: ไม่สลับจุดแรก
             for(let k=i+1;k<n;k++){
-              const A=i===0?HQp:o[i-1];
-              const B=o[i];
-              const C=o[k];
-              const D=k===n-1?HQp:o[k+1];
-              const before=dist(A,B)+dist(C,D);
-              const after=dist(A,C)+dist(B,D);
+              const A=o[i-1], B=o[i], C=o[k];
+              const hasD=k<n-1, D=hasD?o[k+1]:null;
+              const before=dist(A,B)+(hasD?dist(C,D):0);
+              const after =dist(A,C)+(hasD?dist(B,D):0);
               if(after+1e-9<before){
                 let lo=i,hi=k;while(lo<hi){const t=o[lo];o[lo]=o[hi];o[hi]=t;lo++;hi--;}
                 improved=true;
@@ -2472,23 +2466,22 @@ function updateMap(filterPlate){
         }
         return o;
       }
-      // Or-opt: ลองย้ายชิ้น 1-3 จุดไปแทรกตำแหน่งอื่น
+      // Or-opt — ย้ายชิ้น 1-3 จุด (ห้ามย้ายจุดแรก)
       function orOpt(o){
         const n=o.length;if(n<4)return o;
         let improved=true,g=0;
         while(improved&&g++<100){
           improved=false;
           for(let segLen=1;segLen<=Math.min(3,n-2);segLen++){
-            for(let i=0;i<=n-segLen;i++){
+            for(let i=1;i<=n-segLen;i++){   // i=1: ไม่ขยับจุดแรก
               const seg=o.slice(i,i+segLen);
               const rest=[...o.slice(0,i),...o.slice(i+segLen)];
-              // คำนวณ cost ปัจจุบัน
-              const cur=tourCost(o);
+              const cur=pathCost(o);
               let bestPos=-1,bestCost=cur;
-              for(let j=0;j<=rest.length;j++){
+              for(let j=1;j<=rest.length;j++){  // j=1: ไม่แทรกก่อนจุดแรก
                 if(j===i)continue;
                 const trial=[...rest.slice(0,j),...seg,...rest.slice(j)];
-                const c=tourCost(trial);
+                const c=pathCost(trial);
                 if(c+1e-9<bestCost){bestCost=c;bestPos=j;}
               }
               if(bestPos>=0){
@@ -2501,27 +2494,24 @@ function updateMap(filterPlate){
         }
         return o;
       }
-      // Multi-start: เริ่มจาก HQ + จากแต่ละจุด (ถ้า N เล็ก) แล้วเลือกเส้นสั้นสุด
-      let bestTour=null,bestC=Infinity;
-      const starts=[null]; // HQ
-      const maxStarts=bs.length<=20?bs.length:Math.min(10,bs.length);
-      for(let i=0;i<maxStarts;i++)starts.push(i);
-      for(const s of starts){
-        let t=greedyNN(s);
-        t=twoOpt(t);
-        t=orOpt(t);
-        t=twoOpt(t); // 2-opt อีกรอบหลัง or-opt
-        const c=tourCost(t);
-        if(c<bestC){bestC=c;bestTour=t;}
+      // หา top-K จุดไกลสุดจาก HQ → ลองเริ่มแต่ละจุด → เลือกเส้นที่ดีสุด
+      const ranked=bs.map((b,i)=>({i,d:dist(HQp,b)})).sort((a,b)=>b.d-a.d);
+      const K=Math.min(5,bs.length);
+      let best=null,bestC=Infinity;
+      for(let s=0;s<K;s++){
+        let t=greedyNN(ranked[s].i);
+        t=twoOpt(t); t=orOpt(t); t=twoOpt(t);
+        const c=pathCost(t);
+        if(c<bestC){bestC=c;best=t;}
       }
-      return bestTour||bs;
+      return best||bs;
     }
     // เที่ยว 1: solid line
     if(!mapFilterTrip||mapFilterTrip===1){
       const t1=nnRoute(allBills.filter(b=>plateOf(b.ref)===t.plate&&b.lat&&b.lng&&tripOf(b.ref)===1));
       if(filterPlate)t1.forEach((b,i)=>{stopNums[b.ref]=i+1;});
       if(t1.length){
-        const wpts=[[HQ.lat,HQ.lng],...t1.map(b=>[b.lat,b.lng]),[HQ.lat,HQ.lng]];
+        const wpts=[[HQ.lat,HQ.lng],...t1.map(b=>[b.lat,b.lng])]; // เที่ยวไปอย่างเดียว ไม่วาดกลับ HQ
         // haversine estimate
         let estD=0;for(let i=1;i<wpts.length;i++)estD+=haversine(wpts[i-1][0],wpts[i-1][1],wpts[i][0],wpts[i][1]);
         if(filterPlate){if(!_tripDur[t.plate])_tripDur[t.plate]={};_tripDur[t.plate][1]={min:null,est:estD/45*60};renderTripTimeBar(filterPlate);}
@@ -2535,7 +2525,7 @@ function updateMap(filterPlate){
       const t2=nnRoute(allBills.filter(b=>plateOf(b.ref)===t.plate&&b.lat&&b.lng&&tripOf(b.ref)===2));
       if(filterPlate)t2.forEach((b,i)=>{stopNums[b.ref]=i+1;});
       if(t2.length){
-        const wpts=[[HQ.lat,HQ.lng],...t2.map(b=>[b.lat,b.lng]),[HQ.lat,HQ.lng]];
+        const wpts=[[HQ.lat,HQ.lng],...t2.map(b=>[b.lat,b.lng])]; // เที่ยวไปอย่างเดียว ไม่วาดกลับ HQ
         let estD=0;for(let i=1;i<wpts.length;i++)estD+=haversine(wpts[i-1][0],wpts[i-1][1],wpts[i][0],wpts[i][1]);
         if(filterPlate){if(!_tripDur[t.plate])_tripDur[t.plate]={};_tripDur[t.plate][2]={min:null,est:estD/45*60};renderTripTimeBar(filterPlate);}
         const line=L.polyline(wpts,{color:col,weight:2.5,opacity:.7,dashArray:'10 6',lineJoin:'round'}).addTo(leafletMap);
@@ -2548,7 +2538,7 @@ function updateMap(filterPlate){
       const t3=nnRoute(allBills.filter(b=>plateOf(b.ref)===t.plate&&b.lat&&b.lng&&tripOf(b.ref)===3));
       if(filterPlate)t3.forEach((b,i)=>{stopNums[b.ref]=i+1;});
       if(t3.length){
-        const wpts=[[HQ.lat,HQ.lng],...t3.map(b=>[b.lat,b.lng]),[HQ.lat,HQ.lng]];
+        const wpts=[[HQ.lat,HQ.lng],...t3.map(b=>[b.lat,b.lng])]; // เที่ยวไปอย่างเดียว ไม่วาดกลับ HQ
         let estD=0;for(let i=1;i<wpts.length;i++)estD+=haversine(wpts[i-1][0],wpts[i-1][1],wpts[i][0],wpts[i][1]);
         if(filterPlate){if(!_tripDur[t.plate])_tripDur[t.plate]={};_tripDur[t.plate][3]={min:null,est:estD/45*60};renderTripTimeBar(filterPlate);}
         const line=L.polyline(wpts,{color:col,weight:2,opacity:.55,dashArray:'3 5',lineJoin:'round'}).addTo(leafletMap);
