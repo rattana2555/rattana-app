@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v10.9</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v11.0</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -316,7 +316,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v10.9</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v11.0</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -2650,13 +2650,36 @@ function mapAssignments(){
   return m;
 }
 function mapBillsForRoute(){
-  // คืนรายการบิลสำหรับแสดงบนแผนที่: bills จริง + saved-only จาก keepData ที่ไม่มีใน bills
-  const out=[...bills];
-  const seen=new Set(bills.map(b=>b.ref));
-  const rows=dashFilterDate
+  // คืนรายการบิลสำหรับแสดงบนแผนที่
+  // ถ้ามี dashFilterDate → ใช้จาก keepData เฉพาะวันนั้น (ไม่รวม current bills)
+  // ถ้าไม่มี → ใช้ current bills + saved bills จาก keepData (รวม)
+  const rowsKeep=dashFilterDate
     ? keepData.filter(r=>r.deliveryDate===dashFilterDate)
     : keepData;
-  rows.forEach(r=>{
+  const keepByRef={};
+  rowsKeep.forEach(r=>{if(r.ref)keepByRef[r.ref]=r;});
+
+  if(dashFilterDate){
+    // เลือกวันแล้ว → แสดงเฉพาะที่บันทึกในวันนั้น
+    return rowsKeep
+      .filter(r=>r.ref&&r.lat&&r.lng)
+      .map(r=>({
+        ref:r.ref, arName:r.arName, arCode:r.arCode,
+        province:r.province, district:r.district,
+        lat:r.lat, lng:r.lng,
+        totalW:r.weight, totalV:r.volume, totalAmt:r.amount,
+        route:r.route, routeCode:r.routeCode, days:r.days,
+        _saved:true
+      }));
+  }
+
+  // ไม่เลือกวัน → current bills + saved-only (เติม GPS จาก keepData ถ้าขาด)
+  const out=bills.map(b=>{
+    const k=keepByRef[b.ref];
+    return{...b, lat:b.lat||k?.lat||0, lng:b.lng||k?.lng||0};
+  });
+  const seen=new Set(bills.map(b=>b.ref));
+  rowsKeep.forEach(r=>{
     if(r.ref&&!seen.has(r.ref)&&r.lat&&r.lng){
       seen.add(r.ref);
       out.push({
