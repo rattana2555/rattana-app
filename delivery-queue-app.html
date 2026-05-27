@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v12.7</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v12.8</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -365,7 +365,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v12.7</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v12.8</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -2840,6 +2840,87 @@ function setRoutesDate(d){
   renderRoutesView();
 }
 
+// ── Global TSP: เริ่มจากร้านไกลสุด + multi-start NN + 2-opt + Or-opt ──
+function tspRoute(bs){
+  if(bs.length<2)return bs;
+  const dist=(a,b)=>haversine(a.lat,a.lng,b.lat,b.lng);
+  const HQp={lat:HQ.lat,lng:HQ.lng};
+  function pathCost(o){
+    if(!o.length)return 0;
+    let d=dist(HQp,o[0]);
+    for(let i=1;i<o.length;i++)d+=dist(o[i-1],o[i]);
+    return d;
+  }
+  function greedyNN(startIdx){
+    const rem=[...bs];
+    const out=[rem.splice(startIdx,1)[0]];
+    let cur=out[0];
+    while(rem.length){
+      let best=0,bd=Infinity;
+      rem.forEach((x,i)=>{const d=dist(cur,x);if(d<bd){bd=d;best=i;}});
+      out.push(rem.splice(best,1)[0]);cur=out[out.length-1];
+    }
+    return out;
+  }
+  function twoOpt(o){
+    const n=o.length;if(n<3)return o;
+    let improved=true,g=0;
+    while(improved&&g++<300){
+      improved=false;
+      for(let i=1;i<n-1;i++){
+        for(let k=i+1;k<n;k++){
+          const A=o[i-1], B=o[i], C=o[k];
+          const hasD=k<n-1, D=hasD?o[k+1]:null;
+          const before=dist(A,B)+(hasD?dist(C,D):0);
+          const after =dist(A,C)+(hasD?dist(B,D):0);
+          if(after+1e-9<before){
+            let lo=i,hi=k;while(lo<hi){const t=o[lo];o[lo]=o[hi];o[hi]=t;lo++;hi--;}
+            improved=true;
+          }
+        }
+      }
+    }
+    return o;
+  }
+  function orOpt(o){
+    const n=o.length;if(n<4)return o;
+    let improved=true,g=0;
+    while(improved&&g++<100){
+      improved=false;
+      for(let segLen=1;segLen<=Math.min(3,n-2);segLen++){
+        for(let i=1;i<=n-segLen;i++){
+          const seg=o.slice(i,i+segLen);
+          const rest=[...o.slice(0,i),...o.slice(i+segLen)];
+          const cur=pathCost(o);
+          let bestPos=-1,bestCost=cur;
+          for(let j=1;j<=rest.length;j++){
+            if(j===i)continue;
+            const trial=[...rest.slice(0,j),...seg,...rest.slice(j)];
+            const c=pathCost(trial);
+            if(c+1e-9<bestCost){bestCost=c;bestPos=j;}
+          }
+          if(bestPos>=0){
+            o=[...rest.slice(0,bestPos),...seg,...rest.slice(bestPos)];
+            improved=true;break;
+          }
+        }
+        if(improved)break;
+      }
+    }
+    return o;
+  }
+  const ranked=bs.map((b,i)=>({i,d:dist(HQp,b)})).sort((a,b)=>b.d-a.d);
+  const K=Math.min(5,bs.length);
+  let best=null,bestC=Infinity;
+  for(let s=0;s<K;s++){
+    let t=greedyNN(ranked[s].i);
+    t=twoOpt(t); t=orOpt(t); t=twoOpt(t);
+    const c=pathCost(t);
+    if(c<bestC){bestC=c;best=t;}
+  }
+  return best||bs;
+}
+
 // ── Routes Preview Map (queue ปัจจุบัน เท่านั้น ไม่รวม keepData) ──
 let rLeafletMap=null, rMapLayers=[], rMapPlate=null, rMapTrip=0;
 
@@ -2883,25 +2964,9 @@ function rUpdateMap(){
     if(rMapPlate&&t.plate!==rMapPlate)return;
     const col=getTruckCol(t.plate);
 
-    function nnSimple(bs){
-      if(bs.length<2)return bs;
-      const dist=(a,b)=>haversine(a.lat,a.lng,b.lat,b.lng);
-      const HQp={lat:HQ.lat,lng:HQ.lng};
-      const ranked=bs.map((b,i)=>({i,d:dist(HQp,b)})).sort((a,b)=>b.d-a.d);
-      const rem=[...bs];
-      const out=[rem.splice(ranked[0].i,1)[0]];
-      let cur=out[0];
-      while(rem.length){
-        let best=0,bd=Infinity;
-        rem.forEach((x,i)=>{const d=dist(cur,x);if(d<bd){bd=d;best=i;}});
-        out.push(rem.splice(best,1)[0]);cur=out[out.length-1];
-      }
-      return out;
-    }
-
     [1,2,3].forEach(tr=>{
       if(rMapTrip&&rMapTrip!==tr)return;
-      const tb=nnSimple(bills.filter(b=>plateOf(b.ref)===t.plate&&b.lat&&b.lng&&tripOf(b.ref)===tr));
+      const tb=tspRoute(bills.filter(b=>plateOf(b.ref)===t.plate&&b.lat&&b.lng&&tripOf(b.ref)===tr));
       if(!tb.length)return;
       const wpts=[[HQ.lat,HQ.lng],...tb.map(b=>[b.lat,b.lng])];
       const style={1:{weight:4,opacity:.85,dashArray:''},2:{weight:2.5,opacity:.7,dashArray:'10 6'},3:{weight:2,opacity:.55,dashArray:'3 5'}}[tr];
