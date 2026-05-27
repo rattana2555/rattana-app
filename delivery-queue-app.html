@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v12.8</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v12.9</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -365,7 +365,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v12.8</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v12.9</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -2958,8 +2958,9 @@ function rUpdateMap(){
 
   const plateOf=ref=>queue[ref]||null;
   const tripOf=ref=>tripMap[ref]||1;
+  const stopNums={};
 
-  // route lines per truck per trip (จาก updateMap แต่ใช้แค่ queue)
+  // Route lines per truck per trip (เหมือน updateMap แต่ใช้แค่ queue)
   TRUCKS.forEach(t=>{
     if(rMapPlate&&t.plate!==rMapPlate)return;
     const col=getTruckCol(t.plate);
@@ -2967,42 +2968,53 @@ function rUpdateMap(){
     [1,2,3].forEach(tr=>{
       if(rMapTrip&&rMapTrip!==tr)return;
       const tb=tspRoute(bills.filter(b=>plateOf(b.ref)===t.plate&&b.lat&&b.lng&&tripOf(b.ref)===tr));
+      if(rMapPlate)tb.forEach((b,i)=>{stopNums[b.ref]=i+1;});
       if(!tb.length)return;
-      const wpts=[[HQ.lat,HQ.lng],...tb.map(b=>[b.lat,b.lng])];
+      const wpts=[[HQ.lat,HQ.lng],...tb.map(b=>[b.lat,b.lng])]; // เที่ยวไปอย่างเดียว
       const style={1:{weight:4,opacity:.85,dashArray:''},2:{weight:2.5,opacity:.7,dashArray:'10 6'},3:{weight:2,opacity:.55,dashArray:'3 5'}}[tr];
       const line=L.polyline(wpts,{color:col,...style,lineJoin:'round'}).addTo(rLeafletMap);
       rMapLayers.push(line);
-      // Stop numbers (only when filtering single truck)
-      if(rMapPlate){
-        tb.forEach((b,i)=>{
-          const icon=makePinIcon(col,String(i+1),30,1,tr);
-          const m=L.marker([b.lat,b.lng],{icon}).bindPopup(`<b>${b.arName}</b><br/>🚛 ${t.plate} · เที่ยว ${tr}<br/>⚖ ${fmtKg(b.totalW)}`).addTo(rLeafletMap);
-          rMapLayers.push(m);
-        });
-      }
+      // OSRM real road routing (async)
+      fetchOsrmRoute(wpts).then(rd=>{if(rd&&line._map){line.setLatLngs(rd.coords);}}).catch(()=>{});
     });
   });
 
-  // ถ้าไม่ filter รถใดรถหนึ่ง → ใส่ markers ทั่วๆ
-  if(!rMapPlate){
-    bills.forEach(b=>{
-      if(!b.lat||!b.lng)return;
-      const plate=plateOf(b.ref);
-      const tr=tripOf(b.ref);
-      if(rMapTrip&&tr!==rMapTrip)return;
-      const col=plate?getTruckCol(plate):'#9BAAB8';
-      const icon=makePinIcon(col,plate?'·':'?',plate?26:22,1,tr);
-      const m=L.marker([b.lat,b.lng],{icon}).bindPopup(`<b>${b.arName}</b><br/>📍 ${b.district||''}, ${b.province||''}<br/>${plate?`🚛 ${plate}`:'⏳ รอจัดรถ'}`).addTo(rLeafletMap);
-      rMapLayers.push(m);
-    });
-  }
+  // Bill markers — แสดงทุกบิลที่มี GPS (filter ตาม plate/trip)
+  const billsToShow=rMapPlate
+    ? bills.filter(b=>b.lat&&b.lng&&plateOf(b.ref)===rMapPlate&&(!rMapTrip||tripOf(b.ref)===rMapTrip))
+    : bills.filter(b=>b.lat&&b.lng&&(!rMapTrip||tripOf(b.ref)===rMapTrip));
 
-  // HQ
+  billsToShow.forEach(b=>{
+    const plate=plateOf(b.ref);
+    const tr=tripOf(b.ref);
+    const col=plate?getTruckCol(plate):'#9BAAB8';
+    const truck=TRUCKS.find(t=>t.plate===plate);
+    const num=stopNums[b.ref];
+    const size=num?30:(plate?26:22);
+    const label=num?String(num):(plate?'·':'?');
+    const icon=makePinIcon(col,label,size,1,tr);
+    const tripBadge=plate?`<span style="background:${tr===3?'#F0FDF4':tr===2?'#EAF0F8':'#FFF8EC'};color:${tr===3?'#15803D':tr===2?'#1A5FA5':'#C47000'};border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700">เที่ยว ${tr}</span>`:'';
+    const popup=`<div style="min-width:180px">
+      <b style="font-size:13px;color:#07101F">${b.arName}</b> ${tripBadge}<br/>
+      <span style="color:#6B7A90;font-size:11px">📍 ${b.district||''}, ${b.province||''}</span><br/>
+      <span style="font-size:11px;color:#444">⚖ ${fmtKg(b.totalW)}</span><br/>
+      <div style="margin-top:4px;padding:3px 8px;border-radius:6px;background:${plate?col+'18':'#F5F7FA'};color:${plate?col:'#9BAAB8'};font-weight:600;font-size:11px">
+        ${plate?`🚛 ${plate} — ${truck?.nick||''}`:'⏳ รอจัดรถ'}
+      </div>
+      ${num?`<div style="color:#C9A84C;font-weight:700;font-size:11px;margin-top:3px">🚩 จุดที่ ${num}</div>`:''}
+      <div style="margin-top:4px"><a href="https://www.google.com/maps?q=${b.lat},${b.lng}" target="_blank" style="color:#1A5FA5;font-size:10px;text-decoration:none">🔗 เปิด Google Maps</a></div>
+    </div>`;
+    const marker=L.marker([b.lat,b.lng],{icon}).bindPopup(popup,{maxWidth:240}).addTo(rLeafletMap);
+    rMapLayers.push(marker);
+  });
+
+  // HQ marker
   const hqIcon=L.divIcon({
     html:`<div style="width:42px;height:42px;border-radius:50%;background:var(--gold,#c9a84c);border:3px solid rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;color:#0d1b3e;font-size:20px;font-weight:700;box-shadow:0 4px 14px rgba(201,168,76,.6)">★</div>`,
-    className:'',iconSize:[42,42],iconAnchor:[21,21]
+    className:'',iconSize:[42,42],iconAnchor:[21,21],popupAnchor:[0,-25]
   });
-  const hqM=L.marker([HQ.lat,HQ.lng],{icon:hqIcon,zIndexOffset:1000}).bindPopup('<b style="color:#C9A84C">★ HQ รัตนไพบูลย์</b>').addTo(rLeafletMap);
+  const hqM=L.marker([HQ.lat,HQ.lng],{icon:hqIcon,zIndexOffset:1000})
+    .bindPopup('<b style="color:#C9A84C">★ HQ รัตนไพบูลย์ กรุ๊ป</b><br/><span style="font-size:11px;color:#6B7A90">สมุทรสงคราม</span>').addTo(rLeafletMap);
   rMapLayers.push(hqM);
 
   // Fit bounds
