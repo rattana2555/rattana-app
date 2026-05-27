@@ -4,9 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Rattana Colgate v1.0</title>
+  <title>Rattana Colgate v2.2</title>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     :root {
       --navy:#0d1b3e; --navy-mid:#1a2f5e; --navy-light:#243b73;
@@ -136,9 +137,34 @@
     @keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
     @keyframes slideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
     .anim-up{animation:slideUp .3s ease}
+
+    /* ── Login Screen ── */
+    #loginScreen{min-height:100dvh;display:flex;align-items:center;justify-content:center;background:var(--navy);padding:20px}
+    .login-card{background:var(--card-bg);border-radius:20px;padding:40px 32px;max-width:380px;width:100%;text-align:center;border-top:4px solid var(--gold);box-shadow:0 16px 48px rgba(13,27,62,.4);animation:slideUp .35s ease}
+    .login-logo{width:72px;height:72px;object-fit:contain;margin-bottom:12px}
+    .login-title{font-size:22px;font-weight:700;color:var(--navy);margin-bottom:4px}
+    body.dark .login-title{color:var(--text)}
+    .login-subtitle{font-size:13px;color:var(--muted);margin-bottom:28px}
+    .login-divider{height:1px;background:var(--border);margin:20px 0}
+    .login-error{background:#ffd5d0;color:#c0392b;border-radius:8px;padding:10px 14px;font-size:13px;margin-top:14px;display:none;text-align:left}
+    body.dark .login-error{background:#3a1a17;color:#ff8a7e}
+    .login-note{font-size:11px;color:var(--muted);margin-top:16px}
   </style>
 </head>
 <body>
+
+<!-- ── Login Screen ── -->
+<div id="loginScreen">
+  <div class="login-card">
+    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln92zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJticczw5h5np+n7M7mFBwPDda7jznOdhOWemZ+bt6aquKiIAAAAAAAAAAAAAAADgAAAAAAAAAAAAAAAAAAAA2wAAAAAAAAAAAAAAAAAAAABCAAAAAAAAAAAAAAAAAAAAAAoAAAAAAAAAAAAAAAAAAAAoAAAAAAAAAAAAAAAAAAAAoAAAAAAAAAAAAAAAAAAAAAoAAAAAAAAAAAAAAAAAAAAoAAAAAAAAAAAAAAAAAAAAkAAAAAAAAAAAAAAAAAAAAA0AAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAAAAAABwAAAAAAAAAAAAAAAAAAAAcAAAAAAAAAAAAAAAAAAAA0AAAAAAAAAAAAAAAAAAAAIwAAAAAAAAAAAAAAAAAAAAsAAAAAAAAAAAAAAAAAAAA0AAAAAAAAAAAAAAAAAAAAMwAAAAAAAAAAAAAAAAAAAA0AAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAAAAAABgAAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAAAAAABQAAAAAAAAAAAAAAAAAAAABwAAAAAAAAAAAAAAAAAAAAcAAAAAAAAAAAAAAAAAAAA0AAAAAAAAAAAAAAAAAAAAIwAAAAAAAAAAAAAAAAAAAAsAAAAAAAAAAAAAAAAAAAA0AAAAAAAAAAAAAAAAAAAAMwAAAAAAAAAAAAAAAAAAAA0AAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAAAAAABgAAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAAAAAABQAAAAAAAAAAAAAAAAAAAABgAAAAAAAAAAAAAAAAAAAA==" alt="Rattana" class="login-logo">
+    <div class="login-title">RATTANA <span style="color:var(--gold)">COLGATE</span></div>
+    <div class="login-subtitle">ระบบบันทึกข้อมูลร้านค้า · เข้าสู่ระบบด้วย Google</div>
+    <div class="login-divider"></div>
+    <div id="googleSignInBtn"></div>
+    <div id="loginError" class="login-error"></div>
+    <div class="login-note">เฉพาะผู้ใช้ที่ได้รับอนุญาตเท่านั้น</div>
+  </div>
+</div>
 
 <!-- Spinner -->
 <div class="spinner-overlay" id="spinner">
@@ -148,15 +174,18 @@
   </div>
 </div>
 
+<div id="appScreen" style="display:none">
 <div class="page">
 
   <!-- ── Header ── -->
   <header>
     <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln92zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJticczw5h5np+n7M7mFBwPDda7jznOdhOWemZ+bt6aquKiIAAAAAAAAAAAAAAADgAAAAAAAAAAAAAAAAAAAA2wAAAAAAAAAAAAAAAAAAAABCAAAAAAAAAAAAAAAAAAAAAAoAAAAAAAAAAAAAAAAAAAAoAAAAAAAAAAAAAAAAAAAAoAAAAAAAAAAAAAAAAAAAAAoAAAAAAAAAAAAAAAAAAAAoAAAAAAAAAAAAAAAAAAAAkAAAAAAAAAAAAAAAAAAAAA0AAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAAAAAABwAAAAAAAAAAAAAAAAAAAAcAAAAAAAAAAAAAAAAAAAA0AAAAAAAAAAAAAAAAAAAAIwAAAAAAAAAAAAAAAAAAAAsAAAAAAAAAAAAAAAAAAAA0AAAAAAAAAAAAAAAAAAAAMwAAAAAAAAAAAAAAAAAAAA0AAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAAAAAABgAAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAAAAAABQAAAAAAAAAAAAAAAAAAAABwAAAAAAAAAAAAAAAAAAAAcAAAAAAAAAAAAAAAAAAAA0AAAAAAAAAAAAAAAAAAAAIwAAAAAAAAAAAAAAAAAAAAsAAAAAAAAAAAAAAAAAAAA0AAAAAAAAAAAAAAAAAAAAMwAAAAAAAAAAAAAAAAAAAA0AAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAAAAAABgAAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAAAAAABQAAAAAAAAAAAAAAAAAAAABgAAAAAAAAAAAAAAAAAAAA==" alt="Rattana" height="36" style="object-fit:contain;flex-shrink:0">
     <div class="logo-text">RATTANA <span>COLGATE</span></div>
-    <span class="version-badge">v1.0</span>
+    <span class="version-badge">v2.2</span>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรชข้อมูล">↻</button>
     <button class="icon-btn" onclick="toggleDark()" title="Dark/Light Mode" id="btnDark">🌙</button>
+    <button class="icon-btn" onclick="logout()" title="ออกจากระบบ" style="font-size:15px">🚪</button>
+    <span id="userChip" style="font-size:12px;color:rgba(255,255,255,.75);white-space:nowrap;max-width:100px;overflow:hidden;text-overflow:ellipsis"></span>
   </header>
 
   <div class="content">
@@ -394,7 +423,7 @@
 
     <!-- Footer version -->
     <div style="text-align:center;padding:24px 0 12px;color:var(--muted);font-size:11px">
-      Rattana Colgate v1.0 · 2026-05-26
+      Rattana Colgate v2.2 · 2026-05-27
     </div>
 
   </div><!-- /content -->
@@ -402,11 +431,20 @@
 
 <!-- Back to top -->
 <button id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+</div><!-- /appScreen -->
 
 <script>
 // ════════════════════════════════════════════
 //  CONFIG
 // ════════════════════════════════════════════
+// ── Auth ──
+const AUTH_CONFIG = {
+  clientId:       '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
+  usersSheetId:   '19XHdS_Ft7NpQVkFEd2InNjH1CD6y6w6Vgd38Zyx8j0w',
+  usersSheetName: 'User',
+};
+let currentUser = null;
+
 const SHEET_ID   = '19XHdS_Ft7NpQVkFEd2InNjH1CD6y6w6Vgd38Zyx8j0w';
 const SHEET_NAME = 'App Data Center';
 const GAS_WRITE_URL = 'https://script.google.com/macros/s/AKfycbzbmZBiOAhv7978TEzfTrsF2Owit6-PuujknwQoTbwjr5iMNZAjbDu0Xk1LRrQQwxz8vg/exec';
@@ -1143,6 +1181,114 @@ function getGPS() {
 }
 
 // ════════════════════════════════════════════
+//  AUTH — Google Login + User Sheet check
+// ════════════════════════════════════════════
+function decodeJwtPayload(token) {
+  const parts = String(token || '').split('.');
+  if (parts.length < 2) throw new Error('JWT format invalid');
+  let b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+  const pad = (4 - b64.length % 4) % 4;
+  if (pad) b64 += '='.repeat(pad);
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return JSON.parse(new TextDecoder('utf-8').decode(bytes));
+}
+
+const normalizeEmail = s => String(s || '').replace(/[​‌‍﻿]/g, '').replace(/\s+/g, '').toLowerCase();
+
+async function handleGoogleLogin(response) {
+  showSpinner('กำลังตรวจสอบสิทธิ์...');
+  try {
+    const payload = decodeJwtPayload(response.credential);
+    const email   = normalizeEmail(payload.email);
+    const users   = await fetchUsersSheet();
+    const user    = users.find(u => normalizeEmail(u['Email']) === email);
+
+    if (!user) {
+      showLoginError('ไม่พบ Email นี้ในระบบ · กรุณาติดต่อผู้ดูแล');
+      hideSpinner(); return;
+    }
+    const status = String(user['Status'] || '').trim().toLowerCase();
+    if (status !== 'active') {
+      showLoginError('บัญชีนี้ถูกระงับ · กรุณาติดต่อผู้ดูแล');
+      hideSpinner(); return;
+    }
+
+    currentUser = {
+      email,
+      name: user['ชื่อ'] || email,
+    };
+    localStorage.setItem('rattanaColgate_user', JSON.stringify({
+      data: currentUser,
+      exp: Date.now() + 30 * 24 * 60 * 60 * 1000
+    }));
+    showApp();
+  } catch (e) {
+    showLoginError('เกิดข้อผิดพลาด: ' + e.message);
+  }
+  hideSpinner();
+}
+
+async function fetchUsersSheet() {
+  const url = `https://docs.google.com/spreadsheets/d/${AUTH_CONFIG.usersSheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(AUTH_CONFIG.usersSheetName)}`;
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return parseCsv(await res.text());
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('loginError');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function showApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appScreen').style.display   = 'block';
+  if (currentUser) {
+    document.getElementById('userChip').textContent = currentUser.name || currentUser.email;
+  }
+  initApp();
+}
+
+function checkSession() {
+  try {
+    const raw = localStorage.getItem('rattanaColgate_user');
+    if (raw) {
+      const { data, exp } = JSON.parse(raw);
+      if (Date.now() < exp) {
+        currentUser = data;
+        showApp();
+        return;
+      }
+      localStorage.removeItem('rattanaColgate_user');
+    }
+  } catch { localStorage.removeItem('rattanaColgate_user'); }
+
+  // No valid session → show login
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('appScreen').style.display   = 'none';
+  // Init Google Sign-In button
+  google.accounts.id.initialize({
+    client_id: AUTH_CONFIG.clientId,
+    callback: handleGoogleLogin,
+    ux_mode: 'popup',
+  });
+  google.accounts.id.renderButton(
+    document.getElementById('googleSignInBtn'),
+    { theme: 'outline', size: 'large', width: 280, locale: 'th' }
+  );
+}
+
+function logout() {
+  if (!confirm('ออกจากระบบใช่ไหม?')) return;
+  localStorage.removeItem('rattanaColgate_user');
+  currentUser = null;
+  location.reload();
+}
+
+// ════════════════════════════════════════════
 //  BACK TO TOP
 // ════════════════════════════════════════════
 window.addEventListener('scroll', () => {
@@ -1153,18 +1299,23 @@ window.addEventListener('scroll', () => {
 // ════════════════════════════════════════════
 //  INIT
 // ════════════════════════════════════════════
-window.onload = async () => {
-  // Restore dark mode
+async function initApp() {
   if (localStorage.getItem('rattana_colgate_dark') === '1') {
     document.body.classList.add('dark');
     document.getElementById('btnDark').textContent = '☀️';
   }
-  // Load saved stores
   loadFromStorage();
   renderTable();
-  // Fetch sheet data
   await loadData();
+}
+
+window.onload = () => {
+  // Restore dark mode early (before login screen shows)
+  if (localStorage.getItem('rattana_colgate_dark') === '1') {
+    document.body.classList.add('dark');
+  }
+  checkSession();
 };
 </script>
 </body>
-</html>
+</html>อ
