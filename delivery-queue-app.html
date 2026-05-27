@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v13.4</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v13.5</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -365,7 +365,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v13.4</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v13.5</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -1800,17 +1800,30 @@ function confirmAutoAssign(){
           return{t,tr:preferTrip}; // ชื่อร้านเดียวกัน → รถเดิม + เที่ยวเดิมเสมอ (ไม่แยกเที่ยว)
         }
       }
-      // helper: เช็คว่าบิลใหม่ห่างจาก *ทุก* บิลในรถนี้ ≤ MAX_PAIR กม. (กันรถข้ามฝั่ง)
-      const MAX_PAIR=25;
+      // helper: เช็คว่าบิลใหม่ "เข้ากับ" cluster ของรถ — pairwise distance + angle จาก HQ
+      const MAX_PAIR=20;      // pairwise distance สูงสุด
+      const MAX_ANGLE=110;    // angle จาก HQ ระหว่างบิล 2 ตัว ห้ามเกิน 110°
+      function angleFromHQ(lat,lng){
+        return Math.atan2(lat-HQ.lat,lng-HQ.lng)*180/Math.PI;
+      }
       function withinCluster(t){
-        if(!b.lat||!b.lng)return true; // ไม่มี GPS → ไม่เช็ค
+        if(!b.lat||!b.lng)return true;
         const refs=Object.entries(newQ).filter(([,pl])=>pl===t.plate).map(([r])=>r);
         if(!refs.length)return true; // รถว่าง → OK
+        const newAng=angleFromHQ(b.lat,b.lng);
+        const newDistHQ=haversine(HQ.lat,HQ.lng,b.lat,b.lng);
         for(const r of refs){
           const tb=billMap[r];
           if(!tb||!tb.lat||!tb.lng)continue;
-          // ถ้าบิลใหม่ห่างกับบิลที่อยู่ในรถนี้แล้ว เกิน MAX_PAIR → reject
+          // 1) pairwise distance ห้ามเกิน MAX_PAIR
           if(haversine(b.lat,b.lng,tb.lat,tb.lng)>MAX_PAIR)return false;
+          // 2) angle from HQ — กันบิลข้ามฝั่ง HQ (ถ้าทั้งคู่อยู่ไกล HQ > 5 กม.)
+          const distHQ=haversine(HQ.lat,HQ.lng,tb.lat,tb.lng);
+          if(distHQ>5&&newDistHQ>5){
+            const tbAng=angleFromHQ(tb.lat,tb.lng);
+            let diff=Math.abs(newAng-tbAng);if(diff>180)diff=360-diff;
+            if(diff>MAX_ANGLE)return false; // มุมข้ามฝั่งเกินไป
+          }
         }
         return true;
       }
