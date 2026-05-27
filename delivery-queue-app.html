@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v13.3</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v13.4</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -365,7 +365,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v13.3</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v13.4</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -1901,14 +1901,15 @@ function confirmAutoAssign(){
           if(!(b.province&&tp&&tp!==b.province)&&withinCluster(t)){const tr=tryTrip(t,b);if(tr)return{t,tr};}
         }
       }
-      // Rule G: Min-distance ≤25กม. — เฉพาะรถที่จังหวัดตรง+ไม่ overloaded
+      // Rule G: Min-distance ≤25กม. + ไม่ห่างจากบิลใดเกิน 25 (cluster strict)
       if(b.lat&&b.lng){
         let geoT=null,geoTr=0,geoD=Infinity;
         trucks.forEach(t=>{
           const tc=truckCent[t.plate];
           if(!tc||tc.cnt===0)return;
-          if(isOverloaded(t.plate))return; // ข้ามรถ force-overloaded
+          if(isOverloaded(t.plate))return;
           {const tp=truckMainProv(t.plate);if(b.province&&tp&&tp!==b.province)return;}
+          if(!withinCluster(t))return; // ห้ามห่างจากบิลใดในรถนี้เกิน 25 กม.
           const tr=tryTrip(t,b);if(!tr)return;
           let minD=Infinity;
           Object.entries(newQ).forEach(([ref,plate])=>{
@@ -1921,14 +1922,15 @@ function confirmAutoAssign(){
         });
         if(geoT&&geoD<=25)return{t:geoT,tr:geoTr};
       }
-      // Relaxed Rule G (40km) — เฉพาะจังหวัดเดียวกัน (ไม่ให้ขับเดี่ยว)
+      // Relaxed Rule G (40km) — เฉพาะจังหวัดเดียวกัน + ผ่าน cluster guard
       if(b.lat&&b.lng){
         let relaxT=null,relaxTr=0,relaxD=Infinity;
         trucks.forEach(t=>{
           const tc=truckCent[t.plate];
           if(!tc||tc.cnt===0)return;
-          if(isOverloaded(t.plate))return; // ข้ามรถ overloaded
+          if(isOverloaded(t.plate))return;
           {const tp=truckMainProv(t.plate);if(b.province&&tp&&tp!==b.province)return;}
+          if(!withinCluster(t))return; // 🔒 กันรถข้ามฝั่ง
           const tr=tryTrip(t,b);if(!tr)return;
           Object.entries(newQ).forEach(([ref,plate])=>{
             if(plate!==t.plate)return;
