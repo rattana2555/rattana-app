@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v13.5</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v13.6</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -365,7 +365,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v13.5</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v13.6</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -1800,6 +1800,17 @@ function confirmAutoAssign(){
           return{t,tr:preferTrip}; // ชื่อร้านเดียวกัน → รถเดิม + เที่ยวเดิมเสมอ (ไม่แยกเที่ยว)
         }
       }
+      // helper: ห้ามรถมี "สายส่งต่างกัน" 2 ค่าขึ้นไป
+      function saiSongCompat(t){
+        if(!b.saiSong)return true; // ไม่มีสายส่ง → ไม่เช็ค
+        const refs=Object.entries(newQ).filter(([,pl])=>pl===t.plate).map(([r])=>r);
+        for(const r of refs){
+          const tb=billMap[r];
+          if(tb&&tb.saiSong&&tb.saiSong!==b.saiSong)return false;
+        }
+        return true;
+      }
+
       // helper: เช็คว่าบิลใหม่ "เข้ากับ" cluster ของรถ — pairwise distance + angle จาก HQ
       const MAX_PAIR=20;      // pairwise distance สูงสุด
       const MAX_ANGLE=110;    // angle จาก HQ ระหว่างบิล 2 ตัว ห้ามเกิน 110°
@@ -1885,36 +1896,37 @@ function confirmAutoAssign(){
         if(pick)return{t:pick,tr:pickTr};
         // สุดท้าย fall through ให้ rule อื่นจัดทีละบิล
       }
-      // Rule P: จังหวัดเดียวกัน + ใกล้ cluster → รถเดิม
+      // Rule P: จังหวัดเดียวกัน + ใกล้ cluster + สายส่งตรง → รถเดิม
       if(b.province&&provinceMap[b.province]){
         for(const t of trucks){
           if(isOverloaded(t.plate))continue;
           if(loads[t.plate].w1+loads[t.plate].w2+loads[t.plate].w3===0)continue;
           const hasSameProv=Object.entries(newQ).some(([ref,plate])=>plate===t.plate&&billMap[ref]?.province===b.province);
           if(!hasSameProv)continue;
-          if(!withinCluster(t))continue; // กันรถข้ามฝั่ง
+          if(!withinCluster(t))continue;
+          if(!saiSongCompat(t))continue; // 🔒 สายส่งต้องตรง
           const tr=tryTrip(t,b);if(tr)return{t,tr};
         }
       }
-      // Rule D: อำเภอเดียวกัน + จังหวัดเดียวกัน + ใกล้ cluster → รถเดิม
+      // Rule D: อำเภอเดียวกัน + จังหวัดเดียวกัน + ใกล้ cluster + สายส่งตรง → รถเดิม
       if(b.district&&districtMap[b.district]){
         const t=trucks.find(x=>x.plate===districtMap[b.district]);
         if(t&&!isOverloaded(t.plate)){
           const tp=truckMainProv(t.plate);
-          if(!(b.province&&tp&&tp!==b.province)&&withinCluster(t)){
+          if(!(b.province&&tp&&tp!==b.province)&&withinCluster(t)&&saiSongCompat(t)){
             const tr=tryTrip(t,b);if(tr)return{t,tr};
           }
         }
       }
-      // Rule 4: GPS cluster เดียวกัน + ใกล้ centroid
+      // Rule 4: GPS cluster + ใกล้ centroid + สายส่งตรง
       if(ci!==undefined&&clusterMap[ci]){
         const t=trucks.find(x=>x.plate===clusterMap[ci]);
         if(t){
           const tp=truckMainProv(t.plate);
-          if(!(b.province&&tp&&tp!==b.province)&&withinCluster(t)){const tr=tryTrip(t,b);if(tr)return{t,tr};}
+          if(!(b.province&&tp&&tp!==b.province)&&withinCluster(t)&&saiSongCompat(t)){const tr=tryTrip(t,b);if(tr)return{t,tr};}
         }
       }
-      // Rule G: Min-distance ≤25กม. + ไม่ห่างจากบิลใดเกิน 25 (cluster strict)
+      // Rule G: Min-distance ≤25กม. + cluster + สายส่งตรง
       if(b.lat&&b.lng){
         let geoT=null,geoTr=0,geoD=Infinity;
         trucks.forEach(t=>{
@@ -1922,7 +1934,8 @@ function confirmAutoAssign(){
           if(!tc||tc.cnt===0)return;
           if(isOverloaded(t.plate))return;
           {const tp=truckMainProv(t.plate);if(b.province&&tp&&tp!==b.province)return;}
-          if(!withinCluster(t))return; // ห้ามห่างจากบิลใดในรถนี้เกิน 25 กม.
+          if(!withinCluster(t))return;
+          if(!saiSongCompat(t))return; // 🔒
           const tr=tryTrip(t,b);if(!tr)return;
           let minD=Infinity;
           Object.entries(newQ).forEach(([ref,plate])=>{
@@ -1935,7 +1948,7 @@ function confirmAutoAssign(){
         });
         if(geoT&&geoD<=25)return{t:geoT,tr:geoTr};
       }
-      // Relaxed Rule G (40km) — เฉพาะจังหวัดเดียวกัน + ผ่าน cluster guard
+      // Relaxed Rule G (40km) + cluster + สายส่งตรง
       if(b.lat&&b.lng){
         let relaxT=null,relaxTr=0,relaxD=Infinity;
         trucks.forEach(t=>{
@@ -1943,7 +1956,8 @@ function confirmAutoAssign(){
           if(!tc||tc.cnt===0)return;
           if(isOverloaded(t.plate))return;
           {const tp=truckMainProv(t.plate);if(b.province&&tp&&tp!==b.province)return;}
-          if(!withinCluster(t))return; // 🔒 กันรถข้ามฝั่ง
+          if(!withinCluster(t))return;
+          if(!saiSongCompat(t))return; // 🔒
           const tr=tryTrip(t,b);if(!tr)return;
           Object.entries(newQ).forEach(([ref,plate])=>{
             if(plate!==t.plate)return;
