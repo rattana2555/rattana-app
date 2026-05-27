@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v13.6</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v13.8</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -365,7 +365,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v13.6</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v13.8</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -876,10 +876,10 @@ async function loadData(){
     const billData=[...billDS,...otherDS]; // รวม 2 ชีทเข้าด้วยกัน
     setLoad('🔧 ประมวลผลข้อมูล...',70);
 
-    // Products
+    // Products — รองรับหลายรูปแบบ header (รวมถึง header ว่างเปล่า)
     products={};
     productData.forEach(p=>{
-      const name=p['ชื่อสินค้า']||p['SKU_NAME']||'';
+      const name=p['ชื่อสินค้า']||p['SKU_NAME']||p['']||'';
       const w=parseFloat(p['นน. EA']||p['น้ำหนัก EA']||0);
       const v=parseFloat(p['ปริมาตร EA (ลิตร)']||p['ปริมาตร EA']||0)/1000;
       if(name)products[name]={w,v};
@@ -1593,7 +1593,20 @@ function confirmAutoAssign(){
     const tmrRefs=new Set(tmrBills.map(b=>b.ref));
 
     if(!tmrBills.length){
-      showToast(`ไม่พบบิลวัน${tmrFull}`,'warn');
+      // วินิจฉัยสาเหตุ
+      const dayCnt=bills.filter(b=>matchDay(b.days)).length;
+      const gpsCnt=bills.filter(b=>b.lat&&b.lng).length;
+      let msg;
+      if(dayCnt===0)msg=`ไม่พบบิลวัน${tmrFull}`;
+      else if(gpsCnt===0){
+        msg=`ไม่มีบิลที่มี GPS — กำลังโหลดข้อมูลใหม่`;
+        // auto-refresh data → re-try
+        showToast(msg,'warn');
+        refreshData();
+        btn.disabled=false; btn.innerHTML='⚡ จัดอัตโนมัติ';
+        return;
+      } else msg=`มี ${dayCnt} บิลในวัน${tmrFull} แต่ไม่มี GPS — กด 🔄 รีเฟรช`;
+      showToast(msg,'warn');
       btn.disabled=false; btn.innerHTML='⚡ จัดอัตโนมัติ';
       return;
     }
