@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v13.1</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v13.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -365,7 +365,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v13.1</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v13.2</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -1800,14 +1800,19 @@ function confirmAutoAssign(){
           return{t,tr:preferTrip}; // ชื่อร้านเดียวกัน → รถเดิม + เที่ยวเดิมเสมอ (ไม่แยกเที่ยว)
         }
       }
-      // helper: เช็คว่าบิลห่างจาก centroid ของรถ ≤ MAX_DIST กม. (เพื่อกันรถข้ามฝั่ง)
-      const MAX_GROUP_DIST=30;
+      // helper: เช็คว่าบิลใหม่ห่างจาก *ทุก* บิลในรถนี้ ≤ MAX_PAIR กม. (กันรถข้ามฝั่ง)
+      const MAX_PAIR=25;
       function withinCluster(t){
         if(!b.lat||!b.lng)return true; // ไม่มี GPS → ไม่เช็ค
-        const tc=truckCent[t.plate];
-        if(!tc||!tc.cnt)return true;  // รถยังไม่มีบิล → OK
-        const cLat=tc.latSum/tc.cnt, cLng=tc.lngSum/tc.cnt;
-        return haversine(b.lat,b.lng,cLat,cLng)<=MAX_GROUP_DIST;
+        const refs=Object.entries(newQ).filter(([,pl])=>pl===t.plate).map(([r])=>r);
+        if(!refs.length)return true; // รถว่าง → OK
+        for(const r of refs){
+          const tb=billMap[r];
+          if(!tb||!tb.lat||!tb.lng)continue;
+          // ถ้าบิลใหม่ห่างกับบิลที่อยู่ในรถนี้แล้ว เกิน MAX_PAIR → reject
+          if(haversine(b.lat,b.lng,tb.lat,tb.lng)>MAX_PAIR)return false;
+        }
+        return true;
       }
 
       // Rule R: "สายส่ง" เดียวกัน + จังหวัดเดียวกัน + ใกล้ cluster → FORCE
