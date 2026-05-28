@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="th">
 <head>
   <meta charset="UTF-8">
@@ -254,6 +254,10 @@
       <span class="tab-icon">📋</span>
       <span>ร้านค้าของฉัน</span>
     </button>
+    <button class="tab-item" id="sideTab3" onclick="showTab('tab-ar-colgate')">
+      <span class="tab-icon">💰</span>
+      <span>ลูกหนี้ Colgate</span>
+    </button>
   </nav>
 
   <div class="app-body">
@@ -494,12 +498,81 @@
         </div>
       </div><!-- /tab-pane my-stores -->
 
+      <!-- Tab 3: ลูกหนี้ Colgate -->
+      <div id="tab-ar-colgate" class="tab-pane">
+        <div class="content">
+
+          <!-- Header row -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+            <div style="font-size:17px;font-weight:700;color:var(--text)">💰 ลูกหนี้ Colgate</div>
+            <button class="btn btn-outline btn-sm" onclick="loadArColgate()">🔄 รีเฟรช</button>
+          </div>
+
+          <!-- Summary Cards -->
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+            <div class="card" style="padding:14px 12px;border-top:3px solid var(--danger);text-align:center">
+              <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;margin-bottom:5px">ยอดหนี้รวม</div>
+              <div id="arTotalDebt" style="font-size:18px;font-weight:700;color:var(--danger);line-height:1.2">—</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:2px">บาท</div>
+            </div>
+            <div class="card" style="padding:14px 12px;border-top:3px solid var(--warning);text-align:center">
+              <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;margin-bottom:5px">ร้านค้างชำระ</div>
+              <div id="arTotalShops" style="font-size:18px;font-weight:700;color:var(--warning);line-height:1.2">—</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:2px">ร้าน</div>
+            </div>
+            <div class="card" style="padding:14px 12px;border-top:3px solid var(--info);text-align:center">
+              <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;margin-bottom:5px">บิลค้างชำระ</div>
+              <div id="arTotalBills" style="font-size:18px;font-weight:700;color:var(--info);line-height:1.2">—</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:2px">บิล</div>
+            </div>
+          </div>
+
+          <!-- Search -->
+          <div style="margin-bottom:12px">
+            <input type="search" id="arSearch" class="input" placeholder="🔍 ค้นหาชื่อร้าน / รหัส / ยอด..." oninput="filterAr()" style="width:100%;height:44px;font-size:14px">
+          </div>
+
+          <!-- Count -->
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px" id="arCount">—</div>
+
+          <!-- Debtor Cards -->
+          <div id="arBody">
+            <div style="text-align:center;padding:40px 20px;color:var(--muted)">กำลังโหลด...</div>
+          </div>
+
+        </div>
+      </div><!-- /tab-pane ar-colgate -->
+
     </div><!-- /tab-area -->
   </div><!-- /app-body -->
 </div>
 
 <!-- Back to top -->
 <button id="backToTop" onclick="document.querySelector('.tab-area').scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+<!-- AR Detail Modal -->
+<div id="arModal" style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(13,27,62,.6);backdrop-filter:blur(3px);padding:16px;overflow-y:auto" onclick="if(event.target===this)closeArModal()">
+  <div style="background:var(--card-bg);border-radius:var(--radius-lg);max-width:540px;margin:0 auto;border-top:4px solid var(--gold);box-shadow:var(--shadow-lg);animation:slideUp .25s ease">
+    <div style="padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <div>
+        <div id="arModalName" style="font-size:16px;font-weight:700;color:var(--text)"></div>
+        <div id="arModalCode" style="font-size:12px;color:var(--muted);margin-top:2px"></div>
+      </div>
+      <button onclick="closeArModal()" style="background:transparent;border:none;font-size:22px;color:var(--muted);cursor:pointer;line-height:1;flex-shrink:0">✕</button>
+    </div>
+    <div style="padding:12px 18px;border-bottom:1px solid var(--border);display:flex;gap:16px">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">ยอดรวมทั้งหมด</div>
+        <div id="arModalTotal" style="font-size:18px;font-weight:700;color:var(--danger)"></div>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">จำนวนบิล</div>
+        <div id="arModalBillCount" style="font-size:18px;font-weight:700;color:var(--info)"></div>
+      </div>
+    </div>
+    <div id="arModalBody" style="padding:12px 18px 18px"></div>
+  </div>
+</div>
 
 <script>
 // ════════════════════════════════════════════
@@ -1391,10 +1464,252 @@ function showTab(tabId) {
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-item').forEach(b => b.classList.remove('active'));
   document.getElementById(tabId).classList.add('active');
-  const idx = tabId === 'tab-new-store' ? 1 : 2;
+  const idx = tabId === 'tab-new-store' ? 1 : tabId === 'tab-my-stores' ? 2 : 3;
   document.getElementById('sideTab' + idx).classList.add('active');
   if (tabId === 'tab-my-stores') renderMyStores();
+  if (tabId === 'tab-ar-colgate' && !arLoaded) loadArColgate();
   document.querySelector('.tab-area').scrollTo({top:0, behavior:'smooth'});
+}
+
+// ════════════════════════════════════════════
+//  ลูกหนี้ Colgate
+// ════════════════════════════════════════════
+const AR_SHEET_NAME = 'ลูกหนี้';
+let arAllRows   = [];
+let arLoaded    = false;
+let customerMap = new Map(); // รหัสลูกค้า → row
+
+async function loadArColgate() {
+  const body    = document.getElementById('arBody');
+  const countEl = document.getElementById('arCount');
+  body.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--muted)">⏳ กำลังโหลด...</div>';
+  countEl.textContent = '—';
+  try {
+    // โหลด AR + Customer พร้อมกัน
+    const [arRes, custRes] = await Promise.all([
+      fetch(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(AR_SHEET_NAME)}`, { cache: 'no-store' }),
+      fetch(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(CUSTOMER_SHEET_NAME)}`, { cache: 'no-store' })
+    ]);
+    if (!arRes.ok) throw new Error(`AR HTTP ${arRes.status}`);
+
+    const rows     = parseCsv(await arRes.text());
+    const custRows = custRes.ok ? parseCsv(await custRes.text()) : [];
+
+    // Build customerMap: หาคอลัมน์ "รหัส" ใน Customer sheet ที่ match pattern TH60C...
+    customerMap = new Map();
+    if (custRows.length) {
+      const codeKey = Object.keys(custRows[0]).find(k => (custRows[0][k] || '').match(/^TH\d+C/i) || k.includes('รหัส'));
+      custRows.forEach(r => {
+        // หาค่าที่ match pattern TH60Cxxxxx
+        const code = Object.values(r).find(v => /^TH\d+C\d+$/i.test((v||'').trim()));
+        if (code) customerMap.set(code.trim(), r);
+      });
+    }
+
+    const myCode = (currentUser?.['รหัสเซลล์'] || '').trim();
+    const filtered = myCode
+      ? rows.filter(r =>
+          (r['รหัสเซลล์'] || '').trim() === myCode &&
+          Object.values(r).filter(v => (v ?? '').trim() !== '').length >= 4
+        )
+      : [];
+
+    arAllRows = filtered;
+    arLoaded  = true;
+    renderArTable(filtered);
+  } catch(e) {
+    body.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--danger)">❌ โหลดไม่ได้: ${e.message}</div>`;
+    showToast('โหลดข้อมูลลูกหนี้ไม่ได้: ' + e.message, 'error');
+  }
+}
+
+function renderArTable(rows) {
+  const body    = document.getElementById('arBody');
+  const countEl = document.getElementById('arCount');
+
+  // Summary (always from arAllRows)
+  const srcRows = arAllRows.length ? arAllRows : rows;
+  const totalDebt   = srcRows.reduce((sum, r) => sum + (parseFloat((r['ยอดหนี้'] || '0').replace(/,/g,'')) || 0), 0);
+  const uniqueShops = new Set(srcRows.map(r => (r['รหัส'] || '').trim()).filter(Boolean)).size;
+  const uniqueBills = new Set(srcRows.map(r => (r['เลขที่เอกสาร'] || '').trim()).filter(Boolean)).size;
+  const fmtNum = n => n.toLocaleString('th-TH', {minimumFractionDigits:2, maximumFractionDigits:2});
+  document.getElementById('arTotalDebt').textContent  = fmtNum(totalDebt);
+  document.getElementById('arTotalShops').textContent = uniqueShops.toLocaleString('th-TH');
+  document.getElementById('arTotalBills').textContent = uniqueBills.toLocaleString('th-TH');
+
+  if (!rows.length) {
+    countEl.textContent = '0 รายการ';
+    body.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--muted)">ไม่พบข้อมูล</div>';
+    return;
+  }
+
+  // Group by รหัส → เอาแถวที่วันที่เอกสารล่าสุด
+  const parseDate = str => {
+    if (!str) return new Date(0);
+    const [d, m, y] = str.split('/');
+    return new Date(+y, +m - 1, +d);
+  };
+  const grouped = new Map();
+  rows.forEach(r => {
+    const key = (r['รหัส'] || '').trim();
+    if (!key) return;
+    const prev = grouped.get(key);
+    if (!prev || parseDate(r['วันที่เอกสาร']) > parseDate(prev['วันที่เอกสาร'])) {
+      grouped.set(key, r);
+    }
+  });
+  const display = [...grouped.values()].sort((a, b) => {
+    const maxAge = r => Math.max(...arAllRows.filter(x => (x['รหัส'] || '').trim() === (r['รหัส'] || '').trim()).map(x => parseInt(x['อายุหนี้'] || '0') || 0));
+    return maxAge(b) - maxAge(a);
+  });
+  countEl.textContent = display.length + ' ร้าน';
+
+  // คำนวณอายุหนี้
+  const today = new Date(); today.setHours(0,0,0,0);
+  const daysDiff = str => {
+    const d = parseDate(str);
+    if (!d.getTime()) return null;
+    return Math.floor((today - d) / 86400000);
+  };
+  const ageBadge = days => {
+    if (days === null) return '';
+    let bg = 'var(--success)', label = days + ' วัน';
+    if (days > 60) bg = 'var(--danger)';
+    else if (days > 30) bg = 'var(--warning)';
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:${bg};color:#fff;font-size:11px;font-weight:600">${label}</span>`;
+  };
+
+  body.innerHTML = display.map(r => {
+    const amt    = parseFloat((r['ยอดหนี้'] || '0').replace(/,/g,'')) || 0;
+    const key    = (r['รหัส'] || '').trim().replace(/'/g,"\\'");
+    // หาอายุหนี้สูงสุดจากทุกบิลของรหัสนี้
+    const allBills = arAllRows.filter(x => (x['รหัส'] || '').trim() === (r['รหัส'] || '').trim());
+    const maxAge  = Math.max(...allBills.map(x => parseInt(x['อายุหนี้'] || '0') || 0));
+    return `
+    <div class="card" style="margin-bottom:10px;border-left:4px solid var(--danger);cursor:pointer;transition:box-shadow .15s" onclick="openArModal('${key}')" onmouseover="this.style.boxShadow='var(--shadow-lg)'" onmouseout="this.style.boxShadow='var(--shadow-md)'">
+      <div style="padding:14px 16px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px">
+          <div>
+            <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:2px">${r['ชื่อลูกหนี้'] ?? ''}</div>
+            <div style="font-size:12px;color:var(--muted)">${r['รหัส'] ?? ''}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;margin-bottom:2px">ยอดค้างชำระล่าสุด</div>
+            <div style="font-size:17px;font-weight:700;color:var(--danger)">${fmtNum(amt)}</div>
+            <div style="font-size:10px;color:var(--muted)">บาท</div>
+          </div>
+        </div>
+        <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;margin-bottom:4px">บิลค้างชำระล่าสุด</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+          <div style="font-size:12px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap">
+            <span>📄 ${r['เลขที่เอกสาร'] ?? ''}</span>
+            <span>📅 ${r['วันที่เอกสาร'] ?? ''}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.4px;text-transform:uppercase">วันค้างชำระสูงสุด</span>
+            ${ageBadge(maxAge)}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filterAr() {
+  const q = (document.getElementById('arSearch').value || '').toLowerCase();
+  if (!q) { renderArTable(arAllRows); return; }
+  const filtered = arAllRows.filter(r =>
+    Object.values(r).some(v => String(v).toLowerCase().includes(q))
+  );
+  renderArTable(filtered);
+}
+
+function openArModal(code) {
+  const rows = arAllRows.filter(r => (r['รหัส'] || '').trim() === code);
+  if (!rows.length) return;
+
+  const name = rows[0]['ชื่อลูกหนี้'] || '';
+  const fmtNum = n => n.toLocaleString('th-TH', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const today = new Date(); today.setHours(0,0,0,0);
+  const parseDate = str => {
+    if (!str) return new Date(0);
+    const [d, m, y] = str.split('/');
+    return new Date(+y, +m - 1, +d);
+  };
+  const daysDiff = str => {
+    const d = parseDate(str); if (!d.getTime()) return null;
+    return Math.floor((today - d) / 86400000);
+  };
+  const ageBadge = days => {
+    if (days === null) return '';
+    let bg = 'var(--success)';
+    if (days > 60) bg = 'var(--danger)';
+    else if (days > 30) bg = 'var(--warning)';
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:${bg};color:#fff;font-size:11px;font-weight:600">${days} วัน</span>`;
+  };
+
+  // sort by date desc
+  const sorted = [...rows].sort((a, b) => parseDate(b['วันที่เอกสาร']) - parseDate(a['วันที่เอกสาร']));
+  const total  = sorted.reduce((s, r) => s + (parseFloat((r['ยอดหนี้'] || '0').replace(/,/g,'')) || 0), 0);
+
+  // ข้อมูลร้านจาก Customer sheet
+  const cust = customerMap.get(code);
+  const custInfo = (() => {
+    if (!cust) return '';
+    const g = k => (cust[k] || '').trim();
+
+    // แยก ต.,อ.,จ
+    const taoChang = g('ต.,อ.,จ').split(',').map(s => s.trim());
+    const tambon   = taoChang[0] || '';
+    const amphoe   = taoChang[1] || '';
+    const changwat = taoChang[2] || '';
+
+    // สร้างที่อยู่
+    const addrParts = [];
+    if (g('ที่อยู่')) addrParts.push(g('ที่อยู่'));
+    if (g('หมู่'))   addrParts.push('หมู่ ' + g('หมู่'));
+    if (tambon)      addrParts.push('ตำบล' + tambon);
+    if (amphoe)      addrParts.push('อำเภอ' + amphoe);
+    if (changwat)    addrParts.push('จังหวัด' + changwat);
+    if (g('รหัสไปรษณีย์')) addrParts.push(g('รหัสไปรษณีย์'));
+    const addrStr = addrParts.join(' ');
+
+    const rows = [];
+    if (addrStr) rows.push(`<div style="font-size:13px;color:var(--text);margin-bottom:4px">📍 ${addrStr}</div>`);
+    const phone = g('เบอร์โทร') || g('โทร') || g('เบอร์') || g('Tel') || g('Phone') || '';
+    if (phone) rows.push(`<div style="font-size:13px;color:var(--muted)">📞 ${phone}</div>`);
+
+    return rows.length
+      ? `<div style="background:var(--row-alt);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:12px">${rows.join('')}</div>`
+      : '';
+  })();
+
+  document.getElementById('arModalName').textContent = name;
+  document.getElementById('arModalCode').textContent = code;
+  document.getElementById('arModalTotal').textContent = fmtNum(total) + ' บาท';
+  document.getElementById('arModalBillCount').textContent = sorted.length + ' บิล';
+  document.getElementById('arModalBody').innerHTML = custInfo + sorted.map(r => {
+    const amt  = parseFloat((r['ยอดหนี้'] || '0').replace(/,/g,'')) || 0;
+    const days = daysDiff(r['วันที่เอกสาร']);
+    return `
+    <div style="padding:12px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+      <div style="font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:3px">
+        <span style="font-weight:600;color:var(--text)">📄 ${r['เลขที่เอกสาร'] ?? ''}</span>
+        <span>📅 ${r['วันที่เอกสาร'] ?? ''} &nbsp; ${ageBadge(days)}</span>
+      </div>
+      <div style="font-size:15px;font-weight:700;color:var(--danger);text-align:right;flex-shrink:0">
+        ${fmtNum(amt)}<br><span style="font-size:10px;font-weight:400;color:var(--muted)">บาท</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('arModal').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeArModal() {
+  document.getElementById('arModal').style.display = 'none';
+  document.body.style.overflow = '';
 }
 
 let allMyStores = [];  // เก็บ list ทั้งหมด สำหรับ filter
