@@ -647,6 +647,7 @@ async function doLogin() {
     renderTable();
     fillProfileInfo();
     await loadData();
+    startArAutoRefresh();
 
   } catch (e) {
     errEl.textContent = '⚠ เชื่อมต่อไม่ได้: ' + e.message;
@@ -658,7 +659,11 @@ async function doLogin() {
 function doLogout() {
   if (!confirm('ออกจากระบบ?')) return;
   currentUser = null;
-  userRows = [];
+  userRows    = [];
+  arAllRows   = [];
+  arLoaded    = false;
+  customerMap = new Map();
+  stopArAutoRefresh();
   localStorage.removeItem('rattana_colgate_user');
   document.getElementById('userChip').style.display = 'none';
   document.getElementById('loginEmail').value = '';
@@ -1475,9 +1480,27 @@ function showTab(tabId) {
 //  ลูกหนี้ Colgate
 // ════════════════════════════════════════════
 const AR_SHEET_NAME = 'ลูกหนี้';
-let arAllRows   = [];
-let arLoaded    = false;
-let customerMap = new Map(); // รหัสลูกค้า → row
+let arAllRows     = [];
+let arLoaded      = false;
+let customerMap   = new Map(); // รหัสลูกค้า → row
+let arRefreshTimer = null;
+
+function startArAutoRefresh() {
+  stopArAutoRefresh();
+  arRefreshTimer = setInterval(() => {
+    // รีเฟรชเฉพาะเมื่อแท็บลูกหนี้ active อยู่
+    if (document.getElementById('tab-ar-colgate')?.classList.contains('active')) {
+      loadArColgate();
+    } else {
+      // ถ้าไม่ได้อยู่หน้านี้ ให้ reset เพื่อโหลดใหม่เมื่อกลับมา
+      arLoaded = false;
+    }
+  }, 60 * 60 * 1000); // 1 ชั่วโมง
+}
+
+function stopArAutoRefresh() {
+  if (arRefreshTimer) { clearInterval(arRefreshTimer); arRefreshTimer = null; }
+}
 
 async function loadArColgate() {
   const body    = document.getElementById('arBody');
@@ -1510,7 +1533,8 @@ async function loadArColgate() {
     const filtered = myCode
       ? rows.filter(r =>
           (r['รหัสเซลล์'] || '').trim() === myCode &&
-          Object.values(r).filter(v => (v ?? '').trim() !== '').length >= 4
+          (r['รหัส'] || '').trim() !== '' &&
+          (r['ชื่อลูกหนี้'] || '').trim() !== ''
         )
       : [];
 
@@ -1582,7 +1606,7 @@ function renderArTable(rows) {
   body.innerHTML = display.map(r => {
     const amt    = parseFloat((r['ยอดหนี้'] || '0').replace(/,/g,'')) || 0;
     const key    = (r['รหัส'] || '').trim().replace(/'/g,"\\'");
-    // หาอายุหนี้สูงสุดจากทุกบิลของรหัสนี้
+    // หาอายุหนี้สูงสุดจากทุกบิลของรหัสนี้ (ใช้จากคอลัมน์ อายุหนี้ ในชีตตรงๆ)
     const allBills = arAllRows.filter(x => (x['รหัส'] || '').trim() === (r['รหัส'] || '').trim());
     const maxAge  = Math.max(...allBills.map(x => parseInt(x['อายุหนี้'] || '0') || 0));
     return `
@@ -1690,7 +1714,7 @@ function openArModal(code) {
   document.getElementById('arModalBillCount').textContent = sorted.length + ' บิล';
   document.getElementById('arModalBody').innerHTML = custInfo + sorted.map(r => {
     const amt  = parseFloat((r['ยอดหนี้'] || '0').replace(/,/g,'')) || 0;
-    const days = daysDiff(r['วันที่เอกสาร']);
+    const days = parseInt(r['อายุหนี้'] || '0') || 0;
     return `
     <div style="padding:12px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
       <div style="font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:3px">
@@ -1851,6 +1875,7 @@ window.onload = async () => {
         renderTable();
         fillProfileInfo();
         await loadData();
+        startArAutoRefresh();
         return;
       } else {
         // Session expired
