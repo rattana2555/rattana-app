@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0d1b3e">
-  <title>Rattana Stock Count v2.3</title>
+  <title>Rattana Stock Count v2.4</title>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
@@ -150,9 +150,11 @@
     #appScreen.show{display:block}
     #barcodeInput,#countInput{letter-spacing:2px;text-align:center;font-weight:700;font-size:18px}
     /* Scanner video — responsive on phone & desktop */
-    #reader,#countReader{width:100%;max-width:420px;margin:0 auto;border-radius:var(--radius-md);overflow:hidden}
-    #reader video,#countReader video{width:100%!important;height:auto!important;display:block;border-radius:var(--radius-md)}
-    #reader img,#countReader img{display:none}
+    #reader,#countReader{position:relative;width:100%;max-width:420px;margin:0 auto;border-radius:var(--radius-md);overflow:hidden;background:#000;aspect-ratio:4/3}
+    #reader video,#countReader video{width:100%;height:100%;display:block;object-fit:cover}
+    /* aiming frame */
+    #reader::after,#countReader::after{content:'';position:absolute;left:8%;right:8%;top:38%;bottom:38%;border:2px solid var(--gold);border-radius:8px;box-shadow:0 0 0 100vmax rgba(0,0,0,.25);pointer-events:none}
+    .scan-hint{font-size:12px;color:var(--muted);text-align:center;margin-top:8px}
     /* Tab nav */
     .tab-nav{display:flex;gap:6px;margin:10px 0 4px}
     .tab-btn{flex:1;background:var(--card-bg);border:1.5px solid var(--border);color:var(--muted);padding:11px 8px;font-family:inherit;font-size:14px;font-weight:700;border-radius:var(--radius-md);cursor:pointer;transition:all .15s;min-height:46px}
@@ -282,7 +284,8 @@
       </div>
 
       <div id="cameraSection" style="display:none;margin-top:12px">
-        <div id="reader"></div>
+        <div id="reader"><video id="readerVideo" playsinline muted autoplay></video></div>
+        <div class="scan-hint">วางบาร์โค้ดให้อยู่กลางจอ · ระยะ ~15 ซม. · แสงสว่างพอ</div>
       </div>
     </div>
   </div>
@@ -326,7 +329,10 @@
           <button class="btn btn-outline" id="btnCountCam" onclick="toggleCountCamera()">📷 เปิดกล้อง</button>
           <span style="font-size:12px;color:var(--muted)">สแกนบาร์โค้ดหน่วยไหน นับตามหน่วยนั้น</span>
         </div>
-        <div id="countCameraSection" style="display:none;margin-top:12px"><div id="countReader"></div></div>
+        <div id="countCameraSection" style="display:none;margin-top:12px">
+          <div id="countReader"><video id="countVideo" playsinline muted autoplay></video></div>
+          <div class="scan-hint">วางบาร์โค้ดให้อยู่กลางจอ · ระยะ ~15 ซม. · แสงสว่างพอ</div>
+        </div>
       </div>
     </div>
 
@@ -385,7 +391,7 @@
 <button id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
 </div><!-- /appScreen -->
 
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://unpkg.com/@zxing/browser@0.1.5/umd/zxing-browser.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script>
 // ── CONFIG ──────────────────────────────────────────────
@@ -791,56 +797,37 @@ function toggleCamera() {
   cameraOpen ? stopCamera() : startCamera();
 }
 
-function scanFormats() {
-  return [
-    Html5QrcodeSupportedFormats.EAN_13,
-    Html5QrcodeSupportedFormats.EAN_8,
-    Html5QrcodeSupportedFormats.CODE_128,
-    Html5QrcodeSupportedFormats.CODE_39,
-    Html5QrcodeSupportedFormats.UPC_A,
-    Html5QrcodeSupportedFormats.UPC_E,
-    Html5QrcodeSupportedFormats.ITF,
-  ];
-}
-
 // Detect in-app browsers (LINE/FB/IG) that often block the camera on iOS
 function isInAppBrowser() {
   const ua = navigator.userAgent || '';
   return /Line|FBAN|FBAV|FB_IAB|Instagram|Messenger/i.test(ua);
 }
 
-// Robust starter — works on phone (rear cam) and desktop/laptop (front/only cam).
-// Tries environment first, falls back to enumerated cameras. Uses a FRESH instance
-// per attempt to avoid html5-qrcode "already under transition" errors.
-async function startScanner(readerId, onDetected) {
-  const cfg = {
-    fps: 15,
-    // wide scan box suited to 1D barcodes (EAN/UPC/CODE128)
-    qrbox: (vw, vh) => {
-      const w = Math.min(Math.floor(vw * 0.92), 360);
-      return { width: w, height: Math.max(120, Math.floor(w * 0.55)) };
-    },
-    formatsToSupport: scanFormats(),
-    // use the device's native BarcodeDetector when available (Android Chrome) — much better at 1D
-    experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-    rememberLastUsedCamera: false,
-  };
-  // attempt 1 — prefer rear camera
-  let qr = new Html5Qrcode(readerId, { verbose:false });
+// Debounce repeated reads of the same code from continuous scanning
+let lastScanCode = '', lastScanTime = 0;
+function acceptScan(code) {
+  const now = Date.now();
+  if (code === lastScanCode && now - lastScanTime < 1500) return false;
+  lastScanCode = code; lastScanTime = now;
+  return true;
+}
+
+// ZXing reader: decodes the FULL video frame (great 1D support on iOS & Android).
+// Tries rear camera (environment) first, falls back to default device.
+async function startScanner(videoElId, onDetected) {
+  const reader = new ZXingBrowser.BrowserMultiFormatReader(undefined, { delayBetweenScanAttempts: 120 });
+  const videoEl = document.getElementById(videoElId);
+  const cb = (result) => { if (result) { const t = result.getText(); if (acceptScan(t)) onDetected(t); } };
+  let controls;
   try {
-    await qr.start({ facingMode: { ideal: 'environment' } }, cfg, onDetected, () => {});
-    return qr;
+    controls = await reader.decodeFromConstraints(
+      { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
+      videoEl, cb
+    );
   } catch (e1) {
-    try { await qr.stop(); } catch {}
-    try { qr.clear(); } catch {}
+    controls = await reader.decodeFromVideoDevice(undefined, videoEl, cb);
   }
-  // attempt 2 — pick a camera explicitly (desktop / no rear cam)
-  const cams = await Html5Qrcode.getCameras();
-  if (!cams || !cams.length) throw new Error('ไม่พบกล้องบนอุปกรณ์นี้');
-  const back = cams.find(c => /back|rear|environment|หลัง/i.test(c.label || ''));
-  qr = new Html5Qrcode(readerId, { verbose:false });
-  await qr.start((back || cams[cams.length - 1]).id, cfg, onDetected, () => {});
-  return qr;
+  return controls;
 }
 
 function startCamera() {
@@ -849,12 +836,12 @@ function startCamera() {
   const btn = document.getElementById('btnCamera');
   btn.disabled = true; btn.textContent = '⏳ กำลังเปิด...';
   document.getElementById('cameraSection').style.display = 'block';
-  startScanner('reader', (code) => {
+  startScanner('readerVideo', (code) => {
     document.getElementById('barcodeInput').value = code;
     lookupBarcode(code);
     if (navigator.vibrate) navigator.vibrate(80);
-  }).then(qr => {
-    html5QR = qr;
+  }).then(ctrl => {
+    html5QR = ctrl;
     cameraOpen = true;
     setScannerUI(true);
   }).catch(err => {
@@ -865,9 +852,7 @@ function startCamera() {
 }
 
 function stopCamera() {
-  if (html5QR) {
-    html5QR.stop().then(() => { html5QR.clear(); html5QR = null; }).catch(()=>{});
-  }
+  if (html5QR) { try { html5QR.stop(); } catch {} html5QR = null; }
   cameraOpen = false;
   document.getElementById('cameraSection').style.display = 'none';
   setScannerUI(false);
@@ -1323,11 +1308,11 @@ function startCountCamera() {
   const btn = document.getElementById('btnCountCam');
   btn.disabled = true; btn.textContent = '⏳ กำลังเปิด...';
   document.getElementById('countCameraSection').style.display = 'block';
-  startScanner('countReader', (code) => {
+  startScanner('countVideo', (code) => {
     // avoid re-trigger while a pending qty card is open
     if (!pendingScan) { countScan(code); if (navigator.vibrate) navigator.vibrate(80); }
-  }).then(qr => {
-    countQR = qr;
+  }).then(ctrl => {
+    countQR = ctrl;
     countCamOpen = true;
     document.getElementById('countDot').className = 'scanner-dot active';
     document.getElementById('countCamText').textContent = 'กล้องทำงาน';
@@ -1335,10 +1320,10 @@ function startCountCamera() {
   }).catch(err => {
     showToast('เปิดกล้องไม่ได้: ' + (err.message||err), 'error');
     document.getElementById('countCameraSection').style.display = 'none';
-  }).finally(() => { camStarting = false; if (!countCamOpen) btn.disabled = false; btn.disabled = false; });
+  }).finally(() => { camStarting = false; btn.disabled = false; });
 }
 function stopCountCamera() {
-  if (countQR) { countQR.stop().then(()=>{ countQR.clear(); countQR=null; }).catch(()=>{}); }
+  if (countQR) { try { countQR.stop(); } catch {} countQR = null; }
   countCamOpen = false;
   document.getElementById('countCameraSection').style.display = 'none';
   document.getElementById('countDot').className = 'scanner-dot';
