@@ -1,0 +1,3383 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v13.9</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+
+
+/* ══ RATTANA DESIGN TOKENS v12 (Bento × Navy+Gold) ══ */
+:root{
+  --navy:       #0A1A38;
+  --navy-mid:   #1A2E5A;
+  --navy-light: #243B73;
+  --gold:       #C9A24C;
+  --gold-light: #E6C26E;
+  --gold-deep:  #A8862F;
+  --gold-soft:  #FEF6E4;
+  --success:    #16A34A;
+  --success-soft:#DCFCE7;
+  --danger:     #DC2626;
+  --danger-soft:#FEE2E2;
+  --warning:    #EA580C;
+  --warning-soft:#FFEDD5;
+  --info:       #2563EB;
+  --info-soft:  #DBEAFE;
+  --bg:         #FAF7F0;
+  --bg-2:       #F5F0E5;
+  --text:       #0A1A38;
+  --text-2:     #3D4D6E;
+  --card-bg:    #ffffff;
+  --border:     #EAE3D2;
+  --muted:      #8896B0;
+  --row-alt:    #FAFBFD;
+  --radius-sm:  8px;
+  --radius-md:  14px;
+  --radius-lg:  18px;
+  --shadow-sm:  0 1px 3px rgba(10,26,56,.05),0 1px 2px rgba(10,26,56,.04);
+  --shadow-md:  0 4px 12px rgba(10,26,56,.06),0 2px 4px rgba(10,26,56,.04);
+  --shadow-lg:  0 12px 28px rgba(10,26,56,.10),0 4px 12px rgba(10,26,56,.06);
+  --shadow-gold:0 3px 10px rgba(201,162,76,.35);
+}
+
+/* ══ RESET ══ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--text);font-family:'Sarabun',sans-serif;font-size:14px;line-height:1.5;min-height:100dvh;overflow-x:hidden}
+button{font-family:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+select,input{font-family:inherit;font-size:16px}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:#f0f2f6}
+::-webkit-scrollbar-thumb{background:#cbd2dc;border-radius:3px}
+
+/* ══ LOADING BAR ══ */
+#loadingBar{position:fixed;top:0;left:0;height:3px;background:var(--gold);width:0;transition:width .4s;z-index:10000}
+
+/* ══ LOADING SCREEN ══ */
+#ls{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:9999;transition:opacity .5s,visibility .5s}
+#ls.hide{opacity:0;visibility:hidden;pointer-events:none}
+#ls .truck{font-size:54px;animation:bounce 1s ease-in-out infinite alternate}
+@keyframes bounce{from{transform:translateY(0) rotate(-2deg)}to{transform:translateY(-8px) rotate(2deg)}}
+#ls .title{font-family:'Kanit',sans-serif;font-size:20px;font-weight:600;color:var(--navy)}
+#ls .sub{font-size:13px;color:var(--muted)}
+#ls .bar-wrap{width:220px;height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+#ls .bar{height:100%;background:var(--gold);width:8%;transition:width .5s ease;border-radius:3px}
+
+/* ══ TOAST ══ */
+#toasts{position:fixed;bottom:max(24px,env(safe-area-inset-bottom));right:16px;z-index:9998;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.toast{background:var(--card-bg);border:1.5px solid;border-radius:var(--radius-md);padding:10px 14px;font-size:13px;display:flex;align-items:flex-start;gap:8px;max-width:320px;box-shadow:var(--shadow-lg);animation:slideIn .3s ease}
+@keyframes slideIn{from{transform:translateX(110%);opacity:0}to{transform:none;opacity:1}}
+.toast.ok{border-color:#2ecc7188;background:#f0fdf4;color:#1e8449}
+.toast.warn{border-color:#f39c1288;background:#fffbeb;color:#a87800}
+.toast.err{border-color:#e74c3c88;background:#fef2f2;color:#c0392b}
+
+/* ══ HEADER (v12) ══ */
+.topnav{background:#fff;position:sticky;top:0;z-index:200;box-shadow:0 1px 3px rgba(10,26,56,.04);border-bottom:1px solid var(--border)}
+.topnav-inner{display:flex;align-items:center;padding:0 20px;height:58px;gap:10px;max-width:1500px;margin:0 auto}
+.logo-box{width:36px;height:36px;background:linear-gradient(135deg,var(--gold-light),var(--gold));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;box-shadow:var(--shadow-gold)}
+.logo-text{flex-shrink:0}
+.logo-title{font-family:'Kanit',sans-serif;font-size:15px;font-weight:700;color:var(--navy);line-height:1.1}
+.logo-sub{font-size:10px;color:var(--muted);margin-top:1px}
+.app-version{background:linear-gradient(135deg,var(--gold-light),var(--gold));color:var(--navy);font-size:11px;padding:3px 9px;border-radius:6px;font-weight:700;margin-left:6px;box-shadow:0 2px 6px rgba(201,162,76,.3);letter-spacing:.3px;display:inline-block}
+.topnav-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0;font-size:11px;color:var(--muted)}
+
+/* ══ TAB NAV (v12) ══ */
+.nav-tabs{display:flex;flex:1;overflow-x:auto;gap:4px;padding:0 8px;scrollbar-width:none}
+.nav-tabs::-webkit-scrollbar{display:none}
+.nav-tab{display:flex;align-items:center;gap:6px;padding:8px 14px;border:none;background:none;color:var(--muted);font-size:13px;font-weight:600;transition:all .15s;white-space:nowrap;cursor:pointer;border-radius:10px;font-family:inherit}
+.nav-tab:hover{background:var(--gold-soft);color:var(--gold)}
+.nav-tab.active{background:var(--navy);color:var(--gold-light);box-shadow:0 4px 12px rgba(10,26,56,.18)}
+
+/* ══ BOTTOM NAV (mobile, v12) ══ */
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--card-bg);border-top:1px solid var(--border);z-index:200;padding-bottom:env(safe-area-inset-bottom,0);box-shadow:0 -2px 12px rgba(10,26,56,.06)}
+.bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border:none;background:none;color:var(--muted);font-size:10px;font-weight:600;border-top:2px solid transparent;transition:all .15s;font-family:inherit}
+.bnav-item.active{color:var(--gold);border-top-color:var(--gold);font-weight:700;background:var(--gold-soft)}
+.bnav-icon{font-size:18px}
+@media(max-width:768px){.bottom-nav{display:flex}.nav-tabs{display:none}.main{padding-bottom:70px!important}}
+
+/* ══ MAIN ══ */
+.main{padding:20px 28px;max-width:1500px;margin:0 auto}
+@media(max-width:768px){.main{padding:14px 16px}}
+
+/* card with built-in padding for content panels */
+#savedTruckList, #dashTruckList{padding:18px 20px}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+@keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.fi{animation:fi .2s ease}
+
+/* ══ BENTO BOX (v12 Dashboard) ══ */
+.bento-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:20px}
+.bento-box{border-radius:18px;padding:20px;color:#fff;position:relative;overflow:hidden;min-height:120px;box-shadow:var(--shadow-md);cursor:pointer;transition:all .25s}
+.bento-box:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg)}
+.bento-box::before{content:'';position:absolute;bottom:-30%;right:-20%;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,.06);pointer-events:none}
+.bento-1{background:linear-gradient(135deg,var(--navy-mid),var(--navy));grid-column:span 2}
+.bento-2{background:linear-gradient(135deg,var(--gold),var(--gold-deep));grid-column:span 1}
+.bento-3{background:#fff;border:1px solid var(--border);color:var(--navy);grid-column:span 1}
+.bento-3::before{background:var(--gold-soft);opacity:.6}
+.bento-4{background:linear-gradient(135deg,var(--navy-light),var(--navy-mid));grid-column:span 2}
+.bento-5{background:linear-gradient(135deg,var(--gold-light),var(--gold));color:var(--navy);grid-column:span 3}
+.bento-5 .bento-label,.bento-5 .bento-sub{color:var(--navy);opacity:.75}
+.bento-6{background:linear-gradient(135deg,var(--navy),#0D2147);grid-column:span 3}
+.bento-label{font-size:11px;font-weight:700;text-transform:uppercase;opacity:.85;letter-spacing:.6px;display:flex;align-items:center;gap:6px;position:relative;z-index:1}
+.bento-value{font-family:'Kanit',sans-serif;font-size:38px;font-weight:800;margin-top:6px;line-height:1;letter-spacing:-.5px;position:relative;z-index:1}
+.bento-sub{font-size:11px;opacity:.7;margin-top:4px;font-weight:500;position:relative;z-index:1}
+.bento-icon{position:absolute;top:14px;right:14px;font-size:22px;opacity:.4;z-index:1}
+@media(max-width:768px){
+  .bento-grid{grid-template-columns:repeat(2,1fr)}
+  .bento-1,.bento-4,.bento-5,.bento-6{grid-column:span 2}
+}
+
+/* ══ STAT CARDS (Bento-style) ══ */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:20px}
+.stat-card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:18px 20px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow-sm);transition:all .2s;position:relative;overflow:hidden;cursor:pointer}
+.stat-card:hover{box-shadow:var(--shadow-lg);transform:translateY(-2px);border-color:var(--gold-light)}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--gold-light),var(--gold))}
+.stat-icon{width:44px;height:44px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.stat-num{font-family:'Kanit',sans-serif;font-size:28px;font-weight:700;line-height:1;letter-spacing:-.5px;color:var(--navy)}
+.stat-lbl{font-size:11px;color:var(--muted);margin-top:4px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+
+/* ══ CARDS ══ */
+.card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:var(--shadow-sm)}
+.card-gold{border-top:3px solid var(--gold)}
+
+/* ══ BUTTONS (v12) ══ */
+.btn{padding:8px 14px;border-radius:9px;font-size:12px;font-weight:600;border:1px solid transparent;display:inline-flex;align-items:center;gap:6px;transition:all .15s;cursor:pointer;min-height:36px;font-family:inherit}
+.btn:hover{transform:translateY(-1px);box-shadow:var(--shadow-md)}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
+.btn-auto{background:var(--success-soft);border:1px solid var(--success);color:#15803D}
+.btn-save{background:linear-gradient(135deg,var(--gold-light),var(--gold));border:1px solid var(--gold);color:var(--navy);font-weight:700;box-shadow:var(--shadow-gold)}
+.btn-gold{background:linear-gradient(135deg,var(--gold-light),var(--gold));color:var(--navy);border-color:var(--gold);box-shadow:var(--shadow-gold)}
+.btn-danger{background:var(--danger-soft);border:1.5px solid var(--danger);color:var(--danger)}
+
+/* ══ QUEUE HEADER (v12) ══ */
+.queue-header{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;margin-bottom:16px}
+.queue-title{font-family:'Kanit',sans-serif;font-size:24px;font-weight:700;color:var(--navy);letter-spacing:-.3px}
+.queue-sub{font-size:13px;color:var(--muted);margin-top:3px}
+.queue-btns{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+
+/* ══ TRUCK CARDS ══ */
+.truck-hint{font-size:12px;color:var(--muted);margin-bottom:8px}
+.truck-scroll{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px}
+.truck-scroll::-webkit-scrollbar{height:4px}
+.tcard{background:var(--card-bg);border:1.5px solid var(--border);border-radius:12px;padding:11px 13px;cursor:pointer;min-width:148px;flex-shrink:0;transition:all .2s;box-shadow:var(--shadow-sm);position:relative}
+.tcard:hover{border-color:var(--gold-light);box-shadow:var(--shadow-md);transform:translateY(-2px)}
+.tcard.sel{background:var(--gold-soft);border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,162,76,.15),var(--shadow-md)}
+.tcard.over{border-color:var(--danger)}
+.tcard-type{font-size:9px;font-weight:600}
+.tcard-plate{font-family:'Kanit',sans-serif;font-size:14px;font-weight:700;color:var(--navy);margin-top:1px}
+.tcard-pct{font-size:15px;font-weight:700}
+.tcard-wt{font-size:9px;color:var(--muted)}
+.tcard-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin:2px 0}
+.tcard-bar-fill{height:100%;border-radius:2px;transition:width .4s}
+.tcard-meta{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:2px}
+.tcard-driver{font-size:11px;font-weight:600;margin-top:3px}
+.tcard-sel-hint{text-align:center;font-size:10px;color:var(--gold);font-weight:600;margin-top:4px}
+
+/* ══ TRANSFER BAR (v12) ══ */
+.transfer-bar{background:linear-gradient(135deg,var(--gold-soft),#FFF8E0);border:1.5px solid var(--gold-light);border-radius:12px;padding:11px 15px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;margin-bottom:4px;box-shadow:var(--shadow-sm)}
+.transfer-bar select{background:var(--card-bg);border:1.5px solid var(--gold);border-radius:9px;padding:7px 11px;font-size:12px;font-weight:600;min-width:155px;font-family:inherit;color:var(--navy)}
+.btn-clear{background:var(--danger-soft);border:1.5px solid var(--danger);border-radius:9px;padding:7px 12px;color:var(--danger);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}
+.btn-clear:hover{background:#fff;transform:translateY(-1px);box-shadow:var(--shadow-sm)}
+
+/* ══ FILTERS (v12) ══ */
+.filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;align-items:center}
+.filters input,.filters select{background:var(--card-bg);border:1.5px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:13px;font-family:inherit;transition:all .15s}
+.filters input:focus,.filters select:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-soft)}
+.filters input{flex:1;min-width:130px}
+.sel-bar{display:flex;gap:6px;align-items:center;background:var(--gold-soft);border:1px solid var(--gold-light);border-radius:9px;padding:6px 11px;font-weight:600;font-size:12px;color:var(--gold-deep)}
+
+/* ══ FILTER PILLS (v12) ══ */
+.pill-row{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.pill-row .lbl{font-size:12px;color:var(--muted);font-weight:600;margin-right:4px}
+.pill{padding:6px 14px;border-radius:99px;border:1.5px solid var(--border);background:var(--card-bg);color:var(--text-2);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit;white-space:nowrap}
+.pill:hover{border-color:var(--gold-light);color:var(--gold)}
+.pill.active{background:var(--navy);border-color:var(--navy);color:var(--gold-light);box-shadow:var(--shadow-md)}
+.pill-gold.active{background:var(--gold-soft);border-color:var(--gold);color:var(--gold-deep)}
+
+/* ══ BILL TABLE (v12) ══ */
+.bill-table-wrap{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);overflow:visible;box-shadow:var(--shadow-sm)}
+.bill-table{width:100%;border-collapse:collapse;font-size:13px}
+.bill-table th{padding:10px 12px;text-align:left;font-size:11px;font-weight:700;white-space:nowrap;background:var(--gold-soft);color:var(--navy);border-bottom:1px solid var(--gold-light);text-transform:uppercase;letter-spacing:.4px}.bill-table thead tr:first-child th:first-child{border-radius:var(--radius-md) 0 0 0}.bill-table thead tr:first-child th:last-child{border-radius:0 var(--radius-md) 0 0}
+.bill-table td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.bill-row{cursor:pointer;transition:background .12s}
+.bill-row:hover{background:var(--gold-soft)}
+.bill-row.on-truck{background:#FFF8EC}
+.bill-row.selected{background:var(--info-soft)}
+.bill-row:nth-child(even){background:var(--row-alt)}
+.bill-row:nth-child(even):hover{background:var(--gold-soft)}
+.bill-row.on-truck:nth-child(even){background:#FFF8EC}
+.bill-row.selected:nth-child(even){background:var(--info-soft)}
+.chip{display:inline-flex;align-items:center;gap:3px;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:600;white-space:nowrap;border:1px solid}
+.chip-truck{color:var(--c);background:var(--cb);border-color:var(--cc)}
+.chip-pending{color:var(--warning);background:#fef6ec;border-color:#fac77588}
+.table-foot{padding:7px 12px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);display:flex;gap:14px;background:#fafbfc}
+
+/* ══ DISTANCE INDICATORS ══ */
+.fill-green{background:#2E8B57}.fill-amber{background:#E07B00}.fill-red{background:#DC3545}
+
+/* ══ CAR VIEW (v12) ══ */
+.car-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.car-card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;box-shadow:var(--shadow-sm);transition:all .2s}
+.car-card:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);border-color:var(--gold-light)}
+.car-card.over{border-color:var(--danger);border-left:4px solid var(--danger)}
+
+/* ══ SELECTED TRUCK PANEL (v12) ══ */
+#selTruckPanel{background:linear-gradient(135deg,var(--gold-soft),#FFF8E0);border:1.5px solid var(--gold);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow-gold)}
+
+/* ══ MODAL (Rattana standard) ══ */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.65);z-index:5000;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--card-bg);border-radius:var(--radius-lg);max-width:480px;width:100%;box-shadow:var(--shadow-lg);overflow:hidden;animation:slideUp .22s ease;border:1px solid var(--gold-light)}
+.modal-head{background:linear-gradient(135deg,var(--navy),var(--navy-mid));padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
+.modal-head-title{font-family:'Kanit',sans-serif;font-size:16px;font-weight:700;color:var(--gold-light)}
+.modal-head-sub{font-size:12px;color:rgba(255,255,255,.55);margin-top:2px}
+.modal-close{background:rgba(255,255,255,.1);border:none;color:rgba(255,255,255,.7);border-radius:var(--radius-sm);padding:6px 10px;font-size:13px;cursor:pointer;transition:all .15s}
+.modal-close:hover{background:rgba(255,255,255,.2)}
+.modal-body{padding:18px 20px}
+.modal-foot{padding:0 20px 16px;display:flex;gap:8px;justify-content:flex-end}
+
+/* ══ ROUTES / MAP ══ */
+.route-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+#routeMap{border:none;outline:none}
+.leaflet-popup-content{font-family:'Sarabun',sans-serif;font-size:12px}
+
+/* ══ VERSION ══ */
+.app-version{font-size:9px;color:rgba(255,255,255,.3);margin-left:4px}
+
+/* ══ ANIMATIONS ══ */
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+/* ══ LEAFLET — Route Optimizer style ══ */
+.leaflet-popup-content-wrapper{background:var(--card-bg)!important;color:var(--text)!important;border-radius:var(--radius-md)!important;box-shadow:var(--shadow-lg)!important}
+.leaflet-popup-tip{background:var(--card-bg)!important}
+.leaflet-popup-content{color:var(--text)!important;margin:10px 14px!important;font-family:'Sarabun',sans-serif!important}
+.leaflet-popup-close-button{color:var(--muted)!important}
+.leaflet-container{background:var(--bg)!important}
+.leaflet-control-zoom a{background:var(--card-bg)!important;color:var(--text)!important;border-color:var(--border)!important}
+.leaflet-control-attribution{background:var(--card-bg)!important;color:var(--muted)!important;font-size:10px!important}
+
+
+/* ══ SEARCH DROPDOWN ══ */
+.sd-wrap{position:relative;display:inline-block}
+.sd-ctrl{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 8px;border:1.5px solid var(--border);border-radius:7px;background:var(--card-bg);cursor:pointer;font-size:12px;min-height:32px;user-select:none;transition:border-color .15s}
+.sd-ctrl:hover{border-color:var(--gold)}
+.sd-lbl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.sd-lbl.sd-ph{color:var(--muted)}
+.sd-arr{color:var(--muted);font-size:9px;flex-shrink:0;transition:transform .15s}
+.sd-wrap.open .sd-ctrl{border-color:#1A5FA5}
+.sd-wrap.open .sd-arr{transform:rotate(180deg)}
+/* Dropdown panel */
+.sd-panel{position:absolute;top:calc(100% + 4px);left:0;min-width:max(100%,200px);background:#fff;border-radius:12px;box-shadow:0 8px 32px rgba(13,27,62,.18);z-index:9999;display:none;overflow:hidden;border:1.5px solid #dde3f0}
+.sd-wrap.open .sd-panel{display:block}
+/* Search input area */
+.sd-search-wrap{padding:8px 8px 6px}
+.sd-search-box{position:relative;display:flex;align-items:center}
+.sd-search-inp{width:100%;padding:8px 32px 8px 12px;border:1.5px solid #93B8DE;border-radius:8px;font-size:13px;font-family:'Sarabun',sans-serif;outline:none;color:var(--navy);transition:border-color .15s,box-shadow .15s}
+.sd-search-inp:focus{border-color:#1A5FA5;box-shadow:0 0 0 3px rgba(26,95,165,.12)}
+.sd-clear{position:absolute;right:8px;background:none;border:none;color:#aaa;cursor:pointer;font-size:14px;padding:2px 4px;border-radius:4px;display:none}
+.sd-clear:hover{color:var(--navy);background:#eee}
+/* Options */
+.sd-opts{max-height:210px;overflow-y:auto;padding-bottom:4px}
+.sd-opt{padding:8px 14px;font-size:12px;cursor:pointer;border-bottom:1px solid #f3f5f8;transition:background .1s}
+.sd-opt:last-child{border-bottom:none}
+.sd-opt:hover{background:#eaf0f8;color:var(--navy)}
+.sd-opt.sd-sel{background:#fff8ec;color:#C47000;font-weight:600}
+.sd-none{padding:10px 14px;font-size:12px;color:var(--muted);text-align:center}
+/* ══ PRINT ══ */
+@media print{.topnav,.bottom-nav,#toasts,.no-print{display:none!important}body{background:#fff}}
+</style>
+</head>
+<body>
+
+
+<!-- Loading -->
+<div id="loadingBar"></div>
+<div id="ls">
+  <div class="truck">🚛</div>
+  <div class="title">จัดคิวรถส่งสินค้า</div>
+  <div class="sub" id="ls-msg">กำลังโหลดข้อมูล...</div>
+  <div class="bar-wrap"><div class="bar" id="ls-bar"></div></div>
+  <div style="font-size:11px;color:#C8CEDC;margin-top:4px">รัตนไพบูลย์ กรุ๊ป • คลัง W1</div>
+</div>
+
+<!-- Toasts -->
+<div id="toasts"></div>
+
+<!-- Delivery Date Picker Modal -->
+<div id="deliveryDateOverlay" class="modal-overlay">
+  <div class="modal" style="max-width:340px">
+    <div class="modal-head">
+      <div class="modal-head-title">📅 วันที่ส่งสินค้า</div>
+      <button class="modal-close" onclick="document.getElementById('deliveryDateOverlay').classList.remove('open')">✕</button>
+    </div>
+    <div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+      <div style="font-size:12px;color:#6B7A90">เลือกวันที่จะไปส่งสินค้า (ใช้สำหรับบันทึกลงชีท Keepdata)</div>
+      <input type="date" id="deliveryDateInput"
+        style="border:1.5px solid #E0E5ED;border-radius:8px;padding:10px 12px;font-size:14px;font-family:Sarabun,sans-serif;color:#07101F;width:100%"/>
+      <div style="display:flex;gap:8px">
+        <button onclick="document.getElementById('deliveryDateOverlay').classList.remove('open')"
+          style="flex:1;border:1.5px solid #E0E5ED;background:#fff;color:#6B7A90;border-radius:8px;padding:9px;font-size:13px;font-weight:600;cursor:pointer">ยกเลิก</button>
+        <button onclick="confirmDeliveryDate()"
+          style="flex:1;background:#07101F;color:#E4C46E;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer">ตกลง</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Day Picker Modal -->
+<div id="dayPickerOverlay" class="modal-overlay">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-head">
+      <div>
+        <div class="modal-head-title">⚡ จัดอัตโนมัติ</div>
+        <div class="modal-head-sub">เลือกวันที่ต้องการจัดรถ</div>
+      </div>
+      <button class="modal-close" onclick="closeDayPicker()">✕</button>
+    </div>
+    <!-- Day grid -->
+    <div style="padding:18px 20px">
+      <div id="dayGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:16px"></div>
+      <!-- Warning note -->
+      <div style="background:#FFFBEB;border:1px solid #FAC77588;border-radius:8px;padding:10px 13px;font-size:12px;color:#854F0B;display:flex;gap:8px;align-items:flex-start">
+        <span style="flex-shrink:0;font-size:14px">💡</span>
+        <div>บิลวันอื่นที่จัดไปแล้ว<strong>จะไม่ถูกเปลี่ยน</strong> — ระบบจะจัดเฉพาะวันที่เลือก และคำนวณน้ำหนักรถที่เหลือจากวันอื่นด้วย</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button onclick="closeDayPicker()" class="btn btn-outline" style="border:1.5px solid var(--border);background:var(--card-bg);color:var(--muted)">ยกเลิก</button>
+      <button id="dayPickerConfirm" onclick="confirmAutoAssign()" disabled class="btn btn-save" style="opacity:.5">⚡ จัดเลย</button>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- TopNav -->
+<nav class="topnav">
+  <div class="topnav-inner">
+    <div class="logo-box">🚛</div>
+    <div class="logo-text">
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v13.9</span></div>
+      <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
+    </div>
+    <div class="nav-tabs">
+      <button class="nav-tab" onclick="switchTab('dashboard',this)"><span>🏠</span><span>แดชบอร์ด</span></button>
+      <button class="nav-tab active" onclick="switchTab('queue',this)"><span>🚛</span><span>จัดคิวรถ</span></button>
+      <button class="nav-tab" onclick="switchTab('bills',this)"><span>📋</span><span>บิลสินค้า</span></button>
+      <button class="nav-tab" onclick="switchTab('routes',this)"><span>🗺️</span><span>สายส่ง</span></button>
+      <button class="nav-tab" onclick="switchTab('cars',this)"><span>🚐</span><span>รถทั้งหมด</span></button>
+      <button class="nav-tab" onclick="switchTab('saved',this)"><span>💾</span><span>บันทึก</span></button>
+    </div>
+    <div class="topnav-right">
+      <span id="dateLabel"></span>
+      <button class="btn" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);color:#9BAAB8;padding:4px 10px;font-size:11px" onclick="refreshData()">🔄</button>
+      <button onclick="logout()" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.5);padding:4px 10px;font-size:11px;border-radius:6px;cursor:pointer" title="ออกจากระบบ">⎋</button>
+    </div>
+  </div>
+</nav>
+
+<!-- Main -->
+<div class="main" id="mainContent">
+
+  <!-- DASHBOARD -->
+  <div class="tab-panel fi" id="tab-dashboard">
+    <div style="margin-bottom:20px">
+      <h1 style="font-family:Kanit;font-size:26px;font-weight:700;color:var(--navy);letter-spacing:-.3px">สวัสดีครับ ☀️</h1>
+      <p style="font-size:13px;color:var(--muted);margin-top:2px" id="d-greeting">วันนี้ · กำลังโหลดข้อมูล...</p>
+    </div>
+
+    <div class="bento-grid">
+      <div class="bento-box bento-1" onclick="switchTab('bills')">
+        <div class="bento-icon">📦</div>
+        <div class="bento-label">บิลทั้งหมด</div>
+        <div class="bento-value" id="d-total">—</div>
+        <div class="bento-sub">คลิกดูรายการบิลทั้งหมด</div>
+      </div>
+      <div class="bento-box bento-2">
+        <div class="bento-icon">✅</div>
+        <div class="bento-label">จัดแล้ว</div>
+        <div class="bento-value" id="d-done">—</div>
+      </div>
+      <div class="bento-box bento-3">
+        <div class="bento-icon">⏳</div>
+        <div class="bento-label">ยังไม่จัด</div>
+        <div class="bento-value" id="d-pend">—</div>
+      </div>
+      <div class="bento-box bento-4" onclick="switchTab('cars')">
+        <div class="bento-icon">🚛</div>
+        <div class="bento-label">รถใช้งาน</div>
+        <div class="bento-value" id="d-trucks">—</div>
+        <div class="bento-sub">คลิกดูฝูงรถทั้งหมด</div>
+      </div>
+      <div class="bento-box bento-5" onclick="switchTab('saved')">
+        <div class="bento-icon">💾</div>
+        <div class="bento-label">ข้อมูลที่บันทึก</div>
+        <div class="bento-value" id="d-saved">—</div>
+        <div class="bento-sub">คลิกดูสรุป Keepdata + แผนที่</div>
+      </div>
+      <div class="bento-box bento-6">
+        <div class="bento-icon">⚡</div>
+        <div class="bento-label">ปุ่มลัด</div>
+        <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;position:relative;z-index:1">
+          <button onclick="event.stopPropagation();switchTab('queue')" class="btn btn-gold" style="font-size:12px">🚛 ไปจัดคิวรถ</button>
+          <button onclick="event.stopPropagation();switchTab('routes')" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:7px 13px;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer">🛣️ สายส่ง</button>
+          <button onclick="event.stopPropagation();refreshData()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:7px 13px;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer">🔄 รีเฟรช</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SAVED (Keepdata Summary + Map) -->
+  <div class="tab-panel fi" id="tab-saved">
+    <h1 style="font-family:Kanit;font-size:22px;font-weight:600;color:#07101F;margin-bottom:14px">💾 สรุปข้อมูลที่บันทึก</h1>
+
+    <!-- Date filter -->
+    <div style="background:#fff;border:1px solid #E0E5ED;border-radius:12px;padding:12px 16px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">
+        <div style="font-size:11px;color:#6B7A90;font-weight:500">📅 เลือกวันส่ง (จากชีท Keepdata)</div>
+        <button onclick="refreshKeepdata()" style="background:#EAF0F8;border:1px solid #93B8DE;color:#1A5FA5;border-radius:7px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer">🔄 รีเฟรช</button>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center" id="mapDateFilter"></div>
+    </div>
+
+    <!-- Trip filter -->
+    <div style="background:#fff;border:1px solid #E0E5ED;border-radius:12px;padding:10px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:11px;color:#6B7A90;font-weight:500">🗺️ แสดงเที่ยว:</span>
+      <div id="mapTripFilter" style="display:flex;gap:6px">
+        <button onclick="filterMapTrip(0,this)" style="padding:4px 12px;border-radius:7px;border:1.5px solid #E0E5ED;background:#F5F7FA;color:#6B7A90;font-size:11px;font-weight:700;cursor:pointer">ทั้งหมด</button>
+        <button onclick="filterMapTrip(1,this)" style="padding:4px 12px;border-radius:7px;border:1.5px solid #F6C45A;background:#FFF8EC;color:#C47000;font-size:11px;font-weight:400;cursor:pointer">🟠 เที่ยว 1</button>
+        <button onclick="filterMapTrip(2,this)" style="padding:4px 12px;border-radius:7px;border:1.5px solid #93B8DE;background:#EAF0F8;color:#1A5FA5;font-size:11px;font-weight:400;cursor:pointer">🔵 เที่ยว 2</button>
+        <button onclick="filterMapTrip(3,this)" style="padding:4px 12px;border-radius:7px;border:1.5px solid #86EFAC;background:#F0FDF4;color:#15803D;font-size:11px;font-weight:400;cursor:pointer">🟢 เที่ยว 3</button>
+      </div>
+      <button id="mapThemeBtn" onclick="toggleMapTheme()" style="padding:4px 12px;border-radius:7px;border:1.5px solid #E0E5ED;background:#fff;color:#07101F;font-size:11px;font-weight:600;cursor:pointer">🌙 Dark</button>
+      <div style="margin-left:auto;font-size:10px;color:#A0ABBB">● solid = เที่ยว 1 · ○ dashed = เที่ยว 2 · ◌ dotted = เที่ยว 3</div>
+    </div>
+
+    <!-- Truck filter -->
+    <div style="background:#fff;border:1px solid #E0E5ED;border-radius:12px;padding:12px 16px;margin-bottom:14px">
+      <div style="font-size:11px;color:#6B7A90;margin-bottom:10px;font-weight:500">🚛 เลือกดูโลเคชันรายคัน</div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center" id="mapTruckFilter">
+        <button onclick="filterMap(null,this)"
+          style="padding:6px 14px;border-radius:8px;border:2px solid #07101F;background:#07101F;color:#E4C46E;font-size:12px;font-weight:700;cursor:pointer">
+          🌐 ทั้งหมด
+        </button>
+      </div>
+    </div>
+
+    <!-- Map -->
+    <div style="background:#fff;border:1px solid #E0E5ED;border-radius:12px;overflow:hidden;margin-bottom:14px">
+      <div style="padding:10px 16px;border-bottom:1px solid #E0E5ED;background:#F5F7FA;font-family:Kanit;font-size:13px;font-weight:600;color:#7D6428" id="mapTitle">🗺️ แผนที่โลเคชันทั้งหมด</div>
+      <div id="routeMap" style="height:420px;width:100%"></div>
+    </div>
+
+    <!-- Trip Time Bar -->
+    <div id="tripTimeBar" style="display:none;background:#fff;border:1px solid #E0E5ED;border-radius:10px;padding:12px 16px;margin-bottom:14px"></div>
+
+    <!-- Truck summary cards -->
+    <div class="card" id="savedTruckList" style="margin-bottom:16px"></div>
+  </div>
+
+  <!-- QUEUE -->
+  <div class="tab-panel active fi" id="tab-queue">
+    <!-- Header row -->
+    <div class="queue-header">
+      <div>
+        <div class="queue-title">🚛 จัดคิวรถส่งสินค้า</div>
+        <div class="queue-sub" id="q-sub">กำลังโหลด...</div>
+      </div>
+      <div class="queue-btns no-print">
+        <button class="btn btn-auto" id="btn-auto" onclick="doAutoAssign()">⚡ จัดอัตโนมัติ</button>
+        <button class="btn" onclick="doClearAll()" style="background:#FEF2F2;border:1.5px solid #FCA5A5;color:#C62828">🗑 ล้างทั้งหมด</button>
+        <div style="display:flex;gap:0;align-items:stretch">
+          <button class="btn" onclick="doPrintSummary()" style="background:#F0F4FF;border:1px solid #93B8DE88;color:var(--navy)" title="พิมพ์สรุปร้านค้า">🖨 พิมพ์สรุป</button>
+        <button class="btn btn-save" id="btn-save" onclick="doSave()" style="border-radius:8px 0 0 8px">💾 Keepdata</button>
+          <button id="btn-delivery-date" onclick="openDeliveryDatePicker()"
+            title="วันที่จะส่งสินค้า — คลิกเพื่อเปลี่ยน"
+            style="background:#0E2030;border:none;border-left:1px solid rgba(255,255,255,.15);color:#7B97B8;padding:7px 10px;font-size:11px;border-radius:0 8px 8px 0;cursor:pointer;white-space:nowrap">
+            📅 —
+          </button>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- Truck cards -->
+    <div class="truck-hint">👇 <strong style="color:#07101F">คลิกเลือกรถ</strong> แล้วคลิกบิล <span id="sel-plate-hint"></span></div>
+    <div class="truck-scroll" id="truckCards"></div>
+
+    <!-- Transfer bar (shown when truck selected + has bills) -->
+    <div class="transfer-bar no-print" id="transferBar" style="display:none">
+      <div>
+        <div style="font-size:12px;font-weight:700;color:#633806" id="tf-title">🔄 โยกทั้งคัน</div>
+        <div style="font-size:11px;color:#854F0B;margin-top:2px" id="tf-info"></div>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:11px;color:#854F0B;font-weight:600">ย้ายทั้งคัน →</span>
+          <div id="tf-select-cont" style="min-width:175px"></div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:11px;color:#1A5FA5;font-weight:600">ย้ายเที่ยว →</span>
+          <select id="tf-trip-num" style="background:#fff;border:1.5px solid #93B8DE88;border-radius:7px;padding:5px 9px;font-size:12px">
+            <option value="1">🔴 เที่ยว 1</option>
+            <option value="2">🔵 เที่ยว 2</option>
+            <option value="3">🟢 เที่ยว 3</option>
+          </select>
+          <div id="tf-trip-truck-cont" style="min-width:175px"></div>
+        </div>
+        <button class="btn btn-clear" onclick="doClearTruck()">🗑 ล้างทั้งคัน</button>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters no-print">
+      <input type="text" id="srch" placeholder="🔍 ร้านค้า / เลขบิล" oninput="renderBillTable()"/>
+      <select id="fDate" onchange="renderBillTable()"><option value="">ทุกวันที่</option></select>
+      <select id="fStatus" onchange="renderBillTable()">
+        <option value="">ทั้งหมด</option>
+        <option value="pending">⏳ รอจัด</option>
+        <option value="done">✅ จัดแล้ว</option>
+      </select>
+      <select id="fSort" onchange="renderBillTable()">
+                <option value="weight">⚖️ น้ำหนักมากสุด</option>
+        <option value="date">📅 วันที่</option>
+      </select>
+      <div class="sel-bar no-print" id="selBar" style="display:none">
+        <span id="sel-count" style="font-size:12px;font-weight:600;color:#633806"></span>
+        <div id="sel-truck-dd-cont" style="display:inline-block;min-width:160px"></div>
+        <button onclick="clearSelected()" style="border:1px solid #FCA5A5;border-radius:6px;padding:3px 8px;background:none;color:#C62828;font-size:12px">✕</button>
+        <button onclick="cancelSel()" style="background:none;border:none;color:#6B7A90;font-size:11px;text-decoration:underline">ยกเลิก</button>
+      </div>
+    </div>
+
+    <!-- Bill table -->
+    <div class="bill-table-wrap">
+      <table class="bill-table">
+        <thead>
+          <tr>
+            <th style="width:34px"><input type="checkbox" id="chk-all" onchange="toggleAll(this)" style="cursor:pointer;accent-color:#C9A84C"/></th>
+            <th>ร้านค้า</th>
+            <th>จังหวัด / สาย</th>
+            <th>⚖ น้ำหนัก / 📦 ปริมาตร</th>
+            <th>มูลค่า</th>
+            <th>รถที่จัด</th>
+          </tr>
+        </thead>
+        <tbody id="billTbody"></tbody>
+      </table>
+      <div class="table-foot" id="tableFoot"></div>
+    </div>
+  </div>
+
+  <!-- BILLS VIEW -->
+  <div class="tab-panel fi" id="tab-bills">
+    <h1 style="font-family:Kanit;font-size:20px;font-weight:600;color:#07101F;margin-bottom:14px">📋 บิลสินค้า</h1>
+    <div class="filters" style="margin-bottom:12px">
+      <input type="text" id="bv-srch" placeholder="🔍 ค้นหา..." oninput="renderBillsView()"/>
+      <select id="bv-status" onchange="renderBillsView()"><option value="">ทุกสถานะ</option><option value="pending">รอจัด</option><option value="done">จัดแล้ว</option></select>
+      <select id="bv-sort" onchange="renderBillsView()"><option value="weight">⚖️ น้ำหนัก</option><option value="date">📅 วันที่</option></select>
+    </div>
+    <div class="bill-table-wrap">
+      <table class="bill-table">
+        <thead><tr>
+          <th>ร้านค้า</th><th>จังหวัด</th><th>น้ำหนัก / ปริมาตร</th><th>มูลค่า</th><th>จัดรถ</th>
+        </tr></thead>
+        <tbody id="bvTbody"></tbody>
+      </table>
+      <div class="table-foot" id="bvFoot"></div>
+    </div>
+  </div>
+
+  <!-- ROUTES -->
+  <div class="tab-panel fi" id="tab-routes">
+    <h1 style="font-family:Kanit;font-size:20px;font-weight:600;color:#07101F;margin-bottom:14px">🗺️ สายส่งและโลเคชัน <span style="font-size:12px;color:var(--muted);font-weight:400;font-family:Sarabun">· พรีวิวก่อนบันทึก</span></h1>
+
+    <!-- Trip filter -->
+    <div style="background:#fff;border:1px solid #E0E5ED;border-radius:12px;padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:11px;color:#6B7A90;font-weight:500">🗺️ แสดงเที่ยว:</span>
+      <div id="rMapTripFilter" style="display:flex;gap:6px">
+        <button onclick="rFilterMapTrip(0,this)" style="padding:4px 12px;border-radius:7px;border:1.5px solid #E0E5ED;background:#F5F7FA;color:#6B7A90;font-size:11px;font-weight:700;cursor:pointer">ทั้งหมด</button>
+        <button onclick="rFilterMapTrip(1,this)" style="padding:4px 12px;border-radius:7px;border:1.5px solid #F6C45A;background:#FFF8EC;color:#C47000;font-size:11px;font-weight:400;cursor:pointer">🟠 เที่ยว 1</button>
+        <button onclick="rFilterMapTrip(2,this)" style="padding:4px 12px;border-radius:7px;border:1.5px solid #93B8DE;background:#EAF0F8;color:#1A5FA5;font-size:11px;font-weight:400;cursor:pointer">🔵 เที่ยว 2</button>
+        <button onclick="rFilterMapTrip(3,this)" style="padding:4px 12px;border-radius:7px;border:1.5px solid #86EFAC;background:#F0FDF4;color:#15803D;font-size:11px;font-weight:400;cursor:pointer">🟢 เที่ยว 3</button>
+      </div>
+      <div style="margin-left:auto;font-size:10px;color:#A0ABBB">● solid = เที่ยว 1 · ○ dashed = เที่ยว 2 · ◌ dotted = เที่ยว 3</div>
+    </div>
+
+    <!-- Truck filter -->
+    <div style="background:#fff;border:1px solid #E0E5ED;border-radius:12px;padding:12px 16px;margin-bottom:12px">
+      <div style="font-size:11px;color:#6B7A90;margin-bottom:10px;font-weight:500">🚛 เลือกดูโลเคชันรายคัน (queue ปัจจุบัน)</div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center" id="rMapTruckFilter">
+        <button onclick="rFilterMap(null,this)"
+          style="padding:6px 14px;border-radius:8px;border:2px solid #07101F;background:#07101F;color:#E4C46E;font-size:12px;font-weight:700;cursor:pointer">
+          🌐 ทั้งหมด
+        </button>
+      </div>
+    </div>
+
+    <!-- Map -->
+    <div style="background:#fff;border:1px solid #E0E5ED;border-radius:12px;overflow:hidden;margin-bottom:14px">
+      <div style="padding:10px 16px;border-bottom:1px solid #E0E5ED;background:#F5F7FA;font-family:Kanit;font-size:13px;font-weight:600;color:#7D6428" id="rMapTitle">🗺️ แผนที่ queue ปัจจุบัน (ก่อนบันทึก)</div>
+      <div id="routesPreviewMap" style="height:420px;width:100%"></div>
+    </div>
+
+    <div style="font-family:Kanit;font-size:13px;font-weight:600;color:#7D6428;margin-bottom:10px">📋 รายการตามสาย</div>
+    <div id="routeCards" class="route-cards"></div>
+  </div>
+
+  <!-- CARS -->
+  <div class="tab-panel fi" id="tab-cars">
+    <h1 style="font-family:Kanit;font-size:20px;font-weight:600;color:#07101F;margin-bottom:14px">🚐 รถทั้งหมด</h1>
+    <div id="carCards" class="car-grid"></div>
+  </div>
+
+</div><!-- /main -->
+
+<!-- Bottom Nav -->
+<nav class="bottom-nav" id="bottomNav">
+  <button class="bnav-item" onclick="switchTab('dashboard',null,'d')"><span class="bnav-icon">🏠</span>แดชบอร์ด</button>
+  <button class="bnav-item active" onclick="switchTab('queue',null,'q')"><span class="bnav-icon">🚛</span>จัดคิวรถ</button>
+  <button class="bnav-item" onclick="switchTab('bills',null,'b')"><span class="bnav-icon">📋</span>บิลสินค้า</button>
+  <button class="bnav-item" onclick="switchTab('routes',null,'r')"><span class="bnav-icon">🗺️</span>สายส่ง</button>
+  <button class="bnav-item" onclick="switchTab('cars',null,'c')"><span class="bnav-icon">🚐</span>ฝูงรถ</button>
+  <button class="bnav-item" onclick="switchTab('saved',null,'s')"><span class="bnav-icon">💾</span>บันทึก</button>
+</nav>
+
+
+<!-- Print Summary Modal -->
+<div id="printOverlay" class="modal-overlay">
+  <div class="modal" style="max-width:700px;width:95%">
+    <div class="modal-head">
+      <div>
+        <div class="modal-head-title">🖨 สรุปร้านค้าสำหรับพิมพ์</div>
+        <div class="modal-head-sub" id="printSub">แยกตามรถและเที่ยว</div>
+      </div>
+      <button class="modal-close" onclick="document.getElementById('printOverlay').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body" style="max-height:65vh;overflow-y:auto;padding:12px 16px">
+      <div id="printContent"></div>
+    </div>
+    <div class="modal-foot">
+      <button onclick="document.getElementById('printOverlay').classList.remove('open')" class="btn" style="border:1.5px solid var(--border);background:var(--card-bg);color:var(--muted)">ปิด</button>
+      <button onclick="window.print()" class="btn btn-gold">🖨 สั่งพิมพ์</button>
+    </div>
+  </div>
+</div>
+
+<style>
+@media print {
+  body > *:not(#printArea){ display:none!important }
+  #printArea{ display:block!important }
+}
+#printArea{ display:none }
+.print-truck-header{background:var(--navy);color:var(--gold-light);padding:8px 12px;border-radius:var(--radius-sm);font-family:Kanit;font-size:13px;font-weight:700;margin:10px 0 6px}
+.print-trip-header{background:#FFF8EC;border-left:3px solid var(--gold);padding:5px 10px;font-size:12px;font-weight:700;color:#C47000;margin:6px 0 3px}
+.print-trip-header.t2{background:#EAF0F8;border-left-color:#1A5FA5;color:#1A5FA5}.print-trip-header.t3{background:#EAF3DE;border-left-color:#15803D;color:#15803D}
+.print-bill-row{display:flex;gap:8px;padding:5px 4px;border-bottom:1px solid var(--border);font-size:12px;align-items:flex-start}
+.print-bill-row:last-child{border-bottom:none}
+</style>
+<script>
+// ══════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════
+const SHEET_ID = '1OvXga8M0XuUEMYqWPj_AIcBHTEI_vA_WXXNJpqUk0aQ';
+const HQ = {lat:13.444304778884815, lng:100.03838295867146};
+const STORE_KEY = 'dq_v4_queue';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwnx2jD8cc5thpaJxdYSCzDW3INtUH37EXnfKqvxPfuBf0PLLLNv7gXDJeAvhfs-LCnWA/exec'; // Google Apps Script URL (hardcoded)
+
+const TRUCKS = [
+  {id:1,  nick:'แขก',         plate:'806893',  driver:'มนัส รักษาวงศ์',          type:'6 ล้อ',        maxW:9580,  maxV:23.6, e:'🚛'},
+  {id:2,  nick:'มนัส2',       plate:'806613',  driver:'มนัส รักษาวงศ์',           type:'6 ล้อ',        maxW:10660, maxV:18.5, e:'🚛'},
+  {id:3,  nick:'ไมด์',        plate:'807181',  driver:'นำชัย ทองคำประสาท',        type:'6 ล้อ',        maxW:9150,  maxV:29.4, e:'🚛'},
+  {id:4,  nick:'นะ',          plate:'807210',  driver:'จักรกฤษณ์ ศรีนวลสด',      type:'6 ล้อ',        maxW:8780,  maxV:31.3, e:'🚛'},
+  {id:5,  nick:'อาก',         plate:'808425',  driver:'จาตุพจน์ เงินยวง',          type:'6 ล้อ',        maxW:8845,  maxV:31.3, e:'🚛'},
+  {id:6,  nick:'ออม',         plate:'808557',  driver:'ออมสิน เป้าทอง',            type:'6 ล้อ',        maxW:8810,  maxV:35,   e:'🚛'},
+  {id:7,  nick:'เล็ก',        plate:'806991',  driver:'ประสงค์ คำคุ้ม',            type:'10 ล้อ',       maxW:14200, maxV:40.8, e:'🚚'},
+  {id:8,  nick:'ทิ้ง',        plate:'805865',  driver:'ขันติ บุญเฉลียว',           type:'12 ล้อ',       maxW:18000, maxV:36.5, e:'🚚'},
+  {id:9,  nick:'เบิร์ด',      plate:'807482',  driver:'บุญเปรม โสวจันทร์',         type:'12 ล้อ',       maxW:19000, maxV:40.8, e:'🚚'},
+  {id:10, nick:'มานพ',        plate:'808343',  driver:'มานพ ไกรวิจิตร',            type:'12 ล้อ',       maxW:19200, maxV:40.8, e:'🚚'},
+  {id:11, nick:'ปอนด์(ใหญ่)', plate:'บฉ1693', driver:'ภราดร สวนน้อย',             type:'4 ล้อจัมโบ้',  maxW:4000,  maxV:10.6, e:'🚐'},
+  {id:12, nick:'อุทัย',       plate:'บจ9541', driver:'อุทัย อยู่ประเสริฐ',        type:'4 ล้อจัมโบ้',  maxW:4000,  maxV:9.9,  e:'🚐'},
+  {id:13, nick:'ทัน',         plate:'บจ9543', driver:'พงศ์กานต์ จิตต์อารยคุณ',    type:'4 ล้อจัมโบ้',  maxW:4000,  maxV:4.0,  e:'🚐'},
+  {id:14, nick:'อั้ม',        plate:'บฉ8126', driver:'อภิวัฒน์ สะทองแก้ว',       type:'4 ล้อจัมโบ้',  maxW:4000,  maxV:28,   e:'🚐'},
+  {id:15, nick:'อั้ม2',       plate:'บฉ8127', driver:'อภิวัฒน์ สะทองแก้ว',       type:'4 ล้อจัมโบ้',  maxW:4000,  maxV:28,   e:'🚐'},
+  {id:16, nick:'ต้น',         plate:'บฉ8563', driver:'สันดุสิทธิ์ รุ่งสว่าง',    type:'4 ล้อจัมโบ้',  maxW:4000,  maxV:28,   e:'🚐'},
+  {id:17, nick:'เบส',         plate:'บฉ8564', driver:'เดชาพล ลายุก',              type:'4 ล้อจัมโบ้',  maxW:4000,  maxV:28,   e:'🚐'},
+  {id:18, nick:'อั้ม3',       plate:'บฉ8809', driver:'อภิวัฒน์ สะทองแก้ว',       type:'4 ล้อจัมโบ้',  maxW:4000,  maxV:28,   e:'🚐'},
+  {id:19, nick:'แชมป์',       plate:'4ฒข5418',driver:'ธีรพัฒน์ พุทธธรรม',         type:'4 ล้อจัมโบ้',  maxW:4000,  maxV:28,   e:'🚐'},
+  {id:20, nick:'ซัน',         plate:'4ฒข5420',driver:'อาทิตย์ แสงเจริญ',           type:'4 ล้อจัมโบ้',  maxW:4000,  maxV:28,   e:'🚐'},
+  {id:21, nick:'กฤต',         plate:'บฉ272',  driver:'กฤตนัน เจตโพธิ์',           type:'กระบะ',         maxW:2000,  maxV:5.0,  e:'🛻'},
+  {id:22, nick:'อั้ม4',       plate:'บจ6918', driver:'อภิวัฒน์ สะทองแก้ว',       type:'กระบะ',         maxW:2000,  maxV:5.0,  e:'🛻'},
+];
+const TRUCK_COLORS = ['#B45309','#1D4ED8','#15803D','#9333EA','#7C3AED','#BE185D','#0369A1','#92400E','#4338CA','#065F46','#B91C1C','#0E7490','#6D28D9','#047857','#C2410C','#1E40AF','#7E22CE','#0F766E','#B45309','#374151','#6B21A8','#155E75'];
+
+// ── รถที่ไม่ให้จัดอัตโนมัติ (รถพ่วงมีหาง) ──
+// แก้รายการนี้ถ้าต้องการเพิ่ม/ลดรถที่ exclude
+const EXCLUDE_AUTO = new Set([
+  '806991',  // ประสงค์ คำคุ้ม    — 10ล้อ รถพ่วง
+  '807482',  // บุญเปรม โสวจันทร์ — 12ล้อ รถพ่วง
+  '808343',  // มานพ ไกรวิจิตร   — 12ล้อ รถพ่วง
+]);
+
+// ── คนขับหลัก ──
+const PRIMARY_PLATES = new Set([
+  'บจ9541',  // อุทัย
+  '808425',  // อาก
+  '807181',  // ไมด์
+  '806893',  // แขก
+  '808557',  // ออม
+  'บฉ1693', // ปอนด์(ใหญ่)
+  'บจ9543',  // ทัน
+]);
+
+// ── State ──
+let bills=[], billMap={}, products={}, routeMap={};
+let queue={};      // {billRef: plateNumber}
+let tripMap={};    // {billRef: 1|2} — เที่ยว (default=1)
+let selTrip=1;     // เที่ยวที่กำลังจะใส่ (1 หรือ 2) — toggle โดยผู้ใช้
+let selPlate=null;
+let selRefs=new Set();
+// บิลที่จัดรถ + บันทึกลงชีทแล้ว → ซ่อนจากหน้าจัดรถ (แต่ยังนับน้ำหนักรถ)
+let savedRefs=new Set();
+try{savedRefs=new Set(JSON.parse(localStorage.getItem('dq_v4_saved')||'[]'));}catch(e){}
+// เก็บว่าแต่ละบิลบันทึกวันไหน {ref: "20/05/2568"}
+let savedDates={};
+try{savedDates=JSON.parse(localStorage.getItem('dq_v4_saved_dates')||'{}');}catch(e){}
+let dashFilterDate=null;  // วันที่กรองใน Dashboard
+let keepData=[];          // ข้อมูลจากชีท Keepdata (โหลดจาก Google Sheet)
+let keepDataLoading=false;
+
+// ── Helpers ──
+const fmtN = n => Number(n).toLocaleString('th-TH');
+const fmtKg = n => n>=1000?`${(n/1000).toFixed(1)}ต.`:`${Math.round(n)}กก.`;
+const fmtM3 = v => v<1?`${Math.round(v*1000)}L`:`${v.toFixed(1)}m³`;
+
+function haversine(a,b,c,d){
+  const R=6371,r=x=>x*Math.PI/180,dL=r(c-a),dG=r(d-b);
+  const x=Math.sin(dL/2)**2+Math.cos(r(a))*Math.cos(r(c))*Math.sin(dG/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+// dist/distOrInf removed — ไม่ใช้ HQ เป็น reference อีกต่อไป
+
+function truckLoad(plate,trip=0){
+  let w1=0,v1=0,w2=0,v2=0,w3=0,v3=0;
+  Object.entries(queue).forEach(([ref,p])=>{
+    if(p!==plate||!billMap[ref])return;
+    const tr=tripMap[ref]||1;
+    if(tr===1){w1+=billMap[ref].totalW;v1+=billMap[ref].totalV;}
+    else if(tr===2){w2+=billMap[ref].totalW;v2+=billMap[ref].totalV;}
+    else{w3+=billMap[ref].totalW;v3+=billMap[ref].totalV;}
+  });
+  if(trip===1)return{w:w1,v:v1};
+  if(trip===2)return{w:w2,v:v2};
+  if(trip===3)return{w:w3,v:v3};
+  return{w:w1+w2+w3,v:v1+v2+v3,w1,v1,w2,v2,w3,v3};
+}
+function tripFor(t,b){
+  const ld=truckLoad(t.plate);
+  if((ld.w1+b.totalW)<=t.maxW&&(t.maxV<=0||(ld.v1+b.totalV)<=t.maxV))return 1;
+  if((ld.w2+b.totalW)<=t.maxW&&(t.maxV<=0||(ld.v2+b.totalV)<=t.maxV))return 2;
+  if((ld.w3+b.totalW)<=t.maxW&&(t.maxV<=0||(ld.v3+b.totalV)<=t.maxV))return 3;
+  return 0;
+}
+function truckPct(plate,t){
+  const ld=truckLoad(plate);
+  const wp1=t.maxW>0?Math.round(ld.w1/t.maxW*100):0;
+  const vp1=t.maxV>0?Math.round(ld.v1/t.maxV*100):0;
+  const wp2=t.maxW>0?Math.round(ld.w2/t.maxW*100):0;
+  const vp2=t.maxV>0?Math.round(ld.v2/t.maxV*100):0;
+  const wp3=t.maxW>0?Math.round(ld.w3/t.maxW*100):0;
+  const vp3=t.maxV>0?Math.round(ld.v3/t.maxV*100):0;
+  const eff=Math.max(wp1,vp1,wp2,vp2,wp3,vp3);
+  return{wp1,vp1,wp2,vp2,wp3,vp3,eff,over:eff>100,wp:Math.max(wp1,wp2,wp3),vp:Math.max(vp1,vp2,vp3)};
+}
+function pcColor(p){return p>=90?'#DC3545':p>=70?'#E07B00':'#2E8B57';}
+function assignedSet(){return new Set(Object.values(queue).filter(Boolean));}
+let isDirty=false;  // tracks unsaved changes
+function saveQ(){
+  try{localStorage.setItem(STORE_KEY,JSON.stringify(queue));}catch(e){}
+  try{localStorage.setItem(STORE_KEY+'_trip',JSON.stringify(tripMap));}catch(e){}
+  isDirty=true;
+  updateSyncBadge();
+}
+function updateSyncBadge(){
+  const btn=document.getElementById('btn-save');
+  if(!btn)return;
+  const hasUrl=!!SCRIPT_URL;
+  if(isDirty&&hasUrl){
+    btn.innerHTML='💾 Keepdata <span style="background:#C9A84C;color:#07101F;border-radius:8px;padding:0 5px;font-size:10px;font-weight:700;margin-left:2px">มีการแก้ไข</span>';
+    btn.style.background='#1A3A5C';
+  } else if(!hasUrl){
+    btn.innerHTML='💾 Keepdata <span style="background:#C62828;color:#fff;border-radius:8px;padding:0 5px;font-size:10px;font-weight:700;margin-left:2px">ตั้งค่าก่อน</span>';
+    btn.style.background='#07101F';
+  } else {
+    btn.innerHTML='💾 Keepdata';
+    btn.style.background='#07101F';
+  }
+}
+function getTruckCol(plate){const i=TRUCKS.findIndex(t=>t.plate===plate);return i>=0?TRUCK_COLORS[i%TRUCK_COLORS.length]:'#9BAAB8';}
+
+// ══════════════════════════════════════════
+// DATA LOADING
+// ══════════════════════════════════════════
+function setLoad(msg,pct){
+  const m=document.getElementById('ls-msg'),b=document.getElementById('ls-bar'),lb=document.getElementById('loadingBar');
+  if(m)m.textContent=msg; if(b)b.style.width=pct+'%'; if(lb)lb.style.width=pct+'%';
+  if(pct>=100&&lb)setTimeout(()=>lb.style.width='0',600);
+}
+
+const csvURL = s=>`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(s)}`;
+
+async function fetchSheet(name){
+  const r=await fetch(csvURL(name));
+  if(!r.ok)throw new Error(`"${name}" โหลดไม่ได้ (${r.status})`);
+  return parseCSV(await r.text());
+}
+
+function parseCSV(txt){
+  const lines=txt.split('\n').filter(l=>l.trim());
+  if(lines.length<2)return[];
+  const headers=parseLine(lines[0]);
+  return lines.slice(1).map(line=>{const v=parseLine(line);const o={};headers.forEach((h,i)=>o[h.trim()]=(v[i]||'').trim());return o;});
+}
+
+function parseLine(line){
+  const res=[];let cur='',inQ=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(c==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ;}
+    else if(c===','&&!inQ){res.push(cur);cur='';}
+    else cur+=c;
+  }
+  res.push(cur);return res;
+}
+
+async function loadData(){
+  try{
+    const saved=localStorage.getItem(STORE_KEY);
+    if(saved)queue=JSON.parse(saved);
+    try{const st=localStorage.getItem(STORE_KEY+'_trip');if(st)tripMap=JSON.parse(st);}catch(e){}
+    setLoad('📊 โหลด Bill DS...',20);
+
+    setLoad('📊 โหลด Bill DS + Other...',20);
+    const [billDS,otherDS,productData,routeData]=await Promise.all([
+      fetchSheet('Bill DS'),
+      fetchSheet('Other').catch(()=>[]),   // Other sheet (optional — ไม่มีก็ไม่ error)
+      fetchSheet('Product'), fetchSheet('Route')
+    ]);
+    const billData=[...billDS,...otherDS]; // รวม 2 ชีทเข้าด้วยกัน
+    setLoad('🔧 ประมวลผลข้อมูล...',70);
+
+    // Products — รองรับหลายรูปแบบ header (รวมถึง header ว่างเปล่า)
+    products={};
+    productData.forEach(p=>{
+      const name=p['ชื่อสินค้า']||p['SKU_NAME']||p['']||'';
+      const w=parseFloat(p['นน. EA']||p['น้ำหนัก EA']||0);
+      const v=parseFloat(p['ปริมาตร EA (ลิตร)']||p['ปริมาตร EA']||0)/1000;
+      if(name)products[name]={w,v};
+    });
+    // ── Fallback: สินค้าไม่มีน้ำหนัก/ปริมาตร → ใช้ค่าเฉลี่ยของสินค้าที่มีข้อมูล ──
+    const _allW=Object.values(products).map(p=>p.w).filter(w=>w>0);
+    const _allV=Object.values(products).map(p=>p.v).filter(v=>v>0);
+    const _avgW=_allW.length?_allW.reduce((a,b)=>a+b,0)/_allW.length:0;
+    const _avgV=_allV.length?_allV.reduce((a,b)=>a+b,0)/_allV.length:0;
+    Object.values(products).forEach(p=>{if(!p.w&&_avgW)p.w=_avgW;if(!p.v&&_avgV)p.v=_avgV;});
+    console.log(`Products fallback: avgW=${_avgW.toFixed(3)}kg avgV=${_avgV.toFixed(4)}m³`);
+
+    // Routes (with GPS)
+    routeMap={};
+    routeData.forEach(r=>{
+      const code=r['รหัสร้านค้า']||r['AR_CODE']||'';
+      if(!code)return;
+      const gps=r['โลเคชัน']||'';
+      let lat=null,lng=null;
+      if(gps&&gps.includes(',')){const p=gps.split(',');lat=parseFloat(p[0]);lng=parseFloat(p[1]);}
+      const newDays=r['วันส่ง']||'';
+      if(routeMap[code]){
+        // AR_CODE ซ้ำ → รวม วันส่ง ไม่ให้หาย
+        const existing=routeMap[code].days||'';
+        const merged=[...new Set([...existing.split(/[,\s\/]+/),
+                                  ...newDays.split(/[,\s\/]+/)].filter(Boolean))].join(',');
+        routeMap[code].days=merged;
+        if(!routeMap[code].lat&&lat)routeMap[code].lat=lat;
+        if(!routeMap[code].lng&&lng)routeMap[code].lng=lng;
+      } else {
+        routeMap[code]={
+          route:r['ชื่อสายจด']||r['สาย']||'',
+          days:newDays,
+          routeCode:r['Serial Route จด']||'',
+          saiSong:(r['สายส่ง']||'').trim(), // สรุปรูท (สส09, รบ02...) = ตัวจัดกลุ่มหลัก
+          lat:isNaN(lat)?null:lat, lng:isNaN(lng)?null:lng
+        };
+      }
+    });
+
+    // Bills
+    billMap={};
+    billData.forEach(b=>{
+      const ref=b['DI_REF']||''; if(!ref)return;
+      const arCode=b['AR_CODE']||'';
+      if(!billMap[ref]){
+        const ri=routeMap[arCode]||{};
+        billMap[ref]={ref,arCode,arName:b['AR_NAME']||'',date:b['DI_DATE']||'',
+          district:b['ADDB_DISTRICT']||'',province:b['ADDB_PROVINCE']||'',
+          route:ri.route||'',days:ri.days||'',routeCode:ri.routeCode||'',saiSong:ri.saiSong||'',
+          lat:ri.lat,lng:ri.lng, totalW:0,totalV:0,totalAmt:0};
+      }
+      const sku=b['SKU_NAME']||'';
+      const ea=parseFloat(b['EA']||0);
+      const amt=parseFloat((b['TRD_G_AMT']||'0').replace(/,/g,''))||0;
+      const pr=products[sku]||{w:0,v:0};
+      billMap[ref].totalW+=pr.w*ea;
+      billMap[ref].totalV+=pr.v*ea;
+      billMap[ref].totalAmt+=amt;
+    });
+
+    bills=Object.values(billMap);
+
+    // Populate date filter
+    const dates=[...new Set(bills.map(b=>b.date).filter(Boolean))].sort();
+    const fDate=document.getElementById('fDate');
+    dates.forEach(d=>{const o=document.createElement('option');o.value=d;o.textContent=d;fDate.appendChild(o);});
+
+    // Date label
+    document.getElementById('dateLabel').textContent=
+      new Date().toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'});
+
+    setLoad(`✅ ${bills.length} บิล พร้อมแล้ว`,100);
+
+    // โหลดข้อมูลจากชีท Keepdata เงียบๆ (background)
+    loadKeepdata().catch(e=>console.warn('Keepdata load failed:',e.message));
+
+    renderAll();
+    showToast(`โหลดสำเร็จ — ${bills.length} บิล`,'ok');
+    isDirty=false;
+    updateSyncBadge();
+  }catch(e){
+    console.error(e);
+    showToast('โหลดไม่สำเร็จ: '+e.message,'err');
+  }finally{
+    setTimeout(()=>document.getElementById('ls').classList.add('hide'),400);
+  }
+}
+
+function refreshData(){
+  document.getElementById('ls').classList.remove('hide');
+  setLoad('🔄 รีเฟรชข้อมูล...',10);
+  loadData();
+}
+
+// ══════════════════════════════════════════
+// RENDER ALL
+// ══════════════════════════════════════════
+function renderAll(){
+  renderTruckCards();
+  updateQueueSub();
+  renderBillTable();
+  if(currentTab==='dashboard')renderDashboard();
+  else if(currentTab==='saved')renderSavedView();
+  else if(currentTab==='bills')renderBillsView();
+  else if(currentTab==='cars')renderCarsView();
+  else if(currentTab==='routes'){renderRoutesView();rRenderTruckFilter();rUpdateMap();}
+}
+
+// ══════════════════════════════════════════
+// TRUCK CARDS
+// ══════════════════════════════════════════
+function renderTruckCards(){
+  const wrap=document.getElementById('truckCards');
+  // เรียง: มีงาน+หลัก → มีงาน → หลัก → อื่น
+  const sorted=[...TRUCKS].map((t,i)=>({...t,origIdx:i}))
+    .sort((a,b)=>{
+      const aC=Object.values(queue).filter(p=>p===a.plate).length;
+      const bC=Object.values(queue).filter(p=>p===b.plate).length;
+      const aP=PRIMARY_PLATES.has(a.plate)?1:0;
+      const bP=PRIMARY_PLATES.has(b.plate)?1:0;
+      if(bC!==aC)return bC-aC;
+      return bP-aP;
+    });
+  wrap.innerHTML=sorted.map(t=>{
+    const i=t.origIdx;
+    const ld=truckLoad(t.plate);
+    const {wp1,vp1,wp2,vp2,wp3,vp3,eff,over}=truckPct(t.plate,t);
+    const col=TRUCK_COLORS[i%TRUCK_COLORS.length];
+    const isSel=selPlate===t.plate;
+    const effCol=over?'#C62828':pcColor(eff);
+    const isExcluded=EXCLUDE_AUTO.has(t.plate);
+    const isPrimary=PRIMARY_PLATES.has(t.plate);
+    const cnt1=Object.entries(queue).filter(([r,p])=>p===t.plate&&(tripMap[r]||1)===1).length;
+    const cnt2=Object.entries(queue).filter(([r,p])=>p===t.plate&&(tripMap[r]||1)===2).length;
+    const cnt3=Object.entries(queue).filter(([r,p])=>p===t.plate&&(tripMap[r]||1)===3).length;
+    const ld1=truckLoad(t.plate,1),ld2=truckLoad(t.plate,2),ld3=truckLoad(t.plate,3);
+    const hasT2=cnt2>0,hasT3=cnt3>0;
+    return `<div class="tcard${isSel?' sel':''}${over?' over':''}" onclick="selectTruck('${t.plate}')">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+        <div>
+          <div class="tcard-type" style="color:${col}">${t.e} ${t.type}</div>
+          <div class="tcard-plate">${t.plate}</div>
+        </div>
+        <div style="text-align:right">
+          ${over?'<div style="font-size:9px;color:#C62828;font-weight:700">⚠ เกิน</div>':''}
+          ${isExcluded?'<div style="font-size:9px;color:#6B7A90;font-weight:600;background:#F0F2F6;border-radius:4px;padding:0 4px">🔒 Manual</div>':''}
+          ${isPrimary&&!isExcluded?'<div style="font-size:9px;color:#B45309;font-weight:700;background:#FFF8EC;border:1px solid #F6C45A66;border-radius:4px;padding:0 5px">⭐ หลัก</div>':''}
+          <div class="tcard-pct" style="color:${effCol}">${eff}%</div>
+          <div class="tcard-wt">${fmtKg(ld.w)} · ${fmtM3(ld.v)}</div>
+        </div>
+      </div>
+      <div style="font-size:9px;color:#9BAAB8;margin-bottom:1px">เที่ยว 1 — ${cnt1} บิล · ${fmtKg(ld1.w)} · ${fmtM3(ld1.v)}</div>
+      <div class="tcard-bar"><div class="tcard-bar-fill" style="width:${Math.min(100,wp1)}%;background:${wp1>100?'#DC3545':pcColor(wp1)}"></div></div>
+      <div class="tcard-bar"><div class="tcard-bar-fill" style="width:${Math.min(100,vp1)}%;background:${vp1>100?'#DC3545':pcColor(vp1)};opacity:.65"></div></div>
+      <div style="display:flex;gap:6px;font-size:9px;font-weight:700;margin-bottom:${hasT2||hasT3?'3px':'0'};margin-top:1px"><span style="color:${wp1>100?'#DC3545':pcColor(wp1)}">⚖${wp1}%</span><span style="color:${vp1>100?'#DC3545':pcColor(vp1)}">📦${vp1}%</span></div>
+      ${hasT2?`<div style="font-size:9px;color:#1A5FA5;margin-bottom:1px">เที่ยว 2 — ${cnt2} บิล · ${fmtKg(ld2.w)} · ${fmtM3(ld2.v)}</div>
+      <div class="tcard-bar"><div class="tcard-bar-fill" style="width:${Math.min(100,wp2)}%;background:${wp2>100?'#DC3545':'#1A5FA5'}"></div></div>
+      <div class="tcard-bar"><div class="tcard-bar-fill" style="width:${Math.min(100,vp2)}%;background:${wp2>100?'#DC3545':'#1A5FA5'};opacity:.5"></div></div>
+      <div style="display:flex;gap:6px;font-size:9px;font-weight:700;margin-bottom:${hasT3?'3px':'0'};margin-top:1px"><span style="color:${wp2>100?'#DC3545':'#1A5FA5'}">⚖${wp2}%</span><span style="color:${vp2>100?'#DC3545':'#1A5FA5'}">📦${vp2}%</span></div>`:''}
+      ${hasT3?`<div style="font-size:9px;color:#15803D;margin-bottom:1px">เที่ยว 3 — ${cnt3} บิล · ${fmtKg(ld3.w)} · ${fmtM3(ld3.v)} <span style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:4px;padding:0 4px;font-size:8px;font-weight:700;color:#15803D">🔒 Manual</span></div>
+      <div class="tcard-bar"><div class="tcard-bar-fill" style="width:${Math.min(100,wp3)}%;background:${wp3>100?'#DC3545':'#15803D'}"></div></div>
+      <div class="tcard-bar"><div class="tcard-bar-fill" style="width:${Math.min(100,vp3)}%;background:${wp3>100?'#DC3545':'#15803D'};opacity:.5"></div></div>
+      <div style="display:flex;gap:6px;font-size:9px;font-weight:700;margin-bottom:0;margin-top:1px"><span style="color:${wp3>100?'#DC3545':'#15803D'}">⚖${wp3}%</span><span style="color:${vp3>100?'#DC3545':'#15803D'}">📦${vp3}%</span></div>`:''}
+
+      <div class="tcard-driver" style="color:${isSel?'#7D6428':'#6B7A90'}"><span style="color:${col};font-weight:700">${t.nick}</span> <span style="font-size:10px">${t.driver}</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#A0ABBB;margin-top:1px"><span>⚖ max ${fmtKg(t.maxW)}/เที่ยว</span><span>📦 max ${fmtM3(t.maxV)}</span></div>
+      ${isSel?`
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:8px">
+          <button onclick="event.stopPropagation();setSelTrip(1)" style="padding:5px 2px;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;border:2px solid ${selTrip===1?'#C47000':'var(--border)'};background:${selTrip===1?'rgba(196,112,0,.12)':'var(--bg)'};color:${selTrip===1?'#C47000':'var(--muted)'}">🔴 ท.1<br><span style="font-size:9px;font-weight:400">${cnt1}บิล ${fmtKg(ld1.w)}</span></button>
+          <button onclick="event.stopPropagation();setSelTrip(2)" style="padding:5px 2px;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;border:2px solid ${selTrip===2?'#1A5FA5':'var(--border)'};background:${selTrip===2?'rgba(26,95,165,.12)':'var(--bg)'};color:${selTrip===2?'#1A5FA5':'var(--muted)'}">🔵 ท.2<br><span style="font-size:9px;font-weight:400">${cnt2}บิล ${fmtKg(ld2.w)}</span></button>
+          <button onclick="event.stopPropagation();setSelTrip(3)" style="padding:5px 2px;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;border:2px solid ${selTrip===3?'#15803D':'var(--border)'};background:${selTrip===3?'rgba(21,128,61,.12)':'var(--bg)'};color:${selTrip===3?'#15803D':'var(--muted)'}">🟢 ท.3<br><span style="font-size:9px;font-weight:400">${cnt3}บิล ${fmtKg(ld3.w)}</span></button>
+        </div>
+        <div style="text-align:center;font-size:10px;color:var(--gold);font-weight:600;margin-top:4px">
+          👇 คลิกบิลด้านล่างเพื่อใส่ ${selTrip===2?'เที่ยว 2':'เที่ยว 1'}
+        </div>`:''}
+    </div>`;
+  }).join('');
+
+  // Trip toggle
+  updateTripToggle();
+
+  // Hint text
+  const hint=document.getElementById('sel-plate-hint');
+  if(selPlate){
+    hint.innerHTML=`<span style="color:#C9A84C;font-weight:600">— ${selPlate}</span> <button onclick="selectTruck(null)" style="background:none;border:none;color:#6B7A90;font-size:11px;text-decoration:underline;cursor:pointer">ยกเลิก</button>`;
+  } else {
+    hint.innerHTML='';
+  }
+
+  // Transfer bar
+  updateTransferBar();
+
+  // Sel truck dropdowns
+  updateSelDropdowns();
+}
+
+function updateTransferBar(){
+  const bar=document.getElementById('transferBar');
+  if(!selPlate){bar.style.display='none';return;}
+  const billsOnTruck=Object.entries(queue).filter(([,p])=>p===selPlate).map(([r])=>billMap[r]).filter(Boolean);
+  if(!billsOnTruck.length){bar.style.display='none';return;}
+  const tw=billsOnTruck.reduce((s,b)=>s+b.totalW,0);
+  const ta=billsOnTruck.reduce((s,b)=>s+b.totalAmt,0);
+  document.getElementById('tf-title').textContent=`🔄 โยกทั้งคัน — ${selPlate}`;
+  document.getElementById('tf-info').textContent=`${billsOnTruck.length} บิล • ${fmtKg(tw)} • ฿${fmtN(ta)}`;
+  const tOpts=sdMakeTruckOpts(selPlate);
+  const tSelCont=document.getElementById('tf-select-cont');
+  const tTripCont=document.getElementById('tf-trip-truck-cont');
+  if(tSelCont)tSelCont.innerHTML=sdRender('sdtfs',tOpts,'','— เลือกรถ —','sdTransfer','min-width:175px');
+  if(tTripCont)tTripCont.innerHTML=sdRender('sdtft',tOpts,'','— เลือกรถ —','sdTransferTrip','min-width:175px');
+  bar.style.display='flex';
+}
+
+function updateSelDropdowns(){
+  const cont=document.getElementById('sel-truck-dd-cont');
+  if(cont)cont.innerHTML=sdRender('sdseldd',sdMakeTruckOpts(''),sdGetVal('sdseldd')||'','→ เลือกรถ','sdAssignSel','');
+}
+
+// ══════════════════════════════════════════
+// BILL TABLE (Queue tab)
+// ══════════════════════════════════════════
+function getFilteredBills(){
+  const srch=(document.getElementById('srch')?.value||'').toLowerCase();
+  const fDate=document.getElementById('fDate')?.value||'';
+  const fStatus=document.getElementById('fStatus')?.value||'';
+  const fSort=document.getElementById('fSort')?.value||'weight';
+
+  let list=bills.filter(b=>{
+    // ซ่อนเฉพาะบิลที่บันทึกแล้ว + ไม่อยู่ใน queue (ถ้าถูก re-assign กลับ → แสดง)
+    if(savedRefs.has(b.ref)&&!queue[b.ref])return false;
+    if(srch&&!b.arName.toLowerCase().includes(srch)&&!b.ref.toLowerCase().includes(srch))return false;
+    if(fDate&&b.date!==fDate)return false;
+    if(fStatus==='pending'&&queue[b.ref])return false;
+    if(fStatus==='done'&&!queue[b.ref])return false;
+    return true;
+  });
+
+  if(fSort==='weight') list.sort((a,b)=>b.totalW-a.totalW);
+  else list.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+
+  // Selected truck's bills first — เรียงตามเที่ยวด้วย
+  if(selPlate){
+    const onTruck=[...list.filter(b=>queue[b.ref]===selPlate)]
+      .sort((a,b)=>(tripMap[a.ref]||1)-(tripMap[b.ref]||1)||(a.arName||'').localeCompare(b.arName||'','th'));
+    list=[...onTruck,...list.filter(b=>queue[b.ref]!==selPlate)];
+  }
+  return list;
+}
+
+function renderBillTable(){
+  const list=getFilteredBills();
+  const tbody=document.getElementById('billTbody');
+  const asgn=Object.keys(queue).filter(r=>queue[r]);
+
+  if(!list.length){tbody.innerHTML=`<tr><td colspan="6" style="text-align:center;padding:36px;color:#A0ABBB">ไม่พบข้อมูล</td></tr>`;return;}
+
+  let _lastTrip=0; // track trip group for divider
+  tbody.innerHTML=list.map(b=>{
+    const plate=queue[b.ref];
+    const truck=TRUCKS.find(t=>t.plate===plate);
+    const isSel=selRefs.has(b.ref);
+    const isOnActive=selPlate&&plate===selPlate;
+    // ── Trip group divider ──
+    let divider='';
+    if(isOnActive){
+      const tr=tripMap[b.ref]||1;
+      if(tr!==_lastTrip){
+        _lastTrip=tr;
+        const _bg=tr===3?'#EAF3DE':tr===2?'#EAF0F8':'#FFF8EC',_c=tr===3?'#15803D':tr===2?'#1A5FA5':'#C47000',_e=tr===3?'🟢':tr===2?'🔵':'🔴';
+        divider=`<tr style="background:${_bg};border-bottom:none"><td colspan="6" style="padding:4px 10px;font-size:11px;font-weight:700;color:${_c}">${_e} เที่ยว ${tr}</td></tr>`;
+      }
+    } else { _lastTrip=0; }
+    const col=plate?getTruckCol(plate):'';
+    const rowCls=`bill-row${isOnActive?' on-truck':''}${isSel?' selected':''}`;
+    return divider+`<tr class="${rowCls}" onclick="handleBillClick('${b.ref}')">
+      <td onclick="event.stopPropagation();toggleSel('${b.ref}',this)">
+        <input type="checkbox" ${isSel?'checked':''} onchange="toggleSel('${b.ref}',this)" style="cursor:pointer;accent-color:#C9A84C"/>
+      </td>
+      <td>
+        <div style="font-weight:600;color:#07101F">${b.arName}</div>
+        <div style="font-size:10px;color:#6B7A90;margin-top:1px">${b.ref}</div>
+        ${b.lat&&b.lng
+          ?`<div style="font-size:9px;color:#A0ABBB;font-family:monospace">${b.lat.toFixed(4)}, ${b.lng.toFixed(4)}</div>`
+          :`<div style="font-size:9px;color:#FCA5A5;font-weight:600">⚠ ไม่มี GPS</div>`}
+      </td>
+      <td>
+        <div style="font-size:11px;color:#6B7A90">${b.province}</div>
+        <div style="font-size:10px;color:#A0ABBB">${b.routeCode?`<span style="background:#EAF0F8;color:#1A5FA5;border-radius:4px;padding:0 4px;font-weight:600;font-size:9px">${b.routeCode}</span> `:''} ${b.route?b.route.substring(0,12):''}</div>
+        ${b.days?`<span style="font-size:9px;background:#EAF3DE;color:#15803D;border-radius:8px;padding:0 5px;font-weight:600">📅 ${b.days}</span>`:''}
+      </td>
+      <td style="white-space:nowrap">
+        <div style="color:#1A5FA5;font-weight:600;font-size:12px">${fmtKg(b.totalW)}</div>
+        <div style="color:#6B7A90;font-size:10px">${fmtM3(b.totalV)}</div>
+      </td>
+      <td style="font-weight:600;white-space:nowrap">฿${fmtN(Math.round(b.totalAmt))}</td>
+      <td onclick="event.stopPropagation()">
+        ${plate?`
+          <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:3px">
+            <span class="chip chip-truck" style="--c:${col};--cb:${col}18;--cc:${col}55">${truck?.e||'🚛'} ${plate}</span>
+            <span style="background:${(tripMap[b.ref]||1)===3?'#EAF3DE':(tripMap[b.ref]||1)===2?'#EAF0F8':'#FFF8EC'};color:${(tripMap[b.ref]||1)===3?'#15803D':(tripMap[b.ref]||1)===2?'#1A5FA5':'#C47000'};border:1px solid ${(tripMap[b.ref]||1)===3?'#97C459':(tripMap[b.ref]||1)===2?'#93B8DE':'#E4C46E'};border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700">
+              ${(tripMap[b.ref]||1)===3?'🟢':(tripMap[b.ref]||1)===2?'🔵':'🔴'} เที่ยว ${tripMap[b.ref]||1}
+            </span>
+          </div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap">
+            ${sdRender('sdrs_'+b.ref,[{v:'',l:'🚛 เปลี่ยนรถ'}].concat(TRUCKS.filter(t=>t.plate!==plate).map(t=>({v:t.plate,l:t.e+' '+t.plate+' ('+t.nick+')'}))),'',' 🚛 เปลี่ยนรถ','sdReassign','min-width:130px')}
+            <button onclick="changeTrip('${b.ref}')"
+              style="padding:2px 8px;border-radius:6px;background:#EAF0F8;border:1px solid #93B8DE88;color:#1A5FA5;font-size:10px;font-weight:600;cursor:pointer">
+              🔄 เที่ยว
+            </button>
+            <button onclick="removeBill('${b.ref}')"
+              style="padding:2px 8px;border-radius:6px;background:#FEF2F2;border:1px solid #FCA5A588;color:#C62828;font-size:10px;font-weight:600;cursor:pointer">
+              ✕
+            </button>
+          </div>
+        `:`
+          <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap" onclick="event.stopPropagation()">
+            ${sdRender('sdqp_'+b.ref,sdMakeTruckOpts(''),queue[b.ref]||'','🚛 เลือกรถ...','','flex:1;min-width:125px')}
+            <select id="qt_${b.ref}"
+              style="width:78px;padding:5px 6px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;cursor:pointer">
+              <option value="1">🔴 ท.1</option>
+              <option value="2">🔵 ท.2</option>
+              <option value="3">🟢 ท.3</option>
+            </select>
+            <button onclick="quickAssign('${b.ref}',sdGetVal('sdqp_${b.ref}')||'',document.getElementById('qt_${b.ref}')?.value||1)"
+              style="padding:5px 10px;border-radius:var(--radius-sm);background:var(--navy);color:var(--gold-light);border:none;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">
+              ✓ จัด
+            </button>
+          </div>
+          ${selPlate?`<div style="font-size:10px;color:var(--muted);margin-top:2px">หรือกดแถวนี้ → ใส่ ${selTrip===3?'เที่ยว 3':selTrip===2?'เที่ยว 2':'เที่ยว 1'} บนรถ ${selPlate}</div>`:''}
+        `}
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Checkbox all
+  const allChecked=list.length>0&&list.every(b=>selRefs.has(b.ref));
+  document.getElementById('chk-all').checked=allChecked;
+
+  // Footer
+  const done=Object.keys(queue).filter(r=>queue[r]).length;
+  const pend=bills.length-done;
+  document.getElementById('tableFoot').innerHTML=
+    `<span>แสดง ${list.length}/${bills.length}</span>
+     <span style="color:#B45309;font-weight:600">รอจัด: ${pend}</span>
+     <span style="color:#15803D;font-weight:600">จัดแล้ว: ${done}</span>`;
+
+  // Sel bar
+  updateSelBar();
+}
+
+function updateQueueSub(){
+  const THAI_DAYS=['อา','จ','อ','พ','พฤ','ศ','ส'];
+  const tmr=new Date(); tmr.setDate(tmr.getDate()+1);
+  const tmrShort=THAI_DAYS[tmr.getDay()];
+  const THAI_DAYS_FULL=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+  const tmrFull=THAI_DAYS_FULL[tmr.getDay()];
+  // savedN = บิลที่บันทึกแล้ว + ไม่อยู่ใน queue (ไม่ถูก re-assign กลับ)
+  const savedN=bills.filter(b=>savedRefs.has(b.ref)&&!queue[b.ref]).length;
+  // done = บิลที่อยู่ใน queue (จัดอยู่จริงๆ ตอนนี้)
+  const done=Object.keys(queue).filter(r=>queue[r]).length;
+  const pend=bills.length-done-savedN;
+  const tmrCnt=bills.filter(b=>{
+    if(savedRefs.has(b.ref))return false;
+    if(!b.days)return false;
+    return b.days.split(/[,\s\/]+/).some(d=>d.trim()===tmrShort||d.trim()===tmrFull);
+  }).length;
+  document.getElementById('q-sub').innerHTML=
+    `<span style="color:#15803D;font-weight:600">${done} จัดแล้ว</span> / <span style="color:#B45309;font-weight:600">${pend} รอจัด</span>`+
+    (savedN?` / <span style="color:#1A5FA5;font-weight:600">💾 ${savedN} บันทึกแล้ว</span>`:'')+
+    (tmrCnt?` — <span style="color:#1A5FA5;font-weight:600">📅 พรุ่งนี้ (วัน${tmrShort}): ${tmrCnt} บิล</span>`:'');
+}
+
+// ══════════════════════════════════════════
+// INTERACTIONS
+// ══════════════════════════════════════════
+function changeTrip(ref){
+  if(!queue[ref])return;
+  const cur=tripMap[ref]||1;
+  const newTrip=cur===1?2:1;
+  // ตรวจสอบว่าเที่ยวใหม่รับได้ไหม
+  const t=TRUCKS.find(x=>x.plate===queue[ref]);
+  const b=billMap[ref];
+  if(t&&b){
+    const ld=truckLoad(queue[ref],newTrip);
+    if((ld.w+b.totalW)>t.maxW||(t.maxV>0&&(ld.v+b.totalV)>t.maxV)){
+      showToast(`⚠ เที่ยว ${newTrip} เกินขีดบรรทุก — บันทึกแล้วแต่ต้องปรับ`,'warn');
+    }
+  }
+  tripMap[ref]=newTrip;
+  saveQ();renderAll();
+  showToast(`เปลี่ยนเป็นเที่ยว ${newTrip} แล้ว`,'ok');
+}
+
+function setSelTrip(trip){
+  selTrip=trip;
+  renderTruckCards();
+}
+
+function updateTripToggle(){
+  // no-op — trip toggle is now rendered inside the truck card itself
+}
+
+function selectTruck(plate){
+  if(selPlate===plate){selPlate=null;selTrip=1;}else{selPlate=plate;}
+  updateTripToggle();
+  renderTruckCards();
+  renderBillTable();
+}
+
+function handleBillClick(ref){
+  if(selPlate){
+    if(queue[ref]===selPlate){return;}  // บนรถนี้แล้ว — ใช้ปุ่ม ✕
+    if(!queue[ref]){return;}            // ยังไม่จัด — ใช้ dropdown เท่านั้น
+    const t=TRUCKS.find(x=>x.plate===selPlate);
+    const b=billMap[ref];
+    // ── ใช้ selTrip ที่ผู้ใช้เลือก (ไม่ auto) ──
+    // ตรวจสอบว่า selTrip นั้นรับได้ไหม
+    const ld=truckLoad(selPlate,selTrip);
+    if(t&&b&&((ld.w+b.totalW)>t.maxW||(t.maxV>0&&(ld.v+b.totalV)>t.maxV))){
+      showToast(`⚠ เที่ยว ${selTrip} เกินขีดบรรทุก — บันทึกแล้วแต่ต้องปรับ`,'warn');
+      // ไม่ return — ยังจัดได้
+    }
+    queue[ref]=selPlate;
+    tripMap[ref]=selTrip;
+    saveQ();renderAll();
+  } else {
+    toggleSel(ref);
+  }
+}
+
+function quickAssign(ref, plate, trip){
+  if(!plate)return;
+  trip=parseInt(trip)||1;   // FIX: parse string → int ก่อน (HTML select value เป็น string)
+  const t=TRUCKS.find(x=>x.plate===plate);
+  const b=billMap[ref];
+  if(t&&b){
+    const ld=truckLoad(plate,trip);  // ใช้ trip ที่ parse แล้ว
+    if((ld.w+b.totalW)>t.maxW||(t.maxV>0&&(ld.v+b.totalV)>t.maxV)){
+      // FIX: warn แล้วยังจัดได้ (manual assign ไม่ block)
+      showToast(`⚠ ${plate} เที่ยว ${trip} เกินขีดบรรทุก — บันทึกแล้ว`,'warn');
+    }
+  }
+  queue[ref]=plate;
+  tripMap[ref]=trip;
+  saveQ();renderAll();
+}
+
+function doPrintSummary(){
+  const assignedTrucks=TRUCKS.filter(t=>Object.values(queue).some(p=>p===t.plate));
+  if(!assignedTrucks.length){showToast('ยังไม่มีการจัดรถ','warn');return;}
+
+  let html='';
+  let totalBills=0;
+
+  assignedTrucks.forEach(t=>{
+    const allBills=Object.entries(queue)
+      .filter(([,p])=>p===t.plate).map(([r])=>billMap[r]).filter(Boolean)
+      .sort((a,b)=>(a.arName||'').localeCompare(b.arName||'','th'));
+    if(!allBills.length)return;
+    const tw=allBills.reduce((s,b)=>s+b.totalW,0);
+    html+=`<div class="print-truck-header">🚛 ${t.plate} — ${t.nick} (${t.type}) &nbsp;|&nbsp; ${allBills.length} ร้าน &nbsp;|&nbsp; ${fmtKg(tw)}</div>`;
+    [1,2,3].forEach(tr=>{
+      const trBills=allBills.filter(b=>(tripMap[b.ref]||1)===tr);
+      if(!trBills.length)return;
+      const tw2=trBills.reduce((s,b)=>s+b.totalW,0);
+      const tv2r=trBills.reduce((s,b)=>s+(b.totalV||0),0);
+      html+=`<div class="print-trip-header ${tr===3?'t3':tr===2?'t2':''}">${tr===3?'🟢':tr===2?'🔵':'🔴'} เที่ยว ${tr} — ${trBills.length} ร้าน &nbsp;|&nbsp; ${fmtKg(tw2)} / ${fmtM3(tv2r)}</div>`;
+      trBills.forEach((b,j)=>{
+        totalBills++;
+        html+=`<div class="print-bill-row">
+          <span style="color:var(--muted);min-width:22px;font-size:10px">${j+1}.</span>
+          <span style="flex:1;font-weight:500">${b.arName}</span>
+          <span style="color:var(--muted);font-size:11px;white-space:nowrap">${b.district?b.district+' · ':''}</span>
+          <span style="color:var(--muted);font-size:10px;white-space:nowrap;margin-left:6px">${fmtKg(b.totalW)}</span>
+        </div>`;
+      });
+    });
+  });
+
+  document.getElementById('printContent').innerHTML=html;
+  document.getElementById('printSub').textContent=
+    `${assignedTrucks.length} คัน • ${totalBills} ร้าน • ${new Date().toLocaleDateString('th-TH')}`;
+  document.getElementById('printOverlay').classList.add('open');
+}
+
+function reassignTruck(ref, newPlate){
+  if(!newPlate||newPlate===queue[ref])return;
+  const t=TRUCKS.find(x=>x.plate===newPlate);
+  const b=billMap[ref];
+  if(t&&b){
+    const ld=truckLoad(newPlate,tripMap[ref]||1);
+    if((ld.w+b.totalW)>t.maxW||(t.maxV>0&&(ld.v+b.totalV)>t.maxV)){
+      showToast(`⚠ ${newPlate} เกินขีดบรรทุก — บันทึกแล้วต้องปรับ`,'warn');
+    }
+  }
+  queue[ref]=newPlate;
+  saveQ();renderAll();
+  showToast(`🚛 ย้ายไป ${newPlate} (${t?.nick||''})`,'ok');
+}
+
+function removeBill(ref){
+  delete queue[ref];
+  delete tripMap[ref];
+  saveQ();renderAll();
+}
+
+function toggleSel(ref){
+  if(selRefs.has(ref))selRefs.delete(ref);else selRefs.add(ref);
+  renderBillTable();
+}
+
+function toggleAll(cb){
+  const list=getFilteredBills();
+  if(cb.checked)list.forEach(b=>selRefs.add(b.ref));
+  else selRefs.clear();
+  renderBillTable();
+}
+
+function cancelSel(){selRefs.clear();renderBillTable();}
+
+function updateSelBar(){
+  const bar=document.getElementById('selBar');
+  if(!selRefs.size){bar.style.display='none';return;}
+  const tw=[...selRefs].reduce((s,r)=>s+(billMap[r]?.totalW||0),0);
+  document.getElementById('sel-count').textContent=`✓ ${selRefs.size} (${fmtKg(tw)})`;
+  bar.style.display='flex';
+}
+
+function assignSelected(dd){
+  const plate=dd.value;
+  if(!plate)return;
+  selRefs.forEach(r=>{queue[r]=plate;});
+  showToast(`✅ จัด ${selRefs.size} บิล → ${plate}`,'ok');
+  selRefs.clear();
+  saveQ();renderAll();
+  dd.value='';
+}
+
+function clearSelected(){
+  selRefs.forEach(r=>{delete queue[r];});
+  showToast('ลบบิลที่เลือกแล้ว','warn');
+  selRefs.clear();
+  saveQ();renderAll();
+}
+
+function doTransfer(dd){
+  const to=dd.value;
+  if(!to||!selPlate)return;
+  let count=0;
+  Object.keys(queue).forEach(r=>{if(queue[r]===selPlate){queue[r]=to;count++;}});
+  showToast(`🔄 โยก ${count} บิล → ${to} แล้ว`,'ok');
+  selPlate=to;
+  saveQ();renderAll();
+  dd.value='';
+}
+
+function doTransferTrip(dd){
+  const to=dd.value; if(!to||!selPlate)return;
+  const trip=parseInt(document.getElementById('tf-trip-num')?.value||'1');
+  let count=0;
+  Object.keys(queue).forEach(r=>{
+    if(queue[r]===selPlate&&(tripMap[r]||1)===trip){queue[r]=to;count++;}
+  });
+  if(!count){showToast(`ไม่มีบิลเที่ยว ${trip} บนรถนี้`,'warn');dd.value='';return;}
+  showToast(`🔄 โยกเที่ยว ${trip} (${count} บิล) → ${to}`,'ok');
+  saveQ();renderAll();dd.value='';
+}
+
+function doClearTruck(){
+  if(!selPlate)return;
+  const refs=Object.keys(queue).filter(r=>queue[r]===selPlate);
+  if(!refs.length)return;
+  if(!confirm(`ล้าง ${refs.length} บิลออกจาก ${selPlate}?`))return;
+  refs.forEach(r=>delete queue[r]);
+  showToast(`🗑 ล้าง ${refs.length} บิลแล้ว`,'warn');
+  selPlate=null;
+  saveQ();renderAll();
+}
+
+// ══════════════════════════════════════════
+// AUTO-ASSIGN
+// ══════════════════════════════════════════
+function doClearAll(){
+  if(!Object.keys(queue).length){showToast('ยังไม่มีข้อมูลการจัด','warn');return;}
+  if(!confirm('ล้างการจัดรถทั้งหมด?'))return;
+  queue={};tripMap={};selPlate=null;selRefs.clear();
+  saveQ();renderAll();
+  showToast('🗑 ล้างข้อมูลทั้งหมดแล้ว','warn');
+}
+
+let _pickedDay=null; // {short, full}
+
+function doAutoAssign(){
+  const THAI_DAYS_SHORT=['อา','จ','อ','พ','พฤ','ศ','ส'];
+  const THAI_DAYS_FULL=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+
+  // นับบิลต่อวัน
+  const countPerDay=Array(7).fill(0);
+  bills.forEach(b=>{
+    if(!b.days)return;
+    b.days.split(/[,\s\/]+/).forEach(d=>{
+      d=d.trim();
+      THAI_DAYS_SHORT.forEach((s,i)=>{
+        if(d===s||d===THAI_DAYS_FULL[i]||d.startsWith(s))countPerDay[i]++;
+      });
+    });
+  });
+
+  const todayIdx=new Date().getDay();
+  const tmrIdx=(todayIdx+1)%7;
+  const tmr=new Date(); tmr.setDate(tmr.getDate()+1);
+  const tmrDateStr=tmr.toLocaleDateString('th-TH',{day:'numeric',month:'short'});
+  const EMOJI=['🌅','📦','📦','📦','📦','🎉','🌤️'];
+
+  _pickedDay=null;
+  const grid=document.getElementById('dayGrid');
+  grid.innerHTML=THAI_DAYS_SHORT.map((s,i)=>{
+    const cnt=countPerDay[i];
+    const isToday=i===todayIdx, isTmr=i===tmrIdx;
+    const badge=isTmr
+      ?`<span style="background:#1A5FA5;color:#fff;border-radius:4px;padding:0 5px;font-size:9px;font-weight:700;display:block;margin-bottom:4px">พรุ่งนี้ ${tmrDateStr}</span>`
+      :isToday
+      ?`<span style="background:#6B7A90;color:#fff;border-radius:4px;padding:0 5px;font-size:9px;font-weight:700;display:block;margin-bottom:4px">วันนี้</span>`
+      :'<span style="display:block;margin-bottom:4px;height:16px"></span>';
+    return`<button onclick="pickDay(${i},'${s}','${THAI_DAYS_FULL[i]}')" id="dayBtn${i}"
+      style="border:2px solid ${isTmr?'#1A5FA5':cnt?'#E0E5ED':'#EDF0F4'};
+        background:${isTmr?'#EAF0F8':cnt?'#fff':'#F8F9FB'};
+        border-radius:10px;padding:10px 8px;cursor:${cnt?'pointer':'not-allowed'};
+        opacity:${cnt?1:.35};text-align:center;transition:all .15s;width:100%">
+      ${badge}
+      <div style="font-family:Kanit;font-size:17px;font-weight:700;color:${cnt?'#07101F':'#A0ABBB'}">วัน${s}</div>
+      <div style="font-size:18px;margin:3px 0">${EMOJI[i]}</div>
+      <div style="font-size:14px;font-weight:700;color:${cnt?'#1A5FA5':'#A0ABBB'}">${cnt} บิล</div>
+    </button>`;
+  }).join('');
+
+  document.getElementById('dayPickerOverlay').classList.add('open');
+  document.getElementById('dayPickerConfirm').disabled=true;
+  document.getElementById('dayPickerConfirm').style.opacity='.5';
+  document.getElementById('dayPickerConfirm').innerHTML='⚡ จัดเลย';
+
+  // pre-select พรุ่งนี้ถ้ามีบิล
+  if(countPerDay[tmrIdx]>0) pickDay(tmrIdx,THAI_DAYS_SHORT[tmrIdx],THAI_DAYS_FULL[tmrIdx]);
+}
+
+function pickDay(idx,short,full){
+  const THAI_DAYS_SHORT=['อา','จ','อ','พ','พฤ','ศ','ส'];
+  const THAI_DAYS_FULL=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+  // นับบิลวันนี้
+  let cnt=0;
+  bills.forEach(b=>{
+    if(!b.days)return;
+    if(b.days.split(/[,\s\/]+/).some(d=>{d=d.trim();return d===short||d===full;}))cnt++;
+  });
+  if(!cnt)return;
+
+  _pickedDay={short,full,idx};
+
+  // อัปเดต card styles
+  for(let i=0;i<7;i++){
+    const btn=document.getElementById('dayBtn'+i);
+    if(!btn)continue;
+    const sel=i===idx;
+    btn.style.borderColor=sel?'#C9A84C':i===(new Date().getDay()+1)%7?'#1A5FA5':'#E0E5ED';
+    btn.style.background=sel?'#FFF8EC':i===(new Date().getDay()+1)%7&&!sel?'#EAF0F8':'#fff';
+    btn.style.transform=sel?'scale(1.05)':'scale(1)';
+    btn.style.boxShadow=sel?'0 3px 12px rgba(201,168,76,.3)':'';
+  }
+
+  const cb=document.getElementById('dayPickerConfirm');
+  cb.disabled=false; cb.style.opacity='1';
+  cb.innerHTML=`⚡ จัดวัน${short} — ${cnt} บิล`;
+}
+
+function closeDayPicker(){
+  document.getElementById('dayPickerOverlay').classList.remove('open');
+  _pickedDay=null;
+}
+
+function confirmAutoAssign(){
+  if(!_pickedDay)return;
+  const {short:tmrShort,full:tmrFull,idx:tmrIdx}=_pickedDay;
+  closeDayPicker();
+
+  // ── คำนวณวันที่จริงของวันที่เลือก ──
+  const today=new Date();
+  let daysAhead=tmrIdx-today.getDay();
+  if(daysAhead<0)daysAhead+=7;
+  const deliveryDateObj=new Date(today);
+  deliveryDateObj.setDate(today.getDate()+daysAhead);
+  setDeliveryDate(deliveryDateObj);
+
+  const btn=document.getElementById('btn-auto');
+  btn.disabled=true; btn.textContent='⏳ กำลังจัด...';
+
+  setTimeout(()=>{
+    // ══════════════════════════════════════════
+    // AUTO-ASSIGN v2: 4 rules
+    //  1. ไม่ใช้ Serial Route จด
+    //  2. ชื่อร้านเหมือนกัน → รถเดียวกัน
+    //  3. วันส่งเดียวกัน → รถเดียวกัน
+    //  4. GPS ใกล้กัน (≤5กม.) → รถเดียวกัน
+    // ══════════════════════════════════════════
+
+    function matchDay(s){
+      if(!s)return false;
+      return s.split(/[,\s\/]+/).some(d=>{d=d.trim();return d===tmrShort||d===tmrFull;});
+    }
+    const tmrBills=bills.filter(b=>routeMap[b.arCode]&&b.lat&&b.lng&&matchDay(b.days));
+    const tmrRefs=new Set(tmrBills.map(b=>b.ref));
+
+    if(!tmrBills.length){
+      // วินิจฉัยสาเหตุ
+      const dayCnt=bills.filter(b=>matchDay(b.days)).length;
+      const gpsCnt=bills.filter(b=>b.lat&&b.lng).length;
+      let msg;
+      if(dayCnt===0)msg=`ไม่พบบิลวัน${tmrFull}`;
+      else if(gpsCnt===0){
+        msg=`ไม่มีบิลที่มี GPS — กำลังโหลดข้อมูลใหม่`;
+        // auto-refresh data → re-try
+        showToast(msg,'warn');
+        refreshData();
+        btn.disabled=false; btn.innerHTML='⚡ จัดอัตโนมัติ';
+        return;
+      } else msg=`มี ${dayCnt} บิลในวัน${tmrFull} แต่ไม่มี GPS — กด 🔄 รีเฟรช`;
+      showToast(msg,'warn');
+      btn.disabled=false; btn.innerHTML='⚡ จัดอัตโนมัติ';
+      return;
+    }
+
+    // ── Normalize store name (ตัด suffix วงเล็บ) ──
+    function normName(n){
+      return (n||'').replace(/\s*\([^)]*\)/g,'').replace(/\s+/g,' ').trim();
+    }
+
+    // ── GPS Cluster: รวมร้านที่อยู่ใกล้กัน ≤15กม. ──
+    // radius 15กม. = จัดกลุ่มเขต/อำเภอใกล้เคียงเข้าด้วยกัน
+    const GPS_KM=15;
+    const clusters=[];       // [{cLat,cLng,cnt}]
+    const billCluster={};    // ref → clusterIdx
+
+    tmrBills.forEach(b=>{
+      if(!b.lat||!b.lng)return;
+      let found=-1,minD=Infinity;
+      clusters.forEach((c,i)=>{
+        const d=haversine(c.cLat,c.cLng,b.lat,b.lng);
+        if(d<minD){minD=d;found=i;}
+      });
+      if(found>=0&&minD<=GPS_KM){
+        const c=clusters[found];
+        c.cLat=(c.cLat*c.cnt+b.lat)/(c.cnt+1);
+        c.cLng=(c.cLng*c.cnt+b.lng)/(c.cnt+1);
+        c.cnt++;
+        billCluster[b.ref]=found;
+      } else {
+        billCluster[b.ref]=clusters.length;
+        clusters.push({cLat:b.lat,cLng:b.lng,cnt:1});
+      }
+    });
+
+    // ── เรียงบิล: Route Code ก่อน (สส01,สส02,สค01,รบ01...) → GPS NN ภายใน route ──
+    // Route Code = zone จริงของธุรกิจ (สำคัญกว่าจังหวัด)
+    // จาก PDF: bills ที่ route code เดียวกัน → ต้องไปรถคันเดิมเสมอ
+
+    // 1. แบ่งกลุ่มตาม "สายส่ง" (สรุปรูท: สส09, รบ02...) — fallback → จังหวัด
+    const byRoute={};
+    tmrBills.forEach(b=>{
+      const key=(b.saiSong||'').trim()||(b.province||'__').trim();
+      if(!byRoute[key])byRoute[key]=[];
+      byRoute[key].push(b);
+    });
+
+    // 2. เรียง route keys: ใหญ่สุด (น้ำหนักรวมมากสุด) ก่อน
+    const routeOrder=Object.keys(byRoute).sort((a,b)=>{
+      const wA=byRoute[a].reduce((s,x)=>s+x.totalW,0);
+      const wB=byRoute[b].reduce((s,x)=>s+x.totalW,0);
+      return wB-wA;
+    });
+
+    // ── Location Group: มัดร้านจุดเดียวกัน (≤1.5กม.) เป็นกลุ่มเดียว ──
+    // ทั้งกลุ่มไปรถคันเดียวกันเสมอ; ถ้ารถเต็มย้ายทั้งกลุ่มไปคันอื่น
+    const LOC_KM=1.5;
+    const locGroups={};   // gid → {refs,totW,totV,cLat,cLng,n}
+    const billLoc={};     // ref → gid
+    let _locSeq=0;
+
+    // 3. NN ภายใน route แบบ group-aware: มัดโลเคชันเดียวกัน → เรียงกลุ่มหนักก่อน+NN
+    function nnWithin(rbills){
+      const withGps=rbills.filter(b=>b.lat&&b.lng);
+      const noGps=rbills.filter(b=>!b.lat||!b.lng).sort((a,b)=>b.totalW-a.totalW);
+      if(!withGps.length)return noGps;
+      // 3a. cluster เป็น location groups (≤LOC_KM)
+      const grps=[];
+      withGps.forEach(b=>{
+        let gi=-1,gd=Infinity;
+        grps.forEach((g,i)=>{const d=haversine(g.cLat,g.cLng,b.lat,b.lng);if(d<gd){gd=d;gi=i;}});
+        if(gi>=0&&gd<=LOC_KM){
+          const g=grps[gi];
+          g.cLat=(g.cLat*g.bills.length+b.lat)/(g.bills.length+1);
+          g.cLng=(g.cLng*g.bills.length+b.lng)/(g.bills.length+1);
+          g.bills.push(b);g.totW+=b.totalW;g.totV+=b.totalV;
+        } else {
+          grps.push({bills:[b],totW:b.totalW,totV:b.totalV,cLat:b.lat,cLng:b.lng});
+        }
+      });
+      // 3b. register groups + เรียงสมาชิกหนักก่อน
+      grps.forEach(g=>{
+        const gid='L'+(_locSeq++);
+        g.bills.sort((a,b)=>b.totalW-a.totalW);
+        g.bills.forEach(b=>billLoc[b.ref]=gid);
+        locGroups[gid]={refs:g.bills.map(b=>b.ref),totW:g.totW,totV:g.totV,cLat:g.cLat,cLng:g.cLng,n:g.bills.length};
+      });
+      // 3c. เรียงกลุ่ม: กลุ่มหนักสุดเป็น seed → NN ตาม centroid
+      const rem=[...grps].sort((a,b)=>b.totW-a.totW);
+      const ord=[rem.shift()];
+      let cLat=ord[0].cLat,cLng=ord[0].cLng;
+      while(rem.length){
+        let bi=0,bd=Infinity;
+        rem.forEach((g,i)=>{const d=haversine(cLat,cLng,g.cLat,g.cLng);if(d<bd){bd=d;bi=i;}});
+        const g=rem.splice(bi,1)[0];ord.push(g);cLat=g.cLat;cLng=g.cLng;
+      }
+      const result=[];
+      ord.forEach(g=>g.bills.forEach(b=>result.push(b)));
+      return[...result,...noGps];
+    }
+
+    const sorted=[];
+    routeOrder.forEach(rk=>{sorted.push(...nnWithin(byRoute[rk]));});
+
+    // ── loads เริ่มจากบิลวันอื่น ──
+    const loads={};
+    TRUCKS.forEach(t=>{
+      let w1=0,v1=0,w2=0,v2=0,w3=0,v3=0;
+      Object.entries(queue).forEach(([ref,plate])=>{
+        if(plate===t.plate&&!tmrRefs.has(ref)&&billMap[ref]){
+          const tr=tripMap[ref]||1;
+          if(tr===1){w1+=billMap[ref].totalW;v1+=billMap[ref].totalV;}
+          else if(tr===2){w2+=billMap[ref].totalW;v2+=billMap[ref].totalV;}
+          else{w3+=billMap[ref].totalW;v3+=billMap[ref].totalV;}
+        }
+      });
+      loads[t.plate]={w1,v1,w2,v2,w3,v3};
+    });
+
+    // ── tryTrip: จัดอัตโนมัติแค่เที่ยว 1 และ 2 (เที่ยว 3 = manual เท่านั้น) ──
+    function tryTrip(t,b){
+      const ld=loads[t.plate];
+      if((ld.w1+b.totalW)<=t.maxW&&(t.maxV<=0||(ld.v1+b.totalV)<=t.maxV))return 1;
+      if((ld.w2+b.totalW)<=t.maxW&&(t.maxV<=0||(ld.v2+b.totalV)<=t.maxV))return 2;
+      return 0; // เที่ยว 3: ไม่จัดอัตโนมัติ
+    }
+
+    // ── Truck list (ไม่รวม EXCLUDE_AUTO) เรียงใหญ่→เล็ก ──
+    const priority={'12 ล้อ':1,'10 ล้อ':2,'6 ล้อ':3,'4 ล้อจัมโบ้':4,'กระบะ':5};
+    const trucks=[...TRUCKS].filter(t=>!EXCLUDE_AUTO.has(t.plate)&&t.maxW>0)
+      .sort((a,b)=>(priority[a.type]||9)-(priority[b.type]||9)||b.maxW-a.maxW);
+
+    // ── Lookup tables ──
+    const storeMap={};   // normName → plate  (rule 2)
+    const storeTripMap={}; // normName → trip  (ชื่อร้านเดียวกัน → เที่ยวเดิม)
+    const clusterMap={}; // clusterIdx → plate (rule 4)
+    const routeCodeMap={}; // saiSong → plate (rule R: สส01,สค02,รบ03...)
+    const saiSongTripMap={}; // saiSong → trip (สายส่งเดียวกัน → เที่ยวเดิม)
+    const districtMap={}; // district → plate  (rule D)
+    const provinceMap={}; // province → plate  (rule P)
+    const locMap={};      // gid → plate  (rule L: โลเคชันเดียวกัน)
+
+    // ── Running centroid ต่อรถ (อัปเดตทุก assignBill) ──
+    // ใช้ geographic centroid selection แทน bin-packing
+    const truckCent={}; // plate → {latSum,lngSum,cnt}
+
+    const newQ={}, newTripMap={};
+
+    function assignBill(b,plate,trip){
+      newQ[b.ref]=plate; newTripMap[b.ref]=trip;
+      const ld=loads[plate];
+      if(trip===1){ld.w1+=b.totalW;ld.v1+=b.totalV;}
+      else if(trip===2){ld.w2+=b.totalW;ld.v2+=b.totalV;}
+      else{ld.w3+=b.totalW;ld.v3+=b.totalV;}
+      const nm=normName(b.arName);
+      if(nm&&!storeMap[nm]){storeMap[nm]=plate;storeTripMap[nm]=trip;}
+      const gid=billLoc[b.ref];
+      if(gid)locMap[gid]=plate; // location group → รถล่าสุดเสมอ (overflow ตามกลุ่ม)
+      const ci=billCluster[b.ref];
+      if(ci!==undefined&&!clusterMap[ci])clusterMap[ci]=plate;
+      if(b.saiSong&&!routeCodeMap[b.saiSong]){routeCodeMap[b.saiSong]=plate;saiSongTripMap[b.saiSong]=trip;} // สายส่ง → รถ+เที่ยว
+      if(b.district&&!districtMap[b.district])districtMap[b.district]=plate;
+      if(b.province&&!provinceMap[b.province])provinceMap[b.province]=plate;
+      // อัปเดต centroid ของรถ
+      if(b.lat&&b.lng){
+        if(!truckCent[plate])truckCent[plate]={latSum:0,lngSum:0,cnt:0};
+        truckCent[plate].latSum+=b.lat;
+        truckCent[plate].lngSum+=b.lng;
+        truckCent[plate].cnt++;
+      }
+    }
+
+    function bestTruck(b){
+      const nm=normName(b.arName);
+      const ci=billCluster[b.ref];
+
+      // helper: รถนี้ถูก force-overload อยู่ไหม (จาก Rule 2 force)
+      function isOverloaded(plate){
+        const ld=loads[plate];const t2=trucks.find(x=>x.plate===plate);
+        if(!t2)return false;
+        return(ld.w1+ld.w2+ld.w3)>t2.maxW||(t2.maxV>0&&(ld.v1+ld.v2+ld.v3)>t2.maxV);
+      }
+
+      // helper: รถนี้รับ "ทั้งกลุ่มโลเคชัน" ได้ในเที่ยวไหน (1/2) — 0=ไม่ได้
+      function tripFitWhole(t,gW,gV){
+        const ld=loads[t.plate];
+        if((ld.w1+gW)<=t.maxW&&(t.maxV<=0||(ld.v1+gV)<=t.maxV))return 1;
+        if((ld.w2+gW)<=t.maxW&&(t.maxV<=0||(ld.v2+gV)<=t.maxV))return 2;
+        return 0;
+      }
+
+      // helper: จังหวัดหลักของรถ (จากบิลที่จัดไปแล้ว) — กันข้ามจังหวัด
+      function truckMainProv(plate){
+        for(const [r,pl] of Object.entries(newQ)){
+          if(pl===plate&&billMap[r]&&billMap[r].province)return billMap[r].province;
+        }
+        return null;
+      }
+
+      // Rule 2: ชื่อร้านเหมือน → FORCE รถ+เที่ยวเดิม (สำคัญสุด ไม่มีข้อยกเว้น)
+      if(storeMap[nm]){
+        const t=trucks.find(x=>x.plate===storeMap[nm]);
+        if(t){
+          const preferTrip=storeTripMap[nm]||1;
+          return{t,tr:preferTrip}; // ชื่อร้านเดียวกัน → รถเดิม + เที่ยวเดิมเสมอ (ไม่แยกเที่ยว)
+        }
+      }
+      // helper: ห้ามรถมี "สายส่งต่างกัน" 2 ค่าขึ้นไป
+      function saiSongCompat(t){
+        if(!b.saiSong)return true; // ไม่มีสายส่ง → ไม่เช็ค
+        const refs=Object.entries(newQ).filter(([,pl])=>pl===t.plate).map(([r])=>r);
+        for(const r of refs){
+          const tb=billMap[r];
+          if(tb&&tb.saiSong&&tb.saiSong!==b.saiSong)return false;
+        }
+        return true;
+      }
+
+      // helper: เช็คว่าบิลใหม่ "เข้ากับ" cluster ของรถ — pairwise distance + angle จาก HQ
+      const MAX_PAIR=20;      // pairwise distance สูงสุด
+      const MAX_ANGLE=110;    // angle จาก HQ ระหว่างบิล 2 ตัว ห้ามเกิน 110°
+      function angleFromHQ(lat,lng){
+        return Math.atan2(lat-HQ.lat,lng-HQ.lng)*180/Math.PI;
+      }
+      function withinCluster(t){
+        if(!b.lat||!b.lng)return true;
+        const refs=Object.entries(newQ).filter(([,pl])=>pl===t.plate).map(([r])=>r);
+        if(!refs.length)return true; // รถว่าง → OK
+        const newAng=angleFromHQ(b.lat,b.lng);
+        const newDistHQ=haversine(HQ.lat,HQ.lng,b.lat,b.lng);
+        for(const r of refs){
+          const tb=billMap[r];
+          if(!tb||!tb.lat||!tb.lng)continue;
+          // 1) pairwise distance ห้ามเกิน MAX_PAIR
+          if(haversine(b.lat,b.lng,tb.lat,tb.lng)>MAX_PAIR)return false;
+          // 2) angle from HQ — กันบิลข้ามฝั่ง HQ (ถ้าทั้งคู่อยู่ไกล HQ > 5 กม.)
+          const distHQ=haversine(HQ.lat,HQ.lng,tb.lat,tb.lng);
+          if(distHQ>5&&newDistHQ>5){
+            const tbAng=angleFromHQ(tb.lat,tb.lng);
+            let diff=Math.abs(newAng-tbAng);if(diff>180)diff=360-diff;
+            if(diff>MAX_ANGLE)return false; // มุมข้ามฝั่งเกินไป
+          }
+        }
+        return true;
+      }
+
+      // Rule R: "สายส่ง" เดียวกัน + จังหวัดเดียวกัน + ใกล้ cluster → FORCE
+      if(b.saiSong&&routeCodeMap[b.saiSong]){
+        const t=trucks.find(x=>x.plate===routeCodeMap[b.saiSong]);
+        if(t){
+          const tp=truckMainProv(t.plate);
+          if(!(b.province&&tp&&tp!==b.province)&&withinCluster(t)){ // จังหวัดตรง + ไม่ไกลเกิน
+            return{t,tr:saiSongTripMap[b.saiSong]||1};
+          }
+          // คนละจังหวัด หรือไกลเกินไป → fall through
+        }
+      }
+      // Rule L: โลเคชันเดียวกัน (≤1.5กม.) → มัดทั้งกลุ่มไปรถคันเดียว
+      // ถ้ารถกลุ่มเต็ม → ย้ายทั้งกลุ่มที่เหลือไปคันใหม่ที่จุได้ทั้งกลุ่ม + ใกล้สุด
+      const gid=billLoc[b.ref];
+      if(gid){
+        const g=locGroups[gid];
+        if(locMap[gid]){
+          const t=trucks.find(x=>x.plate===locMap[gid]);
+          if(t){const tr=tryTrip(t,b);if(tr)return{t,tr};}
+          // รถกลุ่มเต็ม → ย้ายทั้งกลุ่มที่เหลือ (ด้านล่าง)
+        }
+        // น้ำหนัก/ปริมาตรกลุ่มส่วนที่ยังไม่ถูกจัด
+        let remW=0,remV=0;
+        g.refs.forEach(r=>{if(newQ[r]===undefined&&billMap[r]){remW+=billMap[r].totalW;remV+=billMap[r].totalV;}});
+        if(remW<=0){remW=b.totalW;remV=b.totalV;}
+        // จังหวัดของรถ (จากบิลที่จัดไปแล้ว) — กันข้ามโซน
+        function truckProv(plate){
+          for(const [r,pl] of Object.entries(newQ)){
+            if(pl===plate&&billMap[r]&&billMap[r].province)return billMap[r].province;
+          }
+          return null;
+        }
+        // หารถมีของอยู่แล้ว ใกล้สุด ที่จุ"ทั้งกลุ่ม"ได้ + จังหวัดเดียวกัน → consolidate
+        let pick=null,pickTr=0,pickD=Infinity;
+        trucks.forEach(t=>{
+          if(isOverloaded(t.plate))return;
+          const tc=truckCent[t.plate];
+          if(!tc||!tc.cnt)return;
+          const tp=truckProv(t.plate);
+          if(b.province&&tp&&tp!==b.province)return; // ข้ามรถคนละจังหวัด
+          const fit=tripFitWhole(t,remW,remV);
+          if(!fit)return;
+          const d=haversine(g.cLat,g.cLng,tc.latSum/tc.cnt,tc.lngSum/tc.cnt);
+          if(d<pickD){pickD=d;pick=t;pickTr=fit;}
+        });
+        if(pick&&pickD<=25)return{t:pick,tr:pickTr};
+        // ไม่งั้นเปิดรถเปล่าคันใหญ่สุดที่จุทั้งกลุ่มได้
+        for(const t of trucks){
+          const ld=loads[t.plate];
+          if(ld.w1+ld.w2+ld.w3>0)continue;
+          const fit=tripFitWhole(t,remW,remV);
+          if(fit)return{t,tr:fit};
+        }
+        // กลุ่มใหญ่เกินรถเปล่า → ใช้รถใกล้สุดที่จุได้ (แม้ไกล) แล้วค่อย overflow
+        if(pick)return{t:pick,tr:pickTr};
+        // สุดท้าย fall through ให้ rule อื่นจัดทีละบิล
+      }
+      // Rule P: จังหวัดเดียวกัน + ใกล้ cluster + สายส่งตรง → รถเดิม
+      if(b.province&&provinceMap[b.province]){
+        for(const t of trucks){
+          if(isOverloaded(t.plate))continue;
+          if(loads[t.plate].w1+loads[t.plate].w2+loads[t.plate].w3===0)continue;
+          const hasSameProv=Object.entries(newQ).some(([ref,plate])=>plate===t.plate&&billMap[ref]?.province===b.province);
+          if(!hasSameProv)continue;
+          if(!withinCluster(t))continue;
+          if(!saiSongCompat(t))continue; // 🔒 สายส่งต้องตรง
+          const tr=tryTrip(t,b);if(tr)return{t,tr};
+        }
+      }
+      // Rule D: อำเภอเดียวกัน + จังหวัดเดียวกัน + ใกล้ cluster + สายส่งตรง → รถเดิม
+      if(b.district&&districtMap[b.district]){
+        const t=trucks.find(x=>x.plate===districtMap[b.district]);
+        if(t&&!isOverloaded(t.plate)){
+          const tp=truckMainProv(t.plate);
+          if(!(b.province&&tp&&tp!==b.province)&&withinCluster(t)&&saiSongCompat(t)){
+            const tr=tryTrip(t,b);if(tr)return{t,tr};
+          }
+        }
+      }
+      // Rule 4: GPS cluster + ใกล้ centroid + สายส่งตรง
+      if(ci!==undefined&&clusterMap[ci]){
+        const t=trucks.find(x=>x.plate===clusterMap[ci]);
+        if(t){
+          const tp=truckMainProv(t.plate);
+          if(!(b.province&&tp&&tp!==b.province)&&withinCluster(t)&&saiSongCompat(t)){const tr=tryTrip(t,b);if(tr)return{t,tr};}
+        }
+      }
+      // Rule G: Min-distance ≤25กม. + cluster + สายส่งตรง
+      if(b.lat&&b.lng){
+        let geoT=null,geoTr=0,geoD=Infinity;
+        trucks.forEach(t=>{
+          const tc=truckCent[t.plate];
+          if(!tc||tc.cnt===0)return;
+          if(isOverloaded(t.plate))return;
+          {const tp=truckMainProv(t.plate);if(b.province&&tp&&tp!==b.province)return;}
+          if(!withinCluster(t))return;
+          if(!saiSongCompat(t))return; // 🔒
+          const tr=tryTrip(t,b);if(!tr)return;
+          let minD=Infinity;
+          Object.entries(newQ).forEach(([ref,plate])=>{
+            if(plate!==t.plate)return;
+            const tb=billMap[ref];if(!tb||!tb.lat||!tb.lng)return;
+            const d=haversine(b.lat,b.lng,tb.lat,tb.lng);
+            if(d<minD)minD=d;
+          });
+          if(minD<geoD){geoD=minD;geoT=t;geoTr=tr;}
+        });
+        if(geoT&&geoD<=25)return{t:geoT,tr:geoTr};
+      }
+      // Relaxed Rule G (40km) + cluster + สายส่งตรง
+      if(b.lat&&b.lng){
+        let relaxT=null,relaxTr=0,relaxD=Infinity;
+        trucks.forEach(t=>{
+          const tc=truckCent[t.plate];
+          if(!tc||tc.cnt===0)return;
+          if(isOverloaded(t.plate))return;
+          {const tp=truckMainProv(t.plate);if(b.province&&tp&&tp!==b.province)return;}
+          if(!withinCluster(t))return;
+          if(!saiSongCompat(t))return; // 🔒
+          const tr=tryTrip(t,b);if(!tr)return;
+          Object.entries(newQ).forEach(([ref,plate])=>{
+            if(plate!==t.plate)return;
+            const tb=billMap[ref];if(!tb||!tb.lat||!tb.lng)return;
+            const d=haversine(b.lat,b.lng,tb.lat,tb.lng);
+            if(d<relaxD){relaxD=d;relaxT=t;relaxTr=tr;}
+          });
+        });
+        if(relaxT&&relaxD<=40)return{t:relaxT,tr:relaxTr};
+      }
+      // เปิดรถเปล่าใหม่ — เลือกรถคันใหญ่สุด (trucks เรียง priority ใหญ่→เล็กแล้ว)
+      let ePick=null,eTr=0;
+      for(const t of trucks){   // trucks เรียงใหญ่→เล็กแล้ว → ได้คันใหญ่สุดก่อน
+        const ld=loads[t.plate];
+        if(ld.w1+ld.w2+ld.w3>0)continue; // ไม่ใช่รถเปล่า
+        const tr=tryTrip(t,b);
+        if(!tr)continue;
+        ePick=t;eTr=tr;break;  // เจอรถใหญ่สุดที่รับได้ → ใช้เลย
+      }
+      return ePick?{t:ePick,tr:eTr}:null;
+    }
+
+    sorted.forEach(b=>{
+      const res=bestTruck(b);
+      if(res)assignBill(b,res.t.plate,res.tr);
+    });
+
+    // คง queue วันอื่น + เขียนทับวันที่เลือก
+    const kept={},keptTrip={};
+    Object.entries(queue).forEach(([ref,plate])=>{
+      if(!tmrRefs.has(ref)){kept[ref]=plate;keptTrip[ref]=tripMap[ref]||1;}
+    });
+    queue={...kept,...newQ};
+    tripMap={...keptTrip,...newTripMap};
+
+    selPlate=null; saveQ(); renderAll();
+    btn.disabled=false; btn.innerHTML='⚡ จัดอัตโนมัติ';
+
+    const unassigned=tmrBills.length-Object.keys(newQ).length;
+    const usedTrucks=new Set(Object.values(newQ)).size;
+    showToast(
+      `✅ วัน${tmrFull} — ${Object.keys(newQ).length} บิล / ${usedTrucks} คัน`+
+      (unassigned>0?` ⚠ ${unassigned} บิลไม่พอรถ`:''),
+      unassigned>0?'warn':'ok'
+    );
+  },0);
+}
+
+
+// ══════════════════════════════════════════
+// SETTINGS
+// ══════════════════════════════════════════
+const KEEPDATA_HEADERS=[
+  'วันที่บิล','วันที่ส่ง',                                                    // A B
+  'เลขบิล','รหัสร้านค้า','ชื่อร้านค้า','จังหวัด','อำเภอ',                    // C D E F G
+  'มี GPS','Lat','Lng','ห่าง HQ (กม.)','สายส่ง','รหัสสาย','วันส่ง',          // H I J K L M N
+  'ทะเบียนรถ','เที่ยว','ชื่อเล่น','คนขับ','ประเภทรถ',                        // O P Q R S
+  'น้ำหนัก (กก.)','ปริมาตร (m³)','มูลค่า (บาท)','สถานะ','วันที่อัปเดต'      // T U V W X
+];  // 24 คอลัมน์ (A–X) ตรงกับ GAS sheet
+
+// ── Delivery Date state ──
+let _deliveryDate=''; // "DD/MM/YYYY" เช่น "13/05/2026"
+
+function setDeliveryDate(dateObj){
+  const d=String(dateObj.getDate()).padStart(2,'0');
+  const m=String(dateObj.getMonth()+1).padStart(2,'0');
+  const y=dateObj.getFullYear();
+  _deliveryDate=`${d}/${m}/${y}`;
+  const label=dateObj.toLocaleDateString('th-TH',{day:'numeric',month:'short'});
+  const btn=document.getElementById('btn-delivery-date');
+  if(btn)btn.innerHTML=`📅 ${label}`;
+}
+
+function openDeliveryDatePicker(){
+  const inp=document.getElementById('deliveryDateInput');
+  if(inp){
+    // set input value from _deliveryDate or today
+    if(_deliveryDate){
+      const [d,m,y]=_deliveryDate.split('/');
+      inp.value=`${y}-${m}-${d}`;
+    } else {
+      const t=new Date(); t.setDate(t.getDate()+1);
+      inp.value=t.toISOString().slice(0,10);
+    }
+  }
+  document.getElementById('deliveryDateOverlay').classList.add('open');
+}
+
+function confirmDeliveryDate(){
+  const val=document.getElementById('deliveryDateInput')?.value;
+  if(!val){showToast('กรุณาเลือกวันที่','warn');return;}
+  setDeliveryDate(new Date(val+'T00:00:00'));
+  document.getElementById('deliveryDateOverlay').classList.remove('open');
+  showToast(`✅ วันที่ส่ง: ${_deliveryDate}`,'ok');
+}
+
+
+async function copyHeaders(){
+  const txt=KEEPDATA_HEADERS.join('\t');
+  navigator.clipboard.writeText(txt).then(()=>showToast('✅ คัดลอกหัวคอลัมน์แล้ว','ok')).catch(()=>{
+    const ta=document.createElement('textarea');
+    ta.value=txt;document.body.appendChild(ta);ta.select();
+    document.execCommand('copy');document.body.removeChild(ta);
+    showToast('✅ คัดลอกแล้ว','ok');
+  });
+}
+
+
+async function doSave(){
+  const btn=document.getElementById('btn-save');
+  const scriptUrl=SCRIPT_URL;
+  if(!scriptUrl){
+    showToast('ไม่พบ Script URL','err');
+    return;
+  }
+  if(!_deliveryDate){
+    showToast('กรุณาเลือกวันที่ส่งก่อน','warn');
+    openDeliveryDatePicker();
+    return;
+  }
+  btn.disabled=true;btn.innerHTML='⏳ กำลังบันทึก...';btn.style.background='#07101F';
+  try{
+    const now=new Date().toLocaleString('th-TH',{timeZone:'Asia/Bangkok'});
+    const hdrs=KEEPDATA_HEADERS;
+
+    const rows=bills.sort((a,b)=>(a.province||'').localeCompare(b.province||'','th')).map(b=>{
+      const t=TRUCKS.find(tt=>tt.plate===queue[b.ref]);
+      const hasGPS=!!(b.lat&&b.lng);
+      return[
+        b.date,           // วันที่บิล
+        _deliveryDate,    // วันที่ส่ง ← ใหม่
+        b.ref, b.arCode, b.arName, b.province, b.district,
+        hasGPS?'มี GPS':'ไม่มี GPS',
+        hasGPS?b.lat.toFixed(6):'',
+        hasGPS?b.lng.toFixed(6):'',
+        '',                            // K: ห่าง HQ — ลบออกจาก UI แล้ว ส่งเป็นค่าว่าง
+        b.route||'', b.routeCode||'', b.days||'',
+        queue[b.ref]||'', tripMap[b.ref]||1, t?.nick||'', t?.driver||'', t?.type||'',
+        b.totalW.toFixed(0), b.totalV.toFixed(3),
+        Math.round(b.totalAmt||0),
+        queue[b.ref]?'จัดแล้ว':'รอจัด',
+        now
+      ];
+    });
+
+    // Google Apps Script รองรับ POST แบบ JSON (ต้องเปิด "Anyone" access)
+    const payload=JSON.stringify({action:'save',deliveryDate:_deliveryDate,headers:hdrs,rows});
+    let result;
+    try{
+      const r=await fetch(scriptUrl,{method:'POST',headers:{'Content-Type':'text/plain'},body:payload});
+      result=await r.json();
+    }catch(fetchErr){
+      // fallback: GET with encoded data (for CORS-restricted environments)
+      const rGet=await fetch(scriptUrl+'?action=save&data='+encodeURIComponent(payload));
+      result=await rGet.json();
+    }
+    if(!result.ok)throw new Error(result.message||'Script ตอบผิดพลาด: '+JSON.stringify(result));
+
+    localStorage.setItem('keepdata_bk',JSON.stringify({savedAt:now,rows}));
+    // mark บิลที่จัดรถแล้ว ว่า "บันทึกแล้ว" → หายจากหน้าจัดรถ + เคลียร์ออกจาก queue/tripMap
+    const savedNow=[];
+    Object.keys(queue).forEach(r=>{if(queue[r]){savedRefs.add(r);savedDates[r]=_deliveryDate;savedNow.push(r);}});
+    // ลบบิลที่บันทึกแล้วออกจาก queue / tripMap → รถจะกลับมาว่าง 0%
+    savedNow.forEach(r=>{delete queue[r];delete tripMap[r];});
+    try{localStorage.setItem(STORE_KEY,JSON.stringify(queue));}catch(e){}
+    try{localStorage.setItem(STORE_KEY+'_trip',JSON.stringify(tripMap));}catch(e){}
+    try{localStorage.setItem('dq_v4_saved',JSON.stringify([...savedRefs]));}catch(e){}
+    try{localStorage.setItem('dq_v4_saved_dates',JSON.stringify(savedDates));}catch(e){}
+    isDirty=false;
+    updateSyncBadge();
+    showToast(`✅ ${result.message}`,'ok');
+    // โหลด Keepdata ใหม่เพื่อให้แดชบอร์ดเห็นข้อมูลที่เพิ่งบันทึก
+    loadKeepdata(true).catch(()=>{});
+    renderAll();
+  }catch(e){
+    localStorage.setItem('keepdata_bk',JSON.stringify({savedAt:new Date().toISOString(),error:e.message}));
+    showToast('บันทึกไม่สำเร็จ: '+e.message,'err');
+  }
+  btn.disabled=false;updateSyncBadge();
+}
+
+// ══════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════
+function gotoTruckQueue(plate){
+  const qTab=document.querySelector('.nav-tab[onclick*="\'queue\'"]');
+  switchTab('queue',qTab||null);
+  selPlate=plate;
+  renderTruckCards();renderBillTable();updateQueueSub();
+}
+
+function parseDateTH(s){
+  const dt=parseAnyDate(s);
+  return dt?dt.getTime():0;
+}
+// รองรับหลายรูปแบบ: DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD, พ.ศ., Date object
+function parseAnyDate(s){
+  if(!s)return null;
+  if(s instanceof Date)return isNaN(s)?null:s;
+  const str=String(s).trim();
+  if(!str)return null;
+  let m=str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if(m){
+    let d=+m[1],mo=+m[2],y=+m[3];
+    if(y>2500)y-=543;
+    if(y<100)y+=2000;
+    if(mo>12&&d<=12){const t=d;d=mo;mo=t;} // swap ถ้า month>12
+    return new Date(y,mo-1,d);
+  }
+  m=str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if(m)return new Date(+m[1],+m[2]-1,+m[3]);
+  const t=Date.parse(str);
+  return isNaN(t)?null:new Date(t);
+}
+// แปลงเป็น "DD/MM/YYYY" รูปแบบเดียว
+function fmtDateKey(s){
+  const dt=parseAnyDate(s);
+  if(!dt)return String(s||'').trim();
+  return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
+}
+function setDashDate(d){
+  dashFilterDate=d;
+  console.log('[Dashboard] setDashDate:',d,'→ matched:',keepData.filter(r=>r.deliveryDate===d).length,'/ total:',keepData.length);
+  renderDashboard();
+}
+
+// ── โหลดข้อมูลจากชีท Keepdata บน Google Sheet ──
+async function loadKeepdata(silent=false){
+  if(keepDataLoading)return;
+  keepDataLoading=true;
+  try{
+    const rows=await fetchSheet('Keepdata');
+    keepData=rows.map(r=>({
+      billDate    : r['วันที่บิล']||'',
+      deliveryDate: fmtDateKey(r['วันที่ส่ง']||''),  // normalize format
+      ref         : r['เลขบิล']||'',
+      arCode      : r['รหัสร้านค้า']||'',
+      arName      : r['ชื่อร้านค้า']||'',
+      province    : r['จังหวัด']||'',
+      district    : r['อำเภอ']||'',
+      lat         : parseFloat(r['Lat']||'0')||0,
+      lng         : parseFloat(r['Lng']||'0')||0,
+      route       : r['สายส่ง']||'',
+      routeCode   : r['รหัสสาย']||'',
+      days        : r['วันส่ง']||'',
+      plate       : r['ทะเบียนรถ']||'',
+      trip        : parseInt(r['เที่ยว']||'1')||1,
+      nick        : r['ชื่อเล่น']||'',
+      driver      : r['คนขับ']||'',
+      truckType   : r['ประเภทรถ']||'',
+      weight      : parseFloat(r['น้ำหนัก (กก.)']||'0')||0,
+      volume      : parseFloat(r['ปริมาตร (m³)']||'0')||0,
+      amount      : parseFloat(r['มูลค่า (บาท)']||'0')||0,
+      status      : r['สถานะ']||''
+    })).filter(r=>r.plate&&r.deliveryDate);  // เก็บเฉพาะแถวที่มีรถและวันส่ง
+    if(!silent)showToast(`โหลด Keepdata ${keepData.length} แถว`,'ok');
+    if(currentTab==='saved')renderSavedView();
+    else if(currentTab==='routes')renderRoutesView();
+  }catch(e){
+    if(!silent)showToast('โหลด Keepdata ไม่ได้: '+e.message,'err');
+    throw e;
+  }finally{
+    keepDataLoading=false;
+  }
+}
+
+function refreshKeepdata(){
+  const btn=document.getElementById('btn-refresh-keepdata');
+  if(btn){btn.disabled=true;btn.innerHTML='⏳ กำลังโหลด...';}
+  loadKeepdata(false).finally(()=>{
+    if(btn){btn.disabled=false;btn.innerHTML='🔄 รีเฟรช';}
+  });
+}
+
+function renderDashboard(){
+  const done=Object.keys(queue).filter(r=>queue[r]).length;
+  const pend=bills.length-done;
+  const active=TRUCKS.filter(t=>Object.values(queue).filter(p=>p===t.plate).length>0).length;
+  document.getElementById('d-total').textContent=bills.length;
+  document.getElementById('d-done').textContent=done;
+  document.getElementById('d-pend').textContent=pend;
+  document.getElementById('d-trucks').textContent=active+'/'+TRUCKS.length;
+  const dSaved=document.getElementById('d-saved');
+  if(dSaved)dSaved.textContent=keepData.length;
+  const dGreet=document.getElementById('d-greeting');
+  if(dGreet){
+    const today=new Date().toLocaleDateString('th-TH',{day:'numeric',month:'long',year:'numeric'});
+    dGreet.textContent=`วันที่ ${today} · ${bills.length} บิล · ${active}/${TRUCKS.length} รถพร้อมส่ง`;
+  }
+}
+
+function renderSavedView(){
+  // Render map + filters + truck summary (ทุกอย่างที่เป็นข้อมูล Keepdata)
+  renderRoutesView();
+  const target=document.getElementById('savedTruckList');
+  if(!target)return;
+
+  // ── อ่านข้อมูลจาก Keepdata (ชีท Google Sheet) ──
+  const allDates=[...new Set(keepData.map(r=>r.deliveryDate))]
+    .sort((a,b)=>parseDateTH(b)-parseDateTH(a));
+
+  // auto-select วันล่าสุด
+  if(dashFilterDate&&!allDates.includes(dashFilterDate))dashFilterDate=null;
+  if(!dashFilterDate&&allDates.length)dashFilterDate=allDates[0];
+
+  const rowsForDate=dashFilterDate
+    ? keepData.filter(r=>r.deliveryDate===dashFilterDate)
+    : keepData;
+
+  // ── Header bar: refresh button ──
+  let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+    <div style="font-family:Kanit;font-size:14px;font-weight:600;color:#7D6428">💾 สรุปจากชีท Keepdata</div>
+    <button id="btn-refresh-keepdata" onclick="refreshKeepdata()" style="background:#EAF0F8;border:1.5px solid #93B8DE;color:#1A5FA5;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer">🔄 รีเฟรช</button>
+  </div>`;
+
+  // ── Date filter tabs ──
+  if(allDates.length>=2){
+    const btnStyle=(active,color='#1A5FA5',bg='#EAF0F8')=>
+      `padding:5px 14px;border-radius:20px;border:1.5px solid ${active?color:'#E0E5ED'};`+
+      `background:${active?bg:'#fff'};color:${active?color:'#6B7A90'};`+
+      `font-size:12px;font-weight:600;cursor:pointer`;
+    html+=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+      <span style="font-size:12px;color:#6B7A90;font-weight:600;margin-right:2px">📅 วันส่ง:</span>
+      <button onclick="setDashDate(null)" style="${btnStyle(!dashFilterDate,'#C9A84C','#FEF6EC')}">ทั้งหมด (${keepData.length})</button>
+      ${allDates.map(d=>{
+        const cnt=keepData.filter(r=>r.deliveryDate===d).length;
+        return`<button onclick="setDashDate('${d}')" style="${btnStyle(dashFilterDate===d)}">📅 ${d} <span style="font-size:11px;opacity:.7">(${cnt})</span></button>`;
+      }).join('')}
+    </div>`;
+  } else if(allDates.length===1){
+    html+=`<div style="font-size:13px;color:#6B7A90;margin-bottom:12px;padding:8px 12px;background:#F8F9FB;border-radius:8px;border:1px solid #E0E5ED">
+      📅 วันส่ง: <strong style="color:#07101F">${allDates[0]}</strong>
+      <span style="font-size:11px;color:#A0ABBB;margin-left:6px">(วันเดียว — ยังไม่มีวันอื่นให้กรอง)</span>
+    </div>`;
+  }
+
+  // ── Group by ทะเบียนรถ ──
+  const byPlate={};
+  rowsForDate.forEach(r=>{
+    if(!byPlate[r.plate])byPlate[r.plate]={info:r,rows:[]};
+    byPlate[r.plate].rows.push(r);
+  });
+  const platesSorted=Object.keys(byPlate).sort((a,b)=>{
+    const ia=TRUCKS.findIndex(t=>t.plate===a);
+    const ib=TRUCKS.findIndex(t=>t.plate===b);
+    return (ia<0?999:ia)-(ib<0?999:ib);
+  });
+
+  html+=`<div style="font-size:12px;color:#6B7A90;margin-bottom:10px">รวม ${rowsForDate.length} บิล · ${platesSorted.length} คัน${dashFilterDate?` · วัน ${dashFilterDate}`:''}</div>`;
+
+
+  if(!platesSorted.length){
+    if(keepDataLoading){
+      html+=`<div style="text-align:center;padding:30px;color:#A0ABBB">⏳ กำลังโหลดข้อมูลจากชีท Keepdata...</div>`;
+    } else if(keepData.length===0){
+      html+=`<div style="text-align:center;padding:30px;color:#A0ABBB">ยังไม่มีข้อมูลในชีท Keepdata — จัดรถแล้วกด 💾 Keepdata เพื่อบันทึก<br/><button onclick="refreshKeepdata()" style="margin-top:10px;background:#1A5FA5;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer">🔄 ลองรีเฟรช</button></div>`;
+    } else {
+      html+=`<div style="text-align:center;padding:30px;color:#A0ABBB">ไม่มีข้อมูลในวันที่เลือก</div>`;
+    }
+  } else {
+    html+=platesSorted.map(plate=>{
+      const grp=byPlate[plate];
+      const truck=TRUCKS.find(t=>t.plate===plate);
+      const nick=grp.info.nick||truck?.nick||'-';
+      const tType=grp.info.truckType||truck?.type||'';
+      const driver=grp.info.driver||truck?.driver||'';
+      const maxW=truck?.maxW||0;
+      const maxV=truck?.maxV||0;
+      const col=getTruckCol(plate);
+
+      // group by trip
+      const byTrip={};
+      grp.rows.forEach(r=>{
+        if(!byTrip[r.trip])byTrip[r.trip]={w:0,v:0,amt:0,n:0,bills:[]};
+        byTrip[r.trip].w+=r.weight;
+        byTrip[r.trip].v+=r.volume;
+        byTrip[r.trip].amt+=r.amount;
+        byTrip[r.trip].n++;
+        byTrip[r.trip].bills.push(r);
+      });
+      const tripKeys=Object.keys(byTrip).map(Number).sort((a,b)=>a-b);
+
+      let anyFree=false;
+      const tripsHtml=tripKeys.map(tr=>{
+        const ld=byTrip[tr];
+        const wp=maxW>0?Math.round(ld.w/maxW*100):0;
+        const vp=maxV>0?Math.round(ld.v/maxV*100):0;
+        const eff=Math.max(wp,vp);
+        const freeW=Math.max(0,maxW-ld.w);
+        const canAdd=eff<100&&freeW>50;
+        if(canAdd)anyFree=true;
+        const TE=tr===3?'🟢':tr===2?'🔵':'🔴';
+        // เรียงบิล: ไกล HQ → ใกล้ HQ (ตรงกับลำดับวิ่งจริง)
+        const billsList=[...ld.bills].sort((a,b)=>{
+          const da=haversine(HQ.lat,HQ.lng,a.lat||0,a.lng||0);
+          const db=haversine(HQ.lat,HQ.lng,b.lat||0,b.lng||0);
+          return db-da;
+        });
+        const billsHtml=billsList.map((bb,idx)=>{
+          const dHQ=bb.lat&&bb.lng?haversine(HQ.lat,HQ.lng,bb.lat,bb.lng).toFixed(1)+' กม.':'—';
+          return`<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-top:1px solid #F4F6FA;font-size:12px">
+            <span style="background:#FEF6EC;color:#7D6428;border:1px solid #E4C46E;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0">${idx+1}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;color:#07101F;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${bb.arName||'—'}</div>
+              <div style="font-size:10px;color:#9BAAB8">${bb.district||''}${bb.district&&bb.province?', ':''}${bb.province||''} · 📏 ${dHQ}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-size:11px;color:#6B7A90">⚖ ${fmtKg(bb.weight)}</div>
+              ${bb.amount?`<div style="font-size:10px;color:#7D6428;font-weight:600">฿${fmtN(Math.round(bb.amount))}</div>`:''}
+            </div>
+            ${bb.lat&&bb.lng?`<a href="https://www.google.com/maps?q=${bb.lat},${bb.lng}" target="_blank" style="color:#1A5FA5;font-size:14px;text-decoration:none;flex-shrink:0" title="เปิดแผนที่">📍</a>`:''}
+          </div>`;
+        }).join('');
+        return`<details style="border-top:1px solid #EDF0F4;padding:8px 0">
+          <summary style="cursor:pointer;list-style:none;outline:none">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+              <span style="font-weight:700">${TE} เที่ยว ${tr} · ${ld.n} บิล · ฿${fmtN(Math.round(ld.amt))} <span style="color:#A0ABBB;font-size:10px;font-weight:500">▾ คลิกดูร้าน</span></span>
+              <span style="font-weight:700;color:${eff>100?'#C62828':pcColor(eff)}">${eff}%</span>
+            </div>
+            <div style="height:5px;background:#E0E5ED;border-radius:3px;overflow:hidden;margin-bottom:4px">
+              <div style="width:${Math.min(100,eff)}%;height:100%;background:${eff>100?'#DC3545':pcColor(eff)};border-radius:3px"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:#6B7A90">
+              <span>⚖ ${fmtKg(ld.w)}${maxW?'/'+fmtKg(maxW):''} · 📦 ${fmtM3(ld.v)}${maxV?'/'+fmtM3(maxV):''}</span>
+              ${maxW?(canAdd
+                ?`<span style="color:#15803D;font-weight:600">ว่าง ${fmtKg(freeW)}</span>`
+                :`<span style="color:#C62828;font-weight:600">เต็ม</span>`):''}
+            </div>
+          </summary>
+          <div style="margin-top:6px;background:#FAFBFD;border:1px solid #EDF0F4;border-radius:8px;overflow:hidden">
+            <div style="padding:6px 10px;background:#F4F6FA;font-size:10px;color:#6B7A90;font-weight:600">📋 รายการร้าน (เรียงไกล HQ → ใกล้ HQ)</div>
+            ${billsHtml||'<div style="padding:10px;text-align:center;color:#A0ABBB;font-size:11px">ไม่มีรายการ</div>'}
+          </div>
+        </details>`;
+      }).join('');
+
+      return`<div style="background:#fff;border:1px solid #E0E5ED;border-radius:12px;padding:14px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;flex-wrap:wrap;gap:6px">
+          <div>
+            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${col};margin-right:6px"></span>
+            <span style="font-family:Kanit;font-weight:700;font-size:14px">${plate}</span>
+            <span style="font-size:12px;color:#6B7A90"> ${nick}${tType?' · '+tType:''}</span>
+            ${driver?`<div style="font-size:11px;color:#A0ABBB;margin-left:16px">🧑‍✈️ ${driver}</div>`:''}
+          </div>
+          ${truck&&anyFree
+            ?`<button onclick="gotoTruckQueue('${plate}')" style="background:#15803D;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">➕ เพิ่มบิล</button>`
+            :truck?`<span style="background:#FDECEC;color:#C62828;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700">เต็มแล้ว</span>`:''}
+        </div>
+        ${tripsHtml}
+      </div>`;
+    }).join('');
+  }
+  target.innerHTML=html;
+}
+
+// ══════════════════════════════════════════
+// BILLS VIEW
+// ══════════════════════════════════════════
+function renderBillsView(){
+  const srch=(document.getElementById('bv-srch')?.value||'').toLowerCase();
+  const fStatus=document.getElementById('bv-status')?.value||'';
+  const fSort=document.getElementById('bv-sort')?.value||'weight';
+
+  let list=[...bills].filter(b=>{
+    if(srch&&!b.arName.toLowerCase().includes(srch)&&!b.ref.toLowerCase().includes(srch))return false;
+    if(fStatus==='pending'&&queue[b.ref])return false;
+    if(fStatus==='done'&&!queue[b.ref])return false;
+    return true;
+  });
+  if(fSort==='dist')list.sort((a,b)=>(a.arName||'').localeCompare(b.arName||'','th'));
+  else if(fSort==='weight')list.sort((a,b)=>b.totalW-a.totalW);
+  else list.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+
+  const tbody=document.getElementById('bvTbody');
+  tbody.innerHTML=list.map((b,i)=>{
+    const plate=queue[b.ref];
+    const truck=TRUCKS.find(t=>t.plate===plate);
+    const col=plate?getTruckCol(plate):'';
+    return`<tr style="border-bottom:1px solid #EDF0F4;background:${i%2===0?'transparent':'#F8F9FB'}">
+
+      <td style="padding:8px 10px"><div style="font-weight:500;color:#07101F">${b.arName}</div><div style="font-size:10px;color:#6B7A90">${b.ref}</div></td>
+      <td style="padding:8px 10px;font-size:11px;color:#6B7A90">${b.province}<br/>${b.district}</td>
+      <td style="padding:8px 10px;white-space:nowrap"><div style="color:#1A5FA5;font-weight:600;font-size:12px">${fmtKg(b.totalW)}</div><div style="color:#6B7A90;font-size:10px">${fmtM3(b.totalV)}</div></td>
+      <td style="padding:8px 10px;font-weight:600">฿${fmtN(Math.round(b.totalAmt))}</td>
+      <td style="padding:8px 10px">
+        <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+          ${sdRender('sdbv_'+b.ref,sdMakeTruckOpts(''),plate,'⏳ เลือกรถ...','sdBvAssign','min-width:130px')}
+          <select id="bvt_${b.ref}" onchange="assignBill('${b.ref}')" style="padding:5px 5px;border-radius:7px;border:1.5px solid ${(tripMap[b.ref]||1)===3?'#97C459':(tripMap[b.ref]||1)===2?'#93B8DE':'#E4C46E'};background:${(tripMap[b.ref]||1)===3?'#EAF3DE':(tripMap[b.ref]||1)===2?'#EAF0F8':'#FFF8EC'};color:${(tripMap[b.ref]||1)===3?'#15803D':(tripMap[b.ref]||1)===2?'#1A5FA5':'#C47000'};font-size:11px;font-weight:600">
+            <option value="1" ${(tripMap[b.ref]||1)===1?'selected':''}>🔴 ท.1</option>
+            <option value="2" ${(tripMap[b.ref]||1)===2?'selected':''}>🔵 ท.2</option>
+            <option value="3" ${(tripMap[b.ref]||1)===3?'selected':''}>🟢 ท.3</option>
+          </select>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+  document.getElementById('bvFoot').innerHTML=`<span>แสดง ${list.length}/${bills.length} รายการ</span>`;
+}
+
+function assignBillFull(ref, plate, trip){
+  const tr=parseInt(trip)||1;
+  if(plate){
+    const t=TRUCKS.find(x=>x.plate===plate);
+    const b=billMap[ref];
+    if(t&&b){
+      const ld=truckLoad(plate,tr);
+      if((ld.w+b.totalW)>t.maxW||(t.maxV>0&&(ld.v+b.totalV)>t.maxV)){
+        // warn แล้วยังจัดได้ (manual assign ไม่ block)
+        showToast(`⚠ ${plate} เที่ยว ${tr} เกินขีดบรรทุก — บันทึกแล้ว`,'warn');
+      }
+    }
+    queue[ref]=plate; tripMap[ref]=tr;
+  } else { delete queue[ref]; delete tripMap[ref]; }
+  saveQ();renderAll();
+  showToast(plate?`✅ ${billMap[ref]?.arName} → ${plate} เที่ยว ${tr}`:`ยกเลิก`,'ok');
+}
+function assignBill(ref){
+  const plateEl=document.getElementById('bvp_'+ref);
+  const tripEl=document.getElementById('bvt_'+ref);
+  if(!plateEl)return;
+  const plate=plateEl.value;
+  const trip=parseInt(tripEl?.value||1);
+  if(plate){queue[ref]=plate;tripMap[ref]=trip;}
+  else{delete queue[ref];delete tripMap[ref];}
+  saveQ();renderAll();
+  showToast(plate?`✅ ${billMap[ref]?.arName} → ${plate} เที่ยว ${trip}`:`ยกเลิก ${ref}`,'ok');
+}
+
+// ══════════════════════════════════════════
+// ROUTES VIEW + LEAFLET MAP
+// ══════════════════════════════════════════
+// ── Route Optimizer map style ──
+const MAP_TILES = {
+  light: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  dark:  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+};
+const MAP_TILE_OPTS = {
+  light: {attribution:'© OpenStreetMap contributors', subdomains:'abc', maxZoom:19},
+  dark:  {attribution:'© OpenStreetMap © CARTO', subdomains:'abcd', maxZoom:19}
+};
+let mapTheme = 'light';
+let currentTileLayer = null;
+let leafletMap=null, mapLayers=[], mapFilterPlate=null, mapFilterTrip=0;
+const _tripDur={}; // plate → {1:{min,est}, 2:{min,est}, 3:{min,est}}
+
+function fmtTime(min){
+  if(!min||min<1)return '<1 นาที';
+  const h=Math.floor(min/60),m=Math.round(min%60);
+  return h>0?(m>0?`${h} ชม. ${m} นาที`:`${h} ชม.`):`${m} นาที`;
+}
+function renderTripTimeBar(plate){
+  const bar=document.getElementById('tripTimeBar');
+  if(!bar)return;
+  if(!plate||!_tripDur[plate]){bar.style.display='none';return;}
+  const truck=TRUCKS.find(t=>t.plate===plate);
+  const trips=_tripDur[plate];
+  const TC={1:'#C47000',2:'#1A5FA5',3:'#15803D'},BG={1:'#FFF8EC',2:'#EAF0F8',3:'#EAF3DE'},IC={1:'🔴',2:'🔵',3:'🟢'};
+  let h=`<div style="font-size:12px;font-weight:700;color:#07101F;margin-bottom:8px;font-family:Kanit">⏱ เวลาขับรถโดยประมาณ — ${truck?.nick||plate}</div><div style="display:flex;gap:12px;flex-wrap:wrap">`;
+  [1,2,3].forEach(tr=>{
+    const d=trips[tr];if(!d)return;
+    const t=d.min!==null?d.min:d.est;
+    const lbl=d.min!==null?'🛣 เส้นจริง':'📐 ประมาณ';
+    h+=`<div style="background:${BG[tr]};border-radius:8px;padding:8px 14px;min-width:110px">
+      <div style="font-size:11px;font-weight:600;color:${TC[tr]}">${IC[tr]} เที่ยว ${tr}</div>
+      <div style="font-size:18px;font-weight:700;color:#07101F;margin-top:2px;font-family:Kanit">${fmtTime(t)}</div>
+      <div style="font-size:9px;color:#9BAAB8;margin-top:1px">${lbl}</div>
+    </div>`;
+  });
+  h+='</div>';
+  bar.innerHTML=h;bar.style.display='block';
+}
+
+function initMap(){
+  if(leafletMap||!document.getElementById('routeMap'))return;
+  try{
+    leafletMap=L.map('routeMap',{zoomControl:true,scrollWheelZoom:true})
+      .setView([HQ.lat,HQ.lng],11);
+    currentTileLayer=L.tileLayer(MAP_TILES[mapTheme],MAP_TILE_OPTS[mapTheme]).addTo(leafletMap);
+    setTimeout(()=>leafletMap.invalidateSize(),100);
+  }catch(e){console.warn('Map init error',e);}
+}
+
+function makePinIcon(col,label,size,opacity,trip){
+  // trip: 1=solid fill, 2=ring (empty), 3=dotted ring
+  const s=size||30;
+  const tr=typeof trip==='boolean'?(trip?2:1):trip||1; // backward compat
+  const bg=tr===1?col:'transparent';
+  const border=tr===1?`3px solid rgba(255,255,255,.9)`:tr===3?`2.5px dashed ${col}`:`3px solid ${col}`;
+  const txtCol=tr===1?'#fff':col;
+  const shadow=mapTheme==='dark'?'0 3px 10px rgba(0,0,0,.7)':'0 3px 10px rgba(0,0,0,.35)';
+  return L.divIcon({
+    html:`<div style="width:${s}px;height:${s}px;border-radius:50%;
+      background:${bg};border:${border};
+      display:flex;align-items:center;justify-content:center;
+      color:${txtCol};font-weight:700;font-size:${Math.round(s*.38)}px;
+      font-family:'Sarabun',sans-serif;
+      box-shadow:${shadow};
+      opacity:${opacity||1}">
+      ${label}
+    </div>`,
+    className:'',
+    iconSize:[s,s],iconAnchor:[s/2,s/2],popupAnchor:[0,-s/2-4]
+  });
+}
+
+function toggleMapTheme(){
+  mapTheme=mapTheme==='light'?'dark':'light';
+  if(leafletMap&&currentTileLayer){
+    leafletMap.removeLayer(currentTileLayer);
+    currentTileLayer=L.tileLayer(MAP_TILES[mapTheme],MAP_TILE_OPTS[mapTheme]).addTo(leafletMap);
+  }
+  const btn=document.getElementById('mapThemeBtn');
+  if(btn)btn.textContent=mapTheme==='dark'?'☀️ Light':'🌙 Dark';
+  updateMap(mapFilterPlate);
+}
+
+async function fetchOsrmRoute(wpts){
+  if(!wpts||wpts.length<2)return null;
+  const coords=wpts.slice(0,100).map(p=>`${p[1].toFixed(6)},${p[0].toFixed(6)}`).join(';');
+  try{
+    const ctrl=new AbortController();
+    setTimeout(()=>ctrl.abort(),8000);
+    const r=await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`,{signal:ctrl.signal});
+    const d=await r.json();
+    if(d.code!=='Ok'||!d.routes?.length)return null;
+    return{coords:d.routes[0].geometry.coordinates.map(([lng,lat])=>[lat,lng]),duration:d.routes[0].duration};
+  }catch(e){return null;}
+}
+
+function updateMap(filterPlate){
+  if(!leafletMap)return;
+  mapLayers.forEach(l=>{try{leafletMap.removeLayer(l);}catch(e){}});
+  mapLayers=[];
+
+  // ── รวม queue ปัจจุบัน + ข้อมูลที่บันทึกแล้วจาก Keepdata ──
+  const assign=mapAssignments();
+  const allBills=mapBillsForRoute();
+  const plateOf = ref => assign[ref]?.plate || null;
+  const tripOf  = ref => assign[ref]?.trip || 1;
+  const isSaved = ref => assign[ref]?.saved === true;
+
+  // กรองบิลตาม filterPlate และ mapFilterTrip
+  function passesFilter(b){
+    if(filterPlate&&plateOf(b.ref)!==filterPlate)return false;
+    if(mapFilterTrip&&tripOf(b.ref)!==mapFilterTrip)return false;
+    return true;
+  }
+
+  // Stop nums = ลำดับขับจริง (เติมตอน nnRoute ด้านล่าง เฉพาะตอนเลือกรถคันเดียว)
+  const stopNums={};
+
+  // Route lines per truck per trip
+  TRUCKS.forEach(t=>{
+    if(filterPlate&&t.plate!==filterPlate)return;
+    const col=getTruckCol(t.plate);
+
+    // ใช้ tspRoute (global function — closed-loop optimize, ไม่วาดกลับ HQ)
+    const nnRoute=tspRoute;
+    // เที่ยว 1: solid line
+    if(!mapFilterTrip||mapFilterTrip===1){
+      const t1=nnRoute(allBills.filter(b=>plateOf(b.ref)===t.plate&&b.lat&&b.lng&&tripOf(b.ref)===1));
+      if(filterPlate)t1.forEach((b,i)=>{stopNums[b.ref]=i+1;});
+      if(t1.length){
+        const wpts=[[HQ.lat,HQ.lng],...t1.map(b=>[b.lat,b.lng])]; // เที่ยวไปอย่างเดียว ไม่วาดกลับ HQ
+        // haversine estimate
+        let estD=0;for(let i=1;i<wpts.length;i++)estD+=haversine(wpts[i-1][0],wpts[i-1][1],wpts[i][0],wpts[i][1]);
+        if(filterPlate){if(!_tripDur[t.plate])_tripDur[t.plate]={};_tripDur[t.plate][1]={min:null,est:estD/45*60};renderTripTimeBar(filterPlate);}
+        const line=L.polyline(wpts,{color:col,weight:4,opacity:.85,lineJoin:'round'}).addTo(leafletMap);
+        mapLayers.push(line);
+        fetchOsrmRoute(wpts).then(rd=>{if(rd&&line._map){line.setLatLngs(rd.coords);if(filterPlate){_tripDur[t.plate][1].min=rd.duration/60;renderTripTimeBar(filterPlate);}}});
+      }
+    }
+    // เที่ยว 2: dashed line (thinner, lower opacity)
+    if(!mapFilterTrip||mapFilterTrip===2){
+      const t2=nnRoute(allBills.filter(b=>plateOf(b.ref)===t.plate&&b.lat&&b.lng&&tripOf(b.ref)===2));
+      if(filterPlate)t2.forEach((b,i)=>{stopNums[b.ref]=i+1;});
+      if(t2.length){
+        const wpts=[[HQ.lat,HQ.lng],...t2.map(b=>[b.lat,b.lng])]; // เที่ยวไปอย่างเดียว ไม่วาดกลับ HQ
+        let estD=0;for(let i=1;i<wpts.length;i++)estD+=haversine(wpts[i-1][0],wpts[i-1][1],wpts[i][0],wpts[i][1]);
+        if(filterPlate){if(!_tripDur[t.plate])_tripDur[t.plate]={};_tripDur[t.plate][2]={min:null,est:estD/45*60};renderTripTimeBar(filterPlate);}
+        const line=L.polyline(wpts,{color:col,weight:2.5,opacity:.7,dashArray:'10 6',lineJoin:'round'}).addTo(leafletMap);
+        mapLayers.push(line);
+        fetchOsrmRoute(wpts).then(rd=>{if(rd&&line._map){line.setLatLngs(rd.coords);if(filterPlate){_tripDur[t.plate][2].min=rd.duration/60;renderTripTimeBar(filterPlate);}}});
+      }
+    }
+    // เที่ยว 3: dotted line (thinnest, most transparent)
+    if(!mapFilterTrip||mapFilterTrip===3){
+      const t3=nnRoute(allBills.filter(b=>plateOf(b.ref)===t.plate&&b.lat&&b.lng&&tripOf(b.ref)===3));
+      if(filterPlate)t3.forEach((b,i)=>{stopNums[b.ref]=i+1;});
+      if(t3.length){
+        const wpts=[[HQ.lat,HQ.lng],...t3.map(b=>[b.lat,b.lng])]; // เที่ยวไปอย่างเดียว ไม่วาดกลับ HQ
+        let estD=0;for(let i=1;i<wpts.length;i++)estD+=haversine(wpts[i-1][0],wpts[i-1][1],wpts[i][0],wpts[i][1]);
+        if(filterPlate){if(!_tripDur[t.plate])_tripDur[t.plate]={};_tripDur[t.plate][3]={min:null,est:estD/45*60};renderTripTimeBar(filterPlate);}
+        const line=L.polyline(wpts,{color:col,weight:2,opacity:.55,dashArray:'3 5',lineJoin:'round'}).addTo(leafletMap);
+        mapLayers.push(line);
+        fetchOsrmRoute(wpts).then(rd=>{if(rd&&line._map){line.setLatLngs(rd.coords);if(filterPlate){_tripDur[t.plate][3].min=rd.duration/60;renderTripTimeBar(filterPlate);}}});
+      }
+    }
+  });
+
+  // Bill markers
+  const billsToShow=filterPlate
+    ? allBills.filter(b=>b.lat&&b.lng&&plateOf(b.ref)===filterPlate&&(!mapFilterTrip||tripOf(b.ref)===mapFilterTrip))
+    : allBills.filter(b=>b.lat&&b.lng&&(!mapFilterTrip||tripOf(b.ref)===mapFilterTrip));
+
+  billsToShow.forEach(b=>{
+    const plate=plateOf(b.ref);
+    const tr=tripOf(b.ref);
+    const saved=isSaved(b.ref);
+    const col=plate?getTruckCol(plate):'#9BAAB8';
+    const truck=TRUCKS.find(t=>t.plate===plate);
+    const num=stopNums[b.ref];
+    const size=num?30:(plate?26:22);
+    const label=num?String(num):(plate?(saved?'✓':'·'):'?');
+    const icon=makePinIcon(col,label,size,1,tr);
+    const tripBadge=plate?`<span style="background:${tr===3?'#F0FDF4':tr===2?'#EAF0F8':'#FFF8EC'};color:${tr===3?'#15803D':tr===2?'#1A5FA5':'#C47000'};border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700">เที่ยว ${tr}</span>`:''
+    const savedBadge=saved?` <span style="background:#FEF6EC;color:#7D6428;border:1px solid #E4C46E;border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700">💾 บันทึกแล้ว</span>`:'';
+    const popup=`<div style="min-width:180px">
+      <b style="font-size:13px;color:#07101F">${b.arName}</b> ${tripBadge}${savedBadge}<br/>
+      <span style="color:#6B7A90;font-size:11px">📍 ${b.district}, ${b.province}</span><br/>
+      <span style="font-size:11px;color:#444">⚖ ${fmtKg(b.totalW)}</span><br/>
+      <div style="margin-top:4px;padding:3px 8px;border-radius:6px;background:${plate?col+'18':'#F5F7FA'};color:${plate?col:'#9BAAB8'};font-weight:600;font-size:11px">
+        ${plate?`🚛 ${plate} — ${truck?.nick||''}`:'⏳ รอจัดรถ'}
+      </div>
+      ${num?`<div style="color:#C9A84C;font-weight:700;font-size:11px;margin-top:3px">🚩 จุดที่ ${num}</div>`:''}
+      <div style="margin-top:4px"><a href="https://www.google.com/maps?q=${b.lat},${b.lng}" target="_blank" style="color:#1A5FA5;font-size:10px;text-decoration:none">🔗 เปิด Google Maps</a></div>
+    </div>`;
+    const marker=L.marker([b.lat,b.lng],{icon}).bindPopup(popup,{maxWidth:240}).addTo(leafletMap);
+    mapLayers.push(marker);
+  });
+
+  // HQ marker
+  const hqIcon=L.divIcon({
+    html:`<div style="width:42px;height:42px;border-radius:50%;
+      background:var(--gold,#c9a84c);border:3px solid rgba(255,255,255,.9);
+      display:flex;align-items:center;justify-content:center;
+      color:#0d1b3e;font-size:20px;font-weight:700;
+      box-shadow:0 4px 14px rgba(201,168,76,.6)">
+      ★
+    </div>`,className:'',iconSize:[42,42],iconAnchor:[21,21],popupAnchor:[0,-25]
+  });
+  const hqM=L.marker([HQ.lat,HQ.lng],{icon:hqIcon,zIndexOffset:1000})
+    .bindPopup('<b style="color:#C9A84C">★ HQ รัตนไพบูลย์ กรุ๊ป</b><br/><span style="font-size:11px;color:#6B7A90">สมุทรสงคราม</span>').addTo(leafletMap);
+  mapLayers.push(hqM);
+
+  const pts=allBills.filter(b=>b.lat&&b.lng&&passesFilter(b));
+  if(pts.length){
+    try{leafletMap.fitBounds(L.latLngBounds([[HQ.lat,HQ.lng],...pts.map(b=>[b.lat,b.lng])]),{padding:[36,36],maxZoom:13});}catch(e){}
+  }
+}
+
+function filterMapTrip(trip,btn){
+  mapFilterTrip=mapFilterTrip===trip?0:trip;
+  document.querySelectorAll('#mapTripFilter button').forEach(b=>b.style.fontWeight='400');
+  if(mapFilterTrip&&btn){btn.style.fontWeight='700';}
+  updateMap(mapFilterPlate);
+}
+
+function filterMap(plate,btn){
+  mapFilterPlate=plate;
+  mapFilterTrip=0; // reset trip filter on truck change
+  if(plate)_tripDur[plate]={}; // reset time cache for this truck
+  renderTripTimeBar(plate);   // hide bar if all-trucks, show placeholder if single
+  document.querySelectorAll('#mapTruckFilter button').forEach(b=>b.style.background=b.style.borderColor=plate?'transparent':'#07101F');
+  if(btn){btn.style.background=plate?getTruckCol(plate):'#07101F';btn.style.borderColor=plate?getTruckCol(plate):'#07101F';}
+  // Reset trip filter buttons
+  document.querySelectorAll('#mapTripFilter button').forEach(b=>b.style.fontWeight='400');
+  document.getElementById('mapTitle').textContent=plate
+    ?`🗺️ เส้นทาง ${plate} (${TRUCKS.find(t=>t.plate===plate)?.nick})`
+    :'🗺️ แผนที่โลเคชันทั้งหมด';
+  updateMap(plate);
+}
+
+// ── Helpers: รวมข้อมูล queue ปัจจุบัน + ข้อมูลบันทึกจาก Keepdata ──
+// ใช้ตอน render Routes Map เพื่อให้เห็นบิลที่บันทึกแล้วด้วย
+function mapAssignments(){
+  // คืน {ref:{plate,trip,saved,row}} รวม queue + keepData (กรองตาม dashFilterDate ถ้ามี)
+  const m={};
+  Object.keys(queue).forEach(r=>{
+    if(queue[r]) m[r]={plate:queue[r],trip:tripMap[r]||1,saved:false};
+  });
+  const rows=dashFilterDate
+    ? keepData.filter(r=>r.deliveryDate===dashFilterDate)
+    : keepData;
+  rows.forEach(r=>{
+    if(r.ref&&r.plate&&!m[r.ref]){
+      m[r.ref]={plate:r.plate,trip:r.trip||1,saved:true,row:r};
+    }
+  });
+  return m;
+}
+function mapBillsForRoute(){
+  // คืนรายการบิลสำหรับแสดงบนแผนที่
+  // ถ้ามี dashFilterDate → ใช้จาก keepData เฉพาะวันนั้น (ไม่รวม current bills)
+  // ถ้าไม่มี → ใช้ current bills + saved bills จาก keepData (รวม)
+  const rowsKeep=dashFilterDate
+    ? keepData.filter(r=>r.deliveryDate===dashFilterDate)
+    : keepData;
+  const keepByRef={};
+  rowsKeep.forEach(r=>{if(r.ref)keepByRef[r.ref]=r;});
+
+  if(dashFilterDate){
+    // เลือกวันแล้ว → แสดงเฉพาะที่บันทึกในวันนั้น
+    return rowsKeep
+      .filter(r=>r.ref&&r.lat&&r.lng)
+      .map(r=>({
+        ref:r.ref, arName:r.arName, arCode:r.arCode,
+        province:r.province, district:r.district,
+        lat:r.lat, lng:r.lng,
+        totalW:r.weight, totalV:r.volume, totalAmt:r.amount,
+        route:r.route, routeCode:r.routeCode, days:r.days,
+        _saved:true
+      }));
+  }
+
+  // ไม่เลือกวัน → current bills + saved-only (เติม GPS จาก keepData ถ้าขาด)
+  const out=bills.map(b=>{
+    const k=keepByRef[b.ref];
+    return{...b, lat:b.lat||k?.lat||0, lng:b.lng||k?.lng||0};
+  });
+  const seen=new Set(bills.map(b=>b.ref));
+  rowsKeep.forEach(r=>{
+    if(r.ref&&!seen.has(r.ref)&&r.lat&&r.lng){
+      seen.add(r.ref);
+      out.push({
+        ref:r.ref, arName:r.arName, arCode:r.arCode,
+        province:r.province, district:r.district,
+        lat:r.lat, lng:r.lng,
+        totalW:r.weight, totalV:r.volume, totalAmt:r.amount,
+        route:r.route, routeCode:r.routeCode, days:r.days,
+        _saved:true
+      });
+    }
+  });
+  return out;
+}
+
+function setRoutesDate(d){
+  dashFilterDate=d;
+  renderRoutesView();
+}
+
+// ── Global TSP: เริ่มจากร้านไกลสุด + closed-loop optimize (HQ→...→HQ) แต่ไม่วาดเส้นกลับ ──
+function tspRoute(bs){
+  if(bs.length<2)return bs;
+  const dist=(a,b)=>haversine(a.lat,a.lng,b.lat,b.lng);
+  const HQp={lat:HQ.lat,lng:HQ.lng};
+  // คอสต์ closed loop: HQ → tour → HQ (รวมเส้นกลับ → ทำให้ลำดับเป็นวง ไม่ zigzag)
+  function tourCost(o){
+    if(!o.length)return 0;
+    let d=dist(HQp,o[0]);
+    for(let i=1;i<o.length;i++)d+=dist(o[i-1],o[i]);
+    d+=dist(o[o.length-1],HQp);
+    return d;
+  }
+  function greedyNN(startIdx){
+    const rem=[...bs];
+    const out=[rem.splice(startIdx,1)[0]];
+    let cur=out[0];
+    while(rem.length){
+      let best=0,bd=Infinity;
+      rem.forEach((x,i)=>{const d=dist(cur,x);if(d<bd){bd=d;best=i;}});
+      out.push(rem.splice(best,1)[0]);cur=out[out.length-1];
+    }
+    return out;
+  }
+  // 2-opt — FIX จุดแรก (จุดไกลสุด) + รวมเส้นกลับ HQ ในคอสต์
+  function twoOpt(o){
+    const n=o.length;if(n<3)return o;
+    let improved=true,g=0;
+    while(improved&&g++<300){
+      improved=false;
+      for(let i=1;i<n;i++){
+        for(let k=i+1;k<=n;k++){
+          // ขอบสองด้านของ segment [i..k-1] หรือ [i..k]
+          const A=o[i-1];
+          const B=o[i];
+          const C=k>=n?o[n-1]:o[k-1];
+          const D=k>=n?HQp:o[k];
+          const before=dist(A,B)+dist(C,D);
+          const after =dist(A,C)+dist(B,D);
+          if(after+1e-9<before){
+            const hi=Math.min(k-1,n-1);
+            let lo=i,h=hi;while(lo<h){const t=o[lo];o[lo]=o[h];o[h]=t;lo++;h--;}
+            improved=true;
+          }
+        }
+      }
+    }
+    return o;
+  }
+  // Or-opt — ย้ายชิ้น 1-3 จุด (ห้ามย้ายจุดแรก)
+  function orOpt(o){
+    const n=o.length;if(n<4)return o;
+    let improved=true,g=0;
+    while(improved&&g++<100){
+      improved=false;
+      for(let segLen=1;segLen<=Math.min(3,n-2);segLen++){
+        for(let i=1;i<=n-segLen;i++){
+          const seg=o.slice(i,i+segLen);
+          const rest=[...o.slice(0,i),...o.slice(i+segLen)];
+          const cur=tourCost(o);
+          let bestPos=-1,bestCost=cur;
+          for(let j=1;j<=rest.length;j++){
+            if(j===i)continue;
+            const trial=[...rest.slice(0,j),...seg,...rest.slice(j)];
+            const c=tourCost(trial);
+            if(c+1e-9<bestCost){bestCost=c;bestPos=j;}
+          }
+          if(bestPos>=0){
+            o=[...rest.slice(0,bestPos),...seg,...rest.slice(bestPos)];
+            improved=true;break;
+          }
+        }
+        if(improved)break;
+      }
+    }
+    return o;
+  }
+  // หา top-K จุดไกลสุดจาก HQ → ลองเริ่มแต่ละจุด → เลือกเส้นที่ดีสุด
+  const ranked=bs.map((b,i)=>({i,d:dist(HQp,b)})).sort((a,b)=>b.d-a.d);
+  const K=Math.min(7,bs.length);
+  let best=null,bestC=Infinity;
+  for(let s=0;s<K;s++){
+    let t=greedyNN(ranked[s].i);
+    t=twoOpt(t); t=orOpt(t); t=twoOpt(t);
+    const c=tourCost(t);
+    if(c<bestC){bestC=c;best=t;}
+  }
+  return best||bs;
+}
+
+// ── Routes Preview Map (queue ปัจจุบัน เท่านั้น ไม่รวม keepData) ──
+let rLeafletMap=null, rMapLayers=[], rMapPlate=null, rMapTrip=0;
+
+function rInitMap(){
+  if(rLeafletMap||!document.getElementById('routesPreviewMap'))return;
+  try{
+    rLeafletMap=L.map('routesPreviewMap',{zoomControl:true,scrollWheelZoom:true}).setView([HQ.lat,HQ.lng],11);
+    L.tileLayer(MAP_TILES[mapTheme],MAP_TILE_OPTS[mapTheme]).addTo(rLeafletMap);
+    setTimeout(()=>rLeafletMap.invalidateSize(),100);
+  }catch(e){console.warn('Routes map init',e);}
+}
+
+function rFilterMapTrip(trip,btn){
+  rMapTrip=rMapTrip===trip?0:trip;
+  document.querySelectorAll('#rMapTripFilter button').forEach(b=>b.style.fontWeight='400');
+  if(rMapTrip&&btn)btn.style.fontWeight='700';
+  rUpdateMap();
+}
+function rFilterMap(plate,btn){
+  rMapPlate=plate;
+  rMapTrip=0;
+  document.querySelectorAll('#rMapTruckFilter button').forEach(b=>{b.style.background=plate?'transparent':'#07101F';b.style.borderColor=plate?'transparent':'#07101F';});
+  if(btn){btn.style.background=plate?getTruckCol(plate):'#07101F';btn.style.borderColor=plate?getTruckCol(plate):'#07101F';}
+  document.querySelectorAll('#rMapTripFilter button').forEach(b=>b.style.fontWeight='400');
+  document.getElementById('rMapTitle').textContent=plate
+    ?`🗺️ เส้นทาง ${plate} (${TRUCKS.find(t=>t.plate===plate)?.nick||''}) · queue ปัจจุบัน`
+    :'🗺️ แผนที่ queue ปัจจุบัน (ก่อนบันทึก)';
+  rUpdateMap();
+}
+
+function rUpdateMap(){
+  if(!rLeafletMap)return;
+  rMapLayers.forEach(l=>{try{rLeafletMap.removeLayer(l);}catch(e){}});
+  rMapLayers=[];
+
+  const plateOf=ref=>queue[ref]||null;
+  const tripOf=ref=>tripMap[ref]||1;
+  const stopNums={};
+
+  // Route lines per truck per trip (เหมือน updateMap แต่ใช้แค่ queue)
+  TRUCKS.forEach(t=>{
+    if(rMapPlate&&t.plate!==rMapPlate)return;
+    const col=getTruckCol(t.plate);
+
+    [1,2,3].forEach(tr=>{
+      if(rMapTrip&&rMapTrip!==tr)return;
+      const tb=tspRoute(bills.filter(b=>plateOf(b.ref)===t.plate&&b.lat&&b.lng&&tripOf(b.ref)===tr));
+      if(rMapPlate)tb.forEach((b,i)=>{stopNums[b.ref]=i+1;});
+      if(!tb.length)return;
+      const wpts=[[HQ.lat,HQ.lng],...tb.map(b=>[b.lat,b.lng])]; // เที่ยวไปอย่างเดียว
+      const style={1:{weight:4,opacity:.85,dashArray:''},2:{weight:2.5,opacity:.7,dashArray:'10 6'},3:{weight:2,opacity:.55,dashArray:'3 5'}}[tr];
+      const line=L.polyline(wpts,{color:col,...style,lineJoin:'round'}).addTo(rLeafletMap);
+      rMapLayers.push(line);
+      // OSRM real road routing (async)
+      fetchOsrmRoute(wpts).then(rd=>{if(rd&&line._map){line.setLatLngs(rd.coords);}}).catch(()=>{});
+    });
+  });
+
+  // Bill markers — แสดงทุกบิลที่มี GPS (filter ตาม plate/trip)
+  const billsToShow=rMapPlate
+    ? bills.filter(b=>b.lat&&b.lng&&plateOf(b.ref)===rMapPlate&&(!rMapTrip||tripOf(b.ref)===rMapTrip))
+    : bills.filter(b=>b.lat&&b.lng&&(!rMapTrip||tripOf(b.ref)===rMapTrip));
+
+  billsToShow.forEach(b=>{
+    const plate=plateOf(b.ref);
+    const tr=tripOf(b.ref);
+    const col=plate?getTruckCol(plate):'#9BAAB8';
+    const truck=TRUCKS.find(t=>t.plate===plate);
+    const num=stopNums[b.ref];
+    const size=num?30:(plate?26:22);
+    const label=num?String(num):(plate?'·':'?');
+    const icon=makePinIcon(col,label,size,1,tr);
+    const tripBadge=plate?`<span style="background:${tr===3?'#F0FDF4':tr===2?'#EAF0F8':'#FFF8EC'};color:${tr===3?'#15803D':tr===2?'#1A5FA5':'#C47000'};border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700">เที่ยว ${tr}</span>`:'';
+    const popup=`<div style="min-width:180px">
+      <b style="font-size:13px;color:#07101F">${b.arName}</b> ${tripBadge}<br/>
+      <span style="color:#6B7A90;font-size:11px">📍 ${b.district||''}, ${b.province||''}</span><br/>
+      <span style="font-size:11px;color:#444">⚖ ${fmtKg(b.totalW)}</span><br/>
+      <div style="margin-top:4px;padding:3px 8px;border-radius:6px;background:${plate?col+'18':'#F5F7FA'};color:${plate?col:'#9BAAB8'};font-weight:600;font-size:11px">
+        ${plate?`🚛 ${plate} — ${truck?.nick||''}`:'⏳ รอจัดรถ'}
+      </div>
+      ${num?`<div style="color:#C9A84C;font-weight:700;font-size:11px;margin-top:3px">🚩 จุดที่ ${num}</div>`:''}
+      <div style="margin-top:4px"><a href="https://www.google.com/maps?q=${b.lat},${b.lng}" target="_blank" style="color:#1A5FA5;font-size:10px;text-decoration:none">🔗 เปิด Google Maps</a></div>
+    </div>`;
+    const marker=L.marker([b.lat,b.lng],{icon}).bindPopup(popup,{maxWidth:240}).addTo(rLeafletMap);
+    rMapLayers.push(marker);
+  });
+
+  // HQ marker
+  const hqIcon=L.divIcon({
+    html:`<div style="width:42px;height:42px;border-radius:50%;background:var(--gold,#c9a84c);border:3px solid rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;color:#0d1b3e;font-size:20px;font-weight:700;box-shadow:0 4px 14px rgba(201,168,76,.6)">★</div>`,
+    className:'',iconSize:[42,42],iconAnchor:[21,21],popupAnchor:[0,-25]
+  });
+  const hqM=L.marker([HQ.lat,HQ.lng],{icon:hqIcon,zIndexOffset:1000})
+    .bindPopup('<b style="color:#C9A84C">★ HQ รัตนไพบูลย์ กรุ๊ป</b><br/><span style="font-size:11px;color:#6B7A90">สมุทรสงคราม</span>').addTo(rLeafletMap);
+  rMapLayers.push(hqM);
+
+  // Fit bounds
+  const pts=bills.filter(b=>b.lat&&b.lng&&plateOf(b.ref)&&(!rMapPlate||plateOf(b.ref)===rMapPlate)&&(!rMapTrip||tripOf(b.ref)===rMapTrip));
+  if(pts.length){
+    try{rLeafletMap.fitBounds(L.latLngBounds([[HQ.lat,HQ.lng],...pts.map(b=>[b.lat,b.lng])]),{padding:[36,36],maxZoom:13});}catch(e){}
+  }
+}
+
+function rRenderTruckFilter(){
+  const wrap=document.getElementById('rMapTruckFilter');
+  if(!wrap)return;
+  const platesInQueue={};
+  Object.entries(queue).forEach(([ref,p])=>{
+    if(!p||!billMap[ref]||!billMap[ref].lat||!billMap[ref].lng)return;
+    platesInQueue[p]=(platesInQueue[p]||0)+1;
+  });
+  const trucksWithBills=TRUCKS.filter(t=>platesInQueue[t.plate]>0);
+  wrap.innerHTML=`<button onclick="rFilterMap(null,this)" style="padding:6px 14px;border-radius:8px;border:2px solid ${rMapPlate?'transparent':'#07101F'};background:${rMapPlate?'transparent':'#07101F'};color:${rMapPlate?'#07101F':'#E4C46E'};font-size:12px;font-weight:700;cursor:pointer">🌐 ทั้งหมด</button>`+
+    trucksWithBills.map(t=>{
+      const col=getTruckCol(t.plate);
+      const cnt=platesInQueue[t.plate];
+      const sel=rMapPlate===t.plate;
+      return`<button onclick="rFilterMap('${t.plate}',this)" style="padding:6px 12px;border-radius:8px;border:2px solid ${sel?col:'#E0E5ED'};background:${sel?col:'#fff'};color:${sel?'#fff':'#07101F'};font-size:12px;font-weight:${sel?700:400};cursor:pointer;display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>${t.plate} <span style="color:${sel?'rgba(255,255,255,.75)':'#6B7A90'};font-size:11px">${t.nick} ${cnt}บิล</span></button>`;
+    }).join('');
+}
+
+function renderRoutesView(){
+  // ── Date filter (จากชีท Keepdata) ──
+  const dateWrap=document.getElementById('mapDateFilter');
+  if(dateWrap){
+    const allDates=[...new Set(keepData.map(r=>r.deliveryDate))]
+      .sort((a,b)=>parseDateTH(b)-parseDateTH(a));
+    if(dashFilterDate&&!allDates.includes(dashFilterDate))dashFilterDate=null;
+    if(!allDates.length){
+      dateWrap.innerHTML=`<span style="font-size:11px;color:#A0ABBB">ไม่มีข้อมูลในชีท Keepdata — กด 🔄 รีเฟรช</span>`;
+    } else {
+      const btnS=(active,color='#1A5FA5',bg='#EAF0F8')=>
+        `padding:5px 12px;border-radius:18px;border:1.5px solid ${active?color:'#E0E5ED'};`+
+        `background:${active?bg:'#fff'};color:${active?color:'#6B7A90'};`+
+        `font-size:11px;font-weight:600;cursor:pointer`;
+      dateWrap.innerHTML=`<button onclick="setRoutesDate(null)" style="${btnS(!dashFilterDate,'#C9A84C','#FEF6EC')}">ทั้งหมด (${keepData.length})</button>`+
+        allDates.map(d=>{
+          const cnt=keepData.filter(r=>r.deliveryDate===d).length;
+          return`<button onclick="setRoutesDate('${d}')" style="${btnS(dashFilterDate===d)}">📅 ${d} (${cnt})</button>`;
+        }).join('');
+    }
+  }
+
+  // Build truck filter buttons
+  const wrap=document.getElementById('mapTruckFilter');
+  const assign=mapAssignments();
+  const allBillsMap=mapBillsForRoute();
+  // นับเฉพาะบิลที่มี GPS (ขึ้นบนแผนที่ได้จริง)
+  const cntByPlate={};
+  allBillsMap.forEach(b=>{
+    if(!b.lat||!b.lng)return;
+    const p=assign[b.ref]?.plate;
+    if(p)cntByPlate[p]=(cntByPlate[p]||0)+1;
+  });
+  if(wrap){
+    const trucksWithBills=TRUCKS.filter(t=>cntByPlate[t.plate]>0);
+    wrap.innerHTML=`<button onclick="filterMap(null,this)"
+        style="padding:6px 14px;border-radius:8px;border:2px solid #07101F;background:#07101F;color:#E4C46E;font-size:12px;font-weight:700;cursor:pointer">
+        🌐 ทั้งหมด
+      </button>`+
+      trucksWithBills.map(t=>{
+        const col=getTruckCol(t.plate);
+        const cnt=cntByPlate[t.plate]||0;
+        const isSel=mapFilterPlate===t.plate;
+        return`<button onclick="filterMap('${t.plate}',this)"
+          style="padding:6px 12px;border-radius:8px;border:2px solid ${isSel?col:'#E0E5ED'};
+            background:${isSel?col:'#fff'};color:${isSel?'#fff':'#07101F'};
+            font-size:12px;font-weight:${isSel?700:400};cursor:pointer;display:flex;align-items:center;gap:6px">
+          <span style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>
+          ${t.plate} <span style="color:${isSel?'rgba(255,255,255,.75)':'#6B7A90'};font-size:11px">${t.nick} ${cnt}บิล</span>
+        </button>`;
+      }).join('');
+  }
+
+  // Init and update map
+  if(document.getElementById('tab-routes').classList.contains('active')){
+    initMap();
+    updateMap(mapFilterPlate);
+  }
+
+  // Route cards — รวมบิลที่ยังไม่จัด + บิลที่บันทึกแล้ว
+  const routes={};
+  const mergedBills=mapBillsForRoute();
+  mergedBills.forEach(b=>{
+    const key=b.routeCode||b.route||'—';
+    if(!routes[key])routes[key]={code:key,name:b.route||key,days:b.days||'',bills:[]};
+    routes[key].bills.push(b);
+  });
+  document.getElementById('routeCards').innerHTML=
+    Object.values(routes).filter(r=>r.bills.length>0)
+    .sort((a,b)=>b.bills.length-a.bills.length)
+    .map(r=>{
+      const done=r.bills.filter(b=>queue[b.ref]||assign[b.ref]).length;
+      const tw=r.bills.reduce((s,b)=>s+b.totalW,0);
+      const ta=r.bills.reduce((s,b)=>s+b.totalAmt,0);
+      const pct=r.bills.length?Math.round(done/r.bills.length*100):0;
+      const pCol=pct===100?'var(--success)':pct>0?'var(--gold)':'var(--muted)';
+      return`<div class="card card-gold" style="padding:14px 16px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+          <div>
+            <div style="font-family:Kanit;font-size:14px;font-weight:700;color:var(--navy)">${r.name||r.code}</div>
+            <div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap">
+              <span style="background:var(--navy);color:var(--gold-light);border-radius:6px;padding:1px 8px;font-size:10px;font-weight:600">${r.code}</span>
+              ${r.days?`<span style="background:#FFF8EC;border:1px solid #F6C45A55;color:#C47000;border-radius:6px;padding:1px 8px;font-size:10px;font-weight:600">📅 ${r.days}</span>`:''}
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-family:Kanit;font-size:24px;font-weight:700;color:${pCol}">${pct}%</div>
+            <div style="font-size:10px;color:var(--muted)">${done}/${r.bills.length} บิล</div>
+          </div>
+        </div>
+        <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:8px">
+          <div style="width:${pct}%;height:100%;background:${pCol};border-radius:3px;transition:width .4s"></div>
+        </div>
+        <div style="display:flex;gap:12px;font-size:11px;flex-wrap:wrap;align-items:center">
+          <span>⚖ <strong>${fmtKg(tw)}</strong></span>
+          <span>💰 <strong style="color:#7D6428">฿${fmtN(Math.round(ta))}</strong></span>
+          <span style="margin-left:auto;font-weight:600;color:${pct===100?'var(--success)':pct>0?'var(--gold)':'var(--muted)'}">
+            ${pct===100?'✅ จัดครบแล้ว':pct>0?`⏳ เหลือ ${r.bills.length-done} บิล`:'⏳ ยังไม่ได้จัด'}
+          </span>
+        </div>
+      </div>`;
+    }).join('');
+}
+
+// ══════════════════════════════════════════
+// CARS VIEW
+// ══════════════════════════════════════════
+function carTripHtml(assignedBills){
+  const TC=['','#C47000','#1A5FA5','#15803D'],BG=['','#FFF8EC','#EAF0F8','#EAF3DE'],BD=['','#E4C46E','#93B8DE','#97C459'],TE=['','🔴','🔵','🟢'];
+  let h='';
+  [1,2,3].forEach(tr=>{
+    const tb=assignedBills.filter(b=>(tripMap[b.ref]||1)===tr);
+    if(!tb.length)return;
+    const tw=tb.reduce((s,b)=>s+b.totalW,0);
+      const tv=tb.reduce((s,b)=>s+(b.totalV||0),0);
+    h+=`<div style="margin-bottom:3px"><div style="background:${BG[tr]};border-left:3px solid ${BD[tr]};padding:2px 6px;font-size:10px;font-weight:700;color:${TC[tr]}">${TE[tr]} เที่ยว ${tr} — ${tb.length} บิล · ${fmtKg(tw)} · ${fmtM3(tv)}</div>`;
+    tb.forEach((b,j)=>{h+=`<div style="display:flex;align-items:center;gap:5px;padding:3px 4px;${j?'border-top:1px solid #F0F2F6':''};font-size:11px"><span style="color:#A0ABBB;min-width:14px;font-size:10px">${j+1}.</span><div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500">${b.arName}</div><div style="font-size:9px;color:#9BAAB8">${b.province||'—'}${b.lat&&b.lng?` <span style="font-family:monospace;color:#B8C6D9">${b.lat.toFixed(4)},${b.lng.toFixed(4)}</span>`:'<span style="color:#FCA5A5"> ⚠ ไม่มี GPS</span>'}</div></div></div>`;});
+    h+='</div>';
+  });
+  return h;
+}
+function renderCarsView(){
+  const _sorted=[...TRUCKS].map((t,i)=>({...t,_i:i}))
+    .sort((a,b)=>Object.values(queue).filter(p=>p===b.plate).length-Object.values(queue).filter(p=>p===a.plate).length);
+  document.getElementById('carCards').innerHTML=_sorted.map(t=>{const i=t._i;{
+    const ld=truckLoad(t.plate);
+    const {wp,vp,eff,over}=truckPct(t.plate,t);
+    const col=TRUCK_COLORS[i%TRUCK_COLORS.length];
+    const assignedBills=Object.entries(queue).filter(([,p])=>p===t.plate)
+      .map(([r])=>billMap[r]).filter(Boolean)
+      .sort((a,b)=>(a.arName||'').localeCompare(b.arName||'','th'));
+    return`<div class="car-card${over?' over':''}">
+      <div style="display:flex;justify-content:space-between;margin-bottom:10px">
+        <div>
+          <div style="font-family:Kanit;font-size:16px;font-weight:700;color:#07101F">${t.plate}</div>
+          <div style="font-size:11px;color:#6B7A90;margin-top:1px">${t.type}</div>
+        </div>
+        <div style="text-align:right"><span style="font-size:22px">${t.e}</span><div style="margin-top:4px"><span style="background:#EAF3DE;color:#1E7D45;border:1px solid #97C45988;border-radius:10px;padding:1px 8px;font-size:10px;font-weight:600">✓ ใช้งาน</span></div></div>
+      </div>
+      <div style="background:#F8F9FB;border-radius:7px;padding:8px 10px;font-size:12px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+          <span style="color:#6B7A90">คนขับ</span>
+          <span><span style="font-weight:700;color:#C9A84C">${t.nick}</span> <span style="font-size:10px;color:#6B7A90">(${t.driver})</span></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="color:#6B7A90">⚖ รับได้</span><span style="color:#1A5FA5;font-weight:600">${fmtKg(t.maxW)}</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:#6B7A90">📦 พื้นที่</span><span style="color:#1A5FA5;font-weight:600">${fmtM3(t.maxV)}</span></div>
+      </div>
+      ${over?`<div style="background:#FEF2F2;border:1px solid #FCA5A5;border-radius:6px;padding:4px 8px;font-size:11px;color:#C62828;text-align:center;font-weight:600;margin-bottom:6px">⚠ เกินขีดบรรทุก</div>`:''}
+      <div style="font-size:10px;color:#6B7A90;display:flex;justify-content:space-between;margin-bottom:3px">
+        <span>⚖ ${fmtKg(ld.w)} / ${fmtKg(t.maxW)}</span>
+        <span style="color:${wp>100?'#C62828':pcColor(wp)};font-weight:600">${wp}%</span>
+      </div>
+      <div style="height:5px;background:#E0E5ED;border-radius:3px;overflow:hidden;margin-bottom:3px">
+        <div style="width:${Math.min(100,wp)}%;height:100%;background:${wp>100?'#DC3545':pcColor(wp)};border-radius:3px"></div>
+      </div>
+      <div style="font-size:10px;color:#6B7A90;display:flex;justify-content:space-between;margin-bottom:3px">
+        <span>📦 ${fmtM3(ld.v)} / ${fmtM3(t.maxV)}</span>
+        <span style="color:${vp>100?'#C62828':pcColor(vp)};font-weight:600">${vp}%</span>
+      </div>
+      <div style="height:5px;background:#E0E5ED;border-radius:3px;overflow:hidden;margin-bottom:6px">
+        <div style="width:${Math.min(100,vp)}%;height:100%;background:${vp>100?'#DC3545':pcColor(vp)};border-radius:3px;opacity:.65"></div>
+      </div>
+      ${assignedBills.length>0?`<div style="border-top:1px solid #E0E5ED;padding-top:6px;margin-top:4px">${carTripHtml(assignedBills)}</div>`:''}
+    </div>`;
+  }}).join('');
+}
+
+// ══════════════════════════════════════════
+// UI HELPERS
+// ══════════════════════════════════════════
+let currentTab='queue';
+function switchTab(id,el,bnav){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  // ถ้าไม่ระบุ el → หา nav-tab ที่ตรงกับ id เอง
+  if(!el){
+    el=[...document.querySelectorAll('.nav-tab')].find(t=>{
+      const oc=t.getAttribute('onclick')||'';
+      return oc.includes("'"+id+"'");
+    });
+  }
+  if(el)el.classList.add('active');
+  document.querySelectorAll('.bnav-item').forEach(b=>b.classList.remove('active'));
+  const bnavItems=document.querySelectorAll('.bnav-item');
+  const idx={dashboard:0,queue:1,bills:2,routes:3,cars:4,saved:5}[id];
+  if(bnavItems[idx])bnavItems[idx].classList.add('active');
+  currentTab=id;
+  if(id==='routes'){
+    renderRoutesView();
+    rInitMap();
+    rRenderTruckFilter();
+    rUpdateMap();
+    setTimeout(()=>{if(rLeafletMap)rLeafletMap.invalidateSize();},150);
+  } else if(id==='dashboard')renderDashboard();
+  else if(id==='saved'){
+    renderSavedView();
+    setTimeout(()=>{if(leafletMap)leafletMap.invalidateSize();},150);
+  }
+  else if(id==='queue'){renderTruckCards();updateQueueSub();renderBillTable();}
+  else if(id==='bills')renderBillsView();
+  else if(id==='cars')renderCarsView();
+}
+
+function showToast(msg,type='ok'){
+  const c=document.getElementById('toasts');
+  const t=document.createElement('div');
+  t.className='toast '+type;
+  t.textContent=(type==='ok'?'✅ ':type==='warn'?'⚠️ ':'❌ ')+msg;
+  c.appendChild(t);
+  setTimeout(()=>t.remove(),3500);
+}
+
+
+// ══════════════════════════════════════════
+// SEARCH DROPDOWN COMPONENT
+// ══════════════════════════════════════════
+var _SD={};
+
+function sdRender(id,opts,val,ph,cb,st){
+  ph=ph||'เลือก...'; st=st||''; cb=cb||'';
+  var cur=opts.find(function(o){return o.v===val;});
+  var lbl=cur?cur.l:'';
+  var rows=opts.map(function(o){
+    var dv=o.v.replace(/"/g,'&quot;');
+    var dl=o.l.replace(/"/g,'&quot;');
+    return '<div class="sd-opt'+(o.v===val?' sd-sel':'')+'" data-v="'+dv+'" data-l="'+dl+'">'+o.l+'</div>';
+  }).join('');
+  _SD[id]={opts:opts,val:val,cb:cb};
+  return '<div class="sd-wrap" id="sdw_'+id+'" style="'+st+'">'
+    +'<div class="sd-ctrl" id="sdctrl_'+id+'" onclick="sdToggle(\''+id+'\')">'
+    +'<span class="sd-lbl'+(lbl?'':' sd-ph')+'" id="sdlbl_'+id+'">'+(lbl||ph)+'</span>'
+    +'<span class="sd-arr">&#9660;</span></div>'
+    +'<div class="sd-panel" id="sdp_'+id+'">'
+    +'<div class="sd-search-wrap"><div class="sd-search-box">'
+    +'<input class="sd-search-inp" id="sdi_'+id+'" type="text" placeholder="🔍 พิมพ์ค้นหา..." '
+    +'oninput="sdFilter(\''+id+'\',this.value)" autocomplete="off">'
+    +'<button class="sd-clear" id="sdc_'+id+'" onclick="sdClearSearch(\''+id+'\')" tabindex="-1">✕</button>'
+    +'</div></div>'
+    +'<div class="sd-opts" id="sdopts_'+id+'" onclick="sdOptClick(\''+ id +'\',event)">'+rows+'</div>'
+    +'<div class="sd-none" id="sdnone_'+id+'" style="display:none">ไม่พบรถ</div>'
+    +'</div></div>';
+}
+
+function sdToggle(id){
+  var wrap=document.getElementById('sdw_'+id);
+  if(!wrap)return;
+  var isOpen=wrap.classList.contains('open');
+  // Close all
+  document.querySelectorAll('.sd-wrap.open').forEach(function(w){w.classList.remove('open');});
+  if(!isOpen){
+    wrap.classList.add('open');
+    var inp=document.getElementById('sdi_'+id);
+    if(inp){inp.value='';sdFilter(id,'');setTimeout(function(){inp.focus();},30);}
+  }
+}
+
+function sdFilter(id,q){
+  var opts=document.getElementById('sdopts_'+id);
+  var none=document.getElementById('sdnone_'+id);
+  var clr=document.getElementById('sdc_'+id);
+  if(!opts)return;
+  var lq=q.toLowerCase(); var shown=0;
+  opts.querySelectorAll('.sd-opt').forEach(function(el){
+    var show=!lq||el.dataset.l.toLowerCase().includes(lq);
+    el.style.display=show?'':'none';
+    if(show)shown++;
+  });
+  if(none)none.style.display=shown?'none':'block';
+  if(clr)clr.style.display=q?'inline-block':'none';
+}
+
+function sdClearSearch(id){
+  var inp=document.getElementById('sdi_'+id);
+  if(inp){inp.value='';sdFilter(id,'');inp.focus();}
+}
+
+function sdPick(id,val){
+  var d=_SD[id]; if(!d)return;
+  var cur=d.opts.find(function(o){return o.v===val;});
+  var l=cur?cur.l:'';
+  var lbl=document.getElementById('sdlbl_'+id);
+  if(lbl){lbl.textContent=l||val;lbl.className='sd-lbl'+(l?'':' sd-ph');}
+  // Update sel class
+  var opts=document.getElementById('sdopts_'+id);
+  if(opts)opts.querySelectorAll('.sd-opt').forEach(function(el){el.classList.toggle('sd-sel',el.dataset.v===val);});
+  d.val=val;
+  var wrap=document.getElementById('sdw_'+id);
+  if(wrap)wrap.classList.remove('open');
+  if(d.cb&&window[d.cb])window[d.cb](val,id);
+}
+
+function sdOptClick(id,e){var opt=e.target.closest('.sd-opt');if(opt&&opt.dataset&&opt.dataset.v!==undefined)sdPick(id,opt.dataset.v);}
+function sdGetVal(id){var d=_SD[id];return d?d.val:'';}
+function sdSetVal(id,val){
+  if(!_SD[id])return;
+  _SD[id].val=val;
+  var cur=_SD[id].opts.find(function(o){return o.v===val;});
+  var lbl=document.getElementById('sdlbl_'+id);
+  if(lbl){lbl.textContent=cur?cur.l:(val||'');lbl.className='sd-lbl'+(cur?'':' sd-ph');}
+}
+function sdMakeTruckOpts(excludePlate){
+  return [{v:'',l:'— เลือกรถ —'}].concat(TRUCKS.filter(function(t){return !excludePlate||t.plate!==excludePlate;}).map(function(t){return {v:t.plate,l:t.e+' '+t.plate+' ('+t.nick+')'};}));
+}
+
+// Close on outside click
+document.addEventListener('click',function(e){
+  if(!e.target.closest('.sd-wrap'))
+    document.querySelectorAll('.sd-wrap.open').forEach(function(w){w.classList.remove('open');});
+},true);
+
+// Callbacks
+function sdTransfer(val){
+  if(!val||!selPlate)return;
+  var c=0;Object.keys(queue).forEach(function(r){if(queue[r]===selPlate){queue[r]=val;c++;}});
+  showToast('🔄 โยก '+c+' บิล \u2192 '+val+' แล้ว','ok');selPlate=val;saveQ();renderAll();
+}
+function sdTransferTrip(val){
+  if(!val||!selPlate)return;
+  var trip=parseInt(document.getElementById('tf-trip-num')?.value||'1');
+  var c=0;Object.keys(queue).forEach(function(r){if(queue[r]===selPlate&&(tripMap[r]||1)===trip){queue[r]=val;c++;}});
+  if(!c){showToast('ไม่มีบิลเที่ยว '+trip+' บนรถนี้','warn');return;}
+  showToast('🔄 โยกเที่ยว '+trip+' ('+c+' บิล) \u2192 '+val,'ok');saveQ();renderAll();
+}
+function sdAssignSel(val){
+  if(!val)return;
+  selRefs.forEach(function(r){queue[r]=val;});
+  showToast('✅ จัด '+selRefs.size+' บิล \u2192 '+val,'ok');
+  selRefs.clear();saveQ();renderAll();
+}
+function sdReassign(val,id){
+  if(!val)return;
+  var ref=id.replace(/^sdrs_/,'');
+  reassignTruck(ref,val);
+  setTimeout(function(){sdSetVal(id,'');_SD[id]&&(_SD[id].val='');var lbl=document.getElementById('sdlbl_'+id);if(lbl){lbl.textContent='🚛 เปลี่ยนรถ';lbl.className='sd-lbl sd-ph';}},300);
+}
+function sdBvAssign(val,id){
+  var ref=id.replace(/^sdbv_/,'');
+  var tripEl=document.getElementById('bvt_'+ref);
+  var trip=parseInt(tripEl?tripEl.value:'1')||1;
+  if(val){queue[ref]=val;tripMap[ref]=trip;}else{delete queue[ref];delete tripMap[ref];}
+  saveQ();renderAll();
+  showToast(val?'✅ '+billMap[ref]?.arName+' \u2192 '+val+' เที่ยว '+trip:'ยกเลิก '+ref,'ok');
+}
+// ══════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════
+
+// ── No login required ──
+let currentUser = null;
+function logout(){location.reload();}
+window.addEventListener('DOMContentLoaded', loadData);
+
+</script>
+
+</body>
+</html>

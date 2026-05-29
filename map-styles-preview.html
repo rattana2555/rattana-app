@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>🗺️ Map Styles Preview — Rattana</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun','Segoe UI',sans-serif;background:#f4f6fb;color:#0d1b3e;padding:20px}
+h1{font-size:22px;margin-bottom:8px;color:#0d1b3e}
+.sub{font-size:13px;color:#6b7896;margin-bottom:20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:16px}
+.card{background:#fff;border:1px solid #dde3f0;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.head{padding:10px 14px;background:#0d1b3e;color:#e8c86a;display:flex;justify-content:space-between;align-items:center}
+.head .name{font-weight:700;font-size:14px}
+.head .num{background:#c9a84c;color:#0d1b3e;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+.desc{padding:8px 14px;font-size:12px;color:#6b7896;background:#fafbfd;border-bottom:1px solid #eef0f5}
+.map{height:280px;width:100%}
+.note{background:#fff8ec;border:1px solid #e4c46e;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#7d6428}
+</style>
+</head>
+<body>
+<h1>🗺️ Map Styles Preview</h1>
+<div class="sub">ทุกแผนที่แสดงพื้นที่ HQ สมุทรสงคราม — เลือกอันที่ชอบ แล้วบอกหมายเลข</div>
+<div class="note">💡 คลิก zoom +/- ที่แต่ละแผนที่ได้เพื่อดูรายละเอียด · บางสไตล์อาจโหลดช้าเล็กน้อย</div>
+<div class="grid" id="grid"></div>
+
+<script>
+const HQ=[13.412, 99.991];
+const STYLES=[
+  {
+    name:'CartoDB Voyager (ปัจจุบัน)',
+    desc:'สไตล์สะอาด สมดุล — ใช้อยู่ตอนนี้',
+    url:'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    opts:{maxZoom:19, attribution:'© CARTO © OpenStreetMap'}
+  },
+  {
+    name:'CartoDB Positron',
+    desc:'สว่าง เรียบง่าย — ตัวอักษรเด่น เหมาะกับ marker เยอะ',
+    url:'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    opts:{maxZoom:19, attribution:'© CARTO'}
+  },
+  {
+    name:'CartoDB Dark Matter',
+    desc:'ธีมมืด — เหมาะกับใช้กลางคืน หรือเน้น marker สีสด',
+    url:'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    opts:{maxZoom:19, attribution:'© CARTO'}
+  },
+  {
+    name:'OpenStreetMap Standard',
+    desc:'แผนที่ OSM ดั้งเดิม — รายละเอียดเยอะ สีสด',
+    url:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    opts:{maxZoom:19, attribution:'© OpenStreetMap'}
+  },
+  {
+    name:'OpenStreetMap HOT',
+    desc:'Humanitarian — เน้นถนนชัด สีอุ่น เหมาะกับโลจิสติกส์',
+    url:'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+    opts:{maxZoom:19, attribution:'© OpenStreetMap France'}
+  },
+  {
+    name:'Esri World Imagery (Satellite)',
+    desc:'ภาพถ่ายดาวเทียม — เห็นพื้นที่จริง เช่น โรงงาน ตึก',
+    url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    opts:{maxZoom:18, attribution:'Tiles © Esri'}
+  },
+  {
+    name:'Esri World Street Map',
+    desc:'แผนที่ถนนสไตล์ Esri — รายละเอียดดี เป็นทางการ',
+    url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    opts:{maxZoom:18, attribution:'Tiles © Esri'}
+  },
+  {
+    name:'Esri World Topo Map',
+    desc:'แผนที่ภูมิประเทศ — เห็นเส้นชั้นความสูง เหมาะดูเส้นทางในป่าเขา',
+    url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    opts:{maxZoom:18, attribution:'Tiles © Esri'}
+  },
+  {
+    name:'OpenTopoMap',
+    desc:'แผนที่ภูมิประเทศแบบเอียง 3D — สวย เหมาะดูพื้นที่กว้าง',
+    url:'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    opts:{maxZoom:17, attribution:'© OpenTopoMap'}
+  },
+  {
+    name:'CyclOSM',
+    desc:'สไตล์จักรยาน — ถนนรองชัดเจน เหมาะดูซอย/ตรอก',
+    url:'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
+    opts:{maxZoom:20, attribution:'© CyclOSM © OSM'}
+  },
+  {
+    name:'Stamen Terrain',
+    desc:'แผนที่ภูมิประเทศโทนน้ำตาล — อ่านง่าย ดูเป็นมืออาชีพ',
+    url:'https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}{r}.png',
+    opts:{maxZoom:18, attribution:'© Stadia © Stamen © OSM'}
+  },
+  {
+    name:'Stadia AlidadeSmooth',
+    desc:'สไตล์โมเดิร์น เรียบ ตัดเส้นน้อย — เน้น marker',
+    url:'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png',
+    opts:{maxZoom:20, attribution:'© Stadia © OSM'}
+  }
+];
+
+const grid=document.getElementById('grid');
+STYLES.forEach((s,i)=>{
+  const card=document.createElement('div');
+  card.className='card';
+  card.innerHTML=`
+    <div class="head"><span class="name">${s.name}</span><span class="num">${i+1}</span></div>
+    <div class="desc">${s.desc}</div>
+    <div class="map" id="m${i}"></div>
+  `;
+  grid.appendChild(card);
+  setTimeout(()=>{
+    const m=L.map('m'+i,{zoomControl:true,attributionControl:true}).setView(HQ,12);
+    L.tileLayer(s.url,s.opts).addTo(m);
+    // HQ marker (gold star)
+    const icon=L.divIcon({
+      html:`<div style="width:36px;height:36px;border-radius:50%;background:#c9a84c;border:3px solid #fff;display:flex;align-items:center;justify-content:center;color:#0d1b3e;font-size:18px;font-weight:700;box-shadow:0 4px 12px rgba(201,168,76,.6)">★</div>`,
+      className:'',iconSize:[36,36],iconAnchor:[18,18]
+    });
+    L.marker(HQ,{icon}).addTo(m).bindPopup('<b>★ HQ Rattana</b>');
+    // Sample bill markers
+    [[13.435,99.95,'#1A5FA5'],[13.39,100.02,'#15803D'],[13.45,99.97,'#C47000'],[13.40,99.94,'#7D6428']].forEach(([lat,lng,col])=>{
+      L.circleMarker([lat,lng],{radius:8,fillColor:col,color:'#fff',weight:2,fillOpacity:.9}).addTo(m);
+    });
+  },50*i);
+});
+</script>
+</body>
+</html>
