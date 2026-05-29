@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0d1b3e">
-  <title>Rattana Stock Count v2.2</title>
+  <title>Rattana Stock Count v2.3</title>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
@@ -813,7 +813,18 @@ function isInAppBrowser() {
 // Tries environment first, falls back to enumerated cameras. Uses a FRESH instance
 // per attempt to avoid html5-qrcode "already under transition" errors.
 async function startScanner(readerId, onDetected) {
-  const cfg = { fps:10, qrbox:{ width:260, height:160 }, formatsToSupport:scanFormats() };
+  const cfg = {
+    fps: 15,
+    // wide scan box suited to 1D barcodes (EAN/UPC/CODE128)
+    qrbox: (vw, vh) => {
+      const w = Math.min(Math.floor(vw * 0.92), 360);
+      return { width: w, height: Math.max(120, Math.floor(w * 0.55)) };
+    },
+    formatsToSupport: scanFormats(),
+    // use the device's native BarcodeDetector when available (Android Chrome) — much better at 1D
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+    rememberLastUsedCamera: false,
+  };
   // attempt 1 — prefer rear camera
   let qr = new Html5Qrcode(readerId, { verbose:false });
   try {
