@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Rattana Stock Checker v1.1</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    :root {
+      --navy:#0d1b3e;--navy-mid:#1a2f5e;--navy-light:#243b73;
+      --gold:#c9a84c;--gold-light:#e8c86a;
+      --success:#2ecc71;--danger:#e74c3c;--warning:#f39c12;--info:#3498db;
+      --bg:#f4f6fb;--text:#0d1b3e;--card-bg:#ffffff;--border:#dde3f0;--muted:#6b7896;--row-alt:#fafbfd;
+      --radius-sm:6px;--radius-md:12px;--radius-lg:16px;
+      --shadow-sm:0 1px 4px rgba(0,0,0,.06);--shadow-md:0 2px 8px rgba(0,0,0,.08);
+      --shadow-lg:0 8px 24px rgba(13,27,62,.12);--shadow-gold:0 4px 12px rgba(201,168,76,.35);
+    }
+    body.dark{--bg:#0a1020;--text:#e8eaf0;--card-bg:#111c35;--border:#243b73;--muted:#8a98b8;--row-alt:#0f1830}
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Sarabun',sans-serif;min-height:100dvh;overflow-x:hidden;background:var(--bg);color:var(--text);transition:background .25s,color .25s}
+    button{font-family:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+    input,select{font-family:inherit;font-size:16px}
+
+    header{background:var(--navy);color:#fff;padding:12px 16px;position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:10px;border-bottom:3px solid var(--gold);padding-top:max(12px,env(safe-area-inset-top))}
+    .logo-text{font-weight:700;letter-spacing:1.2px;font-size:17px;color:#fff;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .logo-text span{color:var(--gold)}
+    .icon-btn{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.2);width:38px;height:38px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;transition:background .15s}
+    .icon-btn:hover{background:rgba(255,255,255,.12)}
+
+    .content{padding:12px;max-width:800px;margin:0 auto;width:100%}
+    @media(min-width:640px){.content{padding:16px}}
+
+    .card{background:var(--card-bg);border-radius:var(--radius-md);border:1px solid var(--border);box-shadow:var(--shadow-md);margin-bottom:12px}
+    .card-gold{border-top:3px solid var(--gold)}
+    .card-success{border-top:3px solid var(--success)}
+    .card-danger{border-top:3px solid var(--danger)}
+    .card-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);background:linear-gradient(to right,rgba(201,168,76,.07),transparent);gap:10px}
+    .card-head h3{font-size:15px;font-weight:700}
+    .card-body{padding:16px}
+
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid transparent;min-height:44px;transition:opacity .15s,transform .1s}
+    .btn:active{transform:scale(.97)}
+    .btn-gold{background:var(--gold);color:var(--navy)}
+    .btn-gold:hover{background:var(--gold-light)}
+    .btn-outline{background:transparent;color:var(--text);border-color:var(--border)}
+    .btn-danger{background:var(--danger);color:#fff}
+    .btn-sm{padding:5px 10px;font-size:12px;min-height:32px}
+    .btn-lg{padding:14px 24px;font-size:15px;min-height:52px;border-radius:var(--radius-md)}
+    .btn-block{width:100%;justify-content:center}
+
+    .input{height:48px;padding:0 14px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:16px;font-family:inherit;outline:none;width:100%;transition:border-color .15s}
+    .input:focus{border-color:var(--gold)}
+
+    .badge{display:inline-block;padding:3px 9px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap}
+    .badge-ea{background:#e3f0fd;color:#1a6fb8}
+    .badge-pa{background:#e8f7ee;color:#1e8449}
+    .badge-bp{background:#fef3d7;color:#a87800}
+    .badge-cs{background:rgba(201,168,76,.18);color:var(--navy);border:1px solid rgba(201,168,76,.35)}
+    body.dark .badge-ea{background:#1a3050;color:#7bc0e8}
+    body.dark .badge-pa{background:#1a3a25;color:#7be0a3}
+    body.dark .badge-bp{background:#3a2e15;color:#e8c86a}
+    body.dark .badge-cs{background:rgba(201,168,76,.25);color:var(--gold-light)}
+
+    /* Stock cards */
+    .stock-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+    @media(min-width:480px){.stock-grid{grid-template-columns:repeat(4,1fr)}}
+    .stock-card{background:var(--bg);border-radius:var(--radius-md);padding:14px 10px;border:1px solid var(--border);text-align:center;transition:border-color .2s}
+    .stock-card .wh-label{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.5px;margin-bottom:4px}
+    .stock-card .wh-value{font-size:20px;font-weight:700;line-height:1.1;word-break:break-all}
+    .stock-card .wh-sub{font-size:10px;color:var(--muted);margin-top:3px}
+    .stock-card .wh-loc{font-size:10px;color:var(--muted);margin-top:2px}
+    .stock-card.has-stock{border-color:var(--success)}
+    .stock-card.has-stock .wh-value{color:var(--success)}
+    .stock-card.no-stock .wh-value{color:var(--danger)}
+    body.dark .stock-card{background:var(--row-alt)}
+
+    /* Unit rows */
+    .unit-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--border)}
+    .unit-row:last-child{border-bottom:none}
+    .unit-code{font-family:'Courier New',monospace;font-size:13px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .unit-name{font-size:12px;color:var(--muted);white-space:nowrap}
+    .unit-qty{font-size:12px;font-weight:700;color:var(--gold);white-space:nowrap;min-width:36px;text-align:right}
+    .scanned-marker{font-size:14px;margin-left:2px;flex-shrink:0}
+
+    /* Scanner */
+    #reader{width:100%;border-radius:var(--radius-md);overflow:hidden}
+    #reader video{border-radius:var(--radius-md) !important}
+    .scanner-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block;margin-right:4px;flex-shrink:0}
+    .scanner-dot.active{background:var(--success);animation:pulse 1.5s infinite}
+
+    /* History */
+    .hist-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;border-radius:var(--radius-sm)}
+    .hist-item:last-child{border-bottom:none}
+    .hist-item:hover{background:rgba(201,168,76,.06);padding:10px 8px;margin:0 -8px}
+    .hi-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+    .hi-code{font-size:11px;color:var(--muted);font-family:'Courier New',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .hi-time{font-size:11px;color:var(--muted);white-space:nowrap;flex-shrink:0}
+
+    /* Toast */
+    .toast{position:fixed;bottom:max(24px,env(safe-area-inset-bottom));right:16px;padding:12px 20px;border-radius:var(--radius-md);color:#fff;z-index:9999;animation:slideIn .3s ease;font-weight:500;box-shadow:var(--shadow-lg);max-width:88vw;font-size:13px}
+    .toast-success{background:var(--success)}
+    .toast-error{background:var(--danger)}
+    .toast-warning{background:var(--warning);color:var(--navy)}
+    .toast-info{background:var(--navy-mid);border-left:3px solid var(--gold)}
+
+    /* Spinner */
+    .spinner-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.55);align-items:center;justify-content:center;z-index:99999;backdrop-filter:blur(3px)}
+    .spinner-overlay.show{display:flex}
+    .spinner-box{background:var(--card-bg);border-radius:var(--radius-lg);padding:32px 40px;text-align:center;border-top:4px solid var(--gold);min-width:220px}
+    .spinner-ring{width:48px;height:48px;border:5px solid #dde3f0;border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px}
+
+    #loadingBar{position:fixed;top:0;left:0;height:3px;background:var(--gold);width:0;transition:width .4s;z-index:10001}
+    #resultSection{display:none}
+    #resultSection.show{display:block;animation:fadeIn .3s ease}
+    #backToTop{position:fixed;bottom:max(24px,env(safe-area-inset-bottom));right:max(16px,env(safe-area-inset-right));background:var(--gold);color:var(--navy);border:none;border-radius:50%;width:46px;height:46px;display:none;align-items:center;justify-content:center;box-shadow:var(--shadow-gold);z-index:90;font-size:20px;font-weight:700;cursor:pointer}
+    #backToTop.show{display:flex}
+
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+    .flex{display:flex}.gap-8{gap:8px}.gap-10{gap:10px}.mt-8{margin-top:8px}.mt-12{margin-top:12px}.mt-16{margin-top:16px}
+    .txt-muted{color:var(--muted)}.txt-center{text-align:center}.txt-bold{font-weight:700}
+    /* Login */
+    #loginScreen{display:none;position:fixed;inset:0;background:linear-gradient(160deg,var(--navy),var(--navy-mid));align-items:center;justify-content:center;padding:20px;z-index:200}
+    #loginScreen.show{display:flex}
+    .login-box{background:var(--card-bg);border-radius:var(--radius-lg);border-top:4px solid var(--gold);padding:32px 26px;max-width:380px;width:100%;text-align:center;box-shadow:var(--shadow-lg)}
+    .login-box .l-logo{width:64px;height:64px;border-radius:50%;margin:0 auto 14px;object-fit:contain}
+    .login-box h2{font-size:20px;font-weight:700;color:var(--text)}
+    .login-box h2 span{color:var(--gold)}
+    .login-box p{font-size:13px;color:var(--muted);margin-top:6px;margin-bottom:22px}
+    .login-err{display:none;background:#ffd5d0;color:#c0392b;font-size:13px;padding:10px 14px;border-radius:var(--radius-sm);margin-bottom:16px;font-weight:600}
+    .login-err.show{display:block}
+    #gsiButton{display:flex;justify-content:center}
+    /* User chip */
+    .user-chip{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:20px;padding:4px 6px 4px 12px;cursor:pointer;flex-shrink:0;max-width:160px}
+    .user-chip .uc-name{font-size:12px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .user-chip .uc-wh{font-size:10px;color:var(--gold);font-weight:700}
+    .scope-note{font-size:11px;color:var(--muted);margin-top:6px;font-style:italic}
+    #appScreen{display:none}
+    #appScreen.show{display:block}
+    #barcodeInput{letter-spacing:2px;text-align:center;font-weight:700;font-size:18px}
+    #barcodeInput::placeholder{font-size:14px;letter-spacing:0;font-weight:400}
+    .section-label{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:10px}
+    .not-found-icon{font-size:52px;margin-bottom:12px}
+  </style>
+</head>
+<body lang="th">
+
+<div id="loadingBar"></div>
+
+<div class="spinner-overlay" id="spinner">
+  <div class="spinner-box">
+    <div class="spinner-ring"></div>
+    <p id="spinnerMsg" style="font-size:14px;color:var(--muted)">กำลังโหลดข้อมูล...</p>
+  </div>
+</div>
+
+<!-- Login screen -->
+<div id="loginScreen">
+  <div class="login-box">
+    <img class="l-logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln92zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJticczw5h5np+n7M7mFBwPDda7jznOdhOWemZ+bt6reqq6qrCfwNDkIIwzCEEEoppfQGJzCsk5OTzMnJ0cGBZVkAEATBxtksZovJZEIq/PIShmEYhkFESiki/vXv+BfeW8TiOnAdZU7h4eEJ8XFJCXEJcbFRkZHBwUE+3t7u7u6OMhlIWCBSAACgwHM2i8VgNKpU6vaO9vqGxoqqmvKKysrKqoaGBrPZdOsb/e8DTQhhWbb3a3t6eQ8ckD529KjRI4enpfZ39fITv9cANCm5xg5lc5eqXalBikarTWu2AqJUsHh7+7FAfVykwT4e4YE+UYE+gc4S8ULOZCgqLj575sLpjIxLuZcUCvnNbv2/CbTID4LQPdKjoqOnTp5858wZo0ePlDq7A0CtAc4VVeaUVBdXVDY0NOhUKt5idiCCs5RxkbIMQ9xcXRmWBUDBZjNarIIg6C1WvclmtvEARObuERYU2D8lcUifuLHpyQMTIgAAkL+Ymb1rz56DBw9VVVWKt7bzz/8a0CzLinQJAL5+/rNn3f7wA/ePHDseADoFOHix/OjZnNzCy5rOVjfgIwM8+kcH94+PTo6NiAwN9vP1dnRzA4kMgLnRA3NgMSlVmobWzrKquoKy6vzK+or6JrnKIPPw7BcXOX3C6LunjE6MDAWAwoL8des37tq1s62tza4b/hy4yZ8AsV0dDRw0+InHFs67/x5HF48OsDezfuSouc97erv1+QMDHfV7EO" alt="Rattana">
+    <h2>RATTANA <span>STOCK</span></h2>
+    <p>เข้าสู่ระบบเพื่อเช็คสต็อกสินค้า</p>
+    <div class="login-err" id="loginErr"></div>
+    <div id="g_id_onload"
+         data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com"
+         data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
+    <div id="gsiButton">
+      <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill"></div>
+    </div>
+  </div>
+</div>
+
+<div id="appScreen">
+<header>
+  <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln92zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJticczw5h5np+n7M7mFBwPDda7jznOdhOWemZ+bt6reqq6qrCfwNDkIIwzCEEEoppfQGJzCsk5OTzMnJ0cGBZVkAEATBxtksZovJZEIq/PIShmEYhkFESiki/vXv+BfeW8TiOnAdZU7h4eEJ8XFJCXEJcbFRkZHBwUE+3t7u7u6OMhlIWCBSAACgwHM2i8VgNKpU6vaO9vqGxoqqmvKKysrKqoaGBrPZdOsb/e8DTQhhWbb3a3t6eQ8ckD529KjRI4enpfZ39fITv9cANCm5xg5lc5eqXalBikarTWu2AqJUsHh7+7FAfVykwT4e4YE+UYE+gc4S8ULOZCgqLj575sLpjIxLuZcUCvnNbv2/CbTID4LQPdKjoqOnTp5858wZo0ePlDq7A0CtAc4VVeaUVBdXVDY0NOhUKt5idiCCs5RxkbIMQ9xcXRmWBUDBZjNarIIg6C1WvclmtvEARObuERYU2D8lcUifuLHpyQMTIgAAkL+Ymb1rz56DBw9VVVWKt7bzz/8a0CzLinQJAL5+/rNn3f7wA/ePHDseADoFOHix/OjZnNzCy5rOVjfgIwM8+kcH94+PTo6NiAwN9vP1dnRzA4kMgLnRA3NgMSlVmobWzrKquoKy6vzK+or6JrnKIPPw7BcXOX3C6LunjE6MDAWAwoL8des37tq1s62tza4b/hy4yZ8AsV0dDRw0+InHFs67/x5HF48OsDezfuSouc97erv1+QMDHfV7EO" alt="R" height="34" style="object-fit:contain;flex-shrink:0;border-radius:50%">
+  <div class="logo-text">RATTANA <span>STOCK</span></div>
+  <div class="user-chip" id="userChip" onclick="logout()" title="คลิกเพื่อออกจากระบบ" style="display:none">
+    <div style="overflow:hidden">
+      <div class="uc-name" id="ucName">-</div>
+      <div class="uc-wh" id="ucWh">-</div>
+    </div>
+    <span style="font-size:16px">⎋</span>
+  </div>
+  <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">↻</button>
+  <button class="icon-btn" onclick="toggleDark()" title="Dark Mode">🌙</button>
+</header>
+
+<div class="content">
+
+  <!-- Scanner card -->
+  <div class="card card-gold mt-8">
+    <div class="card-head">
+      <h3>📦 สแกนบาร์โค้ด</h3>
+      <div class="flex" style="align-items:center;gap:6px;font-size:12px;color:var(--muted)">
+        <span class="scanner-dot" id="scannerDot"></span>
+        <span id="scannerStatusText">ปิดกล้อง</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="flex gap-8" style="flex-wrap:wrap">
+        <input type="text" id="barcodeInput" class="input" placeholder="สแกนหรือพิมพ์บาร์โค้ด..."
+               autocomplete="off" autocorrect="off" spellcheck="false" inputmode="numeric"
+               autofocus style="flex:1;min-width:180px">
+        <button class="btn btn-gold" onclick="lookupBarcode()" style="flex-shrink:0">🔍 ค้นหา</button>
+      </div>
+
+      <div class="flex gap-8 mt-8" style="align-items:center;flex-wrap:wrap">
+        <button class="btn btn-outline" id="btnCamera" onclick="toggleCamera()">📷 เปิดกล้อง</button>
+        <span style="font-size:12px;color:var(--muted)" id="dataStatus">กำลังโหลด...</span>
+      </div>
+
+      <div id="cameraSection" style="display:none;margin-top:12px">
+        <div id="reader"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Result -->
+  <div id="resultSection"></div>
+
+  <!-- History -->
+  <div class="card" id="historyCard" style="display:none">
+    <div class="card-head">
+      <h3>🕐 ประวัติการสแกน</h3>
+      <button class="btn btn-outline btn-sm" onclick="clearHistory()">ล้าง</button>
+    </div>
+    <div class="card-body" id="historyList"></div>
+  </div>
+
+  <div style="height:72px"></div>
+</div>
+
+<button id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+</div><!-- /appScreen -->
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+// ── CONFIG ──────────────────────────────────────────────
+const SHEET_ID   = '16mYDqAqqJma-_0vCIAajy6bcjdOZ7F6VagxkdkqAB2I';
+const CACHE_KEY  = 'rattana_stock_v1';
+const CACHE_TTL  = 5 * 60 * 1000;
+
+const AUTH_CONFIG = {
+  usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
+  usersSheetName: 'Rattana Users for apps',
+};
+const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
+
+const WH_LIST  = ['W1','W2','W3','W4'];
+const WH_NAMES = { W1:'สมุทรสงคราม', W2:'สุพรรณบุรี', W3:'ราชบุรี', W4:'นครปฐม' };
+const UNITS    = ['EA','PA','BP','CS'];
+const UNIT_CSS = { EA:'badge-ea', PA:'badge-pa', BP:'badge-bp', CS:'badge-cs' };
+
+// ── STATE ───────────────────────────────────────────────
+let currentUser  = null;
+let visibleWh    = [];   // warehouses this user may view
+let allProducts  = [];
+let barcodeIndex = {};   // code → { product, unit }
+let html5QR      = null;
+let cameraOpen   = false;
+let scanHistory  = [];
+
+try { scanHistory = JSON.parse(localStorage.getItem('rattana_scan_hist') || '[]'); } catch {}
+
+// ── BOOT ────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  applyDarkPref();
+
+  document.getElementById('barcodeInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') lookupBarcode();
+  });
+  window.addEventListener('scroll', () => {
+    document.getElementById('backToTop').classList.toggle('show', window.scrollY > 300);
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && cameraOpen) stopCamera();
+  });
+  window.addEventListener('pagehide', () => { if (cameraOpen) stopCamera(); });
+
+  checkSession();
+});
+
+// ── AUTH ─────────────────────────────────────────────────
+function decodeJwtPayload(token) {
+  const parts = String(token||'').split('.');
+  if (parts.length < 2) throw new Error('JWT format invalid');
+  let b64 = parts[1].replace(/-/g,'+').replace(/_/g,'/');
+  const pad = (4 - b64.length % 4) % 4;
+  if (pad) b64 += '='.repeat(pad);
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return JSON.parse(new TextDecoder('utf-8').decode(bytes));
+}
+const normalizeEmail = s => String(s||'').replace(/[​‌‍﻿]/g,'').replace(/\s+/g,'').toLowerCase();
+
+async function handleGoogleLogin(r) {
+  showSpinner('กำลังตรวจสอบสิทธิ์...');
+  try {
+    const email = normalizeEmail(decodeJwtPayload(r.credential).email);
+    const users = await loadUsersSheet();
+    const user  = users.find(u => normalizeEmail(u['E-mail']) === email);
+    if (!user)                                                           { showLoginError('ไม่พบอีเมลนี้ในระบบ — ติดต่อผู้ดูแล'); return; }
+    if (String(user['Status']||'').trim().toLowerCase() !== 'active')   { showLoginError('บัญชีถูกระงับ — ติดต่อผู้ดูแล'); return; }
+    currentUser = {
+      email,
+      name:      user['ชื่อ - สกุล'] || user['ชื่อเล่น'] || email,
+      nickname:  user['ชื่อเล่น'] || '',
+      role:      parseInt(user['User Role']) || 1,
+      warehouse: String(user['W']||'').trim().toUpperCase(),
+      empId:     String(user['รหัสพนักงาน']||''),
+    };
+    localStorage.setItem('rattanaUser', JSON.stringify({ data: currentUser, exp: Date.now() + 30*24*60*60*1000 }));
+    enterApp();
+  } catch(e) {
+    console.error(e);
+    showLoginError('เกิดข้อผิดพลาด ลองใหม่อีกครั้ง');
+  } finally {
+    hideSpinner();
+  }
+}
+
+async function loadUsersSheet() {
+  const url = `https://docs.google.com/spreadsheets/d/${AUTH_CONFIG.usersSheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(AUTH_CONFIG.usersSheetName)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('users fetch failed');
+  return parseCsv(await res.text());
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('loginErr');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+
+function checkSession() {
+  try {
+    const raw = localStorage.getItem('rattanaUser');
+    if (!raw) { showLogin(); return; }
+    const { data, exp } = JSON.parse(raw);
+    if (Date.now() > exp) { localStorage.removeItem('rattanaUser'); showLogin(); return; }
+    currentUser = data;
+    enterApp();
+  } catch { localStorage.removeItem('rattanaUser'); showLogin(); }
+}
+
+function showLogin() {
+  document.getElementById('loginScreen').classList.add('show');
+  document.getElementById('appScreen').classList.remove('show');
+}
+
+function enterApp() {
+  // Compute visible warehouses
+  if (currentUser.role >= ALL_WAREHOUSE_ROLE) {
+    visibleWh = [...WH_LIST];
+  } else {
+    visibleWh = WH_LIST.includes(currentUser.warehouse) ? [currentUser.warehouse] : [];
+  }
+  // User chip
+  const chip = document.getElementById('userChip');
+  chip.style.display = 'flex';
+  document.getElementById('ucName').textContent = currentUser.nickname || currentUser.name;
+  document.getElementById('ucWh').textContent = currentUser.role >= ALL_WAREHOUSE_ROLE
+    ? `ทุกคลัง · Role ${currentUser.role}`
+    : (currentUser.warehouse || '-') + ` · Role ${currentUser.role}`;
+
+  document.getElementById('loginScreen').classList.remove('show');
+  document.getElementById('appScreen').classList.add('show');
+
+  renderHistory();
+  loadData();
+}
+
+function logout() {
+  if (!confirm('ออกจากระบบ?')) return;
+  if (cameraOpen) stopCamera();
+  localStorage.removeItem('rattanaUser');
+  location.reload();
+}
+
+// ── CSV PARSER (RFC-4180) ────────────────────────────────
+function parseCsv(text) {
+  if (!text) return [];
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const rows = []; let row = [], cell = '', inQuote = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuote) {
+      if (ch === '"') { if (text[i+1]==='"'){cell+='"';i++;}else inQuote=false; }
+      else cell += ch;
+    } else {
+      if (ch==='"') inQuote=true;
+      else if (ch===',') { row.push(cell); cell=''; }
+      else if (ch==='\r') {}
+      else if (ch==='\n') { row.push(cell); rows.push(row); row=[]; cell=''; }
+      else cell += ch;
+    }
+  }
+  if (cell||row.length) { row.push(cell); rows.push(row); }
+  if (!rows.length) return [];
+  const clean = s => String(s||'').replace(/[​‌‍﻿]/g,'').replace(/ /g,' ').trim();
+  const headers = rows[0].map(clean);
+  return rows.slice(1).filter(r=>r.some(c=>clean(c))).map(r=>Object.fromEntries(headers.map((k,i)=>[k,clean(r[i]||'')])));
+}
+
+// ── DATA LOADING ─────────────────────────────────────────
+const getCached = k => { try{const i=JSON.parse(localStorage.getItem(k));return i&&Date.now()-i.ts<CACHE_TTL?i.data:null;}catch{return null}};
+const setCache  = (k,d) => { try{localStorage.setItem(k,JSON.stringify({ts:Date.now(),data:d}));}catch{} };
+
+async function loadData(force=false) {
+  if (!force) {
+    const cached = getCached(CACHE_KEY);
+    if (cached) {
+      buildIndex(cached);
+      setStatusOk(cached.length);
+      fetchAndUpdate(); // background refresh
+      return;
+    }
+  }
+  showSpinner('กำลังโหลดข้อมูลสต็อก...');
+  setLoadingBar(true);
+  try {
+    const data = await fetchSheet();
+    if (data && data.length) {
+      setCache(CACHE_KEY, data);
+      buildIndex(data);
+      setStatusOk(data.length);
+    } else {
+      document.getElementById('dataStatus').textContent = '❌ โหลดไม่ได้ — กรุณา Refresh';
+      showToast('โหลดข้อมูลไม่ได้', 'error');
+    }
+  } finally {
+    hideSpinner();
+    setLoadingBar(false);
+  }
+}
+
+async function fetchAndUpdate() {
+  const data = await fetchSheet().catch(()=>null);
+  if (data && data.length) { setCache(CACHE_KEY, data); buildIndex(data); setStatusOk(data.length); }
+}
+
+async function fetchSheet() {
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return parseCsv(await res.text());
+}
+
+function buildIndex(data) {
+  allProducts  = data;
+  barcodeIndex = {};
+  data.forEach(row => {
+    UNITS.forEach(u => {
+      const code = String(row[`CODE ${u}`]||'').trim();
+      if (code && code !== '0' && code !== '-' && code.length > 3) {
+        if (!barcodeIndex[code]) barcodeIndex[code] = { product: row, unit: u };
+      }
+    });
+  });
+}
+
+function setStatusOk(count) {
+  document.getElementById('dataStatus').textContent = `✅ สินค้า ${count.toLocaleString()} รายการ`;
+}
+
+// ── LOOKUP ───────────────────────────────────────────────
+function lookupBarcode(code) {
+  const inp = document.getElementById('barcodeInput');
+  const bc  = (code || inp.value).trim();
+  if (!bc) { inp.focus(); return; }
+
+  const found = barcodeIndex[bc];
+  if (found) {
+    showResult(bc, found.product, found.unit);
+    addHistory(bc, found.product, found.unit);
+  } else {
+    showNotFound(bc);
+  }
+  if (!code) { setTimeout(() => { inp.select(); }, 80); }
+}
+
+// ── STOCK FORMAT ─────────────────────────────────────────
+// Stock is stored as CS.EA  e.g. "5.08" = 5 CS, 8 EA
+function parseStock(val) {
+  const s = String(val||'0').trim();
+  if (!s || s==='' || s==='-') return { cs:0, ea:0, total:0, raw:'0' };
+  const num = parseFloat(s);
+  if (isNaN(num) || num < 0) return { cs:0, ea:0, total:0, raw:s };
+  const cs = Math.floor(num);
+  const ea = Math.round((num - cs) * 100);
+  return { cs, ea, total:num, raw:s };
+}
+
+function fmtStock(val) {
+  const { cs, ea, total, raw } = parseStock(val);
+  if (total === 0 && ea === 0) return { line1:'0', line2:'ไม่มีสต็อก', hasStock:false };
+  let line1 = '';
+  if (cs > 0 && ea > 0)      line1 = `${cs} CS\n${ea} EA`;
+  else if (cs > 0)            line1 = `${cs} CS`;
+  else                        line1 = `${ea} EA`;
+  return { line1, line2: raw !== '0' ? raw : '', hasStock: total > 0 };
+}
+
+// ── RESULT DISPLAY ───────────────────────────────────────
+function showResult(barcode, product, scannedUnit) {
+  const name  = product['PRODUCT NAME'] || '-';
+  const short = product['SHORT NAME'] || '';
+  const cat   = [product['CAT GROUP'], product['CAT BRAND'], product['CAT SIZE']].filter(Boolean);
+
+  const unitRows = UNITS.map(u => {
+    const code  = String(product[`CODE ${u}`]||'').trim();
+    const runit = product[`RATTANA UNIT ${u}`] || product[`UNIT ${u}`] || u;
+    const qty   = product[`QTY ${u}`] || '';
+    return { u, code, runit, qty, isScanned: u === scannedUnit };
+  }).filter(x => x.code && x.code !== '0' && x.code !== '-' && x.code.length > 3);
+
+  const stockCards = visibleWh.map(w => {
+    const val = product[`STOCK ${w}`] || '0';
+    const fmt = fmtStock(val);
+    const lines = fmt.line1.split('\n');
+    return `
+      <div class="stock-card ${fmt.hasStock ? 'has-stock' : 'no-stock'}">
+        <div class="wh-label">${w}</div>
+        <div class="wh-value">${lines[0]}</div>
+        ${lines[1] ? `<div class="wh-value" style="font-size:14px">${lines[1]}</div>` : ''}
+        <div class="wh-loc">${WH_NAMES[w]||w}</div>
+      </div>`;
+  }).join('');
+
+  const scopeNote = currentUser && currentUser.role >= ALL_WAREHOUSE_ROLE
+    ? 'แสดงทุกคลัง'
+    : `แสดงเฉพาะคลังของคุณ (${currentUser ? currentUser.warehouse : '-'})`;
+
+  const unitRowsHtml = unitRows.map(x => `
+    <div class="unit-row" style="${x.isScanned?'background:rgba(201,168,76,.09);margin:0 -4px;padding:9px 4px;border-radius:var(--radius-sm)':''}">
+      <span class="badge ${UNIT_CSS[x.u]||''}" style="width:34px;text-align:center;flex-shrink:0">${x.u}</span>
+      <span class="unit-code">${x.code}</span>
+      <span class="unit-name">${x.runit}</span>
+      <span class="unit-qty">${x.qty ? '×'+x.qty : ''}</span>
+      ${x.isScanned ? '<span class="scanned-marker">◀</span>' : ''}
+    </div>`).join('');
+
+  const html = `
+    <div class="card card-success">
+      <div class="card-head">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11px;color:var(--muted);font-family:'Courier New',monospace;margin-bottom:3px">${barcode}</div>
+          <div style="font-size:16px;font-weight:700;line-height:1.3">${name}</div>
+          ${short ? `<div style="font-size:12px;color:var(--muted);margin-top:2px">${short}</div>` : ''}
+        </div>
+        <span class="badge ${UNIT_CSS[scannedUnit]||''}" style="font-size:13px;padding:5px 12px;flex-shrink:0">${scannedUnit}</span>
+      </div>
+      <div class="card-body">
+
+        <div class="section-label">สต็อกคลัง (CS.EA)</div>
+        ${visibleWh.length
+          ? `<div class="stock-grid">${stockCards}</div><div class="scope-note">${scopeNote}</div>`
+          : `<div class="scope-note" style="color:var(--danger)">บัญชีของคุณยังไม่ได้กำหนดคลัง (คอลัมน์ W) — ติดต่อผู้ดูแล</div>`}
+
+        <div class="section-label mt-16">บาร์โค้ดและหน่วย</div>
+        <div>${unitRowsHtml}</div>
+
+        ${cat.length ? `
+        <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:6px">
+          ${cat.map(c=>`<span class="badge" style="background:var(--border);color:var(--muted)">${c}</span>`).join('')}
+        </div>` : ''}
+      </div>
+    </div>`;
+
+  const sec = document.getElementById('resultSection');
+  sec.innerHTML = html;
+  sec.className = 'show';
+  setTimeout(() => sec.scrollIntoView({ behavior:'smooth', block:'nearest' }), 80);
+}
+
+function showNotFound(barcode) {
+  const sec = document.getElementById('resultSection');
+  sec.innerHTML = `
+    <div class="card card-danger">
+      <div class="card-body txt-center" style="padding:32px 16px">
+        <div class="not-found-icon">🔍</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:8px">ไม่พบบาร์โค้ด</div>
+        <code style="background:var(--border);padding:3px 10px;border-radius:4px;font-size:15px;font-weight:700">${barcode}</code>
+        <p style="font-size:13px;color:var(--muted);margin-top:10px">ไม่พบในระบบ — ลองรีเฟรชข้อมูลหรือตรวจสอบบาร์โค้ด</p>
+      </div>
+    </div>`;
+  sec.className = 'show';
+  showToast(`ไม่พบ: ${barcode}`, 'error');
+}
+
+// ── CAMERA ───────────────────────────────────────────────
+function toggleCamera() { cameraOpen ? stopCamera() : startCamera(); }
+
+function startCamera() {
+  document.getElementById('cameraSection').style.display = 'block';
+  html5QR = new Html5Qrcode('reader');
+  const formats = [
+    Html5QrcodeSupportedFormats.EAN_13,
+    Html5QrcodeSupportedFormats.EAN_8,
+    Html5QrcodeSupportedFormats.CODE_128,
+    Html5QrcodeSupportedFormats.CODE_39,
+    Html5QrcodeSupportedFormats.UPC_A,
+    Html5QrcodeSupportedFormats.UPC_E,
+    Html5QrcodeSupportedFormats.ITF,
+  ];
+  html5QR.start(
+    { facingMode:'environment' },
+    { fps:10, qrbox:{ width:280, height:100 }, formatsToSupport:formats },
+    (code) => {
+      document.getElementById('barcodeInput').value = code;
+      lookupBarcode(code);
+      if (navigator.vibrate) navigator.vibrate(80);
+    },
+    () => {}
+  ).then(() => {
+    cameraOpen = true;
+    setScannerUI(true);
+  }).catch(err => {
+    showToast('เปิดกล้องไม่ได้: ' + err, 'error');
+    document.getElementById('cameraSection').style.display = 'none';
+  });
+}
+
+function stopCamera() {
+  if (html5QR) {
+    html5QR.stop().then(() => { html5QR.clear(); html5QR = null; }).catch(()=>{});
+  }
+  cameraOpen = false;
+  document.getElementById('cameraSection').style.display = 'none';
+  setScannerUI(false);
+}
+
+function setScannerUI(on) {
+  document.getElementById('scannerDot').className = 'scanner-dot' + (on?' active':'');
+  document.getElementById('scannerStatusText').textContent = on ? 'กล้องทำงาน' : 'ปิดกล้อง';
+  document.getElementById('btnCamera').textContent = on ? '📷 ปิดกล้อง' : '📷 เปิดกล้อง';
+}
+
+// ── HISTORY ──────────────────────────────────────────────
+function addHistory(barcode, product, unit) {
+  const item = { barcode, name: product['PRODUCT NAME']||'-', unit, time: new Date().toISOString() };
+  scanHistory = [item, ...scanHistory.filter(h=>h.barcode!==barcode)].slice(0, 25);
+  try { localStorage.setItem('rattana_scan_hist', JSON.stringify(scanHistory)); } catch {}
+  renderHistory();
+}
+
+function renderHistory() {
+  const card = document.getElementById('historyCard');
+  const list = document.getElementById('historyList');
+  if (!scanHistory.length) { card.style.display='none'; return; }
+  card.style.display = 'block';
+  list.innerHTML = scanHistory.map(h => `
+    <div class="hist-item" onclick="rerLookup('${h.barcode}')">
+      <span class="badge ${UNIT_CSS[h.unit]||''}" style="flex-shrink:0">${h.unit}</span>
+      <div style="flex:1;min-width:0">
+        <div class="hi-name">${h.name}</div>
+        <div class="hi-code">${h.barcode}</div>
+      </div>
+      <div class="hi-time">${fmtTime(h.time)}</div>
+    </div>`).join('');
+}
+
+function rerLookup(bc) {
+  document.getElementById('barcodeInput').value = bc;
+  lookupBarcode(bc);
+  window.scrollTo({ top:0, behavior:'smooth' });
+}
+
+function clearHistory() {
+  scanHistory = [];
+  try { localStorage.removeItem('rattana_scan_hist'); } catch {}
+  renderHistory();
+  showToast('ล้างประวัติแล้ว', 'info');
+}
+
+function fmtTime(iso) {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2,'0')}.${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+// ── UTILITIES ─────────────────────────────────────────────
+const showSpinner = m => { document.getElementById('spinnerMsg').textContent=m||'Loading...'; document.getElementById('spinner').classList.add('show'); };
+const hideSpinner = () => document.getElementById('spinner').classList.remove('show');
+const setLoadingBar = on => document.getElementById('loadingBar').style.width = on?'85%':'0';
+
+function showToast(msg, type='info') {
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+async function refreshData() {
+  const b = document.getElementById('btnRefresh');
+  b.disabled = true;
+  b.style.transform='rotate(360deg)'; b.style.transition='transform .6s';
+  await loadData(true);
+  b.disabled = false;
+  setTimeout(() => { b.style.transform=''; b.style.transition=''; }, 650);
+  showToast('อัพเดทข้อมูลเรียบร้อย ✓', 'success');
+}
+
+function toggleDark() {
+  document.body.classList.toggle('dark');
+  localStorage.setItem('rattana_dark', document.body.classList.contains('dark')? '1':'0');
+}
+function applyDarkPref() {
+  if (localStorage.getItem('rattana_dark')==='1') document.body.classList.add('dark');
+}
+</script>
+</body>
+</html>
