@@ -2,9 +2,14 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Rattana Stock Count v2.0</title>
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Rattana Stock">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="theme-color" content="#0d1b3e">
+  <title>Rattana Stock Count v2.1</title>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
@@ -144,6 +149,10 @@
     #appScreen{display:none}
     #appScreen.show{display:block}
     #barcodeInput,#countInput{letter-spacing:2px;text-align:center;font-weight:700;font-size:18px}
+    /* Scanner video — responsive on phone & desktop */
+    #reader,#countReader{width:100%;max-width:420px;margin:0 auto;border-radius:var(--radius-md);overflow:hidden}
+    #reader video,#countReader video{width:100%!important;height:auto!important;display:block;border-radius:var(--radius-md)}
+    #reader img,#countReader img{display:none}
     /* Tab nav */
     .tab-nav{display:flex;gap:6px;margin:10px 0 4px}
     .tab-btn{flex:1;background:var(--card-bg);border:1.5px solid var(--border);color:var(--muted);padding:11px 8px;font-family:inherit;font-size:14px;font-weight:700;border-radius:var(--radius-md);cursor:pointer;transition:all .15s;min-height:46px}
@@ -783,23 +792,33 @@ function scanFormats() {
   ];
 }
 
+// Robust starter — works on phone (rear cam) and desktop/laptop (front/only cam).
+// Tries environment first, falls back to enumerated cameras.
+function startScanner(readerId, onDetected) {
+  const qr = new Html5Qrcode(readerId);
+  const cfg = { fps:10, qrbox:{ width:280, height:100 }, aspectRatio:1.777, formatsToSupport:scanFormats() };
+  const run = camSpec => qr.start(camSpec, cfg, onDetected, () => {});
+  return run({ facingMode: { ideal: 'environment' } })
+    .then(() => qr)
+    .catch(() => Html5Qrcode.getCameras().then(cams => {
+      if (!cams || !cams.length) throw new Error('ไม่พบกล้องบนอุปกรณ์นี้');
+      const back = cams.find(c => /back|rear|environment|หลัง/i.test(c.label || ''));
+      return run((back || cams[cams.length - 1]).id).then(() => qr);
+    }));
+}
+
 function startCamera() {
   document.getElementById('cameraSection').style.display = 'block';
-  html5QR = new Html5Qrcode('reader');
-  html5QR.start(
-    { facingMode:'environment' },
-    { fps:10, qrbox:{ width:280, height:100 }, formatsToSupport:scanFormats() },
-    (code) => {
-      document.getElementById('barcodeInput').value = code;
-      lookupBarcode(code);
-      if (navigator.vibrate) navigator.vibrate(80);
-    },
-    () => {}
-  ).then(() => {
+  startScanner('reader', (code) => {
+    document.getElementById('barcodeInput').value = code;
+    lookupBarcode(code);
+    if (navigator.vibrate) navigator.vibrate(80);
+  }).then(qr => {
+    html5QR = qr;
     cameraOpen = true;
     setScannerUI(true);
   }).catch(err => {
-    showToast('เปิดกล้องไม่ได้: ' + err, 'error');
+    showToast('เปิดกล้องไม่ได้: ' + (err.message||err), 'error');
     document.getElementById('cameraSection').style.display = 'none';
   });
 }
@@ -1256,22 +1275,17 @@ async function saveCountToSheet() {
 function toggleCountCamera() { countCamOpen ? stopCountCamera() : startCountCamera(); }
 function startCountCamera() {
   document.getElementById('countCameraSection').style.display = 'block';
-  countQR = new Html5Qrcode('countReader');
-  countQR.start(
-    { facingMode:'environment' },
-    { fps:10, qrbox:{ width:280, height:100 }, formatsToSupport:scanFormats() },
-    (code) => {
-      // avoid re-trigger while a pending qty card is open
-      if (!pendingScan) { countScan(code); if (navigator.vibrate) navigator.vibrate(80); }
-    },
-    () => {}
-  ).then(() => {
+  startScanner('countReader', (code) => {
+    // avoid re-trigger while a pending qty card is open
+    if (!pendingScan) { countScan(code); if (navigator.vibrate) navigator.vibrate(80); }
+  }).then(qr => {
+    countQR = qr;
     countCamOpen = true;
     document.getElementById('countDot').className = 'scanner-dot active';
     document.getElementById('countCamText').textContent = 'กล้องทำงาน';
     document.getElementById('btnCountCam').textContent = '📷 ปิดกล้อง';
   }).catch(err => {
-    showToast('เปิดกล้องไม่ได้: ' + err, 'error');
+    showToast('เปิดกล้องไม่ได้: ' + (err.message||err), 'error');
     document.getElementById('countCameraSection').style.display = 'none';
   });
 }
