@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Rattana Stock Checker v1.1</title>
+  <title>Rattana Stock Count v2.0</title>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
@@ -143,7 +143,48 @@
     .scope-note{font-size:11px;color:var(--muted);margin-top:6px;font-style:italic}
     #appScreen{display:none}
     #appScreen.show{display:block}
-    #barcodeInput{letter-spacing:2px;text-align:center;font-weight:700;font-size:18px}
+    #barcodeInput,#countInput{letter-spacing:2px;text-align:center;font-weight:700;font-size:18px}
+    /* Tab nav */
+    .tab-nav{display:flex;gap:6px;margin:10px 0 4px}
+    .tab-btn{flex:1;background:var(--card-bg);border:1.5px solid var(--border);color:var(--muted);padding:11px 8px;font-family:inherit;font-size:14px;font-weight:700;border-radius:var(--radius-md);cursor:pointer;transition:all .15s;min-height:46px}
+    .tab-btn.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+    body.dark .tab-btn.active{background:var(--gold);color:var(--navy);border-color:var(--gold)}
+    /* Count list */
+    .count-item{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border)}
+    .count-item:last-child{border-bottom:none}
+    .ci-main{flex:1;min-width:0}
+    .ci-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ci-breakdown{font-size:12px;color:var(--muted);margin-top:2px}
+    .ci-pieces{font-size:13px;font-weight:700;color:var(--navy);white-space:nowrap}
+    body.dark .ci-pieces{color:var(--gold-light)}
+    .ci-x{background:transparent;border:none;color:var(--danger);font-size:18px;cursor:pointer;padding:4px 8px}
+    .qty-row{display:flex;align-items:center;gap:10px;justify-content:center;margin:10px 0}
+    .qty-btn{width:48px;height:48px;border-radius:var(--radius-md);border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:24px;font-weight:700;cursor:pointer}
+    .qty-input{width:96px;height:52px;text-align:center;font-size:24px;font-weight:700;border:1.5px solid var(--gold);border-radius:var(--radius-md);background:var(--card-bg);color:var(--text)}
+    /* Modal */
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.65);z-index:9000;align-items:flex-start;justify-content:center;padding:12px;backdrop-filter:blur(4px);overflow-y:auto}
+    .modal-overlay.open{display:flex}
+    .modal{background:var(--card-bg);border-radius:var(--radius-lg);max-width:760px;width:100%;margin:auto;border-top:4px solid var(--gold);animation:slideUp .22s ease}
+    .modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--card-bg);border-radius:var(--radius-lg) var(--radius-lg) 0 0;z-index:2}
+    .modal-head h3{font-size:16px;font-weight:700}
+    .modal-close{background:transparent;border:none;font-size:26px;color:var(--muted);cursor:pointer;line-height:1}
+    .modal-body{padding:14px 18px}
+    .modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;position:sticky;bottom:0;background:var(--card-bg)}
+    @keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+    /* Summary table */
+    .sum-tbl{width:100%;border-collapse:collapse;font-size:13px}
+    .sum-tbl th{background:var(--navy);color:#fff;padding:8px 8px;text-align:right;font-size:12px;white-space:nowrap;border-bottom:2px solid var(--gold)}
+    .sum-tbl th:first-child{text-align:left}
+    .sum-tbl td{padding:8px 8px;border-bottom:1px solid var(--border);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+    .sum-tbl td:first-child{text-align:left;white-space:normal;min-width:120px}
+    .sum-tbl tfoot td{font-weight:700;border-top:2px solid var(--gold);background:var(--row-alt)}
+    .diff-ok{color:var(--success);font-weight:700}
+    .diff-short{color:var(--danger);font-weight:700}
+    .diff-over{color:var(--info);font-weight:700}
+    .sum-stat{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+    .sum-stat .ss{background:var(--card-bg);border:1px solid var(--border);border-top:3px solid var(--gold);border-radius:var(--radius-md);padding:12px;text-align:center}
+    .sum-stat .ss .v{font-size:20px;font-weight:700}
+    .sum-stat .ss .l{font-size:11px;color:var(--muted);margin-top:2px}
     #barcodeInput::placeholder{font-size:14px;letter-spacing:0;font-weight:400}
     .section-label{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:10px}
     .not-found-icon{font-size:52px;margin-bottom:12px}
@@ -193,6 +234,15 @@
 
 <div class="content">
 
+  <!-- Tab nav -->
+  <div class="tab-nav">
+    <button class="tab-btn active" id="tabLookup" onclick="setMode('lookup')">🔍 เช็คสต็อก</button>
+    <button class="tab-btn" id="tabCount" onclick="setMode('count')">📦 นับสต็อก</button>
+  </div>
+
+  <!-- ══════════ LOOKUP MODE ══════════ -->
+  <div id="modeLookup">
+
   <!-- Scanner card -->
   <div class="card card-gold mt-8">
     <div class="card-head">
@@ -233,13 +283,93 @@
     <div class="card-body" id="historyList"></div>
   </div>
 
+  </div><!-- /modeLookup -->
+
+  <!-- ══════════ COUNT MODE ══════════ -->
+  <div id="modeCount" style="display:none">
+
+    <div class="card card-gold mt-8">
+      <div class="card-head">
+        <h3>📦 นับสต็อก</h3>
+        <div class="flex" style="align-items:center;gap:6px;font-size:12px;color:var(--muted)">
+          <span class="scanner-dot" id="countDot"></span><span id="countCamText">ปิดกล้อง</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="field mb-12">
+          <label>คลังที่กำลังนับ</label>
+          <select id="countWh" class="input" onchange="onCountWhChange()"></select>
+        </div>
+        <div class="flex gap-8" style="flex-wrap:wrap">
+          <input type="text" id="countInput" class="input" placeholder="สแกน/พิมพ์บาร์โค้ด..."
+                 autocomplete="off" autocorrect="off" spellcheck="false" inputmode="numeric"
+                 style="flex:1;min-width:180px">
+          <button class="btn btn-gold" onclick="countScan()" style="flex-shrink:0">➕ นับ</button>
+        </div>
+        <div class="flex gap-8 mt-8" style="align-items:center;flex-wrap:wrap">
+          <button class="btn btn-outline" id="btnCountCam" onclick="toggleCountCamera()">📷 เปิดกล้อง</button>
+          <span style="font-size:12px;color:var(--muted)">สแกนบาร์โค้ดหน่วยไหน นับตามหน่วยนั้น</span>
+        </div>
+        <div id="countCameraSection" style="display:none;margin-top:12px"><div id="countReader"></div></div>
+      </div>
+    </div>
+
+    <!-- pending add card -->
+    <div id="countPending"></div>
+
+    <!-- counted list -->
+    <div class="card mt-12" id="countListCard" style="display:none">
+      <div class="card-head">
+        <h3>📋 รายการที่นับ (<span id="countN">0</span>)</h3>
+        <div class="flex gap-8">
+          <button class="btn btn-gold btn-sm" onclick="showSummary()">📊 สรุปผล</button>
+          <button class="btn btn-outline btn-sm" onclick="clearCount()">ล้าง</button>
+        </div>
+      </div>
+      <div class="card-body" style="padding:8px 16px" id="countList"></div>
+    </div>
+
+  </div><!-- /modeCount -->
+
   <div style="height:72px"></div>
+</div>
+
+<!-- Summary modal -->
+<div class="modal-overlay" id="summaryModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>📊 สรุปผลการนับ</h3>
+      <button class="modal-close" onclick="closeSummary()">×</button>
+    </div>
+    <div class="modal-body" id="summaryBody"></div>
+    <div class="modal-foot">
+      <button class="btn btn-outline btn-sm" onclick="closeSummary()">ปิด</button>
+      <button class="btn btn-outline btn-sm" onclick="exportCountExcel()">⬇ Excel</button>
+      <button class="btn btn-gold btn-sm" onclick="saveCountToSheet()">☁ บันทึกลง Google Sheet</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit-item modal -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head">
+      <h3>แก้ไขจำนวนที่นับ</h3>
+      <button class="modal-close" onclick="closeEditItem()">×</button>
+    </div>
+    <div class="modal-body" id="editBody"></div>
+    <div class="modal-foot">
+      <button class="btn btn-outline btn-sm" onclick="closeEditItem()">ยกเลิก</button>
+      <button class="btn btn-gold btn-sm" onclick="saveEditItem()">บันทึก</button>
+    </div>
+  </div>
 </div>
 
 <button id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
 </div><!-- /appScreen -->
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script>
 // ── CONFIG ──────────────────────────────────────────────
 const SHEET_ID   = '16mYDqAqqJma-_0vCIAajy6bcjdOZ7F6VagxkdkqAB2I';
@@ -252,6 +382,9 @@ const AUTH_CONFIG = {
 };
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
+// Apps Script Web App URL for saving count results (paste after deploying — see setup note)
+const COUNT_SAVE_URL = '';
+
 const WH_LIST  = ['W1','W2','W3','W4'];
 const WH_NAMES = { W1:'สมุทรสงคราม', W2:'สุพรรณบุรี', W3:'ราชบุรี', W4:'นครปฐม' };
 const UNITS    = ['EA','PA','BP','CS'];
@@ -262,6 +395,8 @@ let currentUser  = null;
 let visibleWh    = [];   // warehouses this user may view
 let allProducts  = [];
 let barcodeIndex = {};   // code → { product, unit }
+let productByKey = {};   // productKey → product row
+let currentMode  = 'lookup';
 let html5QR      = null;
 let cameraOpen   = false;
 let scanHistory  = [];
@@ -278,10 +413,13 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('scroll', () => {
     document.getElementById('backToTop').classList.toggle('show', window.scrollY > 300);
   });
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden && cameraOpen) stopCamera();
+  document.getElementById('countInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') countScan();
   });
-  window.addEventListener('pagehide', () => { if (cameraOpen) stopCamera(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { if (cameraOpen) stopCamera(); if (countCamOpen) stopCountCamera(); }
+  });
+  window.addEventListener('pagehide', () => { if (cameraOpen) stopCamera(); if (countCamOpen) stopCountCamera(); });
 
   checkSession();
 });
@@ -370,6 +508,10 @@ function enterApp() {
     ? `ทุกคลัง · Role ${currentUser.role}`
     : (currentUser.warehouse || '-') + ` · Role ${currentUser.role}`;
 
+  // Count mode needs a warehouse
+  const tabCount = document.getElementById('tabCount');
+  if (!visibleWh.length) { tabCount.disabled = true; tabCount.style.opacity = '.45'; tabCount.title = 'บัญชีไม่มีคลัง'; }
+
   document.getElementById('loginScreen').classList.remove('show');
   document.getElementById('appScreen').classList.add('show');
 
@@ -456,6 +598,7 @@ async function fetchSheet() {
 function buildIndex(data) {
   allProducts  = data;
   barcodeIndex = {};
+  productByKey = {};
   data.forEach(row => {
     UNITS.forEach(u => {
       const code = String(row[`CODE ${u}`]||'').trim();
@@ -463,7 +606,23 @@ function buildIndex(data) {
         if (!barcodeIndex[code]) barcodeIndex[code] = { product: row, unit: u };
       }
     });
+    productByKey[productKey(row)] = row;
   });
+}
+
+// Stable product key — first usable barcode (CS→BP→PA→EA), else product name
+function productKey(p) {
+  for (const u of ['CS','BP','PA','EA']) {
+    const c = String(p[`CODE ${u}`]||'').trim();
+    if (c && c.length > 3 && c !== '0' && c !== '-') return c;
+  }
+  return p['PRODUCT NAME'] || '?';
+}
+// EA-per-unit conversion factor (EA always 1; others from QTY column)
+function unitFactor(p, u) {
+  if (u === 'EA') return 1;
+  const q = parseFloat(p[`QTY ${u}`]);
+  return (!isNaN(q) && q > 0) ? q : 1;
 }
 
 function setStatusOk(count) {
@@ -604,10 +763,8 @@ function showNotFound(barcode) {
 // ── CAMERA ───────────────────────────────────────────────
 function toggleCamera() { cameraOpen ? stopCamera() : startCamera(); }
 
-function startCamera() {
-  document.getElementById('cameraSection').style.display = 'block';
-  html5QR = new Html5Qrcode('reader');
-  const formats = [
+function scanFormats() {
+  return [
     Html5QrcodeSupportedFormats.EAN_13,
     Html5QrcodeSupportedFormats.EAN_8,
     Html5QrcodeSupportedFormats.CODE_128,
@@ -616,9 +773,14 @@ function startCamera() {
     Html5QrcodeSupportedFormats.UPC_E,
     Html5QrcodeSupportedFormats.ITF,
   ];
+}
+
+function startCamera() {
+  document.getElementById('cameraSection').style.display = 'block';
+  html5QR = new Html5Qrcode('reader');
   html5QR.start(
     { facingMode:'environment' },
-    { fps:10, qrbox:{ width:280, height:100 }, formatsToSupport:formats },
+    { fps:10, qrbox:{ width:280, height:100 }, formatsToSupport:scanFormats() },
     (code) => {
       document.getElementById('barcodeInput').value = code;
       lookupBarcode(code);
@@ -689,6 +851,413 @@ function clearHistory() {
 function fmtTime(iso) {
   const d = new Date(iso);
   return `${String(d.getHours()).padStart(2,'0')}.${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+// ════════════ COUNT MODE ════════════
+let countSession = null;   // { warehouse, startedAt, items:{ key:{name,short,key,factors,counts} } }
+let pendingScan  = null;   // { product, unit, code }
+let countCamOpen = false;
+let countQR      = null;
+let editKey      = null;
+
+const countStoreKey = wh => `rattana_count_${wh}`;
+
+function setMode(mode) {
+  currentMode = mode;
+  const isCount = mode === 'count';
+  document.getElementById('modeLookup').style.display = isCount ? 'none' : 'block';
+  document.getElementById('modeCount').style.display  = isCount ? 'block' : 'none';
+  document.getElementById('tabLookup').classList.toggle('active', !isCount);
+  document.getElementById('tabCount').classList.toggle('active', isCount);
+  // stop the other mode's camera
+  if (isCount && cameraOpen) stopCamera();
+  if (!isCount && countCamOpen) stopCountCamera();
+  if (isCount) {
+    initCountMode();
+    setTimeout(() => document.getElementById('countInput').focus(), 60);
+  } else {
+    setTimeout(() => document.getElementById('barcodeInput').focus(), 60);
+  }
+}
+
+function initCountMode() {
+  const sel = document.getElementById('countWh');
+  if (!sel.options.length) {
+    if (!visibleWh.length) {
+      sel.innerHTML = '<option>— ไม่มีคลัง —</option>';
+      return;
+    }
+    sel.innerHTML = visibleWh.map(w => `<option value="${w}">${w} · ${WH_NAMES[w]||w}</option>`).join('');
+  }
+  if (!countSession) loadCountSession(sel.value || visibleWh[0]);
+  renderCountList();
+}
+
+function onCountWhChange() {
+  const wh = document.getElementById('countWh').value;
+  pendingScan = null;
+  document.getElementById('countPending').innerHTML = '';
+  loadCountSession(wh);
+  renderCountList();
+}
+
+function loadCountSession(wh) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(countStoreKey(wh)));
+    countSession = (raw && raw.warehouse === wh) ? raw : null;
+  } catch { countSession = null; }
+  if (!countSession) countSession = { warehouse: wh, startedAt: new Date().toISOString(), items: {} };
+}
+
+function saveCountSession() {
+  if (countSession) {
+    try { localStorage.setItem(countStoreKey(countSession.warehouse), JSON.stringify(countSession)); } catch {}
+  }
+}
+
+// Scan in count mode → show qty entry card
+function countScan(code) {
+  const inp = document.getElementById('countInput');
+  const bc  = (code || inp.value).trim();
+  if (!bc) { inp.focus(); return; }
+  const found = barcodeIndex[bc];
+  if (!found) {
+    showToast(`ไม่พบบาร์โค้ด: ${bc}`, 'error');
+    inp.select();
+    return;
+  }
+  pendingScan = { product: found.product, unit: found.unit, code: bc };
+  renderPending();
+  inp.value = '';
+  if (navigator.vibrate) navigator.vibrate(60);
+}
+
+function renderPending() {
+  const el = document.getElementById('countPending');
+  if (!pendingScan) { el.innerHTML = ''; return; }
+  const p = pendingScan.product, u = pendingScan.unit;
+  const name = p['PRODUCT NAME'] || '-';
+  const factor = unitFactor(p, u);
+  const unitName = p[`RATTANA UNIT ${u}`] || p[`UNIT ${u}`] || u;
+  el.innerHTML = `
+    <div class="card card-gold mt-12">
+      <div class="card-body">
+        <div class="flex" style="gap:10px;align-items:flex-start">
+          <span class="badge ${UNIT_CSS[u]||''}" style="font-size:14px;padding:6px 12px;flex-shrink:0">${u}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:15px;font-weight:700;line-height:1.3">${name}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">${pendingScan.code} · ${unitName} · 1 ${u} = ${factor} ชิ้น</div>
+          </div>
+        </div>
+        <div class="qty-row">
+          <button class="qty-btn" onclick="bumpQty(-1)">−</button>
+          <input type="number" id="qtyInput" class="qty-input" value="1" min="0" inputmode="numeric">
+          <button class="qty-btn" onclick="bumpQty(1)">+</button>
+        </div>
+        <div class="flex gap-8">
+          <button class="btn btn-outline btn-block" onclick="cancelPending()">ยกเลิก</button>
+          <button class="btn btn-gold btn-block" onclick="confirmCount()">✓ บันทึกจำนวน</button>
+        </div>
+      </div>
+    </div>`;
+  const q = document.getElementById('qtyInput');
+  setTimeout(() => { q.focus(); q.select(); }, 60);
+  q.addEventListener('keydown', e => { if (e.key === 'Enter') confirmCount(); });
+}
+
+function bumpQty(d) {
+  const q = document.getElementById('qtyInput');
+  q.value = Math.max(0, (parseInt(q.value)||0) + d);
+}
+function cancelPending() {
+  pendingScan = null;
+  document.getElementById('countPending').innerHTML = '';
+  document.getElementById('countInput').focus();
+}
+
+function confirmCount() {
+  if (!pendingScan) return;
+  const qty = parseInt(document.getElementById('qtyInput').value) || 0;
+  if (qty <= 0) { cancelPending(); return; }
+  const p = pendingScan.product, u = pendingScan.unit;
+  const key = productKey(p);
+  if (!countSession.items[key]) {
+    countSession.items[key] = {
+      key, name: p['PRODUCT NAME']||'-', short: p['SHORT NAME']||'',
+      factors: { EA:unitFactor(p,'EA'), PA:unitFactor(p,'PA'), BP:unitFactor(p,'BP'), CS:unitFactor(p,'CS') },
+      counts: { EA:0, PA:0, BP:0, CS:0 },
+    };
+  }
+  countSession.items[key].counts[u] += qty;
+  saveCountSession();
+  pendingScan = null;
+  document.getElementById('countPending').innerHTML = '';
+  renderCountList();
+  showToast(`+${qty} ${u} · ${countSession.items[key].name}`, 'success');
+  document.getElementById('countInput').focus();
+}
+
+// pieces helpers
+function countedPieces(item) {
+  return ['EA','PA','BP','CS'].reduce((s,u) => s + (item.counts[u]||0) * (item.factors[u]||1), 0);
+}
+function breakdownText(item) {
+  return ['CS','BP','PA','EA'].filter(u => item.counts[u] > 0)
+    .map(u => `${item.counts[u]} ${u}`).join(' + ') || '0';
+}
+function systemPiecesFor(item) {
+  const p = productByKey[item.key];
+  const raw = p ? (p[`STOCK ${countSession.warehouse}`] || '0') : '0';
+  const { cs, ea } = parseStock(raw);
+  return { pieces: cs * (item.factors.CS||1) + ea, raw, cs, ea };
+}
+function piecesToCSEA(pieces, factorCS) {
+  const sign = pieces < 0 ? '-' : '';
+  const a = Math.abs(pieces);
+  const f = factorCS > 0 ? factorCS : 1;
+  const cs = Math.floor(a / f), ea = a - cs * f;
+  return `${sign}${cs} CS ${ea} EA`;
+}
+
+function renderCountList() {
+  const card = document.getElementById('countListCard');
+  const list = document.getElementById('countList');
+  const items = countSession ? Object.values(countSession.items) : [];
+  document.getElementById('countN').textContent = items.length;
+  if (!items.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  list.innerHTML = items.map(it => `
+    <div class="count-item">
+      <div class="ci-main" onclick="openEditItem('${encodeURIComponent(it.key)}')" style="cursor:pointer">
+        <div class="ci-name">${it.name}</div>
+        <div class="ci-breakdown">${breakdownText(it)} = <b>${countedPieces(it).toLocaleString()}</b> ชิ้น</div>
+      </div>
+      <button class="ci-x" onclick="removeCountItem('${encodeURIComponent(it.key)}')" title="ลบ">🗑</button>
+    </div>`).join('');
+}
+
+function removeCountItem(encKey) {
+  const key = decodeURIComponent(encKey);
+  if (!countSession.items[key]) return;
+  if (!confirm(`ลบ "${countSession.items[key].name}" ออกจากการนับ?`)) return;
+  delete countSession.items[key];
+  saveCountSession();
+  renderCountList();
+}
+
+function clearCount() {
+  if (!countSession || !Object.keys(countSession.items).length) return;
+  if (!confirm('ล้างรายการนับทั้งหมดของคลังนี้?')) return;
+  countSession.items = {};
+  countSession.startedAt = new Date().toISOString();
+  saveCountSession();
+  renderCountList();
+  showToast('ล้างการนับแล้ว', 'info');
+}
+
+// ── Edit item modal ──
+function openEditItem(encKey) {
+  const key = decodeURIComponent(encKey);
+  const it = countSession.items[key];
+  if (!it) return;
+  editKey = key;
+  document.getElementById('editBody').innerHTML = `
+    <div style="font-size:14px;font-weight:700;margin-bottom:12px">${it.name}</div>
+    ${['CS','BP','PA','EA'].map(u => `
+      <div class="flex" style="align-items:center;gap:10px;margin-bottom:10px">
+        <span class="badge ${UNIT_CSS[u]||''}" style="width:38px;text-align:center">${u}</span>
+        <span style="flex:1;font-size:12px;color:var(--muted)">1 ${u} = ${it.factors[u]||1} ชิ้น</span>
+        <input type="number" min="0" class="input input-sm" style="width:90px;text-align:center"
+               id="edit_${u}" value="${it.counts[u]||0}">
+      </div>`).join('')}`;
+  document.getElementById('editModal').classList.add('open');
+}
+function saveEditItem() {
+  const it = countSession.items[editKey];
+  if (!it) return closeEditItem();
+  ['CS','BP','PA','EA'].forEach(u => { it.counts[u] = Math.max(0, parseInt(document.getElementById('edit_'+u).value)||0); });
+  if (!['CS','BP','PA','EA'].some(u => it.counts[u] > 0)) delete countSession.items[editKey];
+  saveCountSession();
+  closeEditItem();
+  renderCountList();
+}
+function closeEditItem() { editKey = null; document.getElementById('editModal').classList.remove('open'); }
+
+// ── Summary ──
+function buildSummaryRows() {
+  return Object.values(countSession.items).map(it => {
+    const counted = countedPieces(it);
+    const sys = systemPiecesFor(it);
+    const diff = counted - sys.pieces;
+    return {
+      key: it.key, name: it.name, item: it,
+      counted, system: sys.pieces, diff, factorCS: it.factors.CS||1,
+      systemRaw: sys.raw,
+      status: diff === 0 ? 'ok' : (diff < 0 ? 'short' : 'over'),
+    };
+  }).sort((a,b) => Math.abs(b.diff) - Math.abs(a.diff));
+}
+
+function showSummary() {
+  if (!countSession || !Object.keys(countSession.items).length) { showToast('ยังไม่มีรายการนับ', 'warning'); return; }
+  const rows = buildSummaryRows();
+  const totCount = rows.reduce((s,r)=>s+r.counted,0);
+  const totSys   = rows.reduce((s,r)=>s+r.system,0);
+  const totDiff  = totCount - totSys;
+  const nShort = rows.filter(r=>r.status==='short').length;
+  const nOver  = rows.filter(r=>r.status==='over').length;
+  const nOk    = rows.filter(r=>r.status==='ok').length;
+  const statusBadge = r => r.status==='ok'
+    ? '<span class="diff-ok">ตรง ✓</span>'
+    : r.status==='short' ? `<span class="diff-short">ขาด</span>` : `<span class="diff-over">เกิน</span>`;
+  const diffCell = r => {
+    const cls = r.status==='ok'?'diff-ok':(r.status==='short'?'diff-short':'diff-over');
+    const s = r.diff>0?'+':'';
+    return `<span class="${cls}">${s}${r.diff.toLocaleString()}</span>`;
+  };
+  document.getElementById('summaryBody').innerHTML = `
+    <div style="font-size:13px;color:var(--muted);margin-bottom:10px">
+      คลัง <b>${countSession.warehouse} · ${WH_NAMES[countSession.warehouse]||''}</b> ·
+      ${rows.length} รายการ · ${formatThaiDateTime(countSession.startedAt)}
+    </div>
+    <div class="sum-stat">
+      <div class="ss"><div class="v diff-ok">${nOk}</div><div class="l">ตรง</div></div>
+      <div class="ss"><div class="v diff-short">${nShort}</div><div class="l">ขาด</div></div>
+      <div class="ss"><div class="v diff-over">${nOver}</div><div class="l">เกิน</div></div>
+    </div>
+    <div style="overflow-x:auto">
+    <table class="sum-tbl">
+      <thead><tr>
+        <th>สินค้า</th><th>นับได้<br>(ชิ้น)</th><th>ระบบ<br>(ชิ้น)</th><th>ต่าง<br>(ชิ้น)</th><th>ต่าง (CS.EA)</th><th>สถานะ</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(r => `<tr>
+          <td>${r.name}</td>
+          <td>${r.counted.toLocaleString()}</td>
+          <td>${r.system.toLocaleString()}</td>
+          <td>${diffCell(r)}</td>
+          <td>${r.diff===0?'-':piecesToCSEA(r.diff, r.factorCS)}</td>
+          <td>${statusBadge(r)}</td>
+        </tr>`).join('')}
+      </tbody>
+      <tfoot><tr>
+        <td>รวม</td>
+        <td>${totCount.toLocaleString()}</td>
+        <td>${totSys.toLocaleString()}</td>
+        <td>${totDiff>0?'+':''}${totDiff.toLocaleString()}</td>
+        <td colspan="2"></td>
+      </tr></tfoot>
+    </table>
+    </div>`;
+  document.getElementById('summaryModal').classList.add('open');
+}
+function closeSummary() { document.getElementById('summaryModal').classList.remove('open'); }
+
+// ── Export / Save ──
+function summaryExportRows() {
+  return buildSummaryRows().map(r => ({
+    'รหัสสินค้า': r.key,
+    'ชื่อสินค้า': r.name,
+    'นับได้ CS': r.item.counts.CS, 'นับได้ BP': r.item.counts.BP,
+    'นับได้ PA': r.item.counts.PA, 'นับได้ EA': r.item.counts.EA,
+    'นับได้ (ชิ้น)': r.counted,
+    'สต็อกระบบ (CS.EA)': r.systemRaw,
+    'สต็อกระบบ (ชิ้น)': r.system,
+    'ต่าง (ชิ้น)': r.diff,
+    'สถานะ': r.status==='ok'?'ตรง':(r.status==='short'?'ขาด':'เกิน'),
+  }));
+}
+
+function exportCountExcel() {
+  if (typeof XLSX === 'undefined') { showToast('โหลด Excel library ไม่ได้', 'error'); return; }
+  const rows = summaryExportRows();
+  if (!rows.length) return;
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'CountResult');
+  const stamp = formatThaiDate(new Date()).replace(/\//g,'-');
+  XLSX.writeFile(wb, `นับสต็อก_${countSession.warehouse}_${stamp}.xlsx`);
+  showToast('ดาวน์โหลด Excel แล้ว', 'success');
+}
+
+async function saveCountToSheet() {
+  if (!COUNT_SAVE_URL) {
+    showToast('ยังไม่ได้ตั้งค่า Google Sheet — ดู Excel ไปก่อน หรือแจ้งผู้ดูแลตั้งค่า', 'warning');
+    return;
+  }
+  const rows = buildSummaryRows();
+  if (!rows.length) return;
+  const payload = {
+    warehouse: countSession.warehouse,
+    sessionStart: countSession.startedAt,
+    counterName: currentUser?.name || '',
+    empId: currentUser?.empId || '',
+    savedAt: new Date().toISOString(),
+    rows: rows.map(r => ({
+      key: r.key, name: r.name,
+      cs: r.item.counts.CS, bp: r.item.counts.BP, pa: r.item.counts.PA, ea: r.item.counts.EA,
+      countedPieces: r.counted, systemRaw: r.systemRaw, systemPieces: r.system,
+      diffPieces: r.diff, status: r.status,
+    })),
+  };
+  showSpinner('กำลังบันทึกลง Google Sheet...');
+  try {
+    await fetch(COUNT_SAVE_URL, {
+      method: 'POST', mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload),
+    });
+    showToast('บันทึกลง Google Sheet แล้ว ✓', 'success');
+    closeSummary();
+  } catch (e) {
+    showToast('บันทึกไม่สำเร็จ: ' + e, 'error');
+  } finally {
+    hideSpinner();
+  }
+}
+
+// ── Count camera ──
+function toggleCountCamera() { countCamOpen ? stopCountCamera() : startCountCamera(); }
+function startCountCamera() {
+  document.getElementById('countCameraSection').style.display = 'block';
+  countQR = new Html5Qrcode('countReader');
+  countQR.start(
+    { facingMode:'environment' },
+    { fps:10, qrbox:{ width:280, height:100 }, formatsToSupport:scanFormats() },
+    (code) => {
+      // avoid re-trigger while a pending qty card is open
+      if (!pendingScan) { countScan(code); if (navigator.vibrate) navigator.vibrate(80); }
+    },
+    () => {}
+  ).then(() => {
+    countCamOpen = true;
+    document.getElementById('countDot').className = 'scanner-dot active';
+    document.getElementById('countCamText').textContent = 'กล้องทำงาน';
+    document.getElementById('btnCountCam').textContent = '📷 ปิดกล้อง';
+  }).catch(err => {
+    showToast('เปิดกล้องไม่ได้: ' + err, 'error');
+    document.getElementById('countCameraSection').style.display = 'none';
+  });
+}
+function stopCountCamera() {
+  if (countQR) { countQR.stop().then(()=>{ countQR.clear(); countQR=null; }).catch(()=>{}); }
+  countCamOpen = false;
+  document.getElementById('countCameraSection').style.display = 'none';
+  document.getElementById('countDot').className = 'scanner-dot';
+  document.getElementById('countCamText').textContent = 'ปิดกล้อง';
+  document.getElementById('btnCountCam').textContent = '📷 เปิดกล้อง';
+}
+
+// ── Thai date helpers ──
+function formatThaiDate(input) {
+  const d = input instanceof Date ? input : new Date(input);
+  if (isNaN(d)) return '-';
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()+543}`;
+}
+function formatThaiDateTime(input) {
+  const d = input instanceof Date ? input : new Date(input);
+  if (isNaN(d)) return '-';
+  return `${formatThaiDate(d)} ${String(d.getHours()).padStart(2,'0')}.${String(d.getMinutes()).padStart(2,'0')}`;
 }
 
 // ── UTILITIES ─────────────────────────────────────────────
