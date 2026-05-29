@@ -178,6 +178,12 @@
     .sum-tbl td{padding:8px 8px;border-bottom:1px solid var(--border);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
     .sum-tbl td:first-child{text-align:left;white-space:normal;min-width:120px}
     .sum-tbl tfoot td{font-weight:700;border-top:2px solid var(--gold);background:var(--row-alt)}
+    .badge-ok{background:#e8f7ee;color:#1e8449}
+    .badge-danger{background:#ffd5d0;color:#c0392b}
+    .badge-info{background:#e3f0fd;color:#1a6fb8}
+    body.dark .badge-ok{background:#1a3a25;color:#7be0a3}
+    body.dark .badge-danger{background:#3a1a17;color:#ff8a7e}
+    body.dark .badge-info{background:#15293a;color:#8ec5f0}
     .diff-ok{color:var(--success);font-weight:700}
     .diff-short{color:var(--danger);font-weight:700}
     .diff-over{color:var(--info);font-weight:700}
@@ -236,8 +242,9 @@
 
   <!-- Tab nav -->
   <div class="tab-nav">
-    <button class="tab-btn active" id="tabLookup" onclick="setMode('lookup')">🔍 เช็คสต็อก</button>
-    <button class="tab-btn" id="tabCount" onclick="setMode('count')">📦 นับสต็อก</button>
+    <button class="tab-btn active" id="tabLookup" onclick="setMode('lookup')">🔍 เช็ค</button>
+    <button class="tab-btn" id="tabCount" onclick="setMode('count')">📦 นับ</button>
+    <button class="tab-btn" id="tabSummary" onclick="setMode('summary')">📊 สรุปผล</button>
   </div>
 
   <!-- ══════════ LOOKUP MODE ══════════ -->
@@ -322,7 +329,7 @@
       <div class="card-head">
         <h3>📋 รายการที่นับ (<span id="countN">0</span>)</h3>
         <div class="flex gap-8">
-          <button class="btn btn-gold btn-sm" onclick="showSummary()">📊 สรุปผล</button>
+          <button class="btn btn-gold btn-sm" onclick="setMode('summary')">📊 สรุปผล</button>
           <button class="btn btn-outline btn-sm" onclick="clearCount()">ล้าง</button>
         </div>
       </div>
@@ -331,23 +338,24 @@
 
   </div><!-- /modeCount -->
 
-  <div style="height:72px"></div>
-</div>
+  <!-- ══════════ SUMMARY MODE ══════════ -->
+  <div id="modeSummary" style="display:none">
+    <div class="card mt-8">
+      <div class="card-head">
+        <h3>📊 สรุปผลการนับ</h3>
+        <button class="btn btn-outline btn-sm" onclick="setMode('count')">← กลับไปนับ</button>
+      </div>
+      <div class="card-body" id="summaryBody"></div>
+    </div>
+    <div class="card mt-12" id="summaryActions" style="display:none">
+      <div class="card-body flex gap-8" style="flex-wrap:wrap">
+        <button class="btn btn-outline" onclick="exportCountExcel()">⬇ Excel</button>
+        <button class="btn btn-gold" style="flex:1;min-width:160px" onclick="saveCountToSheet()">✓ ตรวจสอบแล้ว — บันทึกลง Google Sheet</button>
+      </div>
+    </div>
+  </div><!-- /modeSummary -->
 
-<!-- Summary modal -->
-<div class="modal-overlay" id="summaryModal">
-  <div class="modal">
-    <div class="modal-head">
-      <h3>📊 สรุปผลการนับ</h3>
-      <button class="modal-close" onclick="closeSummary()">×</button>
-    </div>
-    <div class="modal-body" id="summaryBody"></div>
-    <div class="modal-foot">
-      <button class="btn btn-outline btn-sm" onclick="closeSummary()">ปิด</button>
-      <button class="btn btn-outline btn-sm" onclick="exportCountExcel()">⬇ Excel</button>
-      <button class="btn btn-gold btn-sm" onclick="saveCountToSheet()">☁ บันทึกลง Google Sheet</button>
-    </div>
-  </div>
+  <div style="height:72px"></div>
 </div>
 
 <!-- Edit-item modal -->
@@ -864,17 +872,21 @@ const countStoreKey = wh => `rattana_count_${wh}`;
 
 function setMode(mode) {
   currentMode = mode;
-  const isCount = mode === 'count';
-  document.getElementById('modeLookup').style.display = isCount ? 'none' : 'block';
-  document.getElementById('modeCount').style.display  = isCount ? 'block' : 'none';
-  document.getElementById('tabLookup').classList.toggle('active', !isCount);
-  document.getElementById('tabCount').classList.toggle('active', isCount);
-  // stop the other mode's camera
-  if (isCount && cameraOpen) stopCamera();
-  if (!isCount && countCamOpen) stopCountCamera();
-  if (isCount) {
+  document.getElementById('modeLookup').style.display  = mode==='lookup'  ? 'block' : 'none';
+  document.getElementById('modeCount').style.display   = mode==='count'   ? 'block' : 'none';
+  document.getElementById('modeSummary').style.display = mode==='summary' ? 'block' : 'none';
+  document.getElementById('tabLookup').classList.toggle('active', mode==='lookup');
+  document.getElementById('tabCount').classList.toggle('active', mode==='count');
+  document.getElementById('tabSummary').classList.toggle('active', mode==='summary');
+  // stop cameras when leaving their modes
+  if (mode!=='lookup' && cameraOpen) stopCamera();
+  if (mode!=='count' && countCamOpen) stopCountCamera();
+  if (mode==='count') {
     initCountMode();
     setTimeout(() => document.getElementById('countInput').focus(), 60);
+  } else if (mode==='summary') {
+    if (!countSession) loadCountSession(visibleWh[0] || 'W1');
+    renderSummary();
   } else {
     setTimeout(() => document.getElementById('barcodeInput').focus(), 60);
   }
@@ -1026,14 +1038,34 @@ function renderCountList() {
   document.getElementById('countN').textContent = items.length;
   if (!items.length) { card.style.display = 'none'; return; }
   card.style.display = 'block';
-  list.innerHTML = items.map(it => `
+  list.innerHTML = items.map(it => {
+    const d = itemDiff(it);
+    return `
     <div class="count-item">
       <div class="ci-main" onclick="openEditItem('${encodeURIComponent(it.key)}')" style="cursor:pointer">
         <div class="ci-name">${it.name}</div>
-        <div class="ci-breakdown">${breakdownText(it)} = <b>${countedPieces(it).toLocaleString()}</b> ชิ้น</div>
+        <div class="ci-breakdown">${breakdownText(it)} = <b>${d.counted.toLocaleString()}</b> ชิ้น · ระบบ ${d.system.toLocaleString()}</div>
+        <div style="margin-top:4px">${statusPill(d)}</div>
       </div>
       <button class="ci-x" onclick="removeCountItem('${encodeURIComponent(it.key)}')" title="ลบ">🗑</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
+}
+
+// diff for one counted item vs system
+function itemDiff(it) {
+  const counted = countedPieces(it);
+  const sys = systemPiecesFor(it);
+  const diff = counted - sys.pieces;
+  return { counted, system: sys.pieces, diff, raw: sys.raw, status: diff===0?'ok':(diff<0?'short':'over'), factorCS: it.factors.CS||1 };
+}
+
+function statusPill(d) {
+  if (d.status==='ok')   return `<span class="badge badge-ok">✓ ตรง</span>`;
+  const s = d.diff>0?'+':'';
+  const cls = d.status==='short' ? 'badge-danger' : 'badge-info';
+  const word = d.status==='short' ? 'ขาด' : 'เกิน';
+  return `<span class="badge ${cls}">${word} ${s}${d.diff.toLocaleString()} ชิ้น (${piecesToCSEA(d.diff, d.factorCS)})</span>`;
 }
 
 function removeCountItem(encKey) {
@@ -1098,8 +1130,15 @@ function buildSummaryRows() {
   }).sort((a,b) => Math.abs(b.diff) - Math.abs(a.diff));
 }
 
-function showSummary() {
-  if (!countSession || !Object.keys(countSession.items).length) { showToast('ยังไม่มีรายการนับ', 'warning'); return; }
+function renderSummary() {
+  const body = document.getElementById('summaryBody');
+  const actions = document.getElementById('summaryActions');
+  if (!countSession || !Object.keys(countSession.items).length) {
+    body.innerHTML = `<div class="txt-center txt-muted" style="padding:32px 16px">ยังไม่มีรายการนับ — ไปที่แท็บ 📦 นับ เพื่อเริ่มนับสินค้า</div>`;
+    actions.style.display = 'none';
+    return;
+  }
+  actions.style.display = 'block';
   const rows = buildSummaryRows();
   const totCount = rows.reduce((s,r)=>s+r.counted,0);
   const totSys   = rows.reduce((s,r)=>s+r.system,0);
@@ -1115,10 +1154,10 @@ function showSummary() {
     const s = r.diff>0?'+':'';
     return `<span class="${cls}">${s}${r.diff.toLocaleString()}</span>`;
   };
-  document.getElementById('summaryBody').innerHTML = `
+  body.innerHTML = `
     <div style="font-size:13px;color:var(--muted);margin-bottom:10px">
       คลัง <b>${countSession.warehouse} · ${WH_NAMES[countSession.warehouse]||''}</b> ·
-      ${rows.length} รายการ · ${formatThaiDateTime(countSession.startedAt)}
+      ${rows.length} รายการ · เริ่มนับ ${formatThaiDateTime(countSession.startedAt)}
     </div>
     <div class="sum-stat">
       <div class="ss"><div class="v diff-ok">${nOk}</div><div class="l">ตรง</div></div>
@@ -1149,9 +1188,7 @@ function showSummary() {
       </tr></tfoot>
     </table>
     </div>`;
-  document.getElementById('summaryModal').classList.add('open');
 }
-function closeSummary() { document.getElementById('summaryModal').classList.remove('open'); }
 
 // ── Export / Save ──
 function summaryExportRows() {
@@ -1208,7 +1245,6 @@ async function saveCountToSheet() {
       body: JSON.stringify(payload),
     });
     showToast('บันทึกลง Google Sheet แล้ว ✓', 'success');
-    closeSummary();
   } catch (e) {
     showToast('บันทึกไม่สำเร็จ: ' + e, 'error');
   } finally {
