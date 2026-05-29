@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0d1b3e">
-  <title>Rattana Stock Count v2.1</title>
+  <title>Rattana Stock Count v2.2</title>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
@@ -778,7 +778,18 @@ function showNotFound(barcode) {
 }
 
 // ── CAMERA ───────────────────────────────────────────────
-function toggleCamera() { cameraOpen ? stopCamera() : startCamera(); }
+let camStarting = false;
+function warnInApp() {
+  if (isInAppBrowser()) {
+    showToast('แนะนำเปิดผ่าน Safari/Chrome — เบราว์เซอร์ในแอป (LINE) อาจใช้กล้องไม่ได้', 'warning');
+    return true;
+  }
+  return false;
+}
+function toggleCamera() {
+  if (camStarting) return;
+  cameraOpen ? stopCamera() : startCamera();
+}
 
 function scanFormats() {
   return [
@@ -792,22 +803,40 @@ function scanFormats() {
   ];
 }
 
+// Detect in-app browsers (LINE/FB/IG) that often block the camera on iOS
+function isInAppBrowser() {
+  const ua = navigator.userAgent || '';
+  return /Line|FBAN|FBAV|FB_IAB|Instagram|Messenger/i.test(ua);
+}
+
 // Robust starter — works on phone (rear cam) and desktop/laptop (front/only cam).
-// Tries environment first, falls back to enumerated cameras.
-function startScanner(readerId, onDetected) {
-  const qr = new Html5Qrcode(readerId);
-  const cfg = { fps:10, qrbox:{ width:280, height:100 }, aspectRatio:1.777, formatsToSupport:scanFormats() };
-  const run = camSpec => qr.start(camSpec, cfg, onDetected, () => {});
-  return run({ facingMode: { ideal: 'environment' } })
-    .then(() => qr)
-    .catch(() => Html5Qrcode.getCameras().then(cams => {
-      if (!cams || !cams.length) throw new Error('ไม่พบกล้องบนอุปกรณ์นี้');
-      const back = cams.find(c => /back|rear|environment|หลัง/i.test(c.label || ''));
-      return run((back || cams[cams.length - 1]).id).then(() => qr);
-    }));
+// Tries environment first, falls back to enumerated cameras. Uses a FRESH instance
+// per attempt to avoid html5-qrcode "already under transition" errors.
+async function startScanner(readerId, onDetected) {
+  const cfg = { fps:10, qrbox:{ width:260, height:160 }, formatsToSupport:scanFormats() };
+  // attempt 1 — prefer rear camera
+  let qr = new Html5Qrcode(readerId, { verbose:false });
+  try {
+    await qr.start({ facingMode: { ideal: 'environment' } }, cfg, onDetected, () => {});
+    return qr;
+  } catch (e1) {
+    try { await qr.stop(); } catch {}
+    try { qr.clear(); } catch {}
+  }
+  // attempt 2 — pick a camera explicitly (desktop / no rear cam)
+  const cams = await Html5Qrcode.getCameras();
+  if (!cams || !cams.length) throw new Error('ไม่พบกล้องบนอุปกรณ์นี้');
+  const back = cams.find(c => /back|rear|environment|หลัง/i.test(c.label || ''));
+  qr = new Html5Qrcode(readerId, { verbose:false });
+  await qr.start((back || cams[cams.length - 1]).id, cfg, onDetected, () => {});
+  return qr;
 }
 
 function startCamera() {
+  warnInApp();
+  camStarting = true;
+  const btn = document.getElementById('btnCamera');
+  btn.disabled = true; btn.textContent = '⏳ กำลังเปิด...';
   document.getElementById('cameraSection').style.display = 'block';
   startScanner('reader', (code) => {
     document.getElementById('barcodeInput').value = code;
@@ -820,7 +849,8 @@ function startCamera() {
   }).catch(err => {
     showToast('เปิดกล้องไม่ได้: ' + (err.message||err), 'error');
     document.getElementById('cameraSection').style.display = 'none';
-  });
+    setScannerUI(false);
+  }).finally(() => { camStarting = false; btn.disabled = false; });
 }
 
 function stopCamera() {
@@ -1272,8 +1302,15 @@ async function saveCountToSheet() {
 }
 
 // ── Count camera ──
-function toggleCountCamera() { countCamOpen ? stopCountCamera() : startCountCamera(); }
+function toggleCountCamera() {
+  if (camStarting) return;
+  countCamOpen ? stopCountCamera() : startCountCamera();
+}
 function startCountCamera() {
+  warnInApp();
+  camStarting = true;
+  const btn = document.getElementById('btnCountCam');
+  btn.disabled = true; btn.textContent = '⏳ กำลังเปิด...';
   document.getElementById('countCameraSection').style.display = 'block';
   startScanner('countReader', (code) => {
     // avoid re-trigger while a pending qty card is open
@@ -1287,7 +1324,7 @@ function startCountCamera() {
   }).catch(err => {
     showToast('เปิดกล้องไม่ได้: ' + (err.message||err), 'error');
     document.getElementById('countCameraSection').style.display = 'none';
-  });
+  }).finally(() => { camStarting = false; if (!countCamOpen) btn.disabled = false; btn.disabled = false; });
 }
 function stopCountCamera() {
   if (countQR) { countQR.stop().then(()=>{ countQR.clear(); countQR=null; }).catch(()=>{}); }
