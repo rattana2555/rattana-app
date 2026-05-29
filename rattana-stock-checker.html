@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0d1b3e">
-  <title>Rattana Stock Count v2.4</title>
+  <title>Rattana Stock Count v2.5</title>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
@@ -838,8 +838,9 @@ function startCamera() {
   document.getElementById('cameraSection').style.display = 'block';
   startScanner('readerVideo', (code) => {
     document.getElementById('barcodeInput').value = code;
-    lookupBarcode(code);
     if (navigator.vibrate) navigator.vibrate(80);
+    stopCamera();            // auto-close box after a successful scan
+    lookupBarcode(code);
   }).then(ctrl => {
     html5QR = ctrl;
     cameraOpen = true;
@@ -1309,8 +1310,10 @@ function startCountCamera() {
   btn.disabled = true; btn.textContent = '⏳ กำลังเปิด...';
   document.getElementById('countCameraSection').style.display = 'block';
   startScanner('countVideo', (code) => {
-    // avoid re-trigger while a pending qty card is open
-    if (!pendingScan) { countScan(code); if (navigator.vibrate) navigator.vibrate(80); }
+    if (pendingScan) return;               // ignore while qty card is open
+    if (navigator.vibrate) navigator.vibrate(80);
+    countScan(code);
+    if (pendingScan) stopCountCamera();    // auto-close box once a product is found
   }).then(ctrl => {
     countQR = ctrl;
     countCamOpen = true;
