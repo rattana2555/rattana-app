@@ -489,13 +489,19 @@ function lookupBarcode(code) {
 // ── STOCK FORMAT ─────────────────────────────────────────
 // Stock is stored as CS.EA  e.g. "5.08" = 5 CS, 8 EA
 function parseStock(val) {
+  // Format = "CS.EA" where the part AFTER the dot is read literally as the EA (piece) count,
+  // NOT as a decimal fraction. e.g. "0.1" → 1 EA, "0.20" → 20 EA, "3.05" → 3 CS 5 EA.
   const s = String(val||'0').trim();
-  if (!s || s==='' || s==='-') return { cs:0, ea:0, total:0, raw:'0' };
-  const num = parseFloat(s);
-  if (isNaN(num) || num < 0) return { cs:0, ea:0, total:0, raw:s };
-  const cs = Math.floor(num);
-  const ea = Math.round((num - cs) * 100);
-  return { cs, ea, total:num, raw:s };
+  if (!s || s==='-') return { cs:0, ea:0, total:0, raw:'0' };
+  // keep only digits and the first dot, drop commas/spaces
+  const clean = s.replace(/,/g,'').replace(/[^\d.]/g,'');
+  if (!clean || clean==='.') return { cs:0, ea:0, total:0, raw:s };
+  const dot = clean.indexOf('.');
+  const csStr = dot === -1 ? clean : clean.slice(0, dot);
+  const eaStr = dot === -1 ? ''    : clean.slice(dot + 1);
+  const cs = parseInt(csStr, 10) || 0;
+  const ea = eaStr === '' ? 0 : (parseInt(eaStr, 10) || 0); // literal digits after dot
+  return { cs, ea, total: cs + ea, raw:s };
 }
 
 function fmtStock(val) {
