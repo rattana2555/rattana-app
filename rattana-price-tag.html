@@ -1199,46 +1199,52 @@ function renderTag(p, idPrefix='tag') {
 
   const footer = `
     <div class="t-foot">
-      <div>
-        <div style="font-weight:700">${escapeHtml(p.sku||'')}</div>
-        ${p.barcode ? `<div style="font-family:'Courier New',monospace;opacity:.7">${escapeHtml(p.barcode)}</div>` : ''}
+      <div class="t-sku">
+        <div>${escapeHtml(p.sku||'')}</div>
+        ${p.barcode && p.barcode !== p.sku ? `<div style="opacity:.7">${escapeHtml(p.barcode)}</div>` : ''}
       </div>
       <div id="${bcId}"></div>
       <div id="${qrId}"></div>
     </div>`;
 
+  // Helper: split price into integer + decimal parts for fancier display
+  const priceStr = fmtThaiBaht(p.price);
+
   if (type === 'sale') {
-    const pct = (p.oldPrice > p.price && p.oldPrice > 0)
-      ? Math.round((p.oldPrice - p.price) / p.oldPrice * 100) : 0;
+    // เทพธัญญะ-style: red circle "พิเศษ" + yellow unit strip + crossed-out old price
     html = `
       <div class="tag tpl-sale" id="${tagId}">
-        <div class="t-head">★ ลดราคา ★ SALE ★</div>
-        ${pct > 0 ? `<div class="t-discount-badge"><div class="pct">-${pct}%</div><div class="off">OFF</div></div>` : ''}
+        <div class="t-head">★ ลดราคาพิเศษ ★</div>
         <div class="t-img">${imgHtml}</div>
         <div class="t-name">${escapeHtml(p.name)}</div>
-        ${p.size ? `<div class="t-size">${escapeHtml(p.size)}</div>` : ''}
-        ${p.oldPrice > p.price ? `<div class="t-old">ปกติ ฿${fmtThaiBaht(p.oldPrice)}</div>` : ''}
-        <div class="t-price-box">
-          <div class="t-price">฿${fmtThaiBaht(p.price)}</div>
-          <div class="t-unit">${escapeHtml(p.unit||'บาท')}</div>
+        <div class="t-price-circle">
+          <div class="t-circle-label">พิเศษ</div>
+          <div class="t-price">${priceStr}<span style="font-size:14pt">.-</span></div>
+          ${p.oldPrice > p.price ? `<div class="t-circle-old">ปกติ ${fmtThaiBaht(p.oldPrice)}</div>` : ''}
         </div>
+        <div class="t-yellow-strip">${escapeHtml(p.unit||'บาท')}${p.size ? ' · '+escapeHtml(p.size) : ''}</div>
         ${footer}
       </div>`;
   } else if (type === 'new') {
+    // Israphan-style clean white + green frame + red NEW! badge
     html = `
       <div class="tag tpl-new" id="${tagId}">
-        <div class="t-head">★ สินค้าใหม่ ★ NEW ★</div>
+        <div class="t-head">★ สินค้าใหม่ · NEW ★</div>
         <div class="t-new-badge">NEW!</div>
         <div class="t-img">${imgHtml}</div>
         <div class="t-name">${escapeHtml(p.name)}</div>
         ${p.size ? `<div class="t-size">${escapeHtml(p.size)}</div>` : ''}
         <div class="t-price-box">
-          <div class="t-price">฿${fmtThaiBaht(p.price)}</div>
+          <div class="t-price-row">
+            <span class="t-currency">฿</span>
+            <span class="t-price">${priceStr}</span>
+          </div>
           <div class="t-unit">${escapeHtml(p.unit||'บาท')}</div>
         </div>
         ${footer}
       </div>`;
   } else if (type === 'bogo') {
+    // ฮงล้ง-style comic burst SALE
     const promoText = p.promo || 'ซื้อ 1 แถม 1';
     html = `
       <div class="tag tpl-bogo" id="${tagId}">
@@ -1246,14 +1252,21 @@ function renderTag(p, idPrefix='tag') {
         <div class="t-promo-banner">${escapeHtml(promoText)}</div>
         <div class="t-img">${imgHtml}</div>
         <div class="t-name">${escapeHtml(p.name)}</div>
-        ${p.size ? `<div class="t-size">${escapeHtml(p.size)}</div>` : ''}
-        <div class="t-price-box">
-          <div class="t-price">฿${fmtThaiBaht(p.price)}</div>
-          <div class="t-unit">${escapeHtml(p.unit||'บาท')}</div>
+        <div class="t-burst-wrap">
+          <div class="t-burst">
+            <div class="t-burst-shape"></div>
+            <div class="t-burst-content">
+              <div class="label">SALE</div>
+              <div class="t-price">${priceStr}<span style="font-size:14pt">.-</span></div>
+              <div class="t-unit">${escapeHtml(p.unit||'บาท')}</div>
+            </div>
+          </div>
         </div>
+        ${p.oldPrice > p.price ? `<div class="t-old-line">(ราคาปกติ ${fmtThaiBaht(p.oldPrice)} บาท)</div>` : ''}
         ${footer}
       </div>`;
   } else {
+    // Israphan-style clean regular price tag
     html = `
       <div class="tag tpl-regular" id="${tagId}">
         <div class="t-head">RATTANA MART</div>
@@ -1261,7 +1274,11 @@ function renderTag(p, idPrefix='tag') {
         <div class="t-name">${escapeHtml(p.name)}</div>
         ${p.size ? `<div class="t-size">${escapeHtml(p.size)}</div>` : ''}
         <div class="t-price-box">
-          <div class="t-price">฿${fmtThaiBaht(p.price)}</div>
+          ${p.oldPrice > p.price ? `<div class="t-old-pill">ปกติ ฿${fmtThaiBaht(p.oldPrice)}</div>` : ''}
+          <div class="t-price-row">
+            <span class="t-currency">฿</span>
+            <span class="t-price">${priceStr}</span>
+          </div>
           <div class="t-unit">${escapeHtml(p.unit||'บาท')}</div>
         </div>
         ${footer}
