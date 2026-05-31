@@ -1160,45 +1160,59 @@ function switchTab(name) {
 }
 
 /* ============== LOAD PRODUCTS ============== */
-async function loadProducts() {
-  const sheetId  = $('#cfgSheetId').value.trim();
-  const sheetName = $('#cfgSheetName').value.trim() || 'Products';
-  if (!sheetId) { showToast('กรุณาใส่ Sheet ID', 'error'); return; }
+async function loadProducts(opts = {}) {
+  const silent = opts.silent === true;  // when loading from cache in background
+  const { sheetId, sheetName } = SHEET_CONFIG;
 
-  showSpinner('กำลังโหลดสินค้า...');
+  if (!silent) {
+    $('#heroSub').textContent = 'กำลังโหลดข้อมูลจาก Google Sheet...';
+    showSkeleton();
+  }
+
   try {
     const rows = await loadFromSheets(sheetId, sheetName);
     if (!rows.length) {
-      showToast('ไม่พบข้อมูลในแท็บนี้', 'warning');
-      hideSpinner();
+      $('#heroSub').textContent = 'ไม่พบข้อมูลในแท็บ';
+      showToast('ไม่พบข้อมูลในแท็บ ' + sheetName, 'warning');
       return;
     }
-    products = rows.map(r => normalizeProduct(r)).filter(p => p.name); // drop rows without a name
-    const priceTier = $('#cfgPriceTier').value;
-    const unitPref  = $('#cfgUnitPref').value;
-    localStorage.setItem(STORAGE.config, JSON.stringify({ sheetId, sheetName, priceTier, unitPref }));
-    localStorage.setItem(STORAGE.cache,  JSON.stringify({ products, ts: Date.now() }));
+    products = rows.map(r => normalizeProduct(r)).filter(p => p.name);
+    localStorage.setItem(STORAGE.cache, JSON.stringify({ products, ts: Date.now() }));
     selectedSkus.clear();
     tplOverrides = {};
     updateStats();
-    $('#cardLoadStatus').style.display = 'block';
-    $('#lastLoad').textContent = formatThaiDate(Date.now());
     renderProducts();
-    showToast(`โหลดสินค้าแล้ว ${products.length} รายการ`, 'success');
-    setTimeout(()=>switchTab('products'), 600);
+    $('#heroSub').textContent = `อัพเดทล่าสุด ${formatThaiDate(Date.now())}`;
+    if (!silent) showToast(`โหลดสินค้า ${products.length} รายการ`, 'success');
   } catch (e) {
     console.error(e);
+    $('#heroSub').textContent = '❌ ' + (e.message || 'โหลดข้อมูลไม่สำเร็จ');
     showToast(e.message || 'โหลดข้อมูลไม่สำเร็จ', 'error');
-  } finally {
-    hideSpinner();
   }
 }
 async function refreshData() {
-  if (!products.length) { switchTab('setup'); return; }
   const b = $('#btnRefresh');
   b.disabled = true; b.style.transform = 'rotate(360deg)'; b.style.transition = 'transform .6s';
   await loadProducts();
   b.disabled = false; setTimeout(()=>{ b.style.transform = ''; b.style.transition = ''; }, 600);
+}
+
+/* Skeleton loading state */
+function showSkeleton() {
+  const grid = $('#prodGrid');
+  if (!grid) return;
+  const n = 12;
+  const html = Array.from({length:n}).map(() => `
+    <div class="skel-card">
+      <div class="skel skel-img"></div>
+      <div class="skel-body">
+        <div class="skel skel-line" style="width:40%"></div>
+        <div class="skel skel-line lg"></div>
+        <div class="skel skel-line price"></div>
+      </div>
+    </div>`).join('');
+  grid.innerHTML = html;
+  $('#prodCountInfo').textContent = '';
 }
 
 /* Google Drive URL → browser-displayable.
