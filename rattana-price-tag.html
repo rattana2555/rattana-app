@@ -721,8 +721,10 @@ body.dark .prod-card .p-price{color:var(--gold-light)}
 .tag-wrap .tag-tpl-pick{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px;justify-content:center}
 .tag-wrap .tpl-btn{padding:4px 10px;font-size:11px;border-radius:6px;border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);cursor:pointer;font-weight:600;font-family:inherit}
 .tag-wrap .tpl-btn.active{background:var(--gold);color:var(--navy);border-color:var(--gold)}
-.tag-wrap .tag-scale{transform-origin:top left;transform:scale(0.6);width:166%;height:0;padding-bottom:148%}
-@media(max-width:520px){.tag-wrap .tag-scale{transform:scale(0.5);width:200%;padding-bottom:153%}}
+/* v1.7 — landscape tag preview: 190mm × 66mm → aspect ratio ~2.88:1 */
+.tag-wrap .tag-scale{transform-origin:top left;transform:scale(0.42);width:238%;height:0;padding-bottom:83%}
+@media(min-width:768px){.tag-wrap .tag-scale{transform:scale(0.55);width:182%;padding-bottom:63%}}
+@media(min-width:1100px){.tag-wrap .tag-scale{transform:scale(0.7);width:143%;padding-bottom:49.5%}}
 
 /* Modal */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.65);z-index:9000;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px);overflow-y:auto}
@@ -1476,96 +1478,99 @@ function renderTag(p, idPrefix='tag') {
   const qrId  = `qr-${idPrefix}-${cssId(p.sku)}`;
   const bcId  = `bc-${idPrefix}-${cssId(p.sku)}`;
 
-  let html = '';
   const imgHtml = p.image
     ? `<img src="${escapeAttr(p.image)}" onerror="this.style.display='none';this.parentElement.innerHTML='<div class=t-img-empty>📦</div>'" alt="" crossorigin="anonymous">`
     : `<div class="t-img-empty">📦</div>`;
 
   const footer = `
     <div class="t-foot">
-      <div class="t-sku">
-        <div>${escapeHtml(p.sku||'')}</div>
-        ${p.barcode && p.barcode !== p.sku ? `<div style="opacity:.7">${escapeHtml(p.barcode)}</div>` : ''}
-      </div>
+      <div class="t-sku">${escapeHtml(p.sku||'')}</div>
       <div id="${bcId}"></div>
       <div id="${qrId}"></div>
     </div>`;
 
-  // Helper: split price into integer + decimal parts for fancier display
   const priceStr = fmtThaiBaht(p.price);
+  const escName = escapeHtml(p.name);
+  const escUnit = escapeHtml(p.unit||'บาท');
+  const escSize = p.size ? escapeHtml(p.size) : '';
+
+  let html = '';
 
   if (type === 'sale') {
-    // เทพธัญญะ-style: red circle "พิเศษ" + yellow unit strip + crossed-out old price
+    /* เทพธัญญะ — image left | (name + old + yellow pill) middle | red circle right */
     html = `
       <div class="tag tpl-sale" id="${tagId}">
-        <div class="t-head">★ ลดราคาพิเศษ ★</div>
         <div class="t-img">${imgHtml}</div>
-        <div class="t-name">${escapeHtml(p.name)}</div>
-        <div class="t-price-circle">
-          <div class="t-circle-label">พิเศษ</div>
-          <div class="t-price">${priceStr}<span style="font-size:14pt">.-</span></div>
-          ${p.oldPrice > p.price ? `<div class="t-circle-old">ปกติ ${fmtThaiBaht(p.oldPrice)}</div>` : ''}
+        <div class="t-info">
+          <div class="t-info-left">
+            <div class="t-name">${escName}</div>
+            ${p.oldPrice > p.price ? `<div class="t-circle-old">ปกติ ${fmtThaiBaht(p.oldPrice)}.-</div>` : ''}
+            <div class="t-yellow-strip">${escUnit}${escSize ? ' · '+escSize : ''}</div>
+          </div>
+          <div class="t-price-circle">
+            <div class="t-circle-label">พิเศษ</div>
+            <div class="t-price">${priceStr}.-</div>
+          </div>
+          ${footer}
         </div>
-        <div class="t-yellow-strip">${escapeHtml(p.unit||'บาท')}${p.size ? ' · '+escapeHtml(p.size) : ''}</div>
-        ${footer}
       </div>`;
   } else if (type === 'new') {
-    // Israphan-style clean white + green frame + red NEW! badge
+    /* Clean white green-frame + ribbon NEW! badge */
     html = `
       <div class="tag tpl-new" id="${tagId}">
-        <div class="t-head">★ สินค้าใหม่ · NEW ★</div>
         <div class="t-new-badge">NEW!</div>
         <div class="t-img">${imgHtml}</div>
-        <div class="t-name">${escapeHtml(p.name)}</div>
-        ${p.size ? `<div class="t-size">${escapeHtml(p.size)}</div>` : ''}
-        <div class="t-price-box">
+        <div class="t-info">
+          <div class="t-name">${escName}</div>
+          ${escSize ? `<div class="t-size">${escSize}</div>` : ''}
           <div class="t-price-row">
             <span class="t-currency">฿</span>
             <span class="t-price">${priceStr}</span>
           </div>
-          <div class="t-unit">${escapeHtml(p.unit||'บาท')}</div>
+          <div class="t-unit">${escUnit}</div>
+          ${footer}
         </div>
-        ${footer}
       </div>`;
   } else if (type === 'bogo') {
-    // ฮงล้ง-style comic burst SALE
-    const promoText = p.promo || 'ซื้อ 1 แถม 1';
+    /* ฮงล้ง — image left | (name + promo banner + old) middle | comic burst right */
+    const promoText = escapeHtml(p.promo || 'ซื้อ 1 แถม 1');
     html = `
       <div class="tag tpl-bogo" id="${tagId}">
-        <div class="t-head">โปรพิเศษ<span class="sub">SPECIAL PROMO</span></div>
-        <div class="t-promo-banner">${escapeHtml(promoText)}</div>
         <div class="t-img">${imgHtml}</div>
-        <div class="t-name">${escapeHtml(p.name)}</div>
-        <div class="t-burst-wrap">
-          <div class="t-burst">
-            <div class="t-burst-shape"></div>
-            <div class="t-burst-content">
-              <div class="label">SALE</div>
-              <div class="t-price">${priceStr}<span style="font-size:14pt">.-</span></div>
-              <div class="t-unit">${escapeHtml(p.unit||'บาท')}</div>
+        <div class="t-info">
+          <div class="t-info-left">
+            <div class="t-name">${escName}</div>
+            <div class="t-promo-banner">${promoText}</div>
+            ${p.oldPrice > p.price ? `<div class="t-old-line">(ปกติ ${fmtThaiBaht(p.oldPrice)} บาท)</div>` : `<div class="t-old-line">${escUnit}${escSize ? ' · '+escSize : ''}</div>`}
+          </div>
+          <div class="t-burst-wrap">
+            <div class="t-burst">
+              <div class="t-burst-shape"></div>
+              <div class="t-burst-content">
+                <div class="label">SALE</div>
+                <div class="t-price">${priceStr}.-</div>
+              </div>
             </div>
           </div>
+          ${footer}
         </div>
-        ${p.oldPrice > p.price ? `<div class="t-old-line">(ราคาปกติ ${fmtThaiBaht(p.oldPrice)} บาท)</div>` : ''}
-        ${footer}
       </div>`;
   } else {
-    // Israphan-style clean regular price tag
+    /* Regular — อิศราภัณฑ์ clean modern: image left | name+price right */
     html = `
       <div class="tag tpl-regular" id="${tagId}">
-        <div class="t-head">RATTANA MART</div>
         <div class="t-img">${imgHtml}</div>
-        <div class="t-name">${escapeHtml(p.name)}</div>
-        ${p.size ? `<div class="t-size">${escapeHtml(p.size)}</div>` : ''}
-        <div class="t-price-box">
+        <div class="t-info">
+          <div class="t-name">${escName}</div>
+          ${escSize ? `<div class="t-size">${escSize}</div>` : ''}
           ${p.oldPrice > p.price ? `<div class="t-old-pill">ปกติ ฿${fmtThaiBaht(p.oldPrice)}</div>` : ''}
           <div class="t-price-row">
             <span class="t-currency">฿</span>
             <span class="t-price">${priceStr}</span>
           </div>
-          <div class="t-unit">${escapeHtml(p.unit||'บาท')}</div>
+          <div class="t-unit">${escUnit}</div>
+          ${footer}
         </div>
-        ${footer}
       </div>`;
   }
   return { html, qrId, bcId };
