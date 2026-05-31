@@ -1111,32 +1111,10 @@ function closeUserModal(){ $('#userModal').classList.remove('open'); }
 
 /* ============== INIT ============== */
 function initApp() {
-  // Load saved config
-  try {
-    const cfg = JSON.parse(localStorage.getItem(STORAGE.config) || '{}');
-    if (cfg.sheetId)    $('#cfgSheetId').value = cfg.sheetId;
-    if (cfg.sheetName)  $('#cfgSheetName').value = cfg.sheetName;
-    if (cfg.priceTier)  $('#cfgPriceTier').value = cfg.priceTier;
-    if (cfg.unitPref)   $('#cfgUnitPref').value = cfg.unitPref;
-  } catch {}
-  // Load saved data
-  try {
-    const cache = JSON.parse(localStorage.getItem(STORAGE.cache) || 'null');
-    if (cache && cache.products && cache.products.length) {
-      products = cache.products;
-      updateStats();
-      $('#cardLoadStatus').style.display = 'block';
-      $('#lastLoad').textContent = formatThaiDate(cache.ts);
-      renderProducts();
-    }
-  } catch {}
   // Init dark mode
   if (localStorage.getItem('darkMode') === '1') document.body.classList.add('dark');
-  // Back-to-top
-  window.addEventListener('scroll', () => {
-    $('#backToTop').classList.toggle('show', window.scrollY > 300);
-  });
-  // Dynamic header height for sticky tab-nav (handles notch / dynamic safe-area)
+
+  // Dynamic header height for sticky tab-nav
   const setHeaderH = () => {
     const h = document.querySelector('header');
     if (h) document.documentElement.style.setProperty('--header-h', h.offsetHeight + 'px');
@@ -1144,6 +1122,28 @@ function initApp() {
   setHeaderH();
   window.addEventListener('resize', setHeaderH);
   window.addEventListener('orientationchange', setHeaderH);
+
+  // Back-to-top
+  window.addEventListener('scroll', () => {
+    $('#backToTop').classList.toggle('show', window.scrollY > 300);
+  });
+
+  // 1) Render cached products instantly (if any) — fast first paint
+  let hasCache = false;
+  try {
+    const cache = JSON.parse(localStorage.getItem(STORAGE.cache) || 'null');
+    if (cache && cache.products && cache.products.length) {
+      products = cache.products;
+      hasCache = true;
+      updateStats();
+      renderProducts();
+      $('#heroSub').textContent = `แคชจาก ${formatThaiDate(cache.ts)} — กำลังเช็คข้อมูลใหม่...`;
+    }
+  } catch {}
+
+  // 2) Always fetch fresh from sheet in background (skeleton only if no cache)
+  if (!hasCache) showSkeleton();
+  loadProducts({ silent: hasCache });
 }
 function toggleDark() {
   document.body.classList.toggle('dark');
