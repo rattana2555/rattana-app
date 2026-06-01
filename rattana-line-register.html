@@ -720,6 +720,8 @@ async function submitForm() {
     const result = await res.json();
     if (result.status === 'ok') {
       currentMember = payload;
+      // Cache เพื่อ auto-login ครั้งหน้า (เฉพาะถ้ามี LINE userId)
+      if (payload.lineUserId) cacheSet(payload.lineUserId, payload);
       document.getElementById('sTitle').textContent = isEditMode ? 'อัปเดตข้อมูลสำเร็จ!' : 'สมัครสมาชิกสำเร็จ!';
       showScreen('successScreen');
     } else {
@@ -740,33 +742,71 @@ function showError(msg) {
 }
 
 // ════════════════════════════════════════
-//  LIFF Init (optional — works without LINE)
+//  LIFF Init (auto-login if registered before)
 // ════════════════════════════════════════
+const CACHE_KEY = 'rattanaMember_';
+
+function cacheGet(userId) {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY + userId);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > 7*24*60*60*1000) return null; // 7 days
+    return data;
+  } catch { return null; }
+}
+function cacheSet(userId, data) {
+  try { localStorage.setItem(CACHE_KEY + userId, JSON.stringify({ data, ts: Date.now() })); } catch {}
+}
+
 async function initLiffOptional() {
   try {
     if (typeof liff === 'undefined') return;
+    showSpinner('กำลังเชื่อมต่อ LINE...');
     await liff.init({ liffId: LIFF_ID });
-    if (!liff.isInClient()) return;  // not in LINE → just show home screen
+    if (!liff.isInClient()) { hideSpinner(); return; }
     if (!liff.isLoggedIn()) { liff.login(); return; }
     lineProfile = await liff.getProfile();
     document.getElementById('profilePic').src = lineProfile.pictureUrl || '';
     document.getElementById('profileName').textContent = lineProfile.displayName || '—';
     document.getElementById('lineProfileCard').style.display = 'block';
-    // เช็คว่าเคยสมัครหรือยัง → ไปหน้า view เลย
-    await checkLineMember(lineProfile.userId);
+
+    // 1️⃣ ลองอ่านจาก cache ก่อน — แสดงทันทีถ้ามี
+    const cached = cacheGet(lineProfile.userId);
+    if (cached) {
+      currentMember = cached;
+      fillViewScreen(currentMember);
+      showScreen('viewScreen');
+      hideSpinner();
+      // 2️⃣ verify กับ server ใน background — ถ้าข้อมูลใหม่กว่า refresh
+      checkLineMember(lineProfile.userId, true);
+      return;
+    }
+
+    // 3️⃣ ไม่มี cache → query server เลย
+    showSpinner('กำลังตรวจสอบสมาชิก...');
+    await checkLineMember(lineProfile.userId, false);
   } catch(e) {
-    console.warn('LIFF init failed (non-fatal):', e);
+    console.warn('LIFF init failed:', e);
+  } finally {
+    hideSpinner();
   }
 }
-async function checkLineMember(userId) {
+
+async function checkLineMember(userId, silent) {
   try {
     const res = await fetch(`${GAS_URL}?userId=${encodeURIComponent(userId)}`);
     if (!res.ok) return;
     const result = await res.json();
     if (result.status === 'found') {
       currentMember = result.data;
+      cacheSet(userId, currentMember);
+      // ถ้าตอนนี้อยู่ในหน้า view อยู่แล้ว → refresh ข้อมูล
+      // ถ้าไม่ → ย้ายไปหน้า view เลย
       fillViewScreen(currentMember);
-      showScreen('viewScreen');
+      if (!silent) showScreen('viewScreen');
+    } else if (!silent) {
+      // ไม่เจอ → อยู่หน้า home ต่อ
     }
   } catch(e) { console.warn('check line member failed:', e); }
 }
