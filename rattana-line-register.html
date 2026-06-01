@@ -994,6 +994,8 @@ async function syncLineProfile() {
 //  Check existing customer from Member Point
 // ════════════════════════════════════════════════
 async function checkExistingPoint() {
+  // ถ้ากำลังแก้ไขข้อมูล ไม่ต้องเช็ค
+  if (isEditMode) return;
   const phone = document.getElementById('phone').value.trim();
   const hint  = document.getElementById('phoneHint');
   if (!/^0[0-9]{8,9}$/.test(phone)) return;
@@ -1002,9 +1004,19 @@ async function checkExistingPoint() {
   try {
     const res = await fetch(`${GAS_URL}?phone=${encodeURIComponent(phone)}&checkPoint=1`);
     const result = await res.json();
+
+    // เคยสมัครเป็นสมาชิกแล้ว → พาไปหน้าเข้าสู่ระบบ
+    if (result.status === 'registered' || result.registered) {
+      hint.innerHTML = '✓ คุณเป็นสมาชิกอยู่แล้ว — กำลังพาไปหน้าเข้าสู่ระบบ...';
+      hint.style.color = 'var(--success)';
+      showToast('✓ คุณเป็นสมาชิกอยู่แล้ว → เข้าสู่ระบบ', 'success');
+      document.getElementById('loginPhone').value = phone;
+      setTimeout(() => goLogin(), 1300);
+      return;
+    }
+
     if (result.status === 'found') {
       const d = result.data;
-      // Pre-fill ชื่อ-นามสกุล ถ้ายังว่าง
       if (!document.getElementById('firstName').value && d.firstName) document.getElementById('firstName').value = d.firstName;
       if (!document.getElementById('lastName').value  && d.lastName)  document.getElementById('lastName').value  = d.lastName;
       hint.innerHTML = `✓ พบข้อมูลลูกค้าเก่า — ${d.firstName} ${d.lastName} · ${d.tier} · ${d.points} แต้ม`;
