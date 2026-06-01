@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v13.9</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v14.0</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -365,7 +365,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v13.9</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v14.0</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -2155,6 +2155,39 @@ async function doSave(){
 // ══════════════════════════════════════════
 // DASHBOARD
 // ══════════════════════════════════════════
+// ──── แก้ไขรถที่บันทึกแล้ว: เอาบิลกลับเข้า queue เพื่อแก้ + remove savedRefs ──
+function editSavedTruck(plate){
+  // หาบิลใน keepData ที่ตรงกับรถนี้ + วันที่ filter (ถ้ามี)
+  const rows=keepData.filter(r=>{
+    if(r.plate!==plate)return false;
+    if(dashFilterDate&&r.deliveryDate!==dashFilterDate)return false;
+    return true;
+  });
+  if(!rows.length){showToast('ไม่พบบิลของรถนี้','warn');return;}
+  let restored=0;
+  rows.forEach(r=>{
+    if(!r.ref||!billMap[r.ref])return;
+    queue[r.ref]=r.plate;
+    tripMap[r.ref]=r.trip||1;
+    savedRefs.delete(r.ref);
+    delete savedDates[r.ref];
+    restored++;
+  });
+  // save state
+  try{localStorage.setItem(STORE_KEY,JSON.stringify(queue));}catch(e){}
+  try{localStorage.setItem(STORE_KEY+'_trip',JSON.stringify(tripMap));}catch(e){}
+  try{localStorage.setItem('dq_v4_saved',JSON.stringify([...savedRefs]));}catch(e){}
+  try{localStorage.setItem('dq_v4_saved_dates',JSON.stringify(savedDates));}catch(e){}
+  isDirty=true;
+  updateSyncBadge&&updateSyncBadge();
+  showToast(`✏️ เอา ${restored} บิลของ ${plate} กลับมาแก้ไข`,'ok');
+  // ไปหน้าจัดคิว + เลือกรถนี้
+  switchTab('queue');
+  selPlate=plate;
+  renderTruckCards();renderBillTable();updateQueueSub();
+  setTimeout(()=>window.scrollTo({top:0,behavior:'smooth'}),100);
+}
+
 function gotoTruckQueue(plate){
   const qTab=document.querySelector('.nav-tab[onclick*="\'queue\'"]');
   switchTab('queue',qTab||null);
@@ -2415,9 +2448,12 @@ function renderSavedView(){
             <span style="font-size:12px;color:#6B7A90"> ${nick}${tType?' · '+tType:''}</span>
             ${driver?`<div style="font-size:11px;color:#A0ABBB;margin-left:16px">🧑‍✈️ ${driver}</div>`:''}
           </div>
-          ${truck&&anyFree
-            ?`<button onclick="gotoTruckQueue('${plate}')" style="background:#15803D;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">➕ เพิ่มบิล</button>`
-            :truck?`<span style="background:#FDECEC;color:#C62828;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700">เต็มแล้ว</span>`:''}
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button onclick="editSavedTruck('${plate}')" style="background:#FEF6E4;color:#7D6428;border:1px solid #E6C26E;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer">✏️ แก้ไข</button>
+            ${truck&&anyFree
+              ?`<button onclick="gotoTruckQueue('${plate}')" style="background:#15803D;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">➕ เพิ่มบิล</button>`
+              :truck?`<span style="background:#FDECEC;color:#C62828;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700">เต็มแล้ว</span>`:''}
+          </div>
         </div>
         ${tripsHtml}
       </div>`;
