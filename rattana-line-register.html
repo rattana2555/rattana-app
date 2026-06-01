@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Rattana Member Register v1.2</title>
+  <title>Rattana Member Register v1.3</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -116,7 +116,7 @@
 <header class="app-header">
   <div class="logo-text">RATTANA <span>MART</span></div>
   <div class="header-sub">สมัครสมาชิก</div>
-  <div class="version-tag">v1.2 · 2026-06-01</div>
+  <div class="version-tag">v1.3 · 2026-06-01</div>
 </header>
 
 <!-- APP SCREEN -->
@@ -277,6 +277,12 @@
               <ul class="dd-list" id="ddSubDistrictList"></ul>
             </div>
           </div>
+        </div>
+
+        <div class="field">
+          <label class="flabel">รหัสไปรษณีย์ (Postcode)</label>
+          <input class="input" type="text" id="postcodeDisplay" readonly placeholder="จะกรอกอัตโนมัติเมื่อเลือกตำบล">
+          <span class="hint">กรอกอัตโนมัติจากตำบลที่เลือก</span>
         </div>
 
       </div>
@@ -485,103 +491,78 @@ function initStaticDropdowns() {
 }
 
 // ══════════════════════════════════════
-//  Thailand address — inline provinces + lazy CDN
+//  Thailand address (same-origin JSON, includes postcode)
 // ══════════════════════════════════════
-// 77 จังหวัด ฝังตรงนี้เลย ไม่ต้องโหลด
-const PROVINCES = [
-  {id:1,n:'กรุงเทพมหานคร'},{id:2,n:'สมุทรปราการ'},{id:3,n:'นนทบุรี'},{id:4,n:'ปทุมธานี'},
-  {id:5,n:'พระนครศรีอยุธยา'},{id:6,n:'อ่างทอง'},{id:7,n:'ลพบุรี'},{id:8,n:'สิงห์บุรี'},
-  {id:9,n:'ชัยนาท'},{id:10,n:'สระบุรี'},{id:11,n:'ชลบุรี'},{id:12,n:'ระยอง'},
-  {id:13,n:'จันทบุรี'},{id:14,n:'ตราด'},{id:15,n:'ฉะเชิงเทรา'},{id:16,n:'ปราจีนบุรี'},
-  {id:17,n:'นครนายก'},{id:18,n:'สระแก้ว'},{id:19,n:'นครราชสีมา'},{id:20,n:'บุรีรัมย์'},
-  {id:21,n:'สุรินทร์'},{id:22,n:'ศรีสะเกษ'},{id:23,n:'อุบลราชธานี'},{id:24,n:'ยโสธร'},
-  {id:25,n:'ชัยภูมิ'},{id:26,n:'อำนาจเจริญ'},{id:27,n:'บึงกาฬ'},{id:28,n:'หนองบัวลำภู'},
-  {id:29,n:'ขอนแก่น'},{id:30,n:'อุดรธานี'},{id:31,n:'เลย'},{id:32,n:'หนองคาย'},
-  {id:33,n:'มหาสารคาม'},{id:34,n:'ร้อยเอ็ด'},{id:35,n:'กาฬสินธุ์'},{id:36,n:'สกลนคร'},
-  {id:37,n:'นครพนม'},{id:38,n:'มุกดาหาร'},{id:39,n:'เชียงใหม่'},{id:40,n:'ลำพูน'},
-  {id:41,n:'ลำปาง'},{id:42,n:'อุตรดิตถ์'},{id:43,n:'แพร่'},{id:44,n:'น่าน'},
-  {id:45,n:'พะเยา'},{id:46,n:'เชียงราย'},{id:47,n:'แม่ฮ่องสอน'},{id:48,n:'นครสวรรค์'},
-  {id:49,n:'อุทัยธานี'},{id:50,n:'กำแพงเพชร'},{id:51,n:'ตาก'},{id:52,n:'สุโขทัย'},
-  {id:53,n:'พิษณุโลก'},{id:54,n:'พิจิตร'},{id:55,n:'เพชรบูรณ์'},{id:56,n:'ราชบุรี'},
-  {id:57,n:'กาญจนบุรี'},{id:58,n:'สุพรรณบุรี'},{id:59,n:'นครปฐม'},{id:60,n:'สมุทรสาคร'},
-  {id:61,n:'สมุทรสงคราม'},{id:62,n:'เพชรบุรี'},{id:63,n:'ประจวบคีรีขันธ์'},{id:64,n:'นครศรีธรรมราช'},
-  {id:65,n:'กระบี่'},{id:66,n:'พังงา'},{id:67,n:'ภูเก็ต'},{id:68,n:'สุราษฎร์ธานี'},
-  {id:69,n:'ระนอง'},{id:70,n:'ชุมพร'},{id:71,n:'สงขลา'},{id:72,n:'สตูล'},
-  {id:73,n:'ตรัง'},{id:74,n:'พัทลุง'},{id:75,n:'ปัตตานี'},{id:76,n:'ยะลา'},{id:77,n:'นราธิวาส'}
-];
+let addressTree = null;       // { province: { district: [ {t, p} ] } }
+let selectedPostcode = '';
 
-let amphureData = null;
-let tambonData  = null;
-const CDN = 'https://cdn.jsdelivr.net/gh/kongvut/thai-province-data@master';
-
-function loadThaiData() {
-  // จังหวัดฝังไว้แล้ว render ทันที
-  populateProvinces();
+async function loadThaiData() {
+  const ul = document.getElementById('ddProvinceList');
+  ul.innerHTML = '<li class="loading">⏳ กำลังโหลดข้อมูลที่อยู่...</li>';
+  try {
+    const res = await fetch('thai-address.json');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    addressTree = await res.json();
+    populateProvinces();
+  } catch(e) {
+    console.error('address load error:', e);
+    ul.innerHTML = '<li class="no-result" onclick="loadThaiData()" style="cursor:pointer;color:var(--danger)">⚠️ โหลดไม่สำเร็จ กดเพื่อลองใหม่</li>';
+  }
 }
 
 function populateProvinces() {
-  const items = PROVINCES.map(p => ({ value: p.n, label: p.n, id: p.id }));
-  populateDD('ddProvinceList', items, async item => {
+  const provinces = Object.keys(addressTree).sort((a,b) => a.localeCompare(b,'th'));
+  const items = provinces.map(p => ({ value: p, label: p }));
+  populateDD('ddProvinceList', items, item => {
     setDDValue('ddProvince', item.value, item.value);
     selectedValues.province    = item.value;
     selectedValues.district    = '';
     selectedValues.subDistrict = '';
-    resetDD('ddDistrict', '⏳ กำลังโหลด...');
-    resetDD('ddSubDistrict', '-- เลือกอำเภอก่อน --');
-    document.querySelector('#ddDistrict .dd-trigger').disabled    = true;
+    selectedPostcode = '';
+    document.querySelector('#ddDistrict .dd-trigger').disabled    = false;
     document.querySelector('#ddSubDistrict .dd-trigger').disabled = true;
-    await loadAmphures(item.id);
+    resetDD('ddSubDistrict', '-- เลือกอำเภอก่อน --');
+    populateDistricts(item.value);
+    updatePostcodeDisplay();
   });
 }
 
-async function loadAmphures(provinceId) {
-  try {
-    if (!amphureData) {
-      const res = await fetch(`${CDN}/api_amphure.json`);
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      amphureData = await res.json();
-    }
-    const filtered = amphureData.filter(a => a.province_id === provinceId);
-    const onSelect = async item => {
-      setDDValue('ddDistrict', item.value, item.value);
-      selectedValues.district    = item.value;
-      selectedValues.subDistrict = '';
-      resetDD('ddSubDistrict', '⏳ กำลังโหลด...');
-      document.querySelector('#ddSubDistrict .dd-trigger').disabled = true;
-      await loadTambons(item.id);
-    };
-    populateDD('ddDistrictList', filtered.map(a => ({ value: a.name_th, label: a.name_th, id: a.id })), onSelect);
-    resetDD('ddDistrict', '-- เลือกอำเภอ --');
-    document.querySelector('#ddDistrict .dd-trigger').disabled = false;
-    populateDD('ddDistrictList', filtered.map(a => ({ value: a.name_th, label: a.name_th, id: a.id })), onSelect);
-  } catch(e) {
-    console.error('amphure error:', e);
-    resetDD('ddDistrict', '⚠️ โหลดไม่สำเร็จ');
-    document.querySelector('#ddDistrict .dd-trigger').disabled = false;
-  }
+function populateDistricts(provinceName) {
+  const districts = Object.keys(addressTree[provinceName] || {}).sort((a,b) => a.localeCompare(b,'th'));
+  resetDD('ddDistrict', '-- เลือกอำเภอ --');
+  const items = districts.map(d => ({ value: d, label: d, province: provinceName }));
+  populateDD('ddDistrictList', items, item => {
+    setDDValue('ddDistrict', item.value, item.value);
+    selectedValues.district    = item.value;
+    selectedValues.subDistrict = '';
+    selectedPostcode = '';
+    document.querySelector('#ddSubDistrict .dd-trigger').disabled = false;
+    populateSubDistricts(item.province, item.value);
+    updatePostcodeDisplay();
+  });
 }
 
-async function loadTambons(amphureId) {
-  try {
-    if (!tambonData) {
-      const res = await fetch(`${CDN}/api_tambon.json`);
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      tambonData = await res.json();
-    }
-    const filtered = tambonData.filter(t => t.amphure_id === amphureId);
-    const onSelect = item => {
-      setDDValue('ddSubDistrict', item.value, item.value);
-      selectedValues.subDistrict = item.value;
-    };
-    populateDD('ddSubDistrictList', filtered.map(t => ({ value: t.name_th, label: t.name_th, id: t.id })), onSelect);
-    resetDD('ddSubDistrict', '-- เลือกตำบล --');
-    document.querySelector('#ddSubDistrict .dd-trigger').disabled = false;
-    populateDD('ddSubDistrictList', filtered.map(t => ({ value: t.name_th, label: t.name_th, id: t.id })), onSelect);
-  } catch(e) {
-    console.error('tambon error:', e);
-    resetDD('ddSubDistrict', '⚠️ โหลดไม่สำเร็จ');
-    document.querySelector('#ddSubDistrict .dd-trigger').disabled = false;
-  }
+function populateSubDistricts(provinceName, districtName) {
+  const tambons = (addressTree[provinceName]?.[districtName] || [])
+    .slice()
+    .sort((a,b) => a.t.localeCompare(b.t,'th'));
+  resetDD('ddSubDistrict', '-- เลือกตำบล --');
+  const items = tambons.map(t => ({
+    value: t.t,
+    label: t.p ? `${t.t} (${t.p})` : t.t,
+    postcode: t.p || ''
+  }));
+  populateDD('ddSubDistrictList', items, item => {
+    setDDValue('ddSubDistrict', item.value, item.value);
+    selectedValues.subDistrict = item.value;
+    selectedPostcode = item.postcode;
+    updatePostcodeDisplay();
+  });
+}
+
+function updatePostcodeDisplay() {
+  const el = document.getElementById('postcodeDisplay');
+  if (el) el.value = selectedPostcode || '';
 }
 
 function resetDD(wrapId, placeholder) {
@@ -661,6 +642,7 @@ async function submitForm() {
     subDistrict:  selectedValues.subDistrict,
     district:     selectedValues.district,
     province:     selectedValues.province,
+    postcode:     String(selectedPostcode || ''),
     registeredAt: new Date().toISOString(),
   };
 
@@ -699,7 +681,7 @@ function showSuccess(data) {
   document.getElementById('sDob').textContent       = data.dateOfBirth;
   document.getElementById('sOccupation').textContent= data.occupation;
   document.getElementById('sGender').textContent    = data.gender;
-  document.getElementById('sAddress').textContent   = `${data.address} ต.${data.subDistrict} อ.${data.district} จ.${data.province}`;
+  document.getElementById('sAddress').textContent   = `${data.address} ต.${data.subDistrict} อ.${data.district} จ.${data.province} ${data.postcode||''}`.trim();
   document.getElementById('sDate').textContent      = formatThaiDate(data.registeredAt);
   window.scrollTo({ top:0, behavior:'smooth' });
 }
