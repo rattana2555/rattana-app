@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0f9d58">
-  <title>Rattana Stock Count v2.7</title>
+  <title>Rattana Stock Count v2.8</title>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
@@ -1001,7 +1001,7 @@ function renderPending() {
     <div class="card card-gold mt-12">
       <div class="card-body">
         <div class="flex" style="gap:12px;align-items:center">
-          <div class="ci-thumb" style="width:56px;height:56px;font-size:30px">${productEmoji(name)}</div>
+          ${thumbHtml(name, pendingScan.product, true)}
           <div style="flex:1;min-width:0">
             <div class="flex" style="gap:8px;align-items:center">
               <span class="badge ${UNIT_CSS[u]||''}" style="flex-shrink:0">${u}</span>
@@ -1095,6 +1095,26 @@ function productEmoji(name) {
   for (const [re, e] of EMOJI_MAP) if (re.test(s)) return e;
   return '📦';
 }
+
+// Product image from SKU_USAGE (Google Drive link) → thumbnail URL
+function driveThumb(url, size = 200) {
+  const s = String(url || '');
+  const m = s.match(/[?&]id=([-\w]+)/) || s.match(/\/d\/([-\w]+)/);
+  return m ? `https://drive.google.com/thumbnail?id=${m[1]}&sz=w${size}` : '';
+}
+function productImage(p) { return p ? driveThumb(p['SKU_USAGE']) : ''; }
+
+// Thumbnail HTML: real image if available, emoji fallback (incl. on load error)
+function thumbHtml(name, product, big) {
+  const sz = big ? 'width:56px;height:56px;font-size:30px' : '';
+  const img = productImage(product);
+  if (img) {
+    return `<div class="ci-thumb" style="${sz};padding:0;overflow:hidden">
+      <img src="${img}" loading="lazy" style="width:100%;height:100%;object-fit:cover"
+           onerror="this.parentNode.textContent='${productEmoji(name)}'"></div>`;
+  }
+  return `<div class="ci-thumb" style="${sz}">${productEmoji(name)}</div>`;
+}
 function systemPiecesFor(item) {
   const p = productByKey[item.key];
   const raw = p ? (p[`STOCK ${countSession.warehouse}`] || '0') : '0';
@@ -1120,7 +1140,7 @@ function renderCountList() {
     const d = itemDiff(it);
     return `
     <div class="count-item">
-      <div class="ci-thumb">${productEmoji(it.name)}</div>
+      ${thumbHtml(it.name, productByKey[it.key])}
       <div class="ci-main" onclick="openEditItem('${encodeURIComponent(it.key)}')" style="cursor:pointer">
         <div class="ci-name">${it.name}</div>
         <div class="ci-breakdown">${breakdownText(it)} = <b>${d.counted.toLocaleString()}</b> ชิ้น · ระบบ ${d.system.toLocaleString()}</div>
