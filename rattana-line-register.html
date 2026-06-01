@@ -485,58 +485,105 @@ function initStaticDropdowns() {
 }
 
 // ══════════════════════════════════════
-//  Thailand address (cascading)
+//  Thailand address (lazy load per level)
 // ══════════════════════════════════════
+const CDN = 'https://cdn.jsdelivr.net/gh/kongvut/thai-province-data@master';
+let amphureData = null;
+let tambonData  = null;
+
 async function loadThaiData() {
+  const ul = document.getElementById('ddProvinceList');
+  ul.innerHTML = '<li class="loading">⏳ กำลังโหลดจังหวัด...</li>';
   try {
-    const res  = await fetch('https://raw.githubusercontent.com/kongvut/thai-province-data/master/api_province_with_amphure_tambon.json');
-    thaiData   = await res.json();
+    const res = await fetch(`${CDN}/api_province.json`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    thaiData = await res.json();
     populateProvinces();
   } catch(e) {
-    console.error('ไม่สามารถโหลดข้อมูลที่อยู่:', e);
-    document.getElementById('ddProvinceList').innerHTML = '<li class="no-result">โหลดข้อมูลไม่สำเร็จ กรุณารีเฟรช</li>';
+    console.error('province load error:', e);
+    ul.innerHTML = '<li class="no-result" onclick="loadThaiData()" style="cursor:pointer;color:var(--danger)">⚠️ โหลดไม่สำเร็จ กดที่นี่เพื่อลองใหม่</li>';
   }
 }
 
 function populateProvinces() {
   const items = thaiData.map(p => ({ value: p.name_th, label: p.name_th, id: p.id }));
-  populateDD('ddProvinceList', items, item => {
+  populateDD('ddProvinceList', items, async item => {
     setDDValue('ddProvince', item.value, item.value);
     selectedValues.province    = item.value;
     selectedValues.district    = '';
     selectedValues.subDistrict = '';
-    populateDistricts(item.id);
-    resetDD('ddDistrict', '-- เลือกอำเภอ --');
+    resetDD('ddDistrict', '⏳ กำลังโหลด...');
     resetDD('ddSubDistrict', '-- เลือกอำเภอก่อน --');
-    document.querySelector('#ddDistrict .dd-trigger').disabled   = false;
+    document.querySelector('#ddDistrict .dd-trigger').disabled    = true;
     document.querySelector('#ddSubDistrict .dd-trigger').disabled = true;
+    await loadAmphures(item.id);
   });
 }
 
-function populateDistricts(provinceId) {
-  const province = thaiData.find(p => p.id === provinceId);
-  if (!province) return;
-  const items = province.amphure.map(a => ({ value: a.name_th, label: a.name_th, id: a.id, provinceId }));
-  populateDD('ddDistrictList', items, item => {
-    setDDValue('ddDistrict', item.value, item.value);
-    selectedValues.district    = item.value;
-    selectedValues.subDistrict = '';
-    populateSubDistricts(provinceId, item.id);
+async function loadAmphures(provinceId) {
+  try {
+    if (!amphureData) {
+      const res = await fetch(`${CDN}/api_amphure.json`);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      amphureData = await res.json();
+    }
+    const list  = amphureData.filter(a => a.province_id === provinceId);
+    const items = list.map(a => ({ value: a.name_th, label: a.name_th, id: a.id, provinceId }));
+    populateDD('ddDistrictList', items, async item => {
+      setDDValue('ddDistrict', item.value, item.value);
+      selectedValues.district    = item.value;
+      selectedValues.subDistrict = '';
+      resetDD('ddSubDistrict', '⏳ กำลังโหลด...');
+      document.querySelector('#ddSubDistrict .dd-trigger').disabled = true;
+      await loadTambons(item.id);
+    });
+    resetDD('ddDistrict', '-- เลือกอำเภอ --');
+    document.querySelector('#ddDistrict .dd-trigger').disabled = false;
+    // re-populate list after reset
+    const list2  = amphureData.filter(a => a.province_id === provinceId);
+    const items2 = list2.map(a => ({ value: a.name_th, label: a.name_th, id: a.id, provinceId }));
+    populateDD('ddDistrictList', items2, async item => {
+      setDDValue('ddDistrict', item.value, item.value);
+      selectedValues.district    = item.value;
+      selectedValues.subDistrict = '';
+      resetDD('ddSubDistrict', '⏳ กำลังโหลด...');
+      document.querySelector('#ddSubDistrict .dd-trigger').disabled = true;
+      await loadTambons(item.id);
+    });
+  } catch(e) {
+    console.error('amphure load error:', e);
+    document.querySelector('#ddDistrict .dd-trigger').disabled = false;
+    resetDD('ddDistrict', '⚠️ โหลดไม่สำเร็จ ลองอีกครั้ง');
+  }
+}
+
+async function loadTambons(amphureId) {
+  try {
+    if (!tambonData) {
+      const res = await fetch(`${CDN}/api_tambon.json`);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      tambonData = await res.json();
+    }
+    const list  = tambonData.filter(t => t.amphure_id === amphureId);
+    const items = list.map(t => ({ value: t.name_th, label: t.name_th, id: t.id }));
+    populateDD('ddSubDistrictList', items, item => {
+      setDDValue('ddSubDistrict', item.value, item.value);
+      selectedValues.subDistrict = item.value;
+    });
     resetDD('ddSubDistrict', '-- เลือกตำบล --');
     document.querySelector('#ddSubDistrict .dd-trigger').disabled = false;
-  });
-}
-
-function populateSubDistricts(provinceId, amphureId) {
-  const province = thaiData.find(p => p.id === provinceId);
-  if (!province) return;
-  const amphure  = province.amphure.find(a => a.id === amphureId);
-  if (!amphure)  return;
-  const items = amphure.tambon.map(t => ({ value: t.name_th, label: t.name_th, id: t.id }));
-  populateDD('ddSubDistrictList', items, item => {
-    setDDValue('ddSubDistrict', item.value, item.value);
-    selectedValues.subDistrict = item.value;
-  });
+    // re-populate after reset
+    const list2  = tambonData.filter(t => t.amphure_id === amphureId);
+    const items2 = list2.map(t => ({ value: t.name_th, label: t.name_th, id: t.id }));
+    populateDD('ddSubDistrictList', items2, item => {
+      setDDValue('ddSubDistrict', item.value, item.value);
+      selectedValues.subDistrict = item.value;
+    });
+  } catch(e) {
+    console.error('tambon load error:', e);
+    document.querySelector('#ddSubDistrict .dd-trigger').disabled = false;
+    resetDD('ddSubDistrict', '⚠️ โหลดไม่สำเร็จ ลองอีกครั้ง');
+  }
 }
 
 function resetDD(wrapId, placeholder) {
