@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0f9d58">
-  <title>Rattana Stock Count v2.10</title>
+  <title>Rattana Stock Count v2.11</title>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
@@ -167,7 +167,13 @@
     /* Count list — big cards with product thumbnail */
     .count-item{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);margin-bottom:10px;background:var(--card-bg);box-shadow:var(--shadow-sm)}
     .count-item:last-child{margin-bottom:0}
-    .ci-thumb{width:52px;height:52px;flex-shrink:0;border-radius:var(--radius-md);background:var(--row-alt);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:26px}
+    .ci-thumb{width:52px;height:52px;flex-shrink:0;border-radius:var(--radius-md);background:var(--row-alt);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:26px;overflow:hidden}
+    .ci-thumb.thumb-img{background:linear-gradient(90deg,#e8efeb 0%,#f5faf7 50%,#e8efeb 100%);background-size:200% 100%;animation:shimmer 1.2s linear infinite}
+    body.dark .ci-thumb.thumb-img{background:linear-gradient(90deg,#16261f 0%,#1f3d31 50%,#16261f 100%);background-size:200% 100%}
+    .ci-thumb img{width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .25s}
+    .ci-thumb img.ld{opacity:1}
+    .ci-thumb.thumb-img:has(img.ld){animation:none;background:transparent}
+    @keyframes shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
     .ci-main{flex:1;min-width:0}
     .ci-name{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .ci-breakdown{font-size:12px;color:var(--muted);margin:2px 0 5px}
@@ -1117,20 +1123,21 @@ function imgFallback(img) {
   }
 }
 
-// Thumbnail HTML: real product image (multi-source) with emoji fallback
+// Thumbnail HTML: real product image (multi-source) with emoji fallback + skeleton
 function thumbHtml(name, product, big) {
   const sz = big ? 'width:56px;height:56px;font-size:30px' : '';
   const id = productImage(product);
   if (id) {
-    const primary = `https://lh3.googleusercontent.com/d/${id}=w200`;
+    const px = big ? 160 : 96;            // serve the actual rendered size, not w200
+    const primary = `https://lh3.googleusercontent.com/d/${id}=w${px}`;
     const alts = [
-      `https://drive.google.com/thumbnail?id=${id}&sz=w200`,
+      `https://drive.google.com/thumbnail?id=${id}&sz=w${px}`,
       `https://lh3.googleusercontent.com/d/${id}`,
     ].join('|');
-    return `<div class="ci-thumb" style="${sz};padding:0;overflow:hidden">
+    return `<div class="ci-thumb thumb-img" style="${sz}">
       <img src="${primary}" data-fallback="${alts}" data-emoji="${productEmoji(name)}"
-           referrerpolicy="no-referrer" loading="lazy"
-           style="width:100%;height:100%;object-fit:cover" onerror="imgFallback(this)"></div>`;
+           referrerpolicy="no-referrer" loading="lazy" decoding="async"
+           onload="this.classList.add('ld')" onerror="imgFallback(this)"></div>`;
   }
   return `<div class="ci-thumb" style="${sz}">${productEmoji(name)}</div>`;
 }
