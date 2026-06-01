@@ -485,28 +485,42 @@ function initStaticDropdowns() {
 }
 
 // ══════════════════════════════════════
-//  Thailand address (lazy load per level)
+//  Thailand address — inline provinces + lazy CDN
 // ══════════════════════════════════════
-const CDN = 'https://cdn.jsdelivr.net/gh/kongvut/thai-province-data@master';
+// 77 จังหวัด ฝังตรงนี้เลย ไม่ต้องโหลด
+const PROVINCES = [
+  {id:1,n:'กรุงเทพมหานคร'},{id:2,n:'สมุทรปราการ'},{id:3,n:'นนทบุรี'},{id:4,n:'ปทุมธานี'},
+  {id:5,n:'พระนครศรีอยุธยา'},{id:6,n:'อ่างทอง'},{id:7,n:'ลพบุรี'},{id:8,n:'สิงห์บุรี'},
+  {id:9,n:'ชัยนาท'},{id:10,n:'สระบุรี'},{id:11,n:'ชลบุรี'},{id:12,n:'ระยอง'},
+  {id:13,n:'จันทบุรี'},{id:14,n:'ตราด'},{id:15,n:'ฉะเชิงเทรา'},{id:16,n:'ปราจีนบุรี'},
+  {id:17,n:'นครนายก'},{id:18,n:'สระแก้ว'},{id:19,n:'นครราชสีมา'},{id:20,n:'บุรีรัมย์'},
+  {id:21,n:'สุรินทร์'},{id:22,n:'ศรีสะเกษ'},{id:23,n:'อุบลราชธานี'},{id:24,n:'ยโสธร'},
+  {id:25,n:'ชัยภูมิ'},{id:26,n:'อำนาจเจริญ'},{id:27,n:'บึงกาฬ'},{id:28,n:'หนองบัวลำภู'},
+  {id:29,n:'ขอนแก่น'},{id:30,n:'อุดรธานี'},{id:31,n:'เลย'},{id:32,n:'หนองคาย'},
+  {id:33,n:'มหาสารคาม'},{id:34,n:'ร้อยเอ็ด'},{id:35,n:'กาฬสินธุ์'},{id:36,n:'สกลนคร'},
+  {id:37,n:'นครพนม'},{id:38,n:'มุกดาหาร'},{id:39,n:'เชียงใหม่'},{id:40,n:'ลำพูน'},
+  {id:41,n:'ลำปาง'},{id:42,n:'อุตรดิตถ์'},{id:43,n:'แพร่'},{id:44,n:'น่าน'},
+  {id:45,n:'พะเยา'},{id:46,n:'เชียงราย'},{id:47,n:'แม่ฮ่องสอน'},{id:48,n:'นครสวรรค์'},
+  {id:49,n:'อุทัยธานี'},{id:50,n:'กำแพงเพชร'},{id:51,n:'ตาก'},{id:52,n:'สุโขทัย'},
+  {id:53,n:'พิษณุโลก'},{id:54,n:'พิจิตร'},{id:55,n:'เพชรบูรณ์'},{id:56,n:'ราชบุรี'},
+  {id:57,n:'กาญจนบุรี'},{id:58,n:'สุพรรณบุรี'},{id:59,n:'นครปฐม'},{id:60,n:'สมุทรสาคร'},
+  {id:61,n:'สมุทรสงคราม'},{id:62,n:'เพชรบุรี'},{id:63,n:'ประจวบคีรีขันธ์'},{id:64,n:'นครศรีธรรมราช'},
+  {id:65,n:'กระบี่'},{id:66,n:'พังงา'},{id:67,n:'ภูเก็ต'},{id:68,n:'สุราษฎร์ธานี'},
+  {id:69,n:'ระนอง'},{id:70,n:'ชุมพร'},{id:71,n:'สงขลา'},{id:72,n:'สตูล'},
+  {id:73,n:'ตรัง'},{id:74,n:'พัทลุง'},{id:75,n:'ปัตตานี'},{id:76,n:'ยะลา'},{id:77,n:'นราธิวาส'}
+];
+
 let amphureData = null;
 let tambonData  = null;
+const CDN = 'https://cdn.jsdelivr.net/gh/kongvut/thai-province-data@master';
 
-async function loadThaiData() {
-  const ul = document.getElementById('ddProvinceList');
-  ul.innerHTML = '<li class="loading">⏳ กำลังโหลดจังหวัด...</li>';
-  try {
-    const res = await fetch(`${CDN}/api_province.json`);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    thaiData = await res.json();
-    populateProvinces();
-  } catch(e) {
-    console.error('province load error:', e);
-    ul.innerHTML = '<li class="no-result" onclick="loadThaiData()" style="cursor:pointer;color:var(--danger)">⚠️ โหลดไม่สำเร็จ กดที่นี่เพื่อลองใหม่</li>';
-  }
+function loadThaiData() {
+  // จังหวัดฝังไว้แล้ว render ทันที
+  populateProvinces();
 }
 
 function populateProvinces() {
-  const items = thaiData.map(p => ({ value: p.name_th, label: p.name_th, id: p.id }));
+  const items = PROVINCES.map(p => ({ value: p.n, label: p.n, id: p.id }));
   populateDD('ddProvinceList', items, async item => {
     setDDValue('ddProvince', item.value, item.value);
     selectedValues.province    = item.value;
@@ -527,33 +541,23 @@ async function loadAmphures(provinceId) {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       amphureData = await res.json();
     }
-    const list  = amphureData.filter(a => a.province_id === provinceId);
-    const items = list.map(a => ({ value: a.name_th, label: a.name_th, id: a.id, provinceId }));
-    populateDD('ddDistrictList', items, async item => {
+    const filtered = amphureData.filter(a => a.province_id === provinceId);
+    const onSelect = async item => {
       setDDValue('ddDistrict', item.value, item.value);
       selectedValues.district    = item.value;
       selectedValues.subDistrict = '';
       resetDD('ddSubDistrict', '⏳ กำลังโหลด...');
       document.querySelector('#ddSubDistrict .dd-trigger').disabled = true;
       await loadTambons(item.id);
-    });
+    };
+    populateDD('ddDistrictList', filtered.map(a => ({ value: a.name_th, label: a.name_th, id: a.id })), onSelect);
     resetDD('ddDistrict', '-- เลือกอำเภอ --');
     document.querySelector('#ddDistrict .dd-trigger').disabled = false;
-    // re-populate list after reset
-    const list2  = amphureData.filter(a => a.province_id === provinceId);
-    const items2 = list2.map(a => ({ value: a.name_th, label: a.name_th, id: a.id, provinceId }));
-    populateDD('ddDistrictList', items2, async item => {
-      setDDValue('ddDistrict', item.value, item.value);
-      selectedValues.district    = item.value;
-      selectedValues.subDistrict = '';
-      resetDD('ddSubDistrict', '⏳ กำลังโหลด...');
-      document.querySelector('#ddSubDistrict .dd-trigger').disabled = true;
-      await loadTambons(item.id);
-    });
+    populateDD('ddDistrictList', filtered.map(a => ({ value: a.name_th, label: a.name_th, id: a.id })), onSelect);
   } catch(e) {
-    console.error('amphure load error:', e);
+    console.error('amphure error:', e);
+    resetDD('ddDistrict', '⚠️ โหลดไม่สำเร็จ');
     document.querySelector('#ddDistrict .dd-trigger').disabled = false;
-    resetDD('ddDistrict', '⚠️ โหลดไม่สำเร็จ ลองอีกครั้ง');
   }
 }
 
@@ -564,25 +568,19 @@ async function loadTambons(amphureId) {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       tambonData = await res.json();
     }
-    const list  = tambonData.filter(t => t.amphure_id === amphureId);
-    const items = list.map(t => ({ value: t.name_th, label: t.name_th, id: t.id }));
-    populateDD('ddSubDistrictList', items, item => {
+    const filtered = tambonData.filter(t => t.amphure_id === amphureId);
+    const onSelect = item => {
       setDDValue('ddSubDistrict', item.value, item.value);
       selectedValues.subDistrict = item.value;
-    });
+    };
+    populateDD('ddSubDistrictList', filtered.map(t => ({ value: t.name_th, label: t.name_th, id: t.id })), onSelect);
     resetDD('ddSubDistrict', '-- เลือกตำบล --');
     document.querySelector('#ddSubDistrict .dd-trigger').disabled = false;
-    // re-populate after reset
-    const list2  = tambonData.filter(t => t.amphure_id === amphureId);
-    const items2 = list2.map(t => ({ value: t.name_th, label: t.name_th, id: t.id }));
-    populateDD('ddSubDistrictList', items2, item => {
-      setDDValue('ddSubDistrict', item.value, item.value);
-      selectedValues.subDistrict = item.value;
-    });
+    populateDD('ddSubDistrictList', filtered.map(t => ({ value: t.name_th, label: t.name_th, id: t.id })), onSelect);
   } catch(e) {
-    console.error('tambon load error:', e);
+    console.error('tambon error:', e);
+    resetDD('ddSubDistrict', '⚠️ โหลดไม่สำเร็จ');
     document.querySelector('#ddSubDistrict .dd-trigger').disabled = false;
-    resetDD('ddSubDistrict', '⚠️ โหลดไม่สำเร็จ ลองอีกครั้ง');
   }
 }
 
