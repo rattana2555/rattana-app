@@ -9,9 +9,13 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0d1b3e">
-  <title>Rattana Stock Count v2.13</title>
+  <title>Rattana Stock Count v2.14</title>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <link rel="preconnect" href="https://docs.google.com" crossorigin>
+  <link rel="preconnect" href="https://lh3.googleusercontent.com" crossorigin>
+  <link rel="preconnect" href="https://drive.google.com" crossorigin>
+  <link rel="dns-prefetch" href="https://lh3.googleusercontent.com">
   <style>
     :root {
       /* Navy + Gold (Rattana brand) */
@@ -588,16 +592,18 @@ const getCached = k => { try{const i=JSON.parse(localStorage.getItem(k));return 
 const setCache  = (k,d) => { try{localStorage.setItem(k,JSON.stringify({ts:Date.now(),data:d}));}catch{} };
 
 async function loadData(force=false) {
+  // Always show cached data instantly so UI is usable on first paint
   if (!force) {
     const cached = getCached(CACHE_KEY);
     if (cached) {
       buildIndex(cached);
       setStatusOk(cached.length);
-      fetchAndUpdate(); // background refresh
+      fetchAndUpdate(); // silent background refresh
       return;
     }
   }
-  showSpinner('กำลังโหลดข้อมูลสต็อก...');
+  // No cache → fetch in the background, show a thin loading bar instead of blocking spinner
+  document.getElementById('dataStatus').textContent = '⏳ กำลังโหลดข้อมูล...';
   setLoadingBar(true);
   try {
     const data = await fetchSheet();
@@ -609,8 +615,9 @@ async function loadData(force=false) {
       document.getElementById('dataStatus').textContent = '❌ โหลดไม่ได้ — กรุณา Refresh';
       showToast('โหลดข้อมูลไม่ได้', 'error');
     }
+  } catch (e) {
+    document.getElementById('dataStatus').textContent = '❌ โหลดไม่ได้ — กรุณา Refresh';
   } finally {
-    hideSpinner();
     setLoadingBar(false);
   }
 }
@@ -620,9 +627,14 @@ async function fetchAndUpdate() {
   if (data && data.length) { setCache(CACHE_KEY, data); buildIndex(data); setStatusOk(data.length); }
 }
 
+// Fetch ONLY the columns we use (≈15 of ~120) — cuts payload ~85%.
+// Column letters: A=PRODUCT NAME, B-I=CODE/UNIT pairs, J-M=UNIT names, N-Q=QTY,
+// BC/BD/BE=CAT GROUP/BRAND/SIZE, BM=SHORT NAME, BN-BQ=STOCK W1-W4, CU=SKU_USAGE.
+const NEEDED_COLS = 'A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,BC,BD,BE,BM,BN,BO,BP,BQ,CU';
 async function fetchSheet() {
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
-  const res = await fetch(url);
+  const tq  = encodeURIComponent(`select ${NEEDED_COLS}`);
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&tq=${tq}`;
+  const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) throw new Error('HTTP ' + res.status);
   return parseCsv(await res.text());
 }
@@ -1130,7 +1142,7 @@ function thumbHtml(name, product, big) {
   const sz = big ? 'width:56px;height:56px;font-size:30px' : '';
   const id = productImage(product);
   if (id) {
-    const px = big ? 160 : 96;            // serve the actual rendered size, not w200
+    const px = big ? 128 : 64;            // serve at the exact rendered size — tiny payload
     const primary = `https://lh3.googleusercontent.com/d/${id}=w${px}`;
     const alts = [
       `https://drive.google.com/thumbnail?id=${id}&sz=w${px}`,
