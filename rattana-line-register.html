@@ -381,8 +381,8 @@
         </div>
         <div class="field">
           <label class="flabel">เบอร์โทรศัพท์<span class="req">*</span></label>
-          <input class="input" type="tel" id="phone" placeholder="0812345678" maxlength="10" inputmode="numeric">
-          <span class="hint">ใช้สำหรับเข้าสู่ระบบในครั้งถัดไป</span>
+          <input class="input" type="tel" id="phone" placeholder="0812345678" maxlength="10" inputmode="numeric" onblur="checkExistingPoint()">
+          <span class="hint" id="phoneHint">ใช้สำหรับเข้าสู่ระบบในครั้งถัดไป</span>
         </div>
         <div class="field">
           <label class="flabel">วัน/เดือน/ปีเกิด<span class="req">*</span></label>
@@ -989,6 +989,36 @@ async function syncLineProfile() {
     currentMember.pictureUrl = lineProfile.pictureUrl;
     currentMember.lineName   = lineProfile.displayName;
   } catch(e) { console.warn('sync line failed:', e); }
+}
+
+// ════════════════════════════════════════════════
+//  Check existing customer from Member Point
+// ════════════════════════════════════════════════
+async function checkExistingPoint() {
+  const phone = document.getElementById('phone').value.trim();
+  const hint  = document.getElementById('phoneHint');
+  if (!/^0[0-9]{8,9}$/.test(phone)) return;
+  hint.textContent = '⏳ กำลังตรวจสอบ...';
+  hint.style.color = 'var(--text-2)';
+  try {
+    const res = await fetch(`${GAS_URL}?phone=${encodeURIComponent(phone)}&checkPoint=1`);
+    const result = await res.json();
+    if (result.status === 'found') {
+      const d = result.data;
+      // Pre-fill ชื่อ-นามสกุล ถ้ายังว่าง
+      if (!document.getElementById('firstName').value && d.firstName) document.getElementById('firstName').value = d.firstName;
+      if (!document.getElementById('lastName').value  && d.lastName)  document.getElementById('lastName').value  = d.lastName;
+      hint.innerHTML = `✓ พบข้อมูลลูกค้าเก่า — ${d.firstName} ${d.lastName} · ${d.tier} · ${d.points} แต้ม`;
+      hint.style.color = 'var(--success)';
+      showToast('✓ พบข้อมูลลูกค้าเก่าในระบบ', 'success');
+    } else {
+      hint.textContent = 'ใช้สำหรับเข้าสู่ระบบในครั้งถัดไป';
+      hint.style.color = 'var(--text-2)';
+    }
+  } catch(e) {
+    hint.textContent = 'ใช้สำหรับเข้าสู่ระบบในครั้งถัดไป';
+    hint.style.color = 'var(--text-2)';
+  }
 }
 
 // ════════════════════════════════════════════════
