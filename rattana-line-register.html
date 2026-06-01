@@ -358,6 +358,10 @@ function toggleDD(wrapId) {
     panel.classList.add('open');
     trigger.classList.add('open');
 
+    // ป้องกัน close-outside ยิงทันทีหลัง open
+    ddJustOpened = true;
+    setTimeout(() => { ddJustOpened = false; }, 300);
+
     // Position panel using fixed coordinates from trigger rect
     const rect       = trigger.getBoundingClientRect();
     const spaceBelow = window.innerHeight - rect.bottom;
@@ -392,9 +396,16 @@ function closeAllDD() {
   document.querySelectorAll('.dd-trigger.open').forEach(t => t.classList.remove('open'));
 }
 
-document.addEventListener('click', e => { if (!e.target.closest('.dd-wrap') && !e.target.closest('.dd-panel')) closeAllDD(); });
-// Close dropdown when page scrolls (fixed panels would float otherwise)
-document.addEventListener('scroll', closeAllDD, true);
+// ใช้ touchstart แทน click + เพิ่ม delay เล็กน้อยก่อน enable close-outside
+let ddJustOpened = false;
+document.addEventListener('touchstart', e => {
+  if (ddJustOpened) return;
+  if (!e.target.closest('.dd-wrap') && !e.target.closest('.dd-panel')) closeAllDD();
+}, { passive: true });
+document.addEventListener('click', e => {
+  if (ddJustOpened) return;
+  if (!e.target.closest('.dd-wrap') && !e.target.closest('.dd-panel')) closeAllDD();
+});
 
 function filterDD(inp, listId) {
   const q = inp.value.toLowerCase();
