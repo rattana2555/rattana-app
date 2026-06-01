@@ -62,7 +62,7 @@
     .dd-trigger .dd-arrow{flex-shrink:0;font-size:12px;color:var(--muted);transition:transform .2s}
     .dd-trigger.open .dd-arrow{transform:rotate(180deg)}
     .dd-trigger:disabled{background:#f2f4fa;color:var(--muted);cursor:not-allowed;opacity:.7}
-    .dd-panel{display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--card-bg);border:1.5px solid var(--border);border-radius:var(--radius-md);z-index:500;box-shadow:0 8px 24px rgba(0,0,0,.15);flex-direction:column;max-height:280px}
+    .dd-panel{display:none;position:fixed;background:var(--card-bg);border:1.5px solid var(--border);border-radius:var(--radius-md);z-index:9000;box-shadow:0 8px 24px rgba(0,0,0,.18);flex-direction:column;max-height:260px}
     .dd-panel.open{display:flex}
     .dd-search{padding:10px 14px;font-size:16px;border:none;border-bottom:1px solid var(--border);background:transparent;color:var(--text);outline:none;border-radius:var(--radius-md) var(--radius-md) 0 0;font-family:'Sarabun',sans-serif;width:100%}
     .dd-list{overflow-y:auto;flex:1;list-style:none;padding:4px 0;margin:0;max-height:220px}
@@ -358,19 +358,27 @@ function toggleDD(wrapId) {
     panel.classList.add('open');
     trigger.classList.add('open');
 
-    // Smart positioning — open upward if not enough space below
+    // Position panel using fixed coordinates from trigger rect
     const rect       = trigger.getBoundingClientRect();
     const spaceBelow = window.innerHeight - rect.bottom;
     const spaceAbove = rect.top;
-    if (spaceBelow < 260 && spaceAbove > spaceBelow) {
-      panel.style.top    = 'auto';
-      panel.style.bottom = 'calc(100% + 4px)';
-    } else {
-      panel.style.top    = 'calc(100% + 4px)';
+    const panelH     = Math.min(260, Math.max(spaceBelow, spaceAbove) - 8);
+
+    panel.style.left  = rect.left + 'px';
+    panel.style.width = rect.width + 'px';
+    panel.style.maxHeight = panelH + 'px';
+
+    if (spaceBelow >= 160 || spaceBelow >= spaceAbove) {
+      // Open downward
+      panel.style.top    = (rect.bottom + 4) + 'px';
       panel.style.bottom = 'auto';
+    } else {
+      // Open upward
+      panel.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+      panel.style.top    = 'auto';
     }
 
-    // Always scroll list back to top so first item is visible
+    // Scroll list to top so first item is always visible
     const list = panel.querySelector('.dd-list');
     if (list) list.scrollTop = 0;
 
