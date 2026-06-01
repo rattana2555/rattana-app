@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0f9d58">
-  <title>Rattana Stock Count v2.9</title>
+  <title>Rattana Stock Count v2.10</title>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
@@ -1097,22 +1097,40 @@ function productEmoji(name) {
   return '📦';
 }
 
-// Product image from SKU_USAGE (Google Drive link) → thumbnail URL
-function driveThumb(url, size = 200) {
+// Extract the Drive file id from any Drive link form
+function driveId(url) {
   const s = String(url || '');
-  const m = s.match(/[?&]id=([-\w]+)/) || s.match(/\/d\/([-\w]+)/);
-  return m ? `https://drive.google.com/thumbnail?id=${m[1]}&sz=w${size}` : '';
+  const m = s.match(/[?&]id=([-\w]+)/) || s.match(/\/d\/([-\w]+)/) || s.match(/([-\w]{25,})/);
+  return m ? m[1] : '';
 }
-function productImage(p) { return p ? driveThumb(p['SKU_USAGE']) : ''; }
+function productImage(p) { return p ? driveId(p['SKU_USAGE']) : ''; }
 
-// Thumbnail HTML: real image if available, emoji fallback (incl. on load error)
+// Try image sources in order, fall back to emoji on the last error
+function imgFallback(img) {
+  const next = (img.dataset.fallback || '').split('|').filter(Boolean);
+  if (next.length) {
+    img.dataset.fallback = next.slice(1).join('|');
+    img.src = next[0];
+  } else {
+    const p = img.parentNode;
+    if (p) p.textContent = img.dataset.emoji || '📦';
+  }
+}
+
+// Thumbnail HTML: real product image (multi-source) with emoji fallback
 function thumbHtml(name, product, big) {
   const sz = big ? 'width:56px;height:56px;font-size:30px' : '';
-  const img = productImage(product);
-  if (img) {
+  const id = productImage(product);
+  if (id) {
+    const primary = `https://lh3.googleusercontent.com/d/${id}=w200`;
+    const alts = [
+      `https://drive.google.com/thumbnail?id=${id}&sz=w200`,
+      `https://lh3.googleusercontent.com/d/${id}`,
+    ].join('|');
     return `<div class="ci-thumb" style="${sz};padding:0;overflow:hidden">
-      <img src="${img}" loading="lazy" style="width:100%;height:100%;object-fit:cover"
-           onerror="this.parentNode.textContent='${productEmoji(name)}'"></div>`;
+      <img src="${primary}" data-fallback="${alts}" data-emoji="${productEmoji(name)}"
+           referrerpolicy="no-referrer" loading="lazy"
+           style="width:100%;height:100%;object-fit:cover" onerror="imgFallback(this)"></div>`;
   }
   return `<div class="ci-thumb" style="${sz}">${productEmoji(name)}</div>`;
 }
