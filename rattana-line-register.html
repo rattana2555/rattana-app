@@ -375,10 +375,16 @@
       </button>
     </div>
 
-    <button class="btn btn-ghost" onclick="logout()" style="margin-top:8px">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-      <span data-i18n="btn.signOut">ออกจากระบบ</span>
-    </button>
+    <div class="btn-stack" style="margin-top:8px">
+      <button class="btn btn-ghost" onclick="switchMember()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
+        <span data-i18n="btn.switchMember">ดูข้อมูลสมาชิกอื่น</span>
+      </button>
+      <button class="btn btn-ghost" onclick="logout()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <span data-i18n="btn.signOut">ออกจากระบบ</span>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -530,7 +536,7 @@ const I18N = {
     'search.day':'🔍 ค้นหาวัน...','search.month':'🔍 ค้นหาเดือน...','search.generic':'🔍 ค้นหา...',
     'placeholder.province':'-- เลือกจังหวัด --','placeholder.district':'-- เลือกจังหวัดก่อน --','placeholder.subDistrict':'-- เลือกอำเภอก่อน --',
     'loading':'⏳ กำลังโหลด...',
-    'btn.signIn':'เข้าสู่ระบบ →','btn.back':'ย้อนกลับ','btn.edit':'แก้ไขข้อมูล','btn.signOut':'ออกจากระบบ',
+    'btn.signIn':'เข้าสู่ระบบ →','btn.back':'ย้อนกลับ','btn.edit':'แก้ไขข้อมูล','btn.signOut':'ออกจากระบบ','btn.switchMember':'ดูข้อมูลสมาชิกอื่น',
     'btn.register':'สมัครสมาชิก','btn.update':'อัปเดตข้อมูล','btn.cancel':'ยกเลิก',
     'dash.hi':'สวัสดี','dash.tier':'ระดับสมาชิก','dash.points':'แต้มสะสม','dash.pointsUnit':'คะแนน',
     'stat.memberId':'รหัสสมาชิก','stat.tier':'ระดับ',
@@ -567,7 +573,7 @@ const I18N = {
     'search.day':'🔍 Search day...','search.month':'🔍 Search month...','search.generic':'🔍 Search...',
     'placeholder.province':'-- Select province --','placeholder.district':'-- Select province first --','placeholder.subDistrict':'-- Select district first --',
     'loading':'⏳ Loading...',
-    'btn.signIn':'Sign In →','btn.back':'Back','btn.edit':'Edit Profile','btn.signOut':'Sign Out',
+    'btn.signIn':'Sign In →','btn.back':'Back','btn.edit':'Edit Profile','btn.signOut':'Sign Out','btn.switchMember':'View another member',
     'btn.register':'Register','btn.update':'Update Info','btn.cancel':'Cancel',
     'dash.hi':'Hello','dash.tier':'Membership Tier','dash.points':'Points Balance','dash.pointsUnit':'pts',
     'stat.memberId':'Member ID','stat.tier':'Tier',
@@ -704,6 +710,7 @@ const BENEFITS = {
 // ════════════════════════════════════════════════
 let lineProfile = null;
 let currentMember = null;
+let linePrimaryMember = null;  // สมาชิกที่ผูกกับ LINE บัญชีนี้ (1 ต่อ 1)
 let isEditMode = false;
 let addressTree = null;
 let selectedPostcode = '';
@@ -979,9 +986,19 @@ function goRegister() {
   showScreen('registerScreen');
 }
 function goLogin() { showScreen('loginScreen'); }
-function backToHome() { showScreen('homeScreen'); }
+function backToHome() {
+  // ถ้ามี LINE primary → กลับไปหน้า dashboard ของ primary
+  if (linePrimaryMember) {
+    currentMember = linePrimaryMember;
+    renderDashboard(currentMember);
+    showScreen('dashScreen');
+  } else {
+    showScreen('homeScreen');
+  }
+}
 function backToView() {
   if (currentMember) { renderDashboard(currentMember); showScreen('dashScreen'); }
+  else if (linePrimaryMember) { currentMember = linePrimaryMember; renderDashboard(currentMember); showScreen('dashScreen'); }
   else showScreen('homeScreen');
 }
 function goEditFromView() {
@@ -1002,8 +1019,19 @@ function switchTab(tabId) {
 function logout() {
   cacheClear();
   currentMember = null;
+  linePrimaryMember = null;
   showScreen('homeScreen');
   showToast(t('toast.signedOut'));
+}
+
+// สลับไปดู/แก้ข้อมูลสมาชิกคนอื่น (ผ่านเบอร์โทร+วันเกิด)
+function switchMember() {
+  currentMember = null;
+  document.getElementById('loginPhone').value = '';
+  loginDobParts = { day:'', month:'', year:'' };
+  resetDobDropdowns('ddLogin', loginDobParts, 'loginDobPreview');
+  document.getElementById('loginErr').style.display = 'none';
+  showScreen('loginScreen');
 }
 
 // ════════════════════════════════════════════════
@@ -1288,11 +1316,31 @@ async function submitForm() {
   showSpinner(t('spinner.save'));
   document.getElementById('btnSubmit').disabled = true;
 
+  // ─── Hybrid: ตัดสินใจว่าจะส่ง lineUserId ไหม ───
+  // ถ้า LINE มีสมาชิกหลักอยู่แล้ว และเรากำลังแก้/สมัครสมาชิกคนอื่น → ไม่ส่ง LINE
+  let payloadLineUserId, payloadLineName, payloadPicture;
+  if (currentMember?.lineUserId) {
+    // มี LINE ผูกอยู่กับสมาชิกนี้แล้ว → คงไว้
+    payloadLineUserId = currentMember.lineUserId;
+    payloadLineName   = currentMember.lineName   || lineProfile?.displayName || '';
+    payloadPicture    = currentMember.pictureUrl || lineProfile?.pictureUrl  || '';
+  } else if (lineProfile && (!linePrimaryMember || (currentMember && currentMember.phone === linePrimaryMember.phone))) {
+    // LINE ยังไม่มี primary หรือ กำลังจัดการ primary ของตัวเอง → ผูก LINE
+    payloadLineUserId = lineProfile.userId;
+    payloadLineName   = lineProfile.displayName;
+    payloadPicture    = lineProfile.pictureUrl;
+  } else {
+    // ไม่ผูก LINE (สมัครให้คนอื่นจากบัญชี LINE ที่มี primary แล้ว)
+    payloadLineUserId = '';
+    payloadLineName   = '';
+    payloadPicture    = '';
+  }
+
   const payload = {
     mode:         isEditMode ? 'update' : 'create',
-    lineUserId:   lineProfile?.userId || currentMember?.lineUserId || '',
-    lineName:     lineProfile?.displayName || currentMember?.lineName || '',
-    pictureUrl:   lineProfile?.pictureUrl || currentMember?.pictureUrl || '',
+    lineUserId:   payloadLineUserId,
+    lineName:     payloadLineName,
+    pictureUrl:   payloadPicture,
     firstName, lastName,
     phone:        String(phone),
     dateOfBirth:  dob,
@@ -1352,6 +1400,7 @@ async function initLiffOptional() {
     const cached = cacheGet(lineProfile.userId);
     if (cached) {
       currentMember = cached;
+      linePrimaryMember = cached;
       // ใช้รูป LINE ใหม่ทันที
       currentMember.pictureUrl = lineProfile.pictureUrl;
       renderDashboard(currentMember);
@@ -1375,6 +1424,7 @@ async function checkLineMember(userId, silent) {
     const result = await res.json();
     if (result.status === 'found') {
       currentMember = result.data;
+      linePrimaryMember = result.data;  // จำว่า LINE นี้มีสมาชิกหลักคือใคร
       // sync รูปและชื่อ LINE ล่าสุด
       if (lineProfile) {
         const picChanged  = currentMember.pictureUrl !== lineProfile.pictureUrl;
