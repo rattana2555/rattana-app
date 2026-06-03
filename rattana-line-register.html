@@ -653,15 +653,31 @@ async function refreshData() {
 }
 
 function toggleLang() {
+  const oldLang = currentLang;
   currentLang = currentLang === 'th' ? 'en' : 'th';
   localStorage.setItem('rattanaLang', currentLang);
   applyLang();
-  // Re-init DOB month dropdowns so month names follow language
+
+  // แปลงปีระหว่าง พ.ศ. ↔ ค.ศ. ตามภาษา
+  const convertYear = (parts) => {
+    if (!parts.year) return;
+    const y = parseInt(parts.year);
+    if (oldLang === 'th' && currentLang === 'en' && y > 2400) parts.year = String(y - 543);
+    else if (oldLang === 'en' && currentLang === 'th' && y < 2400) parts.year = String(y + 543);
+  };
+  convertYear(dobParts);
+  convertYear(loginDobParts);
+
+  // Re-init DOB dropdowns so months + year list follow language
   initDobDropdowns('ddDob',   dobParts,      'dobPreview');
   initDobDropdowns('ddLogin', loginDobParts, 'loginDobPreview');
-  // Re-apply selected month label if any
+  // Re-apply selected labels if any
+  if (dobParts.day)        setDDLabel('ddDobDay',     dobParts.day);
   if (dobParts.month)      setDDLabel('ddDobMonth',   getMonths()[parseInt(dobParts.month)-1]);
+  if (dobParts.year)       setDDLabel('ddDobYear',    dobParts.year);
+  if (loginDobParts.day)   setDDLabel('ddLoginDay',   loginDobParts.day);
   if (loginDobParts.month) setDDLabel('ddLoginMonth', getMonths()[parseInt(loginDobParts.month)-1]);
+  if (loginDobParts.year)  setDDLabel('ddLoginYear',  loginDobParts.year);
   updateDobPreview(dobParts,      'dobPreview');
   updateDobPreview(loginDobParts, 'loginDobPreview');
   if (currentMember) renderDashboard(currentMember);
@@ -843,8 +859,9 @@ function initDobDropdowns(prefix, partsRef, previewId) {
   populateDD(prefix+'MonthList', months.map((m,i) => ({ value:String(i+1), label:m })), item => {
     setDDLabel(prefix+'Month', getMonths()[parseInt(item.value)-1]); partsRef.month = item.value; updateDobPreview(partsRef, previewId);
   });
-  const thisYearBE = new Date().getFullYear() + 543;
-  const years = []; for (let y = thisYearBE; y >= thisYearBE - 100; y--) years.push(y);
+  const offset = currentLang === 'en' ? 0 : 543;
+  const thisYear = new Date().getFullYear() + offset;
+  const years = []; for (let y = thisYear; y >= thisYear - 100; y--) years.push(y);
   populateDD(prefix+'YearList', years.map(y => ({ value:String(y), label:String(y) })), item => {
     setDDLabel(prefix+'Year', item.value); partsRef.year = item.value; updateDobPreview(partsRef, previewId);
   });
@@ -859,13 +876,17 @@ function updateDobPreview(parts, previewId) {
 }
 function dobPartsToISO(parts) {
   if (!parts.day || !parts.month || !parts.year) return '';
-  const yearCE = parseInt(parts.year) - 543;
-  return `${yearCE}-${String(parts.month).padStart(2,'0')}-${String(parts.day).padStart(2,'0')}`;
+  // ปี อาจเก็บเป็น พ.ศ. หรือ ค.ศ. ขึ้นกับภาษา → normalize เป็น ค.ศ.
+  let y = parseInt(parts.year);
+  if (y > 2400) y -= 543;
+  return `${y}-${String(parts.month).padStart(2,'0')}-${String(parts.day).padStart(2,'0')}`;
 }
 function setDobFromISO(iso, prefix, partsRef, previewId) {
   if (!iso) return;
   const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); if (!m) return;
-  partsRef.day = String(parseInt(m[3])); partsRef.month = String(parseInt(m[2])); partsRef.year = String(parseInt(m[1]) + 543);
+  const yearCE = parseInt(m[1]);
+  const yearShow = currentLang === 'en' ? yearCE : yearCE + 543;
+  partsRef.day = String(parseInt(m[3])); partsRef.month = String(parseInt(m[2])); partsRef.year = String(yearShow);
   setDDLabel(prefix+'Day', partsRef.day);
   setDDLabel(prefix+'Month', getMonths()[parseInt(m[2])-1]);
   setDDLabel(prefix+'Year', partsRef.year);
