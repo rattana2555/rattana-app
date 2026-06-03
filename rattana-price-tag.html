@@ -1617,6 +1617,38 @@ function switchTab(name) {
 }
 
 /* ============== LOAD PRODUCTS ============== */
+/* v2.2 — Load Check sheet → barcode→location lookup */
+async function loadLocations() {
+  try {
+    const rows = await loadFromSheets(SHEET_CONFIG.locSheetId, SHEET_CONFIG.locSheetName);
+    locationMap.clear();
+    rows.forEach(r => {
+      const bc  = String(r['บาร์โค้ด']||'').trim();
+      const loc = String(r['โลเคชัน']||'').trim();
+      if (bc && loc) locationMap.set(bc, loc);
+    });
+    // Persist for fast subsequent loads
+    localStorage.setItem('rattanaPriceTag_locCache', JSON.stringify({
+      ts: Date.now(),
+      pairs: Array.from(locationMap.entries()),
+    }));
+    // Update any already-loaded products with their location
+    products.forEach(p => { p.location = locationMap.get(p.sku) || locationMap.get(p.barcode) || ''; });
+    return locationMap.size;
+  } catch (e) {
+    console.warn('loadLocations failed:', e);
+    return 0;
+  }
+}
+function restoreLocationsFromCache() {
+  try {
+    const raw = localStorage.getItem('rattanaPriceTag_locCache');
+    if (!raw) return;
+    const { pairs } = JSON.parse(raw);
+    if (Array.isArray(pairs)) pairs.forEach(([k,v]) => locationMap.set(k,v));
+  } catch {}
+}
+
 async function loadProducts(opts = {}) {
   const silent = opts.silent === true;  // when loading from cache in background
   // Read from form fields if available (so users can change Sheet on the fly),
