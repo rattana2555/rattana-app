@@ -1092,8 +1092,27 @@ async function checkExistingPoint() {
     }
     if (result.status === 'found') {
       const d = result.data;
-      if (!document.getElementById('firstName').value && d.firstName) document.getElementById('firstName').value = d.firstName;
-      if (!document.getElementById('lastName').value  && d.lastName)  document.getElementById('lastName').value  = d.lastName;
+      // Pre-fill ทุก field ที่มีจาก Member Point
+      const setIfEmpty = (id, v) => { const el=document.getElementById(id); if(el && !el.value && v) el.value = v; };
+      setIfEmpty('firstName', d.firstName);
+      setIfEmpty('lastName',  d.lastName);
+      setIfEmpty('address',   d.address);
+      if (d.dateOfBirth) setDobFromISO(d.dateOfBirth, 'ddDob', dobParts, 'dobPreview');
+      // Cascading address pre-fill
+      if (d.province && addressTree && addressTree[d.province]) {
+        selectedValues.province = d.province; setDDLabel('ddProvince', d.province);
+        populateDistricts(d.province);
+        document.querySelector('#ddDistrict .dd-trigger').disabled = false;
+        if (d.district && addressTree[d.province][d.district]) {
+          selectedValues.district = d.district; setDDLabel('ddDistrict', d.district);
+          populateSubDistricts(d.province, d.district);
+          document.querySelector('#ddSubDistrict .dd-trigger').disabled = false;
+          if (d.subDistrict) {
+            selectedValues.subDistrict = d.subDistrict; setDDLabel('ddSubDistrict', d.subDistrict);
+            selectedPostcode = d.postcode || ''; updatePostcodeDisplay();
+          }
+        }
+      }
       const ptsUnit = currentLang === 'en' ? 'pts' : 'แต้ม';
       hint.innerHTML = `${t('hint.foundCustomer')} — ${d.firstName} ${d.lastName} · ${d.tier} · ${d.points} ${ptsUnit}`;
       hint.style.color = 'var(--success)';
