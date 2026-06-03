@@ -2165,6 +2165,53 @@ function buildPdfPreview() {
 }
 
 /* ============== EXPORT PDF ============== */
+/* v2.2 — Export each A4 page as PNG or JPEG (downloads one file per page) */
+async function exportImage(format) {
+  format = (format === 'jpeg' ? 'jpeg' : 'png');
+  const sel = products.filter(p => selectedSkus.has(p.sku));
+  if (!sel.length) { showToast('ยังไม่ได้เลือกสินค้า', 'warning'); return; }
+
+  showSpinner(`กำลังสร้าง ${format.toUpperCase()}...`);
+  buildPdfPreview();
+  await new Promise(r => setTimeout(r, 800));
+
+  const wrapInner = document.querySelector('.pdf-wrap-inner');
+  const prevTransform = wrapInner ? wrapInner.style.transform : '';
+  const prevHeight    = wrapInner ? wrapInner.style.height : '';
+  if (wrapInner) { wrapInner.style.transform = 'none'; wrapInner.style.height = 'auto'; }
+
+  try {
+    const pages = document.querySelectorAll('.pdf-page');
+    const today = new Date().toISOString().slice(0,10);
+    const mime  = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+    const ext   = format === 'jpeg' ? 'jpg' : 'png';
+    for (let i = 0; i < pages.length; i++) {
+      $('#spinnerMsg').textContent = `กำลังสร้างหน้า ${i+1}/${pages.length}...`;
+      const canvas = await html2canvas(pages[i], {
+        scale: 2, useCORS: true, allowTaint: false,
+        backgroundColor: '#ffffff', logging: false
+      });
+      // Trigger download
+      const dataUrl = canvas.toDataURL(mime, format === 'jpeg' ? 0.95 : undefined);
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `Rattana-PriceTag-${today}-page${i+1}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      // small pause between downloads so browsers don't block multi-download
+      await new Promise(r => setTimeout(r, 200));
+    }
+    showToast(`✅ บันทึก ${format.toUpperCase()} แล้ว (${pages.length} ไฟล์)`, 'success');
+  } catch (e) {
+    console.error(e);
+    showToast(`สร้าง ${format.toUpperCase()} ไม่สำเร็จ: ` + (e.message||''), 'error');
+  } finally {
+    if (wrapInner) { wrapInner.style.transform = prevTransform; wrapInner.style.height = prevHeight; }
+    hideSpinner();
+  }
+}
+
 async function exportPDF() {
   const sel = products.filter(p => selectedSkus.has(p.sku));
   if (!sel.length) { showToast('ยังไม่ได้เลือกสินค้า', 'warning'); return; }
