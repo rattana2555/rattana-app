@@ -1585,9 +1585,23 @@ function normalizePDDT(r) {
   const image = fixImageUrl(r['SKU_USAGE']||'');
   const barcode = sku; // CODE EA/CS look like barcodes
 
+  // Compute sale price from salePriceTier if set
+  let finalPrice = price;
+  let oldPrice = 0;
+  let tagType = 'regular';
+  if (SHEET_CONFIG.salePriceTier && usedUnit && price > 0) {
+    const saleRaw = String(r[`PRICE ${SHEET_CONFIG.salePriceTier} ${usedUnit}`]||'').replace(/,/g,'').trim();
+    const sp = parseFloat(saleRaw);
+    if (!isNaN(sp) && sp > 0 && sp < price) {
+      oldPrice = price;
+      finalPrice = sp;
+      tagType = 'sale';
+    }
+  }
+
   return {
-    sku, name, price, oldPrice: 0, unit, size, image, barcode,
-    tagType: 'regular', promo: '', category, brand, usedUnit
+    sku, name, price: finalPrice, oldPrice, unit, size, image, barcode,
+    tagType, promo: '', category, brand, usedUnit
   };
 }
 
