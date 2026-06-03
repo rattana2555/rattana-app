@@ -1714,6 +1714,61 @@ function switchTab(name) {
 }
 
 /* ============== LOAD PRODUCTS ============== */
+/* v2.3 — Ink-saving mode toggle (white bg, minimal color) */
+function toggleInkSave() {
+  const on = $('#cfgInkSave')?.checked || false;
+  document.body.classList.toggle('ink-save', on);
+  localStorage.setItem('rattanaPriceTag_inkSave', on ? '1' : '0');
+  if ($('#tab-design')?.classList.contains('active')) renderDesignStage();
+  if ($('#tab-print')?.classList.contains('active'))  buildPdfPreview();
+}
+
+/* v2.3 — Per-product price override (manual edit in design tab) */
+const priceOverrides = {};   // sku → { price, oldPrice }
+function openPriceEditor(sku) {
+  const p = products.find(x => x.sku === sku);
+  if (!p) return;
+  const cur = priceOverrides[sku] || { price: p.price, oldPrice: p.oldPrice };
+  const newPrice = prompt(`✏️ แก้ราคาของ "${p.name}"\n\nราคาปัจจุบัน: ${p.price} บาท\n\nใส่ราคาใหม่:`, cur.price);
+  if (newPrice === null) return;
+  const np = parseFloat(String(newPrice).replace(/,/g,'')) || 0;
+  if (np <= 0) { showToast('ราคาไม่ถูกต้อง', 'error'); return; }
+  const newOld = prompt('💸 ราคาเดิม (สำหรับขีดฆ่าเปรียบเทียบ)\n\nใส่ 0 ถ้าไม่ต้องการแสดง:', cur.oldPrice || 0);
+  if (newOld === null) return;
+  const no = parseFloat(String(newOld).replace(/,/g,'')) || 0;
+  priceOverrides[sku] = { price: np, oldPrice: no };
+  p.price = np;
+  p.oldPrice = no;
+  localStorage.setItem('rattanaPriceTag_priceOverrides', JSON.stringify(priceOverrides));
+  renderDesignStage();
+  showToast('✅ อัพเดทราคาแล้ว', 'success');
+}
+function resetPriceOverride(sku) {
+  if (!confirm('คืนค่าราคาเดิมจาก Sheet?')) return;
+  delete priceOverrides[sku];
+  localStorage.setItem('rattanaPriceTag_priceOverrides', JSON.stringify(priceOverrides));
+  try {
+    const cache = JSON.parse(localStorage.getItem(STORAGE.cache) || 'null');
+    if (cache && cache.products) {
+      const orig = cache.products.find(x => x.sku === sku);
+      const p = products.find(x => x.sku === sku);
+      if (orig && p) { p.price = orig.price; p.oldPrice = orig.oldPrice; }
+    }
+  } catch {}
+  renderDesignStage();
+  showToast('คืนค่าราคาเดิมแล้ว', 'info');
+}
+function restorePriceOverrides() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('rattanaPriceTag_priceOverrides') || '{}');
+    Object.assign(priceOverrides, saved);
+    products.forEach(p => {
+      const o = priceOverrides[p.sku];
+      if (o) { p.price = o.price; p.oldPrice = o.oldPrice; }
+    });
+  } catch {}
+}
+
 /* v2.3 — Load Check sheet → barcode→location lookup */
 async function loadLocations() {
   try {
