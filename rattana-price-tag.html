@@ -1553,6 +1553,18 @@ function initApp() {
   // Init dark mode
   if (localStorage.getItem('darkMode') === '1') document.body.classList.add('dark');
 
+  // v2.2: Restore location cache + reload in background
+  restoreLocationsFromCache();
+  loadLocations().then(n => {
+    if (n > 0) {
+      // Re-attach locations to already-loaded products
+      products.forEach(p => { p.location = locationMap.get(p.sku) || locationMap.get(p.barcode) || ''; });
+      // If we're on Design or Print tab, re-render so locations show up
+      if ($('#tab-design')?.classList.contains('active')) renderDesignStage();
+      if ($('#tab-print')?.classList.contains('active'))  buildPdfPreview();
+    }
+  });
+
   // Restore saved config into form fields (fallback to SHEET_CONFIG defaults)
   try {
     const cfg = JSON.parse(localStorage.getItem(STORAGE.config) || '{}');
