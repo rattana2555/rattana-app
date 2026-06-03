@@ -21,8 +21,23 @@
       --sh-lg:0 12px 32px rgba(15,23,42,.12);
       --sh-glow:0 8px 32px rgba(200,160,46,.25);
     }
+    /* Dark mode overrides */
+    body.dark{
+      --bg:#0f172a; --bg-2:#1e293b; --text:#f1f5f9; --text-2:#94a3b8;
+      --card:#1e293b; --border:#334155; --border-2:#475569;
+      --sh-sm:0 1px 3px rgba(0,0,0,.3);
+      --sh-md:0 4px 16px rgba(0,0,0,.4);
+      --sh-lg:0 12px 32px rgba(0,0,0,.5);
+    }
+    body.dark .input[readonly]{background:#0f172a;color:#94a3b8}
+    body.dark .source-item{background:#1e293b}
+    body.dark .source-item:hover{background:rgba(200,160,46,.08)}
+    body.dark .source-item.selected{background:rgba(6,199,85,.12)}
+    body.dark .dd-list li:hover{background:#334155}
+    body.dark .ic-head{background:linear-gradient(to right,rgba(200,160,46,.1),transparent)}
+
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-    body{font-family:'Kanit',sans-serif;min-height:100dvh;background:var(--bg);color:var(--text);overflow-x:hidden;-webkit-font-smoothing:antialiased}
+    body{font-family:'Kanit',sans-serif;min-height:100dvh;background:var(--bg);color:var(--text);overflow-x:hidden;-webkit-font-smoothing:antialiased;transition:background .25s,color .25s}
 
     /* ── Decorative bg ── */
     body::before{content:'';position:fixed;inset:0;background:radial-gradient(circle at 0% 0%,rgba(200,160,46,.06),transparent 40%),radial-gradient(circle at 100% 100%,rgba(13,27,62,.05),transparent 40%);pointer-events:none;z-index:-1}
@@ -194,6 +209,10 @@
       <div class="brand-text">RATTANA <span>MART</span></div>
     </div>
     <div class="h-action" id="headerActions">
+      <button class="h-icon" onclick="refreshData()" id="refreshBtn" title="Refresh" style="font-size:16px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+      </button>
+      <button class="h-icon" onclick="toggleDarkMode()" id="darkBtn" title="Dark mode" style="font-size:16px">🌙</button>
       <button class="h-icon" onclick="toggleLang()" id="langBtn" title="Change language" style="width:auto;padding:0 12px;font-weight:700;font-size:13px;letter-spacing:.5px">TH</button>
     </div>
   </div>
@@ -507,7 +526,7 @@ const I18N = {
     'err.generic':'เกิดข้อผิดพลาด กรุณาลองใหม่','err.connect':'ไม่สามารถเชื่อมต่อได้',
     'toast.signedIn':'✓ เข้าสู่ระบบสำเร็จ','toast.signedOut':'ออกจากระบบแล้ว',
     'toast.foundOld':'✓ พบข้อมูลลูกค้าเก่าในระบบ','toast.alreadyMember':'✓ คุณเป็นสมาชิกอยู่แล้ว → เข้าสู่ระบบ',
-    'toast.lineLinked':'✓ เชื่อมต่อ LINE สำเร็จ',
+    'toast.lineLinked':'✓ เชื่อมต่อ LINE สำเร็จ','toast.refreshed':'✓ อัปเดตข้อมูลแล้ว',
     'spinner.line':'กำลังเชื่อมต่อ LINE...','spinner.check':'กำลังตรวจสอบ...','spinner.save':'กำลังบันทึก...','spinner.member':'กำลังตรวจสอบสมาชิก...',
     'hint.foundCustomer':'✓ พบข้อมูลลูกค้าเก่า','hint.alreadyMember':'✓ คุณเป็นสมาชิกอยู่แล้ว — กำลังพาไปหน้าเข้าสู่ระบบ...','hint.checking':'⏳ กำลังตรวจสอบ...',
   },
@@ -543,7 +562,7 @@ const I18N = {
     'err.generic':'Error occurred. Please try again','err.connect':'Cannot connect',
     'toast.signedIn':'✓ Signed in successfully','toast.signedOut':'Signed out',
     'toast.foundOld':'✓ Found existing customer record','toast.alreadyMember':'✓ Already a member → Sign in',
-    'toast.lineLinked':'✓ LINE linked successfully',
+    'toast.lineLinked':'✓ LINE linked successfully','toast.refreshed':'✓ Data refreshed',
     'spinner.line':'Connecting to LINE...','spinner.check':'Checking...','spinner.save':'Saving...','spinner.member':'Verifying membership...',
     'hint.foundCustomer':'✓ Existing customer found','hint.alreadyMember':'✓ Already a member — Redirecting to sign in...','hint.checking':'⏳ Checking...',
   }
@@ -557,6 +576,53 @@ function applyLang() {
   const btn = document.getElementById('langBtn'); if (btn) btn.textContent = currentLang === 'th' ? 'EN' : 'ไทย';
   document.documentElement.lang = currentLang;
 }
+// ════════════════════════════════════════════════
+//  Dark mode
+// ════════════════════════════════════════════════
+let isDark = localStorage.getItem('rattanaDark') === '1';
+function applyDarkMode() {
+  document.body.classList.toggle('dark', isDark);
+  const btn = document.getElementById('darkBtn');
+  if (btn) btn.textContent = isDark ? '☀️' : '🌙';
+}
+function toggleDarkMode() {
+  isDark = !isDark;
+  localStorage.setItem('rattanaDark', isDark ? '1' : '0');
+  applyDarkMode();
+}
+
+// ════════════════════════════════════════════════
+//  Refresh data
+// ════════════════════════════════════════════════
+async function refreshData() {
+  const btn = document.getElementById('refreshBtn');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.style.transform = 'rotate(360deg)';
+  btn.style.transition = 'transform .8s';
+
+  try {
+    if (lineProfile && lineProfile.userId) {
+      await checkLineMember(lineProfile.userId, true);
+      showToast(t('toast.refreshed') || '✓ อัปเดตข้อมูลแล้ว', 'success');
+    } else if (currentMember && currentMember.phone) {
+      const res = await fetch(`${GAS_URL}?phone=${encodeURIComponent(currentMember.phone)}&dob=${encodeURIComponent(currentMember.dateOfBirth)}`);
+      const result = await res.json();
+      if (result.status === 'found') {
+        currentMember = result.data;
+        cacheSet(currentMember.lineUserId || currentMember.phone, currentMember);
+        renderDashboard(currentMember);
+        showToast(t('toast.refreshed') || '✓ อัปเดตข้อมูลแล้ว', 'success');
+      }
+    }
+  } catch(e) { console.warn('refresh failed:', e); }
+  setTimeout(() => {
+    btn.disabled = false;
+    btn.style.transform = '';
+    btn.style.transition = '';
+  }, 800);
+}
+
 function toggleLang() {
   currentLang = currentLang === 'th' ? 'en' : 'th';
   localStorage.setItem('rattanaLang', currentLang);
@@ -1260,6 +1326,7 @@ async function checkLineMember(userId, silent) {
 //  Boot
 // ════════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', async () => {
+  applyDarkMode();
   applyLang();
   initDobDropdowns('ddDob',   dobParts,      'dobPreview');
   initDobDropdowns('ddLogin', loginDobParts, 'loginDobPreview');
