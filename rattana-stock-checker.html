@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0d1b3e">
-  <title>Rattana Stock Count v2.33</title>
+  <title>Rattana Stock Count v2.34</title>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="preconnect" href="https://docs.google.com" crossorigin>
@@ -472,7 +472,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v2.33';
+const APP_VERSION = 'v2.34';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -785,6 +785,19 @@ function ibBadgeHtml(product, warehouse) {
     return `<span class="badge badge-danger" style="margin-left:4px">⚠ หมดอายุ · IB ${dateStr} (${ib.days} วัน)</span>`;
   }
   return `<span class="badge badge-ok" style="margin-left:4px">IB ${dateStr} · ${ib.days} วัน</span>`;
+}
+
+// User-entered expiry date badge (separate from IB)
+// Red if already past, yellow if within 30 days, gray otherwise.
+function expiryBadgeHtml(yyyymmdd) {
+  if (!yyyymmdd) return '';
+  const d = new Date(yyyymmdd);
+  if (isNaN(d)) return '';
+  const days = Math.ceil((d - Date.now()) / 86400000);
+  const dateStr = formatThaiDate(d);
+  if (days < 0)   return `<span class="badge badge-danger">หมดอายุแล้ว · ${dateStr}</span>`;
+  if (days <= 30) return `<span class="badge badge-warn">ใกล้หมดอายุ ${days} วัน · ${dateStr}</span>`;
+  return `<span class="badge" style="background:var(--row-alt);color:var(--muted);border:1px solid var(--border)">EXP ${dateStr} · อีก ${days} วัน</span>`;
 }
 
 function setStatusOk(count) {
@@ -1252,6 +1265,11 @@ function renderPending() {
             <div style="margin-top:6px">${ibBadgeHtml(p, countSession && countSession.warehouse)}</div>
           </div>
         </div>
+        <div class="field" style="margin-top:14px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">📅 วันหมดอายุ (ไม่บังคับ)</label>
+          <input type="date" id="expiryInput" class="input" style="margin-top:4px;height:46px;font-size:15px"
+                 value="${(countSession.items[productKey(p)] && countSession.items[productKey(p)].expiryDate) || ''}">
+        </div>
         <div class="qty-presets">
           ${[1,6,10,12,24].map(n => `<button class="qty-preset" onclick="setQty(${n})">${n}</button>`).join('')}
         </div>
@@ -1300,6 +1318,8 @@ function confirmCount() {
     };
   }
   countSession.items[key].counts[u] += qty;
+  const expEl = document.getElementById('expiryInput');
+  if (expEl) countSession.items[key].expiryDate = expEl.value || '';
   saveCountSession();
   pendingScan = null;
   document.getElementById('countPending').innerHTML = '';
@@ -1413,7 +1433,7 @@ function renderCountList() {
       <div class="ci-main" onclick="openEditItem('${encodeURIComponent(it.key)}')" style="cursor:pointer">
         <div class="ci-name">${it.name}</div>
         <div class="ci-breakdown">${breakdownText(it)} = <b>${d.counted.toLocaleString()}</b> ชิ้น · ระบบ ${d.system.toLocaleString()}</div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${statusPill(d)} ${ibBadgeHtml(productByKey[it.key], countSession && countSession.warehouse)}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${statusPill(d)} ${ibBadgeHtml(productByKey[it.key], countSession && countSession.warehouse)} ${expiryBadgeHtml(it.expiryDate)}</div>
       </div>
       <button class="ci-x" onclick="removeCountItem('${encodeURIComponent(it.key)}')" title="ลบ">🗑</button>
     </div>`;
@@ -1473,13 +1493,19 @@ function openEditItem(encKey) {
         <span style="flex:1;font-size:12px;color:var(--muted)">1 ${u} = ${it.factors[u]||1} ชิ้น</span>
         <input type="number" min="0" class="input input-sm" style="width:90px;text-align:center"
                id="edit_${u}" value="${it.counts[u]||0}">
-      </div>`).join('')}`;
+      </div>`).join('')}
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+      <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">📅 วันหมดอายุ</label>
+      <input type="date" id="edit_expiryDate" class="input" style="margin-top:4px;height:44px"
+             value="${it.expiryDate || ''}">
+    </div>`;
   document.getElementById('editModal').classList.add('open');
 }
 function saveEditItem() {
   const it = countSession.items[editKey];
   if (!it) return closeEditItem();
   ['CS','BP','PA','EA'].forEach(u => { it.counts[u] = Math.max(0, parseInt(document.getElementById('edit_'+u).value)||0); });
+  it.expiryDate = document.getElementById('edit_expiryDate').value || '';
   if (!['CS','BP','PA','EA'].some(u => it.counts[u] > 0)) delete countSession.items[editKey];
   saveCountSession();
   closeEditItem();
@@ -1574,6 +1600,7 @@ function summaryExportRows() {
     'สต็อกระบบ (ชิ้น)': r.system,
     'ต่าง (ชิ้น)': r.diff,
     'สถานะ': r.status==='ok'?'ตรง':(r.status==='short'?'ขาด':'เกิน'),
+    'วันหมดอายุ': r.item.expiryDate || '',
   }));
 }
 
@@ -1607,6 +1634,7 @@ async function saveCountToSheet() {
       cs: r.item.counts.CS, bp: r.item.counts.BP, pa: r.item.counts.PA, ea: r.item.counts.EA,
       countedPieces: r.counted, systemRaw: r.systemRaw, systemPieces: r.system,
       diffPieces: r.diff, status: r.status==='ok' ? 'ตรง' : r.status==='short' ? 'ขาด' : 'เกิน',
+      expiryDate: r.item.expiryDate || '',
     })),
   };
   showSpinner('กำลังบันทึกลง Google Sheet...');
@@ -1738,12 +1766,14 @@ function openHistDetail(idx) {
   const rows = s.items.map(it => {
     tot.c += it.countedPieces; tot.sy += it.systemPieces; tot.d += it.diffPieces;
     const dsign = it.diffPieces>0?'+':'';
+    const expCell = it.expiryDate ? formatThaiDate(it.expiryDate) : '-';
     return `<tr>
       <td>${it.name}</td>
       <td class="num">${it.countedPieces.toLocaleString()}</td>
       <td class="num">${it.systemPieces.toLocaleString()}</td>
       <td class="num">${dsign}${it.diffPieces.toLocaleString()}</td>
       <td><span class="hc ${pill(it.status)}" style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:8px">${it.status}</span></td>
+      <td>${expCell}</td>
     </tr>`;
   }).join('');
   document.getElementById('histModalBody').innerHTML = `
@@ -1752,13 +1782,14 @@ function openHistDetail(idx) {
     </div>
     <div style="overflow-x:auto">
       <table class="sum-tbl">
-        <thead><tr><th>สินค้า</th><th>นับ</th><th>ระบบ</th><th>ต่าง</th><th>สถานะ</th></tr></thead>
+        <thead><tr><th>สินค้า</th><th>นับ</th><th>ระบบ</th><th>ต่าง</th><th>สถานะ</th><th>หมดอายุ</th></tr></thead>
         <tbody>${rows}</tbody>
         <tfoot><tr>
           <td>รวม</td>
           <td class="num">${tot.c.toLocaleString()}</td>
           <td class="num">${tot.sy.toLocaleString()}</td>
           <td class="num">${tot.d>0?'+':''}${tot.d.toLocaleString()}</td>
+          <td></td>
           <td></td>
         </tr></tfoot>
       </table>

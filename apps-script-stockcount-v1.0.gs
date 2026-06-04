@@ -1,5 +1,6 @@
 /**
- * Rattana Stock Count — Apps Script Web App (v1.3)
+ * Rattana Stock Count — Apps Script Web App (v1.4)
+ * v1.4 — add Expiry Date column (user-entered, optional)
  * v1.3 — sync in-progress draft counts per user across devices
  * v1.2 — doGet?action=history returns saved rows for the History tab
  * v1.1 — force Product Key column to plain text format
@@ -40,7 +41,8 @@ var HEADERS = [
   'System Stock',    // สต็อกระบบ (รูปแบบ CS.EA)
   'System Pieces',   // สต็อกระบบ (ชิ้น)
   'Diff Pieces',     // ต่าง (+ เกิน / - ขาด)
-  'Status'           // ok / short / over
+  'Status',          // ตรง / ขาด / เกิน
+  'Expiry Date'      // วันหมดอายุ (ผู้ใช้กรอก, YYYY-MM-DD; ว่างได้)
 ];
 
 function doPost(e) {
@@ -78,7 +80,8 @@ function doPost(e) {
         r.systemRaw || '',
         r.systemPieces || 0,
         r.diffPieces || 0,
-        r.status || ''
+        r.status || '',
+        r.expiryDate || ''
       ]);
     });
     return ContentService
@@ -139,6 +142,7 @@ function doGet(e) {
           systemPieces:  Number(r[13] || 0),
           diffPieces:    Number(r[14] || 0),
           status:        String(r[15] || ''),
+          expiryDate:    _iso(r[16]),
         };
       });
       return _json({ ok: true, rows: rows });
