@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0d1b3e">
-  <title>Rattana Stock Count v2.28</title>
+  <title>Rattana Stock Count v2.29</title>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="preconnect" href="https://docs.google.com" crossorigin>
@@ -1126,7 +1126,12 @@ async function clearRemoteDraft(wh) {
 // Always compares to the LOCAL last-edit timestamp (set on every save / clear),
 // so a fresh save+clear is never overwritten by a stale remote read that
 // races with the no-cors POST clearDraft.
+const recentlySavedAt = {};   // { wh: epochMs } — block re-adoption after a save
 async function maybeAdoptRemoteDraft(wh) {
+  // Guard against the post-save race: if we just saved this warehouse,
+  // ignore any remote draft for the next 30s — Apps Script may not have
+  // finished clearing the row yet, and the user already pushed the data.
+  if (recentlySavedAt[wh] && Date.now() - recentlySavedAt[wh] < 30000) return;
   const remote = await fetchRemoteDraft(wh);
   if (!remote || !remote.items || !Object.keys(remote.items).length) return;
   const localTime  = countSession && countSession.lastEdit ? new Date(countSession.lastEdit).getTime() : 0;
@@ -1541,8 +1546,11 @@ async function saveCountToSheet() {
     });
     // Clear the local count session — start fresh for the next round
     const wh = countSession.warehouse;
+    recentlySavedAt[wh] = Date.now();   // block re-adoption from a stale remote draft
     try { localStorage.removeItem(countStoreKey(wh)); } catch {}
     clearRemoteDraft(wh);
+    // Belt + suspenders: try clearing again after 2s in case the first POST raced the save.
+    setTimeout(() => clearRemoteDraft(wh), 2000);
     const now = new Date().toISOString();
     countSession = { warehouse: wh, startedAt: now, items: {}, lastEdit: now };
     try { localStorage.setItem(countStoreKey(wh), JSON.stringify(countSession)); } catch {}
