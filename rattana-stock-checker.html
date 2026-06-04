@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0d1b3e">
-  <title>Rattana Stock Count v2.24</title>
+  <title>Rattana Stock Count v2.25</title>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="preconnect" href="https://docs.google.com" crossorigin>
@@ -1495,9 +1495,23 @@ async function loadHistory(force) {
 
 // Group rows by (savedAt + warehouse + counter) into one "session" per save
 function groupSessions(rows) {
-  // Restrict to what the current user is allowed to see
+  // Visibility rules — same model as the count tab:
+  //   • Role >= ALL_WAREHOUSE_ROLE → every warehouse AND every counter
+  //   • Role <  ALL_WAREHOUSE_ROLE → own warehouse AND only own counts
   const allowedWh = new Set(visibleWh);
-  const filtered = rows.filter(r => allowedWh.has(String(r.warehouse).toUpperCase()));
+  const seeAll    = currentUser && currentUser.role >= ALL_WAREHOUSE_ROLE;
+  const myEmp     = String(currentUser?.empId || '').trim();
+  const myEmail   = String(currentUser?.email || '').toLowerCase();
+  const myName    = String(currentUser?.name  || '').trim();
+  const isMine = r => {
+    if (seeAll) return true;
+    const e = String(r.empId||'').trim();
+    if (e && myEmp && e === myEmp) return true;
+    const n = String(r.counterName||'').trim();
+    if (n && (n === myName || n.toLowerCase() === myEmail)) return true;
+    return false;
+  };
+  const filtered = rows.filter(r => allowedWh.has(String(r.warehouse).toUpperCase()) && isMine(r));
   const map = new Map();
   filtered.forEach(r => {
     const key = `${r.savedAt}__${r.warehouse}__${r.empId||r.counterName}`;
