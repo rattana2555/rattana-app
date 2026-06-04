@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0d1b3e">
-  <title>Rattana Stock Count v2.29</title>
+  <title>Rattana Stock Count v2.30</title>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="preconnect" href="https://docs.google.com" crossorigin>
@@ -1101,6 +1101,11 @@ async function syncDraftNow() {
         items: countSession.items,
       }),
     });
+    // Mark this local snapshot as mirrored on the Sheet
+    if (countSession) {
+      countSession.syncedAt = new Date().toISOString();
+      try { localStorage.setItem(countStoreKey(countSession.warehouse), JSON.stringify(countSession)); } catch {}
+    }
   } catch {}
 }
 async function fetchRemoteDraft(wh) {
@@ -1133,12 +1138,29 @@ async function maybeAdoptRemoteDraft(wh) {
   // finished clearing the row yet, and the user already pushed the data.
   if (recentlySavedAt[wh] && Date.now() - recentlySavedAt[wh] < 30000) return;
   const remote = await fetchRemoteDraft(wh);
-  if (!remote || !remote.items || !Object.keys(remote.items).length) return;
+  const hasRemote = remote && remote.items && Object.keys(remote.items).length;
+  // ── Remote is EMPTY but local still has items ──────────────────────────
+  // If those local items were already mirrored to the Sheet (syncedAt set)
+  // AND nothing has been edited since the last sync, then another device
+  // saved/cleared this draft — drop the local copy too.
+  if (!hasRemote && countSession && Object.keys(countSession.items||{}).length) {
+    const localEdit = countSession.lastEdit ? new Date(countSession.lastEdit).getTime() : 0;
+    const localSync = countSession.syncedAt ? new Date(countSession.syncedAt).getTime() : 0;
+    if (localSync && localEdit <= localSync + 1500) {
+      const now = new Date().toISOString();
+      countSession = { warehouse: wh, startedAt: now, items: {}, lastEdit: now, syncedAt: now };
+      try { localStorage.setItem(countStoreKey(wh), JSON.stringify(countSession)); } catch {}
+      renderCountList();
+      showToast('รายการนี้ถูกบันทึก/เคลียร์จากเครื่องอื่นแล้ว', 'info');
+    }
+    return;
+  }
+  if (!hasRemote) return;
   const localTime  = countSession && countSession.lastEdit ? new Date(countSession.lastEdit).getTime() : 0;
   const remoteTime = new Date(remote.updatedAt || 0).getTime();
   if (remoteTime <= localTime + 1000) return;   // local is same or newer → keep
   countSession = { warehouse: wh, startedAt: remote.sessionStart || new Date().toISOString(),
-                   items: remote.items, lastEdit: remote.updatedAt };
+                   items: remote.items, lastEdit: remote.updatedAt, syncedAt: remote.updatedAt };
   try { localStorage.setItem(countStoreKey(wh), JSON.stringify(countSession)); } catch {}
   renderCountList();
   showToast(`โหลดรายการที่เช็คค้าง ${Object.keys(remote.items).length} รายการ`, 'info');
