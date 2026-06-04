@@ -1,5 +1,6 @@
 /**
- * Rattana Stock Count — Apps Script Web App (v1.1)
+ * Rattana Stock Count — Apps Script Web App (v1.2)
+ * v1.2 — doGet?action=history returns saved rows for the History tab
  * v1.1 — force Product Key column to plain text format
  * รับผลการนับสต็อกจากเว็บแอป แล้วบันทึกลง Google Sheet
  *
@@ -85,8 +86,50 @@ function doPost(e) {
   }
 }
 
-function doGet() {
-  return ContentService
-    .createTextOutput(JSON.stringify({ ok: true, msg: 'Rattana Stock Count endpoint is live' }))
+function doGet(e) {
+  try {
+    var action = (e && e.parameter && e.parameter.action) || '';
+    if (action === 'history') {
+      var ss = SpreadsheetApp.openById(SHEET_ID);
+      var sheet = ss.getSheetByName(TAB_NAME);
+      if (!sheet || sheet.getLastRow() < 2) {
+        return _json({ ok: true, rows: [] });
+      }
+      var values = sheet.getRange(2, 1, sheet.getLastRow() - 1, HEADERS.length).getValues();
+      var rows = values.map(function (r) {
+        return {
+          savedAt:       _iso(r[0]),
+          sessionStart:  _iso(r[1]),
+          warehouse:     String(r[2] || ''),
+          empId:         String(r[3] || ''),
+          counterName:   String(r[4] || ''),
+          key:           String(r[5] || ''),
+          name:          String(r[6] || ''),
+          cs:            Number(r[7] || 0),
+          bp:            Number(r[8] || 0),
+          pa:            Number(r[9] || 0),
+          ea:            Number(r[10] || 0),
+          countedPieces: Number(r[11] || 0),
+          systemRaw:     String(r[12] || ''),
+          systemPieces:  Number(r[13] || 0),
+          diffPieces:    Number(r[14] || 0),
+          status:        String(r[15] || ''),
+        };
+      });
+      return _json({ ok: true, rows: rows });
+    }
+    return _json({ ok: true, msg: 'Rattana Stock Count endpoint is live' });
+  } catch (err) {
+    return _json({ ok: false, error: String(err) });
+  }
+}
+
+function _iso(v) {
+  if (!v) return '';
+  if (v instanceof Date) return v.toISOString();
+  return String(v);
+}
+function _json(o) {
+  return ContentService.createTextOutput(JSON.stringify(o))
     .setMimeType(ContentService.MimeType.JSON);
 }

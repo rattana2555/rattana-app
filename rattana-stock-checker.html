@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0d1b3e">
-  <title>Rattana Stock Count v2.23</title>
+  <title>Rattana Stock Count v2.24</title>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="preconnect" href="https://docs.google.com" crossorigin>
@@ -67,6 +67,20 @@
     .quick-toggle input{width:18px;height:18px;accent-color:var(--gold);cursor:pointer}
     .quick-toggle:has(input:checked){background:rgba(42,67,128,.14);border-color:var(--gold);color:var(--navy)}
     body.dark .quick-toggle:has(input:checked){color:var(--gold-light)}
+    /* History session list */
+    .hist-row{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s}
+    .hist-row:hover{background:var(--row-alt)}
+    .hist-row:last-child{border:none}
+    .hist-date{font-weight:700;font-size:14px}
+    .hist-meta{font-size:12px;color:var(--muted);margin-top:2px}
+    .hist-counts{display:flex;gap:6px;flex-shrink:0;font-size:11px;font-weight:700}
+    .hist-counts .hc{padding:3px 8px;border-radius:8px}
+    .hc-ok{background:#e8f7ee;color:#1e8449}
+    .hc-short{background:#ffd5d0;color:#c0392b}
+    .hc-over{background:#fff3d1;color:#a67700}
+    body.dark .hc-ok{background:#1a3a25;color:#7be0a3}
+    body.dark .hc-short{background:#3a1a17;color:#ff8a7e}
+    body.dark .hc-over{background:#3a2e15;color:#e8c86a}
     /* Quick qty preset pills */
     .qty-presets{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:8px 0 4px}
     .qty-preset{background:var(--row-alt);border:1.5px solid var(--border);color:var(--text);padding:8px 14px;border-radius:20px;font-weight:700;font-size:14px;cursor:pointer;min-width:48px}
@@ -279,6 +293,7 @@
   <div class="tab-nav">
     <button class="tab-btn active" id="tabCount" onclick="setMode('count')">📦 นับสต็อก</button>
     <button class="tab-btn" id="tabSummary" onclick="setMode('summary')">📊 สรุปผล</button>
+    <button class="tab-btn" id="tabHistory" onclick="setMode('history')">📜 ประวัติ</button>
   </div>
 
   <!-- ══════════ LOOKUP MODE (hidden — kept for internal lookup logic) ══════════ -->
@@ -396,7 +411,34 @@
     </div>
   </div><!-- /modeSummary -->
 
+  <!-- ══════════ HISTORY MODE ══════════ -->
+  <div id="modeHistory" style="display:none">
+    <div class="card mt-8">
+      <div class="card-head">
+        <h3>📜 ประวัติการเช็คสต็อก</h3>
+        <button class="btn btn-outline btn-sm" onclick="loadHistory(true)">↻ รีเฟรช</button>
+      </div>
+      <div class="card-body" style="padding:8px 0" id="historyBody">
+        <div class="txt-center txt-muted" style="padding:24px 16px;font-size:13px">กดรีเฟรชเพื่อโหลดประวัติ</div>
+      </div>
+    </div>
+  </div><!-- /modeHistory -->
+
   <div style="height:72px"></div>
+</div>
+
+<!-- History session detail modal -->
+<div class="modal-overlay" id="histModal">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-head">
+      <h3 id="histModalTitle">รายละเอียดการเช็คสต็อก</h3>
+      <button class="modal-close" onclick="closeHistDetail()">×</button>
+    </div>
+    <div class="modal-body" id="histModalBody"></div>
+    <div class="modal-foot">
+      <button class="btn btn-outline btn-sm" onclick="closeHistDetail()">ปิด</button>
+    </div>
+  </div>
 </div>
 
 <!-- Edit-item modal -->
@@ -954,9 +996,12 @@ function setMode(mode) {
   document.getElementById('modeLookup').style.display  = mode==='lookup'  ? 'block' : 'none';
   document.getElementById('modeCount').style.display   = mode==='count'   ? 'block' : 'none';
   document.getElementById('modeSummary').style.display = mode==='summary' ? 'block' : 'none';
+  document.getElementById('modeHistory').style.display = mode==='history' ? 'block' : 'none';
   document.getElementById('tabCount').classList.toggle('active', mode==='count');
   document.getElementById('tabSummary').classList.toggle('active', mode==='summary');
-  document.getElementById('hdTitle').textContent = mode==='summary' ? '📊 สรุปผล' : '📦 นับสต็อก';
+  document.getElementById('tabHistory').classList.toggle('active', mode==='history');
+  const titles = { count:'📦 นับสต็อก', summary:'📊 สรุปผล', history:'📜 ประวัติ' };
+  document.getElementById('hdTitle').textContent = titles[mode] || titles.count;
   // stop cameras when leaving their modes
   if (mode!=='lookup' && cameraOpen) stopCamera();
   if (mode!=='count' && countCamOpen) stopCountCamera();
@@ -966,6 +1011,8 @@ function setMode(mode) {
   } else if (mode==='summary') {
     if (!countSession) loadCountSession(visibleWh[0] || 'W1');
     renderSummary();
+  } else if (mode==='history') {
+    loadHistory();
   } else {
     setTimeout(() => document.getElementById('barcodeInput').focus(), 60);
   }
@@ -1410,6 +1457,7 @@ async function saveCountToSheet() {
     countSession = { warehouse: wh, startedAt: new Date().toISOString(), items: {} };
     renderCountList();
     renderSummary();
+    historyLoaded = false;  // invalidate history cache so the new save appears next time
     showToast('บันทึกลง Google Sheet แล้ว ✓ เคลียร์รายการนับแล้ว', 'success');
     setMode('count');
   } catch (e) {
@@ -1417,6 +1465,121 @@ async function saveCountToSheet() {
   } finally {
     hideSpinner();
   }
+}
+
+// ════════════ HISTORY MODE ════════════
+let historyCache = null;
+let historyLoaded = false;
+
+async function loadHistory(force) {
+  if (!COUNT_SAVE_URL) {
+    document.getElementById('historyBody').innerHTML =
+      '<div class="txt-center txt-muted" style="padding:24px 16px">ยังไม่ได้ตั้งค่า Google Sheet</div>';
+    return;
+  }
+  if (historyLoaded && !force && historyCache) { renderHistory(historyCache); return; }
+  document.getElementById('historyBody').innerHTML =
+    '<div class="txt-center txt-muted" style="padding:24px 16px">⏳ กำลังโหลด...</div>';
+  try {
+    const res = await fetch(COUNT_SAVE_URL + '?action=history', { cache: 'no-store' });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || 'fetch failed');
+    historyCache = json.rows || [];
+    historyLoaded = true;
+    renderHistory(historyCache);
+  } catch (e) {
+    document.getElementById('historyBody').innerHTML =
+      `<div class="txt-center" style="padding:24px 16px;color:var(--danger);font-size:13px">โหลดประวัติไม่สำเร็จ: ${e.message||e}</div>`;
+  }
+}
+
+// Group rows by (savedAt + warehouse + counter) into one "session" per save
+function groupSessions(rows) {
+  // Restrict to what the current user is allowed to see
+  const allowedWh = new Set(visibleWh);
+  const filtered = rows.filter(r => allowedWh.has(String(r.warehouse).toUpperCase()));
+  const map = new Map();
+  filtered.forEach(r => {
+    const key = `${r.savedAt}__${r.warehouse}__${r.empId||r.counterName}`;
+    if (!map.has(key)) {
+      map.set(key, { savedAt:r.savedAt, sessionStart:r.sessionStart, warehouse:r.warehouse,
+                     empId:r.empId, counterName:r.counterName, items:[] });
+    }
+    map.get(key).items.push(r);
+  });
+  return [...map.values()].sort((a,b) => (b.savedAt||'').localeCompare(a.savedAt||''));
+}
+
+function renderHistory(rows) {
+  const sessions = groupSessions(rows || []);
+  const body = document.getElementById('historyBody');
+  if (!sessions.length) {
+    body.innerHTML = '<div class="txt-center txt-muted" style="padding:24px 16px;font-size:13px">ยังไม่มีประวัติ — เริ่มต้นด้วยการนับสต็อกแล้วบันทึก</div>';
+    return;
+  }
+  body.innerHTML = sessions.map((s, idx) => {
+    const ok    = s.items.filter(i => i.status==='ตรง').length;
+    const short = s.items.filter(i => i.status==='ขาด').length;
+    const over  = s.items.filter(i => i.status==='เกิน').length;
+    const who   = s.counterName || s.empId || '-';
+    return `
+      <div class="hist-row" onclick="openHistDetail(${idx})">
+        <div style="flex:1;min-width:0">
+          <div class="hist-date">${formatThaiDateTime(s.savedAt)}</div>
+          <div class="hist-meta">${s.warehouse} · ${WH_NAMES[s.warehouse]||''} · ${who} · ${s.items.length} รายการ</div>
+        </div>
+        <div class="hist-counts">
+          ${ok?`<span class="hc hc-ok">✓ ${ok}</span>`:''}
+          ${short?`<span class="hc hc-short">↓ ${short}</span>`:''}
+          ${over?`<span class="hc hc-over">↑ ${over}</span>`:''}
+        </div>
+        <span style="color:var(--muted);font-size:18px">›</span>
+      </div>`;
+  }).join('');
+  // store grouped data for detail lookup
+  body._sessions = sessions;
+}
+
+function openHistDetail(idx) {
+  const sessions = document.getElementById('historyBody')._sessions || [];
+  const s = sessions[idx];
+  if (!s) return;
+  const pill = st => st==='ตรง'?'hc-ok':st==='ขาด'?'hc-short':'hc-over';
+  document.getElementById('histModalTitle').textContent =
+    `${formatThaiDateTime(s.savedAt)} · ${s.warehouse}`;
+  const tot = { c:0, sy:0, d:0 };
+  const rows = s.items.map(it => {
+    tot.c += it.countedPieces; tot.sy += it.systemPieces; tot.d += it.diffPieces;
+    const dsign = it.diffPieces>0?'+':'';
+    return `<tr>
+      <td>${it.name}</td>
+      <td class="num">${it.countedPieces.toLocaleString()}</td>
+      <td class="num">${it.systemPieces.toLocaleString()}</td>
+      <td class="num">${dsign}${it.diffPieces.toLocaleString()}</td>
+      <td><span class="hc ${pill(it.status)}" style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:8px">${it.status}</span></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('histModalBody').innerHTML = `
+    <div style="font-size:13px;color:var(--muted);margin-bottom:10px">
+      ผู้นับ <b>${s.counterName||s.empId||'-'}</b> · เริ่มนับ ${formatThaiDateTime(s.sessionStart)} · ${s.items.length} รายการ
+    </div>
+    <div style="overflow-x:auto">
+      <table class="sum-tbl">
+        <thead><tr><th>สินค้า</th><th>นับ</th><th>ระบบ</th><th>ต่าง</th><th>สถานะ</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr>
+          <td>รวม</td>
+          <td class="num">${tot.c.toLocaleString()}</td>
+          <td class="num">${tot.sy.toLocaleString()}</td>
+          <td class="num">${tot.d>0?'+':''}${tot.d.toLocaleString()}</td>
+          <td></td>
+        </tr></tfoot>
+      </table>
+    </div>`;
+  document.getElementById('histModal').classList.add('open');
+}
+function closeHistDetail() {
+  document.getElementById('histModal').classList.remove('open');
 }
 
 // ── Count camera ──
