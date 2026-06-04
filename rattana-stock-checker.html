@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0d1b3e">
-  <title>Rattana Stock Count v2.30</title>
+  <title>Rattana Stock Count v2.31</title>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="preconnect" href="https://docs.google.com" crossorigin>
@@ -527,6 +527,19 @@ document.addEventListener('DOMContentLoaded', () => {
   checkSession();
 });
 
+// Background polling — keeps the open device in sync even when it never
+// leaves focus. Only runs while the count tab is visible and online.
+let draftPollTimer = null;
+function startDraftPoll() {
+  stopDraftPoll();
+  draftPollTimer = setInterval(() => {
+    if (currentMode === 'count' && countSession && !document.hidden && navigator.onLine !== false) {
+      maybeAdoptRemoteDraft(countSession.warehouse);
+    }
+  }, 5000);   // every 5 seconds — feels real-time without hammering the Sheet
+}
+function stopDraftPoll() { if (draftPollTimer) { clearInterval(draftPollTimer); draftPollTimer = null; } }
+
 // Re-sync everything that depends on the network the moment focus returns.
 function refreshEverything() {
   if (!currentUser) return;
@@ -1025,8 +1038,10 @@ function setMode(mode) {
   // stop cameras when leaving their modes
   if (mode!=='lookup' && cameraOpen) stopCamera();
   if (mode!=='count' && countCamOpen) stopCountCamera();
+  if (mode !== 'count') stopDraftPoll();
   if (mode==='count') {
     initCountMode();
+    startDraftPoll();
     setTimeout(() => document.getElementById('countInput').focus(), 60);
   } else if (mode==='summary') {
     if (!countSession) loadCountSession(visibleWh[0] || 'W1');
@@ -1401,6 +1416,8 @@ function clearCount() {
   if (!countSession || !Object.keys(countSession.items).length) return;
   if (!confirm('ล้างรายการนับทั้งหมดของคลังนี้?')) return;
   const wh = countSession.warehouse;
+  recentlySavedAt[wh] = Date.now();
+  if (draftSyncTimer) { clearTimeout(draftSyncTimer); draftSyncTimer = null; }
   countSession.items = {};
   countSession.startedAt = new Date().toISOString();
   saveCountSession();
@@ -1569,6 +1586,8 @@ async function saveCountToSheet() {
     // Clear the local count session — start fresh for the next round
     const wh = countSession.warehouse;
     recentlySavedAt[wh] = Date.now();   // block re-adoption from a stale remote draft
+    // Cancel any pending draft sync so a stale items={} POST doesn't race the clear
+    if (draftSyncTimer) { clearTimeout(draftSyncTimer); draftSyncTimer = null; }
     try { localStorage.removeItem(countStoreKey(wh)); } catch {}
     clearRemoteDraft(wh);
     // Belt + suspenders: try clearing again after 2s in case the first POST raced the save.
