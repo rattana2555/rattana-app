@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0d1b3e">
-  <title>Rattana Stock Count v2.26</title>
+  <title>Rattana Stock Count v2.27</title>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="preconnect" href="https://docs.google.com" crossorigin>
@@ -1046,7 +1046,7 @@ function loadCountSession(wh) {
     const raw = JSON.parse(localStorage.getItem(countStoreKey(wh)));
     countSession = (raw && raw.warehouse === wh) ? raw : null;
   } catch { countSession = null; }
-  if (!countSession) countSession = { warehouse: wh, startedAt: new Date().toISOString(), items: {} };
+  if (!countSession) countSession = { warehouse: wh, startedAt: new Date().toISOString(), items: {}, lastEdit: 0 };
 }
 
 function saveCountSession() {
@@ -1102,20 +1102,21 @@ async function clearRemoteDraft(wh) {
     });
   } catch {}
 }
-// Pull newest draft from Sheet — last-write-wins by updatedAt
+// Pull newest draft from Sheet — last-write-wins by updatedAt.
+// Always compares to the LOCAL last-edit timestamp (set on every save / clear),
+// so a fresh save+clear is never overwritten by a stale remote read that
+// races with the no-cors POST clearDraft.
 async function maybeAdoptRemoteDraft(wh) {
   const remote = await fetchRemoteDraft(wh);
   if (!remote || !remote.items || !Object.keys(remote.items).length) return;
-  const localTime  = countSession && countSession.lastEdit  ? new Date(countSession.lastEdit).getTime() : 0;
+  const localTime  = countSession && countSession.lastEdit ? new Date(countSession.lastEdit).getTime() : 0;
   const remoteTime = new Date(remote.updatedAt || 0).getTime();
-  const localEmpty = !countSession || !Object.keys(countSession.items||{}).length;
-  if (localEmpty || remoteTime > localTime + 1000) {
-    countSession = { warehouse: wh, startedAt: remote.sessionStart || new Date().toISOString(),
-                     items: remote.items, lastEdit: remote.updatedAt };
-    try { localStorage.setItem(countStoreKey(wh), JSON.stringify(countSession)); } catch {}
-    renderCountList();
-    showToast(`โหลดรายการที่เช็คค้าง ${Object.keys(remote.items).length} รายการ`, 'info');
-  }
+  if (remoteTime <= localTime + 1000) return;   // local is same or newer → keep
+  countSession = { warehouse: wh, startedAt: remote.sessionStart || new Date().toISOString(),
+                   items: remote.items, lastEdit: remote.updatedAt };
+  try { localStorage.setItem(countStoreKey(wh), JSON.stringify(countSession)); } catch {}
+  renderCountList();
+  showToast(`โหลดรายการที่เช็คค้าง ${Object.keys(remote.items).length} รายการ`, 'info');
 }
 
 // Scan in count mode → show qty entry card
@@ -1522,7 +1523,9 @@ async function saveCountToSheet() {
     const wh = countSession.warehouse;
     try { localStorage.removeItem(countStoreKey(wh)); } catch {}
     clearRemoteDraft(wh);
-    countSession = { warehouse: wh, startedAt: new Date().toISOString(), items: {} };
+    const now = new Date().toISOString();
+    countSession = { warehouse: wh, startedAt: now, items: {}, lastEdit: now };
+    try { localStorage.setItem(countStoreKey(wh), JSON.stringify(countSession)); } catch {}
     renderCountList();
     renderSummary();
     historyLoaded = false;  // invalidate history cache so the new save appears next time
