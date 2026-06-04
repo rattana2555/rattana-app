@@ -1,5 +1,6 @@
 /**
- * Rattana Stock Count — Apps Script Web App (v1.0)
+ * Rattana Stock Count — Apps Script Web App (v1.1)
+ * v1.1 — force Product Key column to plain text format
  * รับผลการนับสต็อกจากเว็บแอป แล้วบันทึกลง Google Sheet
  *
  * ── วิธีติดตั้ง ──
@@ -49,6 +50,10 @@ function doPost(e) {
       sheet.getRange(1, 1, 1, HEADERS.length).setFontWeight('bold');
       sheet.setFrozenRows(1);
     }
+    // Force Product Key column (6) to PLAIN TEXT so leading zeros & long
+    // barcodes are preserved (otherwise Sheets turns "0812345678" into a
+    // number and 13-digit codes into 1.23E+12).
+    sheet.getRange(1, 6, sheet.getMaxRows(), 1).setNumberFormat('@');
     var savedAt = data.savedAt || new Date().toISOString();
     (data.rows || []).forEach(function (r) {
       sheet.appendRow([
