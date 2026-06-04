@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0d1b3e">
-  <title>Rattana Stock Count v2.25</title>
+  <title>Rattana Stock Count v2.26</title>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="preconnect" href="https://docs.google.com" crossorigin>
@@ -1029,6 +1029,7 @@ function initCountMode() {
   }
   if (!countSession) loadCountSession(sel.value || visibleWh[0]);
   renderCountList();
+  maybeAdoptRemoteDraft(countSession.warehouse);
 }
 
 function onCountWhChange() {
@@ -1037,6 +1038,7 @@ function onCountWhChange() {
   document.getElementById('countPending').innerHTML = '';
   loadCountSession(wh);
   renderCountList();
+  maybeAdoptRemoteDraft(wh);
 }
 
 function loadCountSession(wh) {
@@ -1049,7 +1051,70 @@ function loadCountSession(wh) {
 
 function saveCountSession() {
   if (countSession) {
+    countSession.lastEdit = new Date().toISOString();
     try { localStorage.setItem(countStoreKey(countSession.warehouse), JSON.stringify(countSession)); } catch {}
+    queueDraftSync();
+  }
+}
+
+// ── Cross-device draft sync via Google Sheet ──
+const userKey = () => String((currentUser && (currentUser.empId || currentUser.email)) || '').toLowerCase();
+let draftSyncTimer = null;
+function queueDraftSync() {
+  if (!COUNT_SAVE_URL || !currentUser || !countSession) return;
+  clearTimeout(draftSyncTimer);
+  draftSyncTimer = setTimeout(syncDraftNow, 1500); // debounce 1.5s
+}
+async function syncDraftNow() {
+  if (!COUNT_SAVE_URL || !currentUser || !countSession) return;
+  try {
+    await fetch(COUNT_SAVE_URL, {
+      method:'POST', mode:'no-cors',
+      headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action:'saveDraft',
+        userKey: userKey(),
+        email: currentUser.email,
+        empId: currentUser.empId || '',
+        warehouse: countSession.warehouse,
+        sessionStart: countSession.startedAt,
+        items: countSession.items,
+      }),
+    });
+  } catch {}
+}
+async function fetchRemoteDraft(wh) {
+  if (!COUNT_SAVE_URL || !currentUser) return null;
+  try {
+    const url = `${COUNT_SAVE_URL}?action=draft&userKey=${encodeURIComponent(userKey())}&warehouse=${encodeURIComponent(wh)}`;
+    const res = await fetch(url, { cache:'no-store' });
+    const json = await res.json();
+    return json && json.ok && json.draft ? json.draft : null;
+  } catch { return null; }
+}
+async function clearRemoteDraft(wh) {
+  if (!COUNT_SAVE_URL || !currentUser) return;
+  try {
+    await fetch(COUNT_SAVE_URL, {
+      method:'POST', mode:'no-cors',
+      headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action:'clearDraft', userKey: userKey(), warehouse: wh }),
+    });
+  } catch {}
+}
+// Pull newest draft from Sheet — last-write-wins by updatedAt
+async function maybeAdoptRemoteDraft(wh) {
+  const remote = await fetchRemoteDraft(wh);
+  if (!remote || !remote.items || !Object.keys(remote.items).length) return;
+  const localTime  = countSession && countSession.lastEdit  ? new Date(countSession.lastEdit).getTime() : 0;
+  const remoteTime = new Date(remote.updatedAt || 0).getTime();
+  const localEmpty = !countSession || !Object.keys(countSession.items||{}).length;
+  if (localEmpty || remoteTime > localTime + 1000) {
+    countSession = { warehouse: wh, startedAt: remote.sessionStart || new Date().toISOString(),
+                     items: remote.items, lastEdit: remote.updatedAt };
+    try { localStorage.setItem(countStoreKey(wh), JSON.stringify(countSession)); } catch {}
+    renderCountList();
+    showToast(`โหลดรายการที่เช็คค้าง ${Object.keys(remote.items).length} รายการ`, 'info');
   }
 }
 
@@ -1287,9 +1352,11 @@ function removeCountItem(encKey) {
 function clearCount() {
   if (!countSession || !Object.keys(countSession.items).length) return;
   if (!confirm('ล้างรายการนับทั้งหมดของคลังนี้?')) return;
+  const wh = countSession.warehouse;
   countSession.items = {};
   countSession.startedAt = new Date().toISOString();
   saveCountSession();
+  clearRemoteDraft(wh);
   renderCountList();
   showToast('ล้างการนับแล้ว', 'info');
 }
@@ -1454,6 +1521,7 @@ async function saveCountToSheet() {
     // Clear the local count session — start fresh for the next round
     const wh = countSession.warehouse;
     try { localStorage.removeItem(countStoreKey(wh)); } catch {}
+    clearRemoteDraft(wh);
     countSession = { warehouse: wh, startedAt: new Date().toISOString(), items: {} };
     renderCountList();
     renderSummary();

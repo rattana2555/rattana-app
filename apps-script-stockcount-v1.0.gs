@@ -1,5 +1,6 @@
 /**
- * Rattana Stock Count — Apps Script Web App (v1.2)
+ * Rattana Stock Count — Apps Script Web App (v1.3)
+ * v1.3 — sync in-progress draft counts per user across devices
  * v1.2 — doGet?action=history returns saved rows for the History tab
  * v1.1 — force Product Key column to plain text format
  * รับผลการนับสต็อกจากเว็บแอป แล้วบันทึกลง Google Sheet
@@ -18,8 +19,10 @@
  * แอปจะสร้างชีทชื่อ "StockCount" ให้อัตโนมัติพร้อม header แถวแรก
  */
 
-var SHEET_ID   = 'PASTE_YOUR_SPREADSHEET_ID_HERE';
-var TAB_NAME   = 'StockCount';
+var SHEET_ID    = 'PASTE_YOUR_SPREADSHEET_ID_HERE';
+var TAB_NAME    = 'StockCount';
+var DRAFT_TAB   = 'Drafts';
+var DRAFT_HEADERS = ['UserKey','Email','EmpId','Warehouse','SessionStart','UpdatedAt','Payload'];
 
 var HEADERS = [
   'Saved At',        // เวลาที่บันทึก
@@ -44,6 +47,8 @@ function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
     var ss = SpreadsheetApp.openById(SHEET_ID);
+    if (data.action === 'saveDraft')  return _saveDraft(ss, data);
+    if (data.action === 'clearDraft') return _clearDraft(ss, data);
     var sheet = ss.getSheetByName(TAB_NAME);
     if (!sheet) {
       sheet = ss.insertSheet(TAB_NAME);
@@ -89,6 +94,26 @@ function doPost(e) {
 function doGet(e) {
   try {
     var action = (e && e.parameter && e.parameter.action) || '';
+    if (action === 'draft') {
+      var ss = SpreadsheetApp.openById(SHEET_ID);
+      var key = String((e.parameter.userKey || '')).toLowerCase();
+      var wh  = String((e.parameter.warehouse || '')).toUpperCase();
+      var sheet = ss.getSheetByName(DRAFT_TAB);
+      if (!sheet || sheet.getLastRow() < 2) return _json({ ok: true, draft: null });
+      var vals = sheet.getRange(2, 1, sheet.getLastRow() - 1, DRAFT_HEADERS.length).getValues();
+      for (var i = 0; i < vals.length; i++) {
+        if (String(vals[i][0]).toLowerCase() === key && String(vals[i][3]).toUpperCase() === wh) {
+          try {
+            return _json({ ok: true, draft: {
+              sessionStart: _iso(vals[i][4]),
+              updatedAt:    _iso(vals[i][5]),
+              items:        JSON.parse(vals[i][6] || '{}'),
+            }});
+          } catch (er) { return _json({ ok: true, draft: null }); }
+        }
+      }
+      return _json({ ok: true, draft: null });
+    }
     if (action === 'history') {
       var ss = SpreadsheetApp.openById(SHEET_ID);
       var sheet = ss.getSheetByName(TAB_NAME);
@@ -122,6 +147,59 @@ function doGet(e) {
   } catch (err) {
     return _json({ ok: false, error: String(err) });
   }
+}
+
+function _ensureDraftSheet(ss) {
+  var sheet = ss.getSheetByName(DRAFT_TAB);
+  if (!sheet) {
+    sheet = ss.insertSheet(DRAFT_TAB);
+    sheet.appendRow(DRAFT_HEADERS);
+    sheet.getRange(1, 1, 1, DRAFT_HEADERS.length).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+// Find a draft row by (userKey, warehouse). Returns 1-based row number or 0.
+function _findDraftRow(sheet, userKey, warehouse) {
+  if (sheet.getLastRow() < 2) return 0;
+  var vals = sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues();
+  var k = String(userKey || '').toLowerCase();
+  var w = String(warehouse || '').toUpperCase();
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][0]).toLowerCase() === k && String(vals[i][3]).toUpperCase() === w) {
+      return i + 2;
+    }
+  }
+  return 0;
+}
+
+function _saveDraft(ss, data) {
+  var sheet = _ensureDraftSheet(ss);
+  var row = _findDraftRow(sheet, data.userKey, data.warehouse);
+  var values = [
+    String(data.userKey || '').toLowerCase(),
+    String(data.email || ''),
+    String(data.empId || ''),
+    String(data.warehouse || '').toUpperCase(),
+    data.sessionStart || new Date().toISOString(),
+    new Date().toISOString(),
+    JSON.stringify(data.items || {}),
+  ];
+  if (row) {
+    sheet.getRange(row, 1, 1, DRAFT_HEADERS.length).setValues([values]);
+  } else {
+    sheet.appendRow(values);
+  }
+  return _json({ ok: true });
+}
+
+function _clearDraft(ss, data) {
+  var sheet = ss.getSheetByName(DRAFT_TAB);
+  if (!sheet) return _json({ ok: true });
+  var row = _findDraftRow(sheet, data.userKey, data.warehouse);
+  if (row) sheet.deleteRow(row);
+  return _json({ ok: true });
 }
 
 function _iso(v) {
