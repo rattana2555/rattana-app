@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0d1b3e">
-  <title>Rattana Stock Count v2.32</title>
+  <title>Rattana Stock Count v2.33</title>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="preconnect" href="https://docs.google.com" crossorigin>
@@ -465,14 +465,14 @@
 <script>
 // ── CONFIG ──────────────────────────────────────────────
 const SHEET_ID   = '16mYDqAqqJma-_0vCIAajy6bcjdOZ7F6VagxkdkqAB2I';
-const CACHE_KEY  = 'rattana_stock_v2';   // bumped: schema now includes STOCK C4
+const CACHE_KEY  = 'rattana_stock_v3';   // bumped: schema now includes IB W1-W4 + C4
 const CACHE_TTL  = 60 * 1000;   // 1 minute — show cache instantly, refresh fast
 
 const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v2.32';
+const APP_VERSION = 'v2.33';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -719,7 +719,8 @@ async function fetchAndUpdate() {
 // Fetch ONLY the columns we use (≈15 of ~120) — cuts payload ~85%.
 // Column letters: A=PRODUCT NAME, B-I=CODE/UNIT pairs, J-M=UNIT names, N-Q=QTY,
 // BC/BD/BE=CAT GROUP/BRAND/SIZE, BM=SHORT NAME, BN-BQ=STOCK W1-W4, CU=SKU_USAGE.
-const NEEDED_COLS = 'A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,BC,BD,BE,BM,BN,BO,BP,BQ,BR,CU';
+// + CP-CT = IB W1, IB W2, IB W3, IB W4, IB C4 (last received date per warehouse)
+const NEEDED_COLS = 'A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,BC,BD,BE,BM,BN,BO,BP,BQ,BR,CP,CQ,CR,CS,CT,CU';
 async function fetchSheet() {
   const tq  = encodeURIComponent(`select ${NEEDED_COLS}`);
   const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&tq=${tq}`;
@@ -756,6 +757,34 @@ function unitFactor(p, u) {
   if (u === 'EA') return 1;
   const q = parseFloat(p[`QTY ${u}`]);
   return (!isNaN(q) && q > 0) ? q : 1;
+}
+
+// IB W*/C4 cells look like:  "2026/05/28 VOLUME 60.0 FREE 0.0 VALUE 2922.00"
+// → extract the YYYY/MM/DD date; if older than EXPIRY_DAYS, flag as expired.
+const EXPIRY_DAYS = 90;
+function parseIBDate(cell) {
+  const m = String(cell || '').match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return isNaN(d) ? null : d;
+}
+// Returns { date, days, expired } or null if no IB info for that warehouse
+function ibInfo(product, warehouse) {
+  if (!product || !warehouse) return null;
+  const date = parseIBDate(product[`IB ${warehouse}`]);
+  if (!date) return null;
+  const days = Math.floor((Date.now() - date.getTime()) / 86400000);
+  return { date, days, expired: days > EXPIRY_DAYS };
+}
+// Small badge HTML — empty string if no IB date for this warehouse
+function ibBadgeHtml(product, warehouse) {
+  const ib = ibInfo(product, warehouse);
+  if (!ib) return '';
+  const dateStr = formatThaiDate(ib.date);
+  if (ib.expired) {
+    return `<span class="badge badge-danger" style="margin-left:4px">⚠ หมดอายุ · IB ${dateStr} (${ib.days} วัน)</span>`;
+  }
+  return `<span class="badge badge-ok" style="margin-left:4px">IB ${dateStr} · ${ib.days} วัน</span>`;
 }
 
 function setStatusOk(count) {
@@ -1220,6 +1249,7 @@ function renderPending() {
               <div style="font-size:15px;font-weight:700;line-height:1.3;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</div>
             </div>
             <div style="font-size:12px;color:var(--muted);margin-top:3px">${pendingScan.code} · ${unitName} · 1 ${u} = ${factor} ชิ้น</div>
+            <div style="margin-top:6px">${ibBadgeHtml(p, countSession && countSession.warehouse)}</div>
           </div>
         </div>
         <div class="qty-presets">
@@ -1383,7 +1413,7 @@ function renderCountList() {
       <div class="ci-main" onclick="openEditItem('${encodeURIComponent(it.key)}')" style="cursor:pointer">
         <div class="ci-name">${it.name}</div>
         <div class="ci-breakdown">${breakdownText(it)} = <b>${d.counted.toLocaleString()}</b> ชิ้น · ระบบ ${d.system.toLocaleString()}</div>
-        ${statusPill(d)}
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${statusPill(d)} ${ibBadgeHtml(productByKey[it.key], countSession && countSession.warehouse)}</div>
       </div>
       <button class="ci-x" onclick="removeCountItem('${encodeURIComponent(it.key)}')" title="ลบ">🗑</button>
     </div>`;
