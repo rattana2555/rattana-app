@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0d1b3e">
-  <title>Rattana Stock Count v2.16</title>
+  <title>Rattana Stock Count v2.17</title>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="preconnect" href="https://docs.google.com" crossorigin>
@@ -349,13 +349,9 @@
           <button class="btn btn-gold" onclick="countScan()" style="flex-shrink:0">นับ</button>
         </div>
         <div class="flex gap-8 mt-8" style="align-items:center;flex-wrap:wrap">
-          <button class="btn btn-gold btn-lg" id="btnCountCam" onclick="toggleCountCamera()" style="flex:1;min-width:160px;min-height:50px;font-size:15px">📷 เปิดกล้องเริ่มนับ</button>
-          <label class="quick-toggle" title="สแกน 1 ครั้ง = +1 ชิ้นทันที (ไม่ถามจำนวน)">
-            <input type="checkbox" id="quickMode" onchange="onQuickToggle()" checked>
-            <span>โหมดเร็ว ⚡</span>
-          </label>
+          <button class="btn btn-gold btn-lg btn-block" id="btnCountCam" onclick="toggleCountCamera()" style="min-height:50px;font-size:15px">📷 เปิดกล้องเริ่มนับ</button>
         </div>
-        <div style="font-size:11.5px;color:var(--muted);margin-top:8px" id="modeHint">โหมดเร็ว: สแกน = +1 อัตโนมัติ · กล้องเปิดต่อให้สแกนรัวได้</div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:8px;text-align:center">สแกนหน่วยไหน นับตามหน่วยนั้น · มีช่องใส่จำนวน ตั้งไว้ที่ 1 แก้ไขได้</div>
         <div id="countCameraSection" style="display:none;margin-top:12px">
           <div id="countReader"><video id="countVideo" playsinline muted autoplay></video></div>
           <div class="scan-hint">วางบาร์โค้ดให้อยู่กลางจอ · ระยะ ~15 ซม. · แสงสว่างพอ</div>
@@ -1011,33 +1007,6 @@ function saveCountSession() {
 }
 
 // Scan in count mode → show qty entry card
-function isQuickMode() {
-  const el = document.getElementById('quickMode');
-  return el ? el.checked : true;
-}
-function onQuickToggle() {
-  document.getElementById('modeHint').textContent = isQuickMode()
-    ? 'โหมดเร็ว: สแกน = +1 อัตโนมัติ · กล้องเปิดต่อให้สแกนรัวได้'
-    : 'โหมดถามจำนวน: สแกนเสร็จจะถามว่ากี่ชิ้น';
-}
-
-// Add 1 piece of the scanned unit, skipping the qty popup.
-function quickAdd(product, unit, code) {
-  const key = productKey(product);
-  if (!countSession.items[key]) {
-    countSession.items[key] = {
-      key, name: product['PRODUCT NAME']||'-', short: product['SHORT NAME']||'',
-      factors: { EA:unitFactor(product,'EA'), PA:unitFactor(product,'PA'), BP:unitFactor(product,'BP'), CS:unitFactor(product,'CS') },
-      counts: { EA:0, PA:0, BP:0, CS:0 },
-    };
-  }
-  countSession.items[key].counts[unit] += 1;
-  saveCountSession();
-  renderCountList();
-  showToast(`+1 ${unit} · ${countSession.items[key].name}`, 'success');
-  if (navigator.vibrate) navigator.vibrate(40);
-}
-
 function countScan(code) {
   const inp = document.getElementById('countInput');
   const bc  = (code || inp.value).trim();
@@ -1049,9 +1018,7 @@ function countScan(code) {
     return;
   }
   inp.value = '';
-  // Quick mode: +1 immediately, leave the camera open to scan more
-  if (isQuickMode()) { quickAdd(found.product, found.unit, bc); return; }
-  // Slow mode: open the qty card
+  // Open the qty card with 1 pre-filled — user can confirm or edit.
   pendingScan = { product: found.product, unit: found.unit, code: bc };
   renderPending();
   if (navigator.vibrate) navigator.vibrate(60);
@@ -1460,9 +1427,8 @@ function startCountCamera() {
     if (pendingScan) return;               // ignore while qty card is open
     if (navigator.vibrate) navigator.vibrate(80);
     countScan(code);
-    // Quick mode keeps the camera open so you can scan many items in a row.
-    // Slow mode closes it as soon as the qty card opens.
-    if (pendingScan && !isQuickMode()) stopCountCamera();
+    // Close the camera as soon as the qty card opens so the user can confirm.
+    if (pendingScan) stopCountCamera();
   }).then(ctrl => {
     countQR = ctrl;
     countCamOpen = true;
