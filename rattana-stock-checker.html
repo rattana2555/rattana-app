@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0d1b3e">
-  <title>Rattana Stock Count v2.14</title>
+  <title>Rattana Stock Count v2.15</title>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="preconnect" href="https://docs.google.com" crossorigin>
@@ -62,6 +62,15 @@
     .btn-sm{padding:5px 10px;font-size:12px;min-height:32px}
     .btn-lg{padding:14px 24px;font-size:15px;min-height:52px;border-radius:var(--radius-md)}
     .btn-block{width:100%;justify-content:center}
+    /* Quick-mode toggle pill */
+    .quick-toggle{display:inline-flex;align-items:center;gap:6px;background:var(--row-alt);border:1.5px solid var(--border);padding:8px 12px;border-radius:24px;cursor:pointer;user-select:none;font-size:13px;font-weight:600;color:var(--muted)}
+    .quick-toggle input{width:18px;height:18px;accent-color:var(--gold);cursor:pointer}
+    .quick-toggle:has(input:checked){background:rgba(201,168,76,.14);border-color:var(--gold);color:var(--navy)}
+    body.dark .quick-toggle:has(input:checked){color:var(--gold-light)}
+    /* Quick qty preset pills */
+    .qty-presets{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:8px 0 4px}
+    .qty-preset{background:var(--row-alt);border:1.5px solid var(--border);color:var(--text);padding:8px 14px;border-radius:20px;font-weight:700;font-size:14px;cursor:pointer;min-width:48px}
+    .qty-preset:hover,.qty-preset:active{background:rgba(201,168,76,.18);border-color:var(--gold)}
 
     .input{height:48px;padding:0 14px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:16px;font-family:inherit;outline:none;width:100%;transition:border-color .15s}
     .input:focus{border-color:var(--gold)}
@@ -340,9 +349,13 @@
           <button class="btn btn-gold" onclick="countScan()" style="flex-shrink:0">นับ</button>
         </div>
         <div class="flex gap-8 mt-8" style="align-items:center;flex-wrap:wrap">
-          <button class="btn btn-outline" id="btnCountCam" onclick="toggleCountCamera()">📷 เปิดกล้อง</button>
-          <span style="font-size:12px;color:var(--muted)">สแกนบาร์โค้ดหน่วยไหน นับตามหน่วยนั้น</span>
+          <button class="btn btn-gold btn-lg" id="btnCountCam" onclick="toggleCountCamera()" style="flex:1;min-width:160px;min-height:50px;font-size:15px">📷 เปิดกล้องเริ่มนับ</button>
+          <label class="quick-toggle" title="สแกน 1 ครั้ง = +1 ชิ้นทันที (ไม่ถามจำนวน)">
+            <input type="checkbox" id="quickMode" onchange="onQuickToggle()" checked>
+            <span>โหมดเร็ว ⚡</span>
+          </label>
         </div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:8px" id="modeHint">โหมดเร็ว: สแกน = +1 อัตโนมัติ · กล้องเปิดต่อให้สแกนรัวได้</div>
         <div id="countCameraSection" style="display:none;margin-top:12px">
           <div id="countReader"><video id="countVideo" playsinline muted autoplay></video></div>
           <div class="scan-hint">วางบาร์โค้ดให้อยู่กลางจอ · ระยะ ~15 ซม. · แสงสว่างพอ</div>
@@ -363,6 +376,9 @@
         </div>
       </div>
       <div class="card-body" style="padding:8px 16px" id="countList"></div>
+      <div style="padding:12px 16px;border-top:1px solid var(--border)">
+        <button class="btn btn-gold btn-block btn-lg" onclick="setMode('summary')">📊 ตรวจสอบและสรุปผล →</button>
+      </div>
     </div>
 
   </div><!-- /modeCount -->
@@ -995,6 +1011,33 @@ function saveCountSession() {
 }
 
 // Scan in count mode → show qty entry card
+function isQuickMode() {
+  const el = document.getElementById('quickMode');
+  return el ? el.checked : true;
+}
+function onQuickToggle() {
+  document.getElementById('modeHint').textContent = isQuickMode()
+    ? 'โหมดเร็ว: สแกน = +1 อัตโนมัติ · กล้องเปิดต่อให้สแกนรัวได้'
+    : 'โหมดถามจำนวน: สแกนเสร็จจะถามว่ากี่ชิ้น';
+}
+
+// Add 1 piece of the scanned unit, skipping the qty popup.
+function quickAdd(product, unit, code) {
+  const key = productKey(product);
+  if (!countSession.items[key]) {
+    countSession.items[key] = {
+      key, name: product['PRODUCT NAME']||'-', short: product['SHORT NAME']||'',
+      factors: { EA:unitFactor(product,'EA'), PA:unitFactor(product,'PA'), BP:unitFactor(product,'BP'), CS:unitFactor(product,'CS') },
+      counts: { EA:0, PA:0, BP:0, CS:0 },
+    };
+  }
+  countSession.items[key].counts[unit] += 1;
+  saveCountSession();
+  renderCountList();
+  showToast(`+1 ${unit} · ${countSession.items[key].name}`, 'success');
+  if (navigator.vibrate) navigator.vibrate(40);
+}
+
 function countScan(code) {
   const inp = document.getElementById('countInput');
   const bc  = (code || inp.value).trim();
@@ -1005,9 +1048,12 @@ function countScan(code) {
     inp.select();
     return;
   }
+  inp.value = '';
+  // Quick mode: +1 immediately, leave the camera open to scan more
+  if (isQuickMode()) { quickAdd(found.product, found.unit, bc); return; }
+  // Slow mode: open the qty card
   pendingScan = { product: found.product, unit: found.unit, code: bc };
   renderPending();
-  inp.value = '';
   if (navigator.vibrate) navigator.vibrate(60);
 }
 
@@ -1031,6 +1077,9 @@ function renderPending() {
             <div style="font-size:12px;color:var(--muted);margin-top:3px">${pendingScan.code} · ${unitName} · 1 ${u} = ${factor} ชิ้น</div>
           </div>
         </div>
+        <div class="qty-presets">
+          ${[1,6,10,12,24].map(n => `<button class="qty-preset" onclick="setQty(${n})">${n}</button>`).join('')}
+        </div>
         <div class="qty-row">
           <button class="qty-btn" onclick="bumpQty(-1)">−</button>
           <input type="number" id="qtyInput" class="qty-input" value="1" min="0" inputmode="numeric">
@@ -1050,6 +1099,11 @@ function renderPending() {
 function bumpQty(d) {
   const q = document.getElementById('qtyInput');
   q.value = Math.max(0, (parseInt(q.value)||0) + d);
+}
+function setQty(n) {
+  const q = document.getElementById('qtyInput');
+  q.value = n;
+  q.focus();
 }
 function cancelPending() {
   pendingScan = null;
@@ -1406,7 +1460,9 @@ function startCountCamera() {
     if (pendingScan) return;               // ignore while qty card is open
     if (navigator.vibrate) navigator.vibrate(80);
     countScan(code);
-    if (pendingScan) stopCountCamera();    // auto-close box once a product is found
+    // Quick mode keeps the camera open so you can scan many items in a row.
+    // Slow mode closes it as soon as the qty card opens.
+    if (pendingScan && !isQuickMode()) stopCountCamera();
   }).then(ctrl => {
     countQR = ctrl;
     countCamOpen = true;
