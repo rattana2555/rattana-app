@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0d1b3e">
-  <title>Rattana Stock Count v2.27</title>
+  <title>Rattana Stock Count v2.28</title>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="preconnect" href="https://docs.google.com" crossorigin>
@@ -465,7 +465,7 @@
 // ── CONFIG ──────────────────────────────────────────────
 const SHEET_ID   = '16mYDqAqqJma-_0vCIAajy6bcjdOZ7F6VagxkdkqAB2I';
 const CACHE_KEY  = 'rattana_stock_v2';   // bumped: schema now includes STOCK C4
-const CACHE_TTL  = 5 * 60 * 1000;
+const CACHE_TTL  = 60 * 1000;   // 1 minute — show cache instantly, refresh fast
 
 const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -508,12 +508,32 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') countScan();
   });
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { if (cameraOpen) stopCamera(); if (countCamOpen) stopCountCamera(); }
+    if (document.hidden) {
+      if (cameraOpen) stopCamera();
+      if (countCamOpen) stopCountCamera();
+      if (draftSyncTimer) { clearTimeout(draftSyncTimer); syncDraftNow(); } // flush pending edits before hiding
+    } else {
+      refreshEverything();   // back to app → re-sync immediately
+    }
   });
-  window.addEventListener('pagehide', () => { if (cameraOpen) stopCamera(); if (countCamOpen) stopCountCamera(); });
+  window.addEventListener('focus',  refreshEverything);
+  window.addEventListener('online', refreshEverything);
+  window.addEventListener('pagehide', () => {
+    if (cameraOpen) stopCamera();
+    if (countCamOpen) stopCountCamera();
+    if (draftSyncTimer) { clearTimeout(draftSyncTimer); syncDraftNow(); } // last-chance flush
+  });
 
   checkSession();
 });
+
+// Re-sync everything that depends on the network the moment focus returns.
+function refreshEverything() {
+  if (!currentUser) return;
+  if (currentMode === 'history') { historyLoaded = false; loadHistory(true); }
+  if (currentMode === 'count')   { fetchAndUpdate(); if (countSession) maybeAdoptRemoteDraft(countSession.warehouse); }
+  if (currentMode === 'summary') { fetchAndUpdate(); renderSummary(); }
+}
 
 // ── AUTH ─────────────────────────────────────────────────
 function decodeJwtPayload(token) {
@@ -1012,7 +1032,7 @@ function setMode(mode) {
     if (!countSession) loadCountSession(visibleWh[0] || 'W1');
     renderSummary();
   } else if (mode==='history') {
-    loadHistory();
+    loadHistory(true);   // always fetch fresh on tab enter
   } else {
     setTimeout(() => document.getElementById('barcodeInput').focus(), 60);
   }
@@ -1063,7 +1083,7 @@ let draftSyncTimer = null;
 function queueDraftSync() {
   if (!COUNT_SAVE_URL || !currentUser || !countSession) return;
   clearTimeout(draftSyncTimer);
-  draftSyncTimer = setTimeout(syncDraftNow, 1500); // debounce 1.5s
+  draftSyncTimer = setTimeout(syncDraftNow, 400); // debounce 0.4s — feels instant
 }
 async function syncDraftNow() {
   if (!COUNT_SAVE_URL || !currentUser || !countSession) return;
