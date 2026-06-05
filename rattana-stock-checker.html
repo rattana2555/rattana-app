@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0d1b3e">
-  <title>Rattana Stock Count v2.35</title>
+  <title>Rattana Stock Count v2.36</title>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="preconnect" href="https://docs.google.com" crossorigin>
@@ -472,7 +472,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v2.35';
+const APP_VERSION = 'v2.36';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -1747,12 +1747,21 @@ function groupSessions(rows) {
     return false;
   };
   const filtered = rows.filter(r => allowedWh.has(String(r.warehouse).toUpperCase()) && isMine(r));
+  // Group by DATE (not full timestamp) so multiple saves in the same day by
+  // the same person at the same warehouse fold into one card.
+  const dayOf = iso => String(iso || '').slice(0, 10);   // "YYYY-MM-DD"
   const map = new Map();
   filtered.forEach(r => {
-    const key = `${r.savedAt}__${r.warehouse}__${r.empId||r.counterName}`;
+    const day = dayOf(r.savedAt);
+    const key = `${day}__${r.warehouse}__${r.empId || r.counterName}`;
     if (!map.has(key)) {
       map.set(key, { savedAt:r.savedAt, sessionStart:r.sessionStart, warehouse:r.warehouse,
                      empId:r.empId, counterName:r.counterName, items:[] });
+    } else {
+      const g = map.get(key);
+      // Keep the most recent save timestamp for display; earliest session start
+      if ((r.savedAt||'') > (g.savedAt||''))     g.savedAt = r.savedAt;
+      if (r.sessionStart && (!g.sessionStart || r.sessionStart < g.sessionStart)) g.sessionStart = r.sessionStart;
     }
     map.get(key).items.push(r);
   });
@@ -1774,7 +1783,7 @@ function renderHistory(rows) {
     return `
       <div class="hist-row" onclick="openHistDetail(${idx})">
         <div style="flex:1;min-width:0">
-          <div class="hist-date">${formatThaiDateTime(s.savedAt)}</div>
+          <div class="hist-date">${formatThaiDate(s.savedAt)}</div>
           <div class="hist-meta">${s.warehouse} · ${WH_NAMES[s.warehouse]||''} · ${who} · ${s.items.length} รายการ</div>
         </div>
         <div class="hist-counts">
@@ -1795,7 +1804,7 @@ function openHistDetail(idx) {
   if (!s) return;
   const pill = st => st==='ตรง'?'hc-ok':st==='ขาด'?'hc-short':'hc-over';
   document.getElementById('histModalTitle').textContent =
-    `${formatThaiDateTime(s.savedAt)} · ${s.warehouse}`;
+    `${formatThaiDate(s.savedAt)} · ${s.warehouse}`;
   const tot = { c:0, sy:0, d:0 };
   const rows = s.items.map(it => {
     tot.c += it.countedPieces; tot.sy += it.systemPieces; tot.d += it.diffPieces;
