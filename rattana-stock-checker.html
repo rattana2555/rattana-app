@@ -375,8 +375,11 @@
                  style="flex:1;min-width:0">
           <button class="btn btn-gold" onclick="countScan()" style="flex-shrink:0;min-height:42px;padding:0 16px">นับ</button>
         </div>
-        <button class="btn btn-gold btn-block" id="btnCountCam" onclick="toggleCountCamera()" style="margin-top:8px;min-height:44px;font-size:14px">📷 เปิดกล้องเริ่มนับ</button>
-        <div style="font-size:11px;color:var(--muted);margin-top:6px;text-align:center">สแกนหน่วยไหน นับตามหน่วยนั้น · ตั้งไว้ที่ 1 แก้ไขได้</div>
+        <div class="flex gap-8" style="margin-top:8px">
+          <button class="btn btn-gold" id="btnCountCam" onclick="toggleCountCamera()" style="flex:1;min-height:44px;font-size:14px">📷 เปิดกล้องเริ่มนับ</button>
+          <button class="btn btn-outline" onclick="forcePullDraft()" title="ดึงรายการที่เคยนับค้างไว้จากเครื่องอื่น" style="min-height:44px;padding:0 14px;font-size:18px">↻</button>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;text-align:center">↻ ดึงรายการที่เคยนับค้างไว้จากเครื่องอื่น</div>
         <div id="countCameraSection" style="display:none;margin-top:12px">
           <div id="countReader"><video id="countVideo" playsinline muted autoplay></video></div>
           <div class="scan-hint">วางบาร์โค้ดให้อยู่กลางจอ · ระยะ ~15 ซม. · แสงสว่างพอ</div>
@@ -481,7 +484,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v2.46';
+const APP_VERSION = 'v2.47';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -1218,6 +1221,39 @@ async function clearRemoteDraft(wh) {
     });
   } catch {}
 }
+// Manual override — bypass the 30s guard, fetch the remote draft and adopt it
+// even if local has items. Used when the user knows another device has the
+// authoritative state.
+async function forcePullDraft() {
+  if (!COUNT_SAVE_URL || !currentUser || !countSession) {
+    showToast('ยังไม่พร้อม — รอเข้าระบบให้เรียบร้อย', 'warning');
+    return;
+  }
+  const wh = countSession.warehouse;
+  showSpinner('กำลังดึงรายการค้าง...');
+  try {
+    delete recentlySavedAt[wh];
+    const remote = await fetchRemoteDraft(wh);
+    console.log('forcePullDraft remote =', remote);
+    if (!remote || !remote.items || !Object.keys(remote.items).length) {
+      showToast('ไม่มีรายการค้างไว้ในระบบ', 'info');
+      return;
+    }
+    if (Object.keys(countSession.items || {}).length &&
+        !confirm(`พบ ${Object.keys(remote.items).length} รายการในระบบ — แทนที่รายการในเครื่องตอนนี้?`)) return;
+    countSession = { warehouse: wh, startedAt: remote.sessionStart || new Date().toISOString(),
+                     items: remote.items, lastEdit: remote.updatedAt, syncedAt: remote.updatedAt };
+    try { localStorage.setItem(countStoreKey(wh), JSON.stringify(countSession)); } catch {}
+    renderCountList();
+    showToast(`โหลด ${Object.keys(remote.items).length} รายการแล้ว ✓`, 'success');
+  } catch (e) {
+    showToast('โหลดไม่สำเร็จ: ' + (e.message || e), 'error');
+    console.error('forcePullDraft error', e);
+  } finally {
+    hideSpinner();
+  }
+}
+
 // Pull newest draft from Sheet — last-write-wins by updatedAt.
 // Always compares to the LOCAL last-edit timestamp (set on every save / clear),
 // so a fresh save+clear is never overwritten by a stale remote read that
