@@ -2502,14 +2502,55 @@ function buildPdfPreview() {
     return;
   }
   // Slice products into pages by perPage count
-  const perPage = [1,2,4,6].includes(SHEET_CONFIG.perPage) ? SHEET_CONFIG.perPage : 4;
+  const perPage = [1,2,4,6,12,16].includes(SHEET_CONFIG.perPage) ? SHEET_CONFIG.perPage : 4;
   const pages = [];
   for (let i = 0; i < sel.length; i += perPage) pages.push(sel.slice(i, i+perPage));
   const w = window.innerWidth;
   const scale = w <= 880 ? 0.42 : (w <= 1100 ? 0.65 : 0.85);
+  // v2.6: Build promo header (only for layout 12/16)
+  const buildPromoHeader = () => {
+    if (perPage !== 12 && perPage !== 16) return '';
+    const title = escapeHtml(SHEET_CONFIG.promoTitle || 'โปรโมชั่นเด็ดห้ามพลาด!');
+    const sub   = escapeHtml(SHEET_CONFIG.promoSubtitle || '');
+    const ds    = SHEET_CONFIG.promoStart, de = SHEET_CONFIG.promoEnd;
+    let dateRange = '';
+    if (ds || de) {
+      const fmt = d => d ? formatThaiDate(d).split(' ')[0] : '—';
+      dateRange = `${fmt(ds)} → ${fmt(de)}`;
+    }
+    const bg = SHEET_CONFIG.promoBg ? `background-image:url('${escapeAttr(SHEET_CONFIG.promoBg)}');background-size:cover;background-position:center` : '';
+    return `
+      <div class="promo-header" style="${bg}">
+        <div class="promo-header-overlay"></div>
+        ${dateRange ? `<div class="promo-date-badge">📅 ${escapeHtml(dateRange)}</div>` : ''}
+        <div class="promo-brand">
+          <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <rect width="100" height="100" rx="14" fill="#0d1b3e"/>
+            <g fill="#fbbf24">
+              <rect x="19" y="34" width="11" height="6" rx="1.5"/>
+              <path d="M30 42 L80 42 L80 49 L30 49 Z"/>
+              <path d="M32 52 L80 52 L74 71 L43 71 Z"/>
+              <circle cx="48" cy="78" r="5"/>
+              <circle cx="66" cy="78" r="5"/>
+            </g>
+          </svg>
+          <div class="promo-brand-text">
+            <div class="promo-brand-th">รัตน<b>มาร์ท</b></div>
+            <div class="promo-brand-en">RATTANA MART</div>
+          </div>
+        </div>
+        <div class="promo-title-wrap">
+          <div class="promo-title">${title}</div>
+          ${sub ? `<div class="promo-subtitle">${sub}</div>` : ''}
+        </div>
+      </div>`;
+  };
   const innerHTML = pages.map((page, pi) => `
     <div class="pdf-page layout-${perPage}" id="pdf-page-${pi}">
-      ${page.map(p => renderTag(p, 'pdf-p'+pi, perPage).html).join('')}
+      ${buildPromoHeader()}
+      <div class="pdf-page-grid">
+        ${page.map(p => renderTag(p, 'pdf-p'+pi, perPage).html).join('')}
+      </div>
     </div>
   `).join('');
   // px equivalents (A4 portrait): ≈ 794 × 1123 px @ 96dpi
