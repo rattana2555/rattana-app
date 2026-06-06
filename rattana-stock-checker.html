@@ -481,7 +481,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v2.45';
+const APP_VERSION = 'v2.46';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -766,6 +766,28 @@ function unitFactor(p, u) {
   if (u === 'EA') return 1;
   const q = parseFloat(p[`QTY ${u}`]);
   return (!isNaN(q) && q > 0) ? q : 1;
+}
+
+// List of all unit pack-sizes the product has (e.g. ชิ้นx1(EA) · แพ็คx6(PA) · ลังx24(CS)).
+// `scannedUnit` is highlighted so the user sees which pack they just scanned.
+function unitListHtml(product, scannedUnit) {
+  if (!product) return '';
+  const rows = ['EA','PA','BP','CS']
+    .map(u => ({ u, label: String(product[`UNIT ${u}`] || '').trim() }))
+    .filter(x => x.label && x.label !== '0' && x.label !== '-');
+  if (!rows.length) return '';
+  return `
+    <div style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--border)">
+      <div style="font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">หน่วย / บรรจุ</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${rows.map(r => {
+          const active = r.u === scannedUnit;
+          return `<span class="badge ${UNIT_CSS[r.u]||''}" style="${active?'box-shadow:0 0 0 2px var(--gold);font-weight:700':'opacity:.85;font-weight:600'};padding:5px 10px;font-size:11.5px">
+            ${r.u} · ${r.label}
+          </span>`;
+        }).join('')}
+      </div>
+    </div>`;
 }
 
 // IB W*/C4 cells look like:  "2026/05/28 VOLUME 60.0 FREE 0.0 VALUE 2922.00"
@@ -1274,6 +1296,7 @@ function renderPending() {
             <div style="margin-top:6px">${ibBadgeHtml(p, countSession && countSession.warehouse)}</div>
           </div>
         </div>
+        ${unitListHtml(p, u)}
         ${(() => {
           const ib = ibInfo(p, countSession && countSession.warehouse);
           const required = ib && ib.expired;
