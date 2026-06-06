@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0d1b3e">
-  <title>Rattana Stock Count v2.38</title>
+  <title>Rattana Stock Count v2.39</title>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="preconnect" href="https://docs.google.com" crossorigin>
@@ -472,7 +472,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v2.38';
+const APP_VERSION = 'v2.39';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -1794,19 +1794,30 @@ function renderHistory(rows) {
         <span style="color:var(--muted);font-size:18px">›</span>
       </div>`;
   }).join('');
-  // store grouped data for detail lookup
+  // Store grouped data on the container AND on window as a belt-and-suspenders fallback
   body._sessions = sessions;
-  // Event delegation — robust against inline-onclick quirks / minifiers
-  body.onclick = (e) => {
-    const row = e.target.closest('.hist-row');
-    if (row && row.dataset.idx != null) openHistDetail(+row.dataset.idx);
-  };
+  window._histSessions = sessions;
 }
 
+// Global delegated click — bound once on script load, survives every
+// innerHTML replacement that renderHistory does on refresh.
+document.addEventListener('click', function (e) {
+  const row = e.target && e.target.closest && e.target.closest('.hist-row');
+  if (!row) return;
+  const idx = parseInt(row.dataset.idx, 10);
+  if (!isFinite(idx)) return;
+  try { openHistDetail(idx); }
+  catch (err) {
+    console.error('openHistDetail failed:', err);
+    showToast('เปิดรายละเอียดไม่สำเร็จ: ' + (err.message || err), 'error');
+  }
+}, true);
+
 function openHistDetail(idx) {
-  const sessions = document.getElementById('historyBody')._sessions || [];
+  const body = document.getElementById('historyBody');
+  const sessions = (body && body._sessions) || window._histSessions || [];
   const s = sessions[idx];
-  if (!s) return;
+  if (!s) { console.warn('openHistDetail: no session at idx', idx, 'of', sessions.length); return; }
   const pill = st => st==='ตรง'?'hc-ok':st==='ขาด'?'hc-short':'hc-over';
   document.getElementById('histModalTitle').textContent =
     `${formatThaiDate(s.savedAt)} · ${s.warehouse}`;
