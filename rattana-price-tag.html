@@ -2235,6 +2235,133 @@ function switchTab(name) {
 }
 
 /* ============== LOAD PRODUCTS ============== */
+/* ====================================================================
+   v2.7 — AI DESIGN STUDIO
+   ==================================================================== */
+const AI_BG_GALLERY = [
+  { label: 'Sale Burst',    url: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1200&q=80' },
+  { label: 'Gold Luxury',   url: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=1200&q=80' },
+  { label: 'Festival',      url: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?w=1200&q=80' },
+  { label: 'Fresh Market',  url: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=1200&q=80' },
+  { label: 'Sunset Glow',   url: 'https://images.unsplash.com/photo-1505968409348-bd000797c92e?w=1200&q=80' },
+  { label: 'Tropical',      url: 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?w=1200&q=80' },
+  { label: 'Bokeh Lights',  url: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&q=80' },
+  { label: 'Vintage Paper', url: 'https://images.unsplash.com/photo-1506466010722-395aa2bef877?w=1200&q=80' },
+  { label: 'Neon Cyber',    url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1200&q=80' },
+  { label: 'Confetti',      url: 'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=1200&q=80' },
+  { label: 'Songkran',      url: 'https://images.unsplash.com/photo-1530686577540-37dc8b8a73a8?w=1200&q=80' },
+  { label: 'New Year',      url: 'https://images.unsplash.com/photo-1467810563316-b5476525c0f9?w=1200&q=80' },
+];
+
+const AI_TITLE_PRESETS = [
+  'โปรโมชั่นเด็ดห้ามพลาด!',
+  'ลดสุดๆ ของดีราคาประหยัด',
+  'ราคาทุบสถิติ!',
+  'ช้อปเลย ก่อนของหมด',
+  'พิเศษเฉพาะเดือนนี้',
+  'ดีลเด็ด ห้ามรอ!',
+  'ราคาดีที่สุดในย่าน',
+  'ลดล้างสต๊อก!',
+  'ข้อเสนอสุดพิเศษ',
+  '🔥 ราคาร้อนแรง 🔥',
+  '⚡ เด็ดสุดสัปดาห์นี้ ⚡',
+  '✨ Mid Year Sale ✨',
+];
+
+const HEADER_STYLE_GRADIENTS = {
+  navy:   { bg: 'linear-gradient(135deg,#0a1428 0%,#0d1b3e 45%,#1e293b 100%)', title:'#fbbf24', sub:'#fff',  badge:'linear-gradient(135deg,#fbbf24,#d97706)', text:'#fff' },
+  sunset: { bg: 'linear-gradient(135deg,#dc2626 0%,#ea580c 50%,#fbbf24 100%)', title:'#fff',    sub:'#fff',  badge:'linear-gradient(135deg,#fff,#fde047)',     text:'#7f1d1d' },
+  ocean:  { bg: 'linear-gradient(135deg,#0891b2 0%,#0e7490 45%,#082f49 100%)', title:'#fde047', sub:'#cffafe',badge:'linear-gradient(135deg,#fde047,#fbbf24)',text:'#082f49' },
+  royal:  { bg: 'linear-gradient(135deg,#581c87 0%,#7c3aed 50%,#a855f7 100%)', title:'#fbbf24', sub:'#fff',  badge:'linear-gradient(135deg,#fbbf24,#d97706)',text:'#581c87' },
+  cyber:  { bg: 'linear-gradient(135deg,#020617 0%,#0f172a 50%,#020617 100%)', title:'#22d3ee', sub:'#a855f7',badge:'linear-gradient(135deg,#22d3ee,#a855f7)',text:'#020617' },
+  garden: { bg: 'linear-gradient(135deg,#065f46 0%,#10b981 50%,#86efac 100%)', title:'#fff',    sub:'#d1fae5',badge:'linear-gradient(135deg,#fde047,#fbbf24)',text:'#065f46' },
+};
+
+function applyHeaderStyle(style) {
+  if (!HEADER_STYLE_GRADIENTS[style]) return;
+  SHEET_CONFIG.headerStyle = style;
+  localStorage.setItem('rattanaPriceTag_headerStyle', style);
+  // Update active state in UI
+  document.querySelectorAll('.ai-style').forEach(el => {
+    el.classList.toggle('active', el.dataset.style === style);
+  });
+  // Apply CSS variables for the style to all promo headers
+  const s = HEADER_STYLE_GRADIENTS[style];
+  document.documentElement.style.setProperty('--ph-bg',    s.bg);
+  document.documentElement.style.setProperty('--ph-title', s.title);
+  document.documentElement.style.setProperty('--ph-sub',   s.sub);
+  document.documentElement.style.setProperty('--ph-badge', s.badge);
+  document.documentElement.style.setProperty('--ph-badge-text', s.text);
+  // Re-render previews
+  if ($('#tab-print')?.classList.contains('active')) buildPdfPreview();
+  showToast(`สไตล์ "${style}" ใช้งานแล้ว ✨`, 'success');
+}
+
+function applyPromoBg(url, label) {
+  $('#cfgPromoBg').value = url;
+  SHEET_CONFIG.promoBg = url;
+  document.querySelectorAll('.ai-bg-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.url === url);
+  });
+  // persist
+  const cfg = JSON.parse(localStorage.getItem(STORAGE.config) || '{}');
+  cfg.promoBg = url;
+  localStorage.setItem(STORAGE.config, JSON.stringify(cfg));
+  if ($('#tab-print')?.classList.contains('active')) buildPdfPreview();
+  if (label) showToast(`ใช้พื้นหลัง "${label}" ✨`, 'success');
+}
+
+function clearPromoBg() {
+  $('#cfgPromoBg').value = '';
+  SHEET_CONFIG.promoBg = '';
+  document.querySelectorAll('.ai-bg-item').forEach(el => el.classList.remove('active'));
+  const cfg = JSON.parse(localStorage.getItem(STORAGE.config) || '{}');
+  cfg.promoBg = '';
+  localStorage.setItem(STORAGE.config, JSON.stringify(cfg));
+  if ($('#tab-print')?.classList.contains('active')) buildPdfPreview();
+  showToast('ล้างรูปพื้นหลังแล้ว', 'info');
+}
+
+function applyPromoTitle(text) {
+  $('#cfgPromoTitle').value = text;
+  SHEET_CONFIG.promoTitle = text;
+  const cfg = JSON.parse(localStorage.getItem(STORAGE.config) || '{}');
+  cfg.promoTitle = text;
+  localStorage.setItem(STORAGE.config, JSON.stringify(cfg));
+  if ($('#tab-print')?.classList.contains('active')) buildPdfPreview();
+  showToast(`ใช้ข้อความ "${text}" ✨`, 'success');
+}
+
+function initAIStudio() {
+  // Populate background gallery
+  const grid = $('#aiBgGrid');
+  if (grid) {
+    grid.innerHTML = AI_BG_GALLERY.map(item => `
+      <div class="ai-bg-item" data-url="${escapeAttr(item.url)}"
+           style="background-image:url('${escapeAttr(item.url)}')"
+           onclick="applyPromoBg('${escapeAttr(item.url)}','${escapeAttr(item.label)}')">
+        <div class="ai-bg-item-label">${escapeHtml(item.label)}</div>
+      </div>`).join('');
+  }
+  // Populate title chips
+  const chips = $('#aiTitleChips');
+  if (chips) {
+    chips.innerHTML = AI_TITLE_PRESETS.map(t => `
+      <button class="ai-title-chip" onclick="applyPromoTitle('${escapeAttr(t)}')">${escapeHtml(t)}</button>
+    `).join('');
+  }
+  // Apply saved style (default to navy)
+  const savedStyle = localStorage.getItem('rattanaPriceTag_headerStyle') || 'navy';
+  SHEET_CONFIG.headerStyle = savedStyle;
+  applyHeaderStyle(savedStyle);
+  // Apply saved bg
+  if (SHEET_CONFIG.promoBg) {
+    document.querySelectorAll('.ai-bg-item').forEach(el => {
+      if (el.dataset.url === SHEET_CONFIG.promoBg) el.classList.add('active');
+    });
+  }
+}
+
 /* v2.7 — Ink-saving mode toggle (white bg, minimal color) */
 function toggleInkSave() {
   const on = $('#cfgInkSave')?.checked || false;
