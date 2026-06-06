@@ -213,6 +213,9 @@
     .qty-row{display:flex;align-items:center;gap:10px;justify-content:center;margin:10px 0}
     .qty-btn{width:48px;height:48px;border-radius:var(--radius-md);border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:24px;font-weight:700;cursor:pointer}
     .qty-input{width:96px;height:52px;text-align:center;font-size:24px;font-weight:700;border:1.5px solid var(--gold);border-radius:var(--radius-md);background:var(--card-bg);color:var(--text)}
+    .qty-btn-sm{width:42px;height:42px;font-size:20px;border-radius:var(--radius-sm)}
+    .qty-input-sm{width:84px;height:44px;font-size:20px;border-radius:var(--radius-sm)}
+    .qty-row{display:flex;align-items:center;justify-content:center;gap:8px}
     /* Modal */
     .modal-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.65);z-index:9000;align-items:flex-start;justify-content:center;padding:12px;backdrop-filter:blur(4px);overflow-y:auto}
     .modal-overlay.open{display:flex}
@@ -484,7 +487,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v2.47';
+const APP_VERSION = 'v2.48';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -1318,45 +1321,48 @@ function renderPending() {
   const name = p['PRODUCT NAME'] || '-';
   const factor = unitFactor(p, u);
   const unitName = p[`RATTANA UNIT ${u}`] || p[`UNIT ${u}`] || u;
+  // Mini chips of every pack the product has — far more compact than the full list block
+  const packChips = ['EA','PA','BP','CS']
+    .map(uu => ({ uu, lbl: String(p[`UNIT ${uu}`]||'').trim() }))
+    .filter(x => x.lbl && x.lbl !== '0' && x.lbl !== '-')
+    .map(x => `<span class="badge ${UNIT_CSS[x.uu]||''}" style="padding:2px 7px;font-size:10.5px;${x.uu===u?'box-shadow:0 0 0 1.5px var(--gold)':'opacity:.7'}">${x.lbl}</span>`)
+    .join(' ');
   el.innerHTML = `
-    <div class="card card-gold mt-12">
-      <div class="card-body">
-        <div class="flex" style="gap:12px;align-items:center">
-          ${thumbHtml(name, pendingScan.product, true)}
+    <div class="card card-gold mt-8 pending-card">
+      <div class="card-body" style="padding:12px">
+        <div class="flex" style="gap:10px;align-items:flex-start">
+          ${thumbHtml(name, pendingScan.product, false)}
           <div style="flex:1;min-width:0">
-            <div class="flex" style="gap:8px;align-items:center">
-              <span class="badge ${UNIT_CSS[u]||''}" style="flex-shrink:0">${u}</span>
-              <div style="font-size:15px;font-weight:700;line-height:1.3;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</div>
+            <div class="flex" style="gap:6px;align-items:center">
+              <span class="badge ${UNIT_CSS[u]||''}" style="flex-shrink:0;padding:2px 7px;font-size:11px">${u}</span>
+              <div style="font-size:13.5px;font-weight:700;line-height:1.25;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</div>
             </div>
-            <div style="font-size:12px;color:var(--muted);margin-top:3px">${pendingScan.code} · ${unitName} · 1 ${u} = ${factor} ชิ้น</div>
-            <div style="margin-top:6px">${ibBadgeHtml(p, countSession && countSession.warehouse)}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">${pendingScan.code} · 1 ${u} = ${factor} ชิ้น</div>
+            ${packChips ? `<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px">${packChips}</div>` : ''}
+            <div style="margin-top:5px">${ibBadgeHtml(p, countSession && countSession.warehouse)}</div>
           </div>
         </div>
-        ${unitListHtml(p, u)}
         ${(() => {
           const ib = ibInfo(p, countSession && countSession.warehouse);
           const required = ib && ib.expired;
           const cur = (countSession.items[productKey(p)] && countSession.items[productKey(p)].expiryDate) || '';
           return `
-        <div class="field" style="margin-top:14px">
-          <label style="font-size:11px;font-weight:700;${required?'color:var(--danger)':'color:var(--muted)'};text-transform:uppercase;letter-spacing:.4px">
-            📅 วันหมดอายุ ${required ? '<span>* จำเป็น (สินค้าเกิน 90 วัน)</span>' : '(ไม่บังคับ)'}
+        <div class="field" style="margin-top:10px">
+          <label style="font-size:10.5px;font-weight:700;${required?'color:var(--danger)':'color:var(--muted)'};text-transform:uppercase;letter-spacing:.3px">
+            📅 วันหมดอายุ ${required ? '<span>* จำเป็น</span>' : '(ไม่บังคับ)'}
           </label>
-          <input type="date" id="expiryInput" class="input" style="margin-top:4px;height:46px;font-size:15px;${required?'border-color:var(--danger);background:rgba(224,72,58,.04)':''}"
+          <input type="date" id="expiryInput" class="input input-compact" style="margin-top:3px;${required?'border-color:var(--danger);background:rgba(224,72,58,.04)':''}"
                  value="${cur}" ${required ? 'required' : ''}>
         </div>`;
         })()}
-        <div class="qty-presets">
-          ${[1,6,10,12,24].map(n => `<button class="qty-preset" onclick="setQty(${n})">${n}</button>`).join('')}
-        </div>
-        <div class="qty-row">
-          <button class="qty-btn" onclick="bumpQty(-1)">−</button>
-          <input type="number" id="qtyInput" class="qty-input" value="1" min="0" inputmode="numeric">
-          <button class="qty-btn" onclick="bumpQty(1)">+</button>
+        <div class="qty-row" style="margin:10px 0 8px">
+          <button class="qty-btn qty-btn-sm" onclick="bumpQty(-1)">−</button>
+          <input type="number" id="qtyInput" class="qty-input qty-input-sm" value="1" min="0" inputmode="numeric">
+          <button class="qty-btn qty-btn-sm" onclick="bumpQty(1)">+</button>
         </div>
         <div class="flex gap-8">
-          <button class="btn btn-outline btn-block" onclick="cancelPending()">ยกเลิก</button>
-          <button class="btn btn-gold btn-block" onclick="confirmCount()">✓ บันทึกจำนวน</button>
+          <button class="btn btn-outline btn-block" style="min-height:40px;font-size:13px" onclick="cancelPending()">ยกเลิก</button>
+          <button class="btn btn-gold btn-block" style="min-height:40px;font-size:13px" onclick="confirmCount()">✓ บันทึก</button>
         </div>
       </div>
     </div>`;
