@@ -338,7 +338,10 @@
 
       <div id="cameraSection" style="display:none;margin-top:12px">
         <div id="reader"><video id="readerVideo" playsinline muted autoplay></video></div>
-        <div class="scan-hint">วางบาร์โค้ดให้อยู่กลางจอ · ระยะ ~15 ซม. · แสงสว่างพอ</div>
+        <div class="flex gap-8" style="margin-top:8px;justify-content:center">
+          <button class="btn btn-outline btn-torch" onclick="toggleTorch()" style="display:none;min-height:36px;font-size:13px">🔦 เปิดไฟ</button>
+        </div>
+        <div class="scan-hint">วางบาร์ให้อยู่ในกรอบ · ขยับใกล้/ไกล · ถ้าสะท้อนแสงให้เอียงเล็กน้อย · กดไฟช่วยถ้ามืด</div>
       </div>
     </div>
   </div>
@@ -385,7 +388,10 @@
         <div style="font-size:11px;color:var(--muted);margin-top:6px;text-align:center">↻ ดึงรายการที่เคยนับค้างไว้จากเครื่องอื่น</div>
         <div id="countCameraSection" style="display:none;margin-top:12px">
           <div id="countReader"><video id="countVideo" playsinline muted autoplay></video></div>
-          <div class="scan-hint">วางบาร์โค้ดให้อยู่กลางจอ · ระยะ ~15 ซม. · แสงสว่างพอ</div>
+          <div class="flex gap-8" style="margin-top:8px;justify-content:center">
+            <button class="btn btn-outline btn-torch" onclick="toggleTorch()" style="display:none;min-height:36px;font-size:13px">🔦 เปิดไฟ</button>
+          </div>
+          <div class="scan-hint">วางบาร์ให้อยู่ในกรอบ · ขยับใกล้/ไกล · ถ้าสะท้อนแสงให้เอียงเล็กน้อย · กดไฟช่วยถ้ามืด</div>
         </div>
       </div>
     </div>
@@ -486,7 +492,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v2.49';
+const APP_VERSION = 'v2.50';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -1002,20 +1008,80 @@ function acceptScan(code) {
 
 // ZXing reader: decodes the FULL video frame (great 1D support on iOS & Android).
 // Tries rear camera (environment) first, falls back to default device.
+let currentStream = null;     // MediaStream of the active camera (for torch)
+let torchOn = false;
+
+// ZXing decode hints — TRY_HARDER (slower but better at small/wrinkled barcodes)
+// + ALSO_INVERTED for white-on-black labels.
+function zxingHints() {
+  if (!window.ZXingBrowser || !ZXingBrowser.DecodeHintType) return undefined;
+  const H = ZXingBrowser.DecodeHintType;
+  const hints = new Map();
+  hints.set(H.TRY_HARDER, true);
+  if (H.ALSO_INVERTED) hints.set(H.ALSO_INVERTED, true);
+  if (H.POSSIBLE_FORMATS && ZXingBrowser.BarcodeFormat) {
+    const F = ZXingBrowser.BarcodeFormat;
+    hints.set(H.POSSIBLE_FORMATS, [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.ITF].filter(Boolean));
+  }
+  return hints;
+}
+
 async function startScanner(videoElId, onDetected) {
-  const reader = new ZXingBrowser.BrowserMultiFormatReader(undefined, { delayBetweenScanAttempts: 120 });
+  const reader = new ZXingBrowser.BrowserMultiFormatReader(zxingHints(), { delayBetweenScanAttempts: 80 });
   const videoEl = document.getElementById(videoElId);
   const cb = (result) => { if (result) { const t = result.getText(); if (acceptScan(t)) onDetected(t); } };
+  // Ask for the best rear-cam: 1920x1080 + continuous focus. Silently downgraded if unsupported.
+  const hi = {
+    video: {
+      facingMode: { ideal: 'environment' },
+      width:  { ideal: 1920 },
+      height: { ideal: 1080 },
+      frameRate: { ideal: 30 },
+      advanced: [{ focusMode: 'continuous' }, { whiteBalanceMode: 'continuous' }],
+    }
+  };
   let controls;
   try {
-    controls = await reader.decodeFromConstraints(
-      { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
-      videoEl, cb
-    );
+    controls = await reader.decodeFromConstraints(hi, videoEl, cb);
   } catch (e1) {
-    controls = await reader.decodeFromVideoDevice(undefined, videoEl, cb);
+    try {
+      controls = await reader.decodeFromConstraints(
+        { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
+        videoEl, cb);
+    } catch (e2) {
+      controls = await reader.decodeFromVideoDevice(undefined, videoEl, cb);
+    }
   }
+  currentStream = videoEl.srcObject || null;
+  torchOn = false;
+  updateTorchButton();
   return controls;
+}
+
+// ── Torch (flashlight) — only shown when the device supports it ──
+function videoTrack() { return currentStream ? currentStream.getVideoTracks()[0] : null; }
+function torchSupported() {
+  const t = videoTrack();
+  if (!t || !t.getCapabilities) return false;
+  return !!t.getCapabilities().torch;
+}
+function updateTorchButton() {
+  document.querySelectorAll('.btn-torch').forEach(b => {
+    b.style.display = torchSupported() ? 'inline-flex' : 'none';
+    b.textContent = torchOn ? '🔦 ปิดไฟ' : '🔦 เปิดไฟ';
+  });
+}
+async function toggleTorch() {
+  const t = videoTrack();
+  if (!t) return;
+  try {
+    torchOn = !torchOn;
+    await t.applyConstraints({ advanced: [{ torch: torchOn }] });
+    updateTorchButton();
+  } catch {
+    torchOn = false;
+    showToast('เปิดไฟกล้องไม่ได้บนอุปกรณ์นี้', 'warning');
+  }
 }
 
 function startCamera() {
@@ -1042,6 +1108,7 @@ function startCamera() {
 
 function stopCamera() {
   if (html5QR) { try { html5QR.stop(); } catch {} html5QR = null; }
+  currentStream = null; torchOn = false;
   cameraOpen = false;
   document.getElementById('cameraSection').style.display = 'none';
   setScannerUI(false);
@@ -1978,6 +2045,7 @@ function startCountCamera() {
 }
 function stopCountCamera() {
   if (countQR) { try { countQR.stop(); } catch {} countQR = null; }
+  currentStream = null; torchOn = false;
   countCamOpen = false;
   document.getElementById('countCameraSection').style.display = 'none';
   document.getElementById('countDot').className = 'scanner-dot';
