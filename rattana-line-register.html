@@ -480,6 +480,10 @@
           <label class="source-item"><input type="radio" name="source" value="รีวิวจากบล็อกเกอร์ หรือเพจต่างๆ"> <span data-i18n="source.blogger">รีวิวจากบล็อกเกอร์ หรือเพจต่างๆ</span></label>
           <label class="source-item"><input type="radio" name="source" value="other"> <span data-i18n="source.other">อื่นๆ (โปรดระบุ)</span></label>
         </div>
+        <div class="field" id="sourceStaffField" style="display:none">
+          <label class="flabel"><span data-i18n="field.staffName">ชื่อพนักงานที่แนะนำ</span></label>
+          <input class="input" type="text" id="sourceStaff" data-i18n-ph="ph.staffName" placeholder="ระบุชื่อพนักงาน (ถ้าทราบ)">
+        </div>
         <div class="field" id="sourceOtherField" style="display:none">
           <label class="flabel"><span data-i18n="field.specify">โปรดระบุ</span><span class="req">*</span></label>
           <input class="input" type="text" id="sourceOther" data-i18n-ph="ph.specify" placeholder="ระบุช่องทาง">
@@ -529,7 +533,8 @@ const I18N = {
     'login.title':'เข้าสู่ระบบ','login.subtitle':'กรอกเบอร์โทรและวันเกิดที่ลงทะเบียนไว้',
     'field.phone':'เบอร์โทรศัพท์','field.dob':'วัน/เดือน/ปีเกิด','field.firstName':'ชื่อ','field.lastName':'นามสกุล',
     'field.address':'บ้านเลขที่ / หมู่ / ซอย / ถนน','field.province':'จังหวัด','field.district':'เขต/อำเภอ','field.subDistrict':'แขวง/ตำบล',
-    'field.postcode':'รหัสไปรษณีย์','field.specify':'โปรดระบุ',
+    'field.postcode':'รหัสไปรษณีย์','field.specify':'โปรดระบุ','field.staffName':'ชื่อพนักงานที่แนะนำ',
+    'ph.staffName':'ระบุชื่อพนักงาน (ถ้าทราบ)',
     'ph.firstName':'ชื่อจริง','ph.lastName':'นามสกุล','ph.address':'123 หมู่ 4 ถนน...','ph.postcode':'กรอกอัตโนมัติ','ph.specify':'ระบุช่องทาง',
     'hint.phone':'กรอกเบอร์ก่อน — ระบบจะตรวจสอบและดึงข้อมูลเดิมให้',
     'dob.day':'วัน','dob.month':'เดือน','dob.year':'พ.ศ.',
@@ -566,7 +571,8 @@ const I18N = {
     'login.title':'Sign In','login.subtitle':'Enter your registered phone number and date of birth',
     'field.phone':'Phone Number','field.dob':'Date of Birth','field.firstName':'First Name','field.lastName':'Last Name',
     'field.address':'House No. / Moo / Soi / Road','field.province':'Province','field.district':'District','field.subDistrict':'Sub-district',
-    'field.postcode':'Postal Code','field.specify':'Please Specify',
+    'field.postcode':'Postal Code','field.specify':'Please Specify','field.staffName':'Recommending Staff Name',
+    'ph.staffName':'Staff name (if known)',
     'ph.firstName':'First name','ph.lastName':'Last name','ph.address':'123 Moo 4 Road...','ph.postcode':'Auto-filled','ph.specify':'Specify source',
     'hint.phone':'Enter phone first — system will look up existing records',
     'dob.day':'Day','dob.month':'Month','dob.year':'Year',
@@ -956,7 +962,9 @@ document.querySelectorAll('.source-item').forEach(label => {
   label.addEventListener('click', () => {
     document.querySelectorAll('.source-item').forEach(s => s.classList.remove('selected'));
     label.classList.add('selected');
-    document.getElementById('sourceOtherField').style.display = (label.querySelector('input').value === 'other') ? 'flex' : 'none';
+    const v = label.querySelector('input').value;
+    document.getElementById('sourceOtherField').style.display = v === 'other' ? 'flex' : 'none';
+    document.getElementById('sourceStaffField').style.display = v.indexOf('สื่อโฆษณาหน้าร้าน') > -1 ? 'flex' : 'none';
   });
 });
 
@@ -1038,10 +1046,11 @@ function switchMember() {
 //  Form helpers
 // ════════════════════════════════════════════════
 function clearForm() {
-  ['firstName','lastName','phone','address','sourceOther'].forEach(id => document.getElementById(id).value = '');
+  ['firstName','lastName','phone','address','sourceOther','sourceStaff'].forEach(id => document.getElementById(id).value = '');
   document.querySelectorAll('input[name="source"]').forEach(r => r.checked = false);
   document.querySelectorAll('.source-item').forEach(s => s.classList.remove('selected'));
   document.getElementById('sourceOtherField').style.display = 'none';
+  document.getElementById('sourceStaffField').style.display = 'none';
   resetDD('ddProvince','-- เลือกจังหวัด --');
   resetDD('ddDistrict','-- เลือกจังหวัดก่อน --');
   resetDD('ddSubDistrict','-- เลือกอำเภอก่อน --');
@@ -1067,9 +1076,18 @@ function fillFormFromMember(d) {
     'สื่อโฆษณาหน้าร้าน / พนักงานแนะนำ','รีวิวจากบล็อกเกอร์ หรือเพจต่างๆ'
   ];
   if (d.source) {
-    if (knownSources.includes(d.source)) {
-      const radio = document.querySelector(`input[name="source"][value="${d.source.replace(/"/g,'\\"')}"]`);
+    // ตรวจ pattern "X (พนักงาน: Y)"
+    const staffMatch = d.source.match(/^(.+?)\s*\(พนักงาน:\s*(.+?)\)\s*$/);
+    const baseSource = staffMatch ? staffMatch[1].trim() : d.source;
+    const staffName  = staffMatch ? staffMatch[2].trim() : '';
+
+    if (knownSources.includes(baseSource)) {
+      const radio = document.querySelector(`input[name="source"][value="${baseSource.replace(/"/g,'\\"')}"]`);
       if (radio) { radio.checked = true; radio.closest('.source-item').classList.add('selected'); }
+      if (baseSource.indexOf('สื่อโฆษณาหน้าร้าน') > -1) {
+        document.getElementById('sourceStaffField').style.display = 'flex';
+        document.getElementById('sourceStaff').value = staffName;
+      }
     } else {
       const other = document.querySelector('input[name="source"][value="other"]');
       other.checked = true; other.closest('.source-item').classList.add('selected');
@@ -1299,7 +1317,14 @@ async function submitForm() {
   const address   = document.getElementById('address').value.trim();
   const sourceRadio = document.querySelector('input[name="source"]:checked');
   const sourceOther = document.getElementById('sourceOther').value.trim();
-  const source = !sourceRadio ? '' : (sourceRadio.value === 'other' ? sourceOther : sourceRadio.value);
+  const sourceStaff = document.getElementById('sourceStaff').value.trim();
+  let source = '';
+  if (sourceRadio) {
+    if (sourceRadio.value === 'other') source = sourceOther;
+    else if (sourceRadio.value.indexOf('สื่อโฆษณาหน้าร้าน') > -1 && sourceStaff)
+      source = sourceRadio.value + ' (พนักงาน: ' + sourceStaff + ')';
+    else source = sourceRadio.value;
+  }
 
   document.getElementById('errBanner').style.display = 'none';
   if (!firstName)                   { showError(t('err.firstName')); return; }
