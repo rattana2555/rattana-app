@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Rattana Stock">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0d1b3e">
-  <title>Rattana Stock Count v2.40</title>
+  <title>Rattana Stock Count v2.41</title>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="preconnect" href="https://docs.google.com" crossorigin>
@@ -472,7 +472,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v2.40';
+const APP_VERSION = 'v2.41';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -1825,14 +1825,22 @@ function openHistDetail(idx) {
   const rows = s.items.map(it => {
     tot.c += it.countedPieces; tot.sy += it.systemPieces; tot.d += it.diffPieces;
     const dsign = it.diffPieces>0?'+':'';
-    const expCell = it.expiryDate ? formatThaiDate(it.expiryDate) : '-';
+    const expCell  = it.expiryDate ? formatThaiDate(it.expiryDate) : '-';
     const timeCell = it.savedAt ? formatThaiTime(it.savedAt) : '-';
+    // Compute factorCS from product master, else infer from this row
+    const prod = productByKey[it.key];
+    let factorCS = prod ? unitFactor(prod, 'CS') : 1;
+    if ((!prod || factorCS === 1) && it.cs > 0 && it.countedPieces > 0) {
+      const inferred = Math.round((it.countedPieces - it.ea - (it.bp||0) - (it.pa||0)) / it.cs);
+      if (inferred > 1) factorCS = inferred;
+    }
+    const diffCSEA = it.diffPieces === 0 ? '' : ' ' + piecesToCSEA(it.diffPieces, factorCS);
     return `<tr>
       <td style="font-size:11px;color:var(--muted);white-space:nowrap">${timeCell}</td>
       <td>${it.name}</td>
       <td class="num">${it.countedPieces.toLocaleString()}</td>
       <td class="num">${it.systemPieces.toLocaleString()}</td>
-      <td class="num">${dsign}${it.diffPieces.toLocaleString()}</td>
+      <td class="num"><div>${dsign}${it.diffPieces.toLocaleString()}</div>${diffCSEA?`<div style="font-size:10px;color:var(--muted);font-weight:500">${diffCSEA.trim()}</div>`:''}</td>
       <td><span class="hc ${pill(it.status)}" style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:8px">${it.status}</span></td>
       <td>${expCell}</td>
     </tr>`;
