@@ -637,7 +637,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v3.20';
+const APP_VERSION = 'v3.21';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -811,7 +811,7 @@ async function renderCounterPicker() {
     return;
   }
   await ensureUsersLoaded();
-  // Distinct (name, empId) per warehouse the user can see
+  // Distinct (name, empId, nickname) per warehouse the user can see
   const seen = new Map();
   allUsers.forEach(u => {
     const w = String(u['W']||'').trim().toUpperCase();
@@ -819,8 +819,9 @@ async function renderCounterPicker() {
     const name = String(u['ชื่อ - สกุล']||'').trim();
     if (!name) return;
     const empId = String(u['รหัสพนักงาน']||'').trim();
+    const nickname = String(u['ชื่อเล่น']||'').trim();
     const k = name + '|' + empId;
-    if (!seen.has(k)) seen.set(k, { name, empId, w });
+    if (!seen.has(k)) seen.set(k, { name, empId, nickname, w });
   });
   // Always include the logged-in user's own name as the default option
   const myName  = String(currentUser.name||'').trim();
@@ -840,8 +841,13 @@ async function renderCounterPicker() {
   }
   // Set current value
   sel.value = counterPick ? curName : '';
-  // Stash name→empId map for change handler
-  window._counterMap = Object.fromEntries(opts.map(o => [o.name, o.empId || '']));
+  // Stash name→{empId,nickname} map for change handler
+  window._counterMap = Object.fromEntries(opts.map(o => [o.name, { empId: o.empId || '', nickname: o.nickname || '' }]));
+  // If pick is already set, also update header subtitle to that person's nickname
+  if (counterPick && counterPick.name && window._counterMap[counterPick.name]) {
+    counterPick.nickname = window._counterMap[counterPick.name].nickname || counterPick.nickname || '';
+    updateHeaderSubtitle();
+  }
   // Shared email (no own name): always show picker if there's at least 1 option
   if (wrap) wrap.style.display = opts.length >= 1 ? 'flex' : 'none';
   // If no choice yet → force user to pick before counting
@@ -865,16 +871,26 @@ function onCounterChange() {
   if (!sel) return;
   const name = String(sel.value || '').trim();
   if (!name) return;
-  // Only commit when name matches a known option (avoids saving partial typing)
   const map = window._counterMap || {};
   if (!(name in map)) return;
-  const empId = map[name];
-  if (counterPick && counterPick.name === name) return;  // unchanged
-  counterPick = { name, empId };
+  const { empId, nickname } = map[name];
+  if (counterPick && counterPick.name === name) return;
+  counterPick = { name, empId, nickname };
   try { localStorage.setItem('counterPick_'+(currentUser.email||'').toLowerCase(), JSON.stringify(counterPick)); } catch {}
   const wrap = document.getElementById('counterBar');
   if (wrap) wrap.classList.remove('need-pick');
-  showToast(`ผู้นับ: ${name}`, 'success');
+  updateHeaderSubtitle();
+  showToast(`ผู้นับ: ${nickname || name}`, 'success');
+}
+function updateHeaderSubtitle() {
+  if (!currentUser) return;
+  const scope = currentUser.role >= ALL_WAREHOUSE_ROLE
+    ? 'ทุกคลัง'
+    : (visibleWh[0] ? `${visibleWh[0]} · ${WH_NAMES[visibleWh[0]]||''}` : 'ไม่มีคลัง');
+  const who = (counterPick && (counterPick.nickname || counterPick.name))
+           || currentUser.nickname || currentUser.name || '';
+  const el = document.getElementById('hdSub');
+  if (el) el.textContent = `${scope} · Role ${currentUser.role} · ${who}`;
 }
 
 function showLogin() {
@@ -893,8 +909,7 @@ function enterApp() {
   const scope = currentUser.role >= ALL_WAREHOUSE_ROLE
     ? 'ทุกคลัง'
     : (visibleWh[0] ? `${visibleWh[0]} · ${WH_NAMES[visibleWh[0]]||''}` : 'ไม่มีคลัง');
-  document.getElementById('hdSub').textContent =
-    `${scope} · Role ${currentUser.role} · ${currentUser.nickname || currentUser.name}`;
+  updateHeaderSubtitle();
 
   // Count mode needs a warehouse
   const tabCount = document.getElementById('tabCount');
