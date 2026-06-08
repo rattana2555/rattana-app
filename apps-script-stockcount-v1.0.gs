@@ -42,8 +42,8 @@ var HEADERS = [
   'System Stock',    // สต็อกระบบ (รูปแบบ CS.EA)
   'System Pieces',   // สต็อกระบบ (ชิ้น)
   'Diff Pieces',     // ต่าง (+ เกิน / - ขาด)
-  'Diff CS.EA',      // ต่าง รูปแบบ CS.EA (เช่น "-4 CS 17 EA")
   'Status',          // ตรง / ขาด / เกิน
+  'Diff CS.EA',      // ต่าง รูปแบบ CS.EA (เช่น "-4 CS 17 EA")
   'Expiry Date'      // วันหมดอายุ (ผู้ใช้กรอก, YYYY-MM-DD; ว่างได้)
 ];
 
@@ -82,8 +82,8 @@ function doPost(e) {
         r.systemRaw || '',
         r.systemPieces || 0,
         r.diffPieces || 0,
-        r.diffCSEA || '',
         r.status || '',
+        r.diffCSEA || '',
         r.expiryDate || ''
       ]);
     });
@@ -144,8 +144,8 @@ function doGet(e) {
           systemRaw:     String(r[12] || ''),
           systemPieces:  Number(r[13] || 0),
           diffPieces:    Number(r[14] || 0),
-          diffCSEA:      String(r[15] || ''),
-          status:        String(r[16] || ''),
+          status:        String(r[15] || ''),
+          diffCSEA:      String(r[16] || ''),
           expiryDate:    _iso(r[17]),
         };
       });
