@@ -631,7 +631,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v3.17';
+const APP_VERSION = 'v3.18';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -733,9 +733,11 @@ async function handleGoogleLogin(r) {
     const user  = users.find(u => normalizeEmail(u['E-mail']) === email);
     if (!user)                                                           { showLoginError('ไม่พบอีเมลนี้ในระบบ — ติดต่อผู้ดูแล'); return; }
     if (String(user['Status']||'').trim().toLowerCase() !== 'active')   { showLoginError('บัญชีถูกระงับ — ติดต่อผู้ดูแล'); return; }
+    const rawName = String(user['ชื่อ - สกุล']||'').trim();
     currentUser = {
       email,
-      name:      user['ชื่อ - สกุล'] || user['ชื่อเล่น'] || email,
+      name:      rawName || user['ชื่อเล่น'] || email,
+      hasOwnName: !!rawName,                  // true = email's row has a name → no picker needed
       nickname:  user['ชื่อเล่น'] || '',
       role:      parseInt(user['User Role']) || 1,
       warehouse: String(user['W']||'').trim().toUpperCase(),
@@ -793,7 +795,15 @@ function counterDisplayEmpId() {
 }
 async function renderCounterPicker() {
   const sel = document.getElementById('counterSel');
+  const wrap = document.getElementById('counterBar');
   if (!sel || !currentUser) return;
+  // If this email's row already has a ชื่อ - สกุล → no need to pick
+  if (currentUser.hasOwnName) {
+    counterPick = null;
+    try { localStorage.removeItem('counterPick_'+(currentUser.email||'').toLowerCase()); } catch {}
+    if (wrap) wrap.style.display = 'none';
+    return;
+  }
   await ensureUsersLoaded();
   // Distinct (name, empId) per warehouse the user can see
   const seen = new Map();
@@ -821,9 +831,8 @@ async function renderCounterPicker() {
     const sel2 = (o.name === curName && o.empId === curEmp) ? ' selected' : '';
     return `<option value="${v.replace(/"/g,'&quot;')}"${sel2}>${label}</option>`;
   }).join('');
-  // Hide entire picker if only 1 option total (no point picking)
-  const wrap = document.getElementById('counterBar');
-  if (wrap) wrap.style.display = opts.length > 1 ? 'flex' : 'none';
+  // Shared email (no own name): always show picker if there's at least 1 option
+  if (wrap) wrap.style.display = opts.length >= 1 ? 'flex' : 'none';
 }
 function onCounterChange() {
   const sel = document.getElementById('counterSel');
