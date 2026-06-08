@@ -89,6 +89,10 @@
     .quick-toggle:has(input:checked){background:rgba(42,67,128,.14);border-color:var(--gold);color:var(--navy)}
     body.dark .quick-toggle:has(input:checked){color:var(--gold-light)}
     /* History session list */
+    .wh-bar.need-pick{background:#fff3d1;border:1.5px dashed #cf8400;border-radius:12px;padding:8px 10px;animation:pulse-pick 1.8s ease-in-out infinite}
+    .wh-bar.need-pick .wh-bar-l{color:#a67700;font-weight:800}
+    .wh-bar.need-pick select{border-color:#cf8400 !important;background:#fff}
+    @keyframes pulse-pick{0%,100%{box-shadow:0 0 0 0 rgba(207,132,0,.35)}50%{box-shadow:0 0 0 6px rgba(207,132,0,0)}}
     .hist-chips{display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px 4px;border-bottom:1px solid var(--border)}
     .hist-chip{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:999px;border:1px solid var(--border);background:#fff;color:var(--navy);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
     .hist-chip:hover{border-color:var(--navy)}
@@ -631,7 +635,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v3.18';
+const APP_VERSION = 'v3.19';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -825,14 +829,32 @@ async function renderCounterPicker() {
   const opts = [...seen.values()].sort((a,b) => a.name.localeCompare(b.name, 'th'));
   const curName = counterDisplayName();
   const curEmp  = counterDisplayEmpId();
-  sel.innerHTML = opts.map(o => {
+  const placeholder = !counterPick
+    ? `<option value="" selected disabled>— เลือกชื่อผู้นับ —</option>`
+    : '';
+  sel.innerHTML = placeholder + opts.map(o => {
     const v = `${o.name}|${o.empId}`;
     const label = o.name;
-    const sel2 = (o.name === curName && o.empId === curEmp) ? ' selected' : '';
+    const sel2 = (counterPick && o.name === curName && o.empId === curEmp) ? ' selected' : '';
     return `<option value="${v.replace(/"/g,'&quot;')}"${sel2}>${label}</option>`;
   }).join('');
   // Shared email (no own name): always show picker if there's at least 1 option
   if (wrap) wrap.style.display = opts.length >= 1 ? 'flex' : 'none';
+  // If no choice yet → force user to pick before counting
+  if (!counterPick) {
+    // Highlight + prompt
+    if (wrap) wrap.classList.add('need-pick');
+    setTimeout(() => {
+      showToast('กรุณาเลือกชื่อผู้นับก่อนเริ่มนับสต็อก', 'warning');
+      try { sel.focus(); sel.scrollIntoView({behavior:'smooth', block:'center'}); } catch {}
+    }, 400);
+  } else {
+    if (wrap) wrap.classList.remove('need-pick');
+  }
+}
+// True when user must pick a counter name before saving / scanning
+function counterRequiredButMissing() {
+  return currentUser && !currentUser.hasOwnName && !counterPick;
 }
 function onCounterChange() {
   const sel = document.getElementById('counterSel');
@@ -840,6 +862,8 @@ function onCounterChange() {
   const [name, empId] = sel.value.split('|');
   counterPick = { name, empId };
   try { localStorage.setItem('counterPick_'+(currentUser.email||'').toLowerCase(), JSON.stringify(counterPick)); } catch {}
+  const wrap = document.getElementById('counterBar');
+  if (wrap) wrap.classList.remove('need-pick');
   showToast(`ผู้นับ: ${name}`, 'success');
 }
 
@@ -2059,6 +2083,15 @@ function exportCountExcel() {
 async function saveCountToSheet() {
   if (!COUNT_SAVE_URL) {
     showToast('ยังไม่ได้ตั้งค่า Google Sheet — ดู Excel ไปก่อน หรือแจ้งผู้ดูแลตั้งค่า', 'warning');
+    return;
+  }
+  if (counterRequiredButMissing()) {
+    showToast('กรุณาเลือกชื่อผู้นับก่อนบันทึก', 'warning');
+    setMode('count');
+    setTimeout(() => {
+      const sel = document.getElementById('counterSel');
+      if (sel) { sel.focus(); sel.scrollIntoView({behavior:'smooth', block:'center'}); }
+    }, 200);
     return;
   }
   const rows = buildSummaryRows();
