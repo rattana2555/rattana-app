@@ -617,7 +617,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v3.8';
+const APP_VERSION = 'v3.9';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -1460,22 +1460,10 @@ async function maybeAdoptRemoteDraft(wh) {
   if (recentlySavedAt[wh] && Date.now() - recentlySavedAt[wh] < 30000) return;
   const remote = await fetchRemoteDraft(wh);
   const hasRemote = remote && remote.items && Object.keys(remote.items).length;
-  // ── Remote is EMPTY but local still has items ──────────────────────────
-  // If those local items were already mirrored to the Sheet (syncedAt set)
-  // AND nothing has been edited since the last sync, then another device
-  // saved/cleared this draft — drop the local copy too.
-  if (!hasRemote && countSession && Object.keys(countSession.items||{}).length) {
-    const localEdit = countSession.lastEdit ? new Date(countSession.lastEdit).getTime() : 0;
-    const localSync = countSession.syncedAt ? new Date(countSession.syncedAt).getTime() : 0;
-    if (localSync && localEdit <= localSync + 1500) {
-      const now = new Date().toISOString();
-      countSession = { warehouse: wh, startedAt: now, items: {}, lastEdit: now, syncedAt: now };
-      try { localStorage.setItem(countStoreKey(wh), JSON.stringify(countSession)); } catch {}
-      renderCountList();
-      showToast('รายการนี้ถูกบันทึก/เคลียร์จากเครื่องอื่นแล้ว', 'info');
-    }
-    return;
-  }
+  // Remote empty → leave local alone. (No-cors POST means syncedAt isn't a
+  // reliable signal that the server actually has our items, so the old
+  // auto-clear path was triggering false positives. The user can clear
+  // explicitly via "ล้างทั้งหมด" or the ↻ pull-draft button.)
   if (!hasRemote) return;
   const localTime  = countSession && countSession.lastEdit ? new Date(countSession.lastEdit).getTime() : 0;
   const remoteTime = new Date(remote.updatedAt || 0).getTime();
