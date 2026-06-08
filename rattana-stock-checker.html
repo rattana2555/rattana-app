@@ -89,6 +89,12 @@
     .quick-toggle:has(input:checked){background:rgba(42,67,128,.14);border-color:var(--gold);color:var(--navy)}
     body.dark .quick-toggle:has(input:checked){color:var(--gold-light)}
     /* History session list */
+    .hist-chips{display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px 4px;border-bottom:1px solid var(--border)}
+    .hist-chip{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:999px;border:1px solid var(--border);background:#fff;color:var(--navy);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
+    .hist-chip:hover{border-color:var(--navy)}
+    .hist-chip.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+    .hist-chip .ct{opacity:.7;font-weight:500;font-size:11px}
+    .hist-chip.active .ct{opacity:.9}
     .hist-row{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s}
     .hist-row:hover{background:var(--row-alt)}
     .hist-row:last-child{border:none}
@@ -564,6 +570,7 @@
         <h3>📜 ประวัติการเช็คสต็อก</h3>
         <button class="btn btn-outline btn-sm" onclick="loadHistory(true)">↻ รีเฟรช</button>
       </div>
+      <div id="historyWhChips" class="hist-chips" style="display:none"></div>
       <div class="card-body" style="padding:8px 0" id="historyBody">
         <div class="txt-center txt-muted" style="padding:24px 16px;font-size:13px">กดรีเฟรชเพื่อโหลดประวัติ</div>
       </div>
@@ -2101,8 +2108,33 @@ function groupSessions(rows) {
   return [...map.values()].sort((a,b) => (b.savedAt||'').localeCompare(a.savedAt||''));
 }
 
+let historyWhFilter = 'ALL';
+function setHistoryWhFilter(wh) {
+  historyWhFilter = wh;
+  renderHistory(historyCache || []);
+}
+function renderHistoryChips(allSessions) {
+  const chipBox = document.getElementById('historyWhChips');
+  if (!chipBox) return;
+  // Count sessions per warehouse (using ALL allowed sessions, before chip filter)
+  const counts = {};
+  allSessions.forEach(s => { const w = String(s.warehouse||'').toUpperCase(); counts[w] = (counts[w]||0)+1; });
+  const whs = visibleWh.filter(w => counts[w]); // only show chips for warehouses with history
+  if (whs.length < 2) { chipBox.style.display = 'none'; chipBox.innerHTML = ''; return; }
+  chipBox.style.display = 'flex';
+  const total = allSessions.length;
+  const chips = [
+    `<button class="hist-chip ${historyWhFilter==='ALL'?'active':''}" onclick="setHistoryWhFilter('ALL')">ทั้งหมด <span class="ct">${total}</span></button>`,
+    ...whs.map(w => `<button class="hist-chip ${historyWhFilter===w?'active':''}" onclick="setHistoryWhFilter('${w}')">${w} · ${WH_NAMES[w]||''} <span class="ct">${counts[w]}</span></button>`)
+  ];
+  chipBox.innerHTML = chips.join('');
+}
 function renderHistory(rows) {
-  const sessions = groupSessions(rows || []);
+  const allSessions = groupSessions(rows || []);
+  renderHistoryChips(allSessions);
+  const sessions = historyWhFilter === 'ALL'
+    ? allSessions
+    : allSessions.filter(s => String(s.warehouse||'').toUpperCase() === historyWhFilter);
   const body = document.getElementById('historyBody');
   if (!sessions.length) {
     body.innerHTML = '<div class="txt-center txt-muted" style="padding:24px 16px;font-size:13px">ยังไม่มีประวัติ — เริ่มต้นด้วยการนับสต็อกแล้วบันทึก</div>';
