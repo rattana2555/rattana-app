@@ -1,5 +1,6 @@
 /**
- * Rattana Stock Count — Apps Script Web App (v1.7)
+ * Rattana Stock Count — Apps Script Web App (v1.8)
+ * v1.8 — add Email column (counter's email) after Expiry Date
  * v1.7 — append Diff CS.EA with apostrophe prefix + per-cell text format (Sheets was still coercing it to a number)
  * v1.6 — Diff CS.EA stored as numeric-text "+1.2" / "-0.12"; column forced to text
  * v1.5 — add Diff CS.EA column (e.g. "-4 CS 17 EA")
@@ -45,8 +46,9 @@ var HEADERS = [
   'System Pieces',   // สต็อกระบบ (ชิ้น)
   'Diff Pieces',     // ต่าง (+ เกิน / - ขาด)
   'Status',          // ตรง / ขาด / เกิน
-  'Diff CS.EA',      // ต่าง รูปแบบ CS.EA (เช่น "-4 CS 17 EA")
-  'Expiry Date'      // วันหมดอายุ (ผู้ใช้กรอก, YYYY-MM-DD; ว่างได้)
+  'Diff CS.EA',      // ต่าง รูปแบบ CS.EA (เช่น "-1.2")
+  'Expiry Date',     // วันหมดอายุ (ผู้ใช้กรอก, YYYY-MM-DD; ว่างได้)
+  'Email'            // อีเมลผู้นับ
 ];
 
 function doPost(e) {
@@ -91,7 +93,8 @@ function doPost(e) {
         r.diffPieces || 0,
         r.status || '',
         diffCSEA,
-        r.expiryDate || ''
+        r.expiryDate || '',
+        data.email || ''
       ]);
       // Belt + suspenders — force the column-16 cell on this exact row to plain text
       try {
@@ -158,6 +161,7 @@ function doGet(e) {
           status:        String(r[15] || ''),
           diffCSEA:      String(r[16] || ''),
           expiryDate:    _iso(r[17]),
+          email:         String(r[18] || ''),
         };
       });
       return _json({ ok: true, rows: rows });
