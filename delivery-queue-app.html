@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v14.1</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v14.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -365,7 +365,7 @@ select,input{font-family:inherit;font-size:16px}
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v14.1</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v14.2</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -1893,15 +1893,23 @@ function confirmAutoAssign(){
         return true;
       }
 
-      // Rule R: "สายส่ง" เดียวกัน + จังหวัดเดียวกัน + ใกล้ cluster → FORCE
+      // Rule R: "สายส่ง" เดียวกัน + จังหวัดเดียวกัน + ใกล้ cluster + ยังจุได้ → ใช้รถเดิม (SOFT)
       if(b.saiSong&&routeCodeMap[b.saiSong]){
         const t=trucks.find(x=>x.plate===routeCodeMap[b.saiSong]);
-        if(t){
+        if(t&&!isOverloaded(t.plate)){
           const tp=truckMainProv(t.plate);
           if(!(b.province&&tp&&tp!==b.province)&&withinCluster(t)){ // จังหวัดตรง + ไม่ไกลเกิน
-            return{t,tr:saiSongTripMap[b.saiSong]||1};
+            // เช็ค capacity ก่อน — ถ้ารถเต็ม → fall through ให้ rule อื่นจัด (กันโหลดเกิน)
+            const preferTr=saiSongTripMap[b.saiSong]||0;
+            const ld=loads[t.plate];
+            // ลอง trip ที่ preferred ก่อน
+            if(preferTr===1&&(ld.w1+b.totalW)<=t.maxW&&(t.maxV<=0||(ld.v1+b.totalV)<=t.maxV))return{t,tr:1};
+            if(preferTr===2&&(ld.w2+b.totalW)<=t.maxW&&(t.maxV<=0||(ld.v2+b.totalV)<=t.maxV))return{t,tr:2};
+            // ถ้า trip preferred เต็ม → ลอง trip อื่น
+            const tr=tryTrip(t,b);
+            if(tr)return{t,tr};
+            // เต็มทั้ง 2 เที่ยว → fall through
           }
-          // คนละจังหวัด หรือไกลเกินไป → fall through
         }
       }
       // Rule L: โลเคชันเดียวกัน (≤1.5กม.) → มัดทั้งกลุ่มไปรถคันเดียว
