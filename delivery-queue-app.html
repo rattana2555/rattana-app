@@ -727,6 +727,41 @@ const EXCLUDE_AUTO = new Set([
   '808343',  // มานพ ไกรวิจิตร   — 12ล้อ รถพ่วง
 ]);
 
+// ── Route → Preferred Truck (จากประวัติจริง 3 วัน, concentration ≥66%) ──
+// ใช้ pre-seed routeCodeMap ก่อน auto-assign → Rule R จะใช้รถที่ตรงกับ pattern จริงตั้งแต่บิลแรก
+const ROUTE_PREFERRED_TRUCK = {
+  // ราชบุรี
+  'รบ01':'808425',  // อาก    — 79% match
+  'รบ02':'808557',  // ออม    — 67%
+  'รบ03':'807181',  // ไมด์   — 75%
+  'รบ04':'807210',  // นะ     — (808810 หลัก แต่ไม่มีใน TRUCKS → ใช้คันรอง)
+  'รบ05':'807210',  // นะ     — 67%
+  // สมุทรสาคร
+  'สค01':'807210',  // นะ     — 83%
+  'สค02':'808557',  // ออม    — 100%
+  'สค03':'807181',  // ไมด์   — 71%
+  'สค04':'808425',  // อาก    — 100%
+  'สค05':'806893',  // แขก    — 100%
+  'สค06':'บจ9541', // อุทัย   — 100%
+  // สมุทรสงคราม
+  'สส01':'807181',  // ไมด์   — (808810 หลัก แต่ไม่มีใน TRUCKS → ใช้คันรอง 34%)
+  'สส02':'806893',  // แขก    — 55%
+  'สส03':'806613',  // มนัส2  — 93%
+  'สส04':'บฉ1693', // ปอนด์ใหญ่ — 53%
+  'สส05':'บจ9541', // อุทัย   — 79%
+  'สส06':'บจ9541', // อุทัย   — 67%
+  'สส07':'บฉ8127', // อั้ม2   — 100%
+  'สส08':'บฉ1693', // ปอนด์ใหญ่ — 100%
+  'สส09':'บฉ1693', // ปอนด์ใหญ่ — 100%
+  'สส11':'บฉ1693', // ปอนด์ใหญ่ — 100%
+};
+
+// ── จังหวัด → Preferred Truck Type (จาก pattern จริง) ──
+// เพชรบุรี → รถจัมโบ้เป็นหลัก (บฉ1693 รับ 63% ของบิลเพชรบุรี)
+const PROVINCE_PREFERRED_TYPE = {
+  'เพชรบุรี':'4 ล้อจัมโบ้',
+};
+
 // ── คนขับหลัก ──
 const PRIMARY_PLATES = new Set([
   'บจ9541',  // อุทัย
@@ -1748,6 +1783,12 @@ function confirmAutoAssign(){
     const provinceMap={}; // province → plate  (rule P)
     const locMap={};      // gid → plate  (rule L: โลเคชันเดียวกัน)
 
+    // ── Pre-seed Route → preferred truck จากประวัติจริง ──
+    // ทำให้ Rule R เลือกรถที่ตรงกับ pattern จริงตั้งแต่บิลแรก (ไม่ต้อง first-come-first-served)
+    Object.entries(ROUTE_PREFERRED_TRUCK).forEach(([route,plate])=>{
+      if(trucks.some(t=>t.plate===plate))routeCodeMap[route]=plate;
+    });
+
     // ── Running centroid ต่อรถ (อัปเดตทุก assignBill) ──
     // ใช้ geographic centroid selection แทน bin-packing
     const truckCent={}; // plate → {latSum,lngSum,cnt}
@@ -1980,6 +2021,27 @@ function confirmAutoAssign(){
           });
         });
         if(relaxT&&relaxD<=40)return{t:relaxT,tr:relaxTr};
+      }
+      // Rule J: จังหวัด → prefer truck type (เพชรบุรี → รถจัมโบ้)
+      if(b.province&&PROVINCE_PREFERRED_TYPE[b.province]){
+        const preferType=PROVINCE_PREFERRED_TYPE[b.province];
+        // ลองรถ type นั้นที่มีของ + จังหวัดตรง ก่อน
+        for(const t of trucks){
+          if(t.type!==preferType)continue;
+          if(isOverloaded(t.plate))continue;
+          const ld=loads[t.plate];
+          if(ld.w1+ld.w2+ld.w3===0)continue; // ข้ามรถเปล่า (เก็บไว้ fallback)
+          const tp=truckMainProv(t.plate);
+          if(tp&&tp!==b.province)continue;
+          const tr=tryTrip(t,b);if(tr)return{t,tr};
+        }
+        // ถ้ารถ type ที่ prefer ยังไม่มีบิล → เปิดรถเปล่า type นั้นก่อน
+        for(const t of trucks){
+          if(t.type!==preferType)continue;
+          const ld=loads[t.plate];
+          if(ld.w1+ld.w2+ld.w3>0)continue;
+          const tr=tryTrip(t,b);if(tr)return{t,tr};
+        }
       }
       // เปิดรถเปล่าใหม่ — เลือกรถคันใหญ่สุด (trucks เรียง priority ใหญ่→เล็กแล้ว)
       let ePick=null,eTr=0;
