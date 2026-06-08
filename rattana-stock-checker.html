@@ -524,6 +524,12 @@
       <button class="btn-pull" onclick="forcePullDraft()" title="ดึงรายการที่เคยนับค้างไว้จากเครื่องอื่น" type="button">↻</button>
     </div>
 
+    <!-- Counter name picker (shown only when email has 2+ staff in Users sheet) -->
+    <div class="wh-bar mt-8" id="counterBar" style="display:none">
+      <span class="wh-bar-l">ผู้นับ</span>
+      <select id="counterSel" class="input input-compact wh-bar-sel" onchange="onCounterChange()"></select>
+    </div>
+
     <!-- Camera (collapsed by default — opens above the list) -->
     <div id="countCameraSection" style="display:none;margin-top:10px">
       <div id="countReader"><video id="countVideo" playsinline muted autoplay></video></div>
@@ -625,7 +631,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v3.15';
+const APP_VERSION = 'v3.16';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -639,6 +645,8 @@ const UNIT_CSS = { EA:'badge-ea', PA:'badge-pa', BP:'badge-bp', CS:'badge-cs' };
 // ── STATE ───────────────────────────────────────────────
 let currentUser  = null;
 let visibleWh    = [];   // warehouses this user may view
+let allUsers     = [];   // full Users sheet (for counter name picker)
+let counterPick  = null; // { name, empId } override when email is shared by multiple staff
 let allProducts  = [];
 let barcodeIndex = {};   // code → { product, unit }
 let productByKey = {};   // productKey → product row
@@ -734,6 +742,7 @@ async function handleGoogleLogin(r) {
       empId:     String(user['รหัสพนักงาน']||''),
     };
     localStorage.setItem('rattanaUser', JSON.stringify({ data: currentUser, exp: Date.now() + 30*24*60*60*1000 }));
+    try { counterPick = JSON.parse(localStorage.getItem('counterPick_'+(currentUser.email||'').toLowerCase()) || 'null'); } catch { counterPick = null; }
     enterApp();
   } catch(e) {
     console.error(e);
@@ -747,7 +756,13 @@ async function loadUsersSheet() {
   const url = `https://docs.google.com/spreadsheets/d/${AUTH_CONFIG.usersSheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(AUTH_CONFIG.usersSheetName)}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error('users fetch failed');
-  return parseCsv(await res.text());
+  allUsers = parseCsv(await res.text());
+  return allUsers;
+}
+// Lazy-load users list when restoring session from localStorage (no fresh login)
+async function ensureUsersLoaded() {
+  if (allUsers.length) return allUsers;
+  try { return await loadUsersSheet(); } catch { return []; }
 }
 
 function showLoginError(msg) {
@@ -763,8 +778,60 @@ function checkSession() {
     const { data, exp } = JSON.parse(raw);
     if (Date.now() > exp) { localStorage.removeItem('rattanaUser'); showLogin(); return; }
     currentUser = data;
+    try { counterPick = JSON.parse(localStorage.getItem('counterPick_'+(currentUser.email||'').toLowerCase()) || 'null'); } catch { counterPick = null; }
     enterApp();
   } catch { localStorage.removeItem('rattanaUser'); showLogin(); }
+}
+
+// Counter name picker — lets users override the saved counterName/empId for
+// shared Google accounts where multiple staff log in with the same email.
+function counterDisplayName() {
+  return (counterPick && counterPick.name) || (currentUser && currentUser.name) || '';
+}
+function counterDisplayEmpId() {
+  return (counterPick && counterPick.empId) || (currentUser && currentUser.empId) || '';
+}
+async function renderCounterPicker() {
+  const sel = document.getElementById('counterSel');
+  if (!sel || !currentUser) return;
+  await ensureUsersLoaded();
+  // Distinct (name, empId) per warehouse the user can see
+  const seen = new Map();
+  allUsers.forEach(u => {
+    const w = String(u['W']||'').trim().toUpperCase();
+    if (!visibleWh.includes(w)) return;
+    const name = String(u['ชื่อ - สกุล']||'').trim();
+    if (!name) return;
+    const empId = String(u['รหัสพนักงาน']||'').trim();
+    const k = name + '|' + empId;
+    if (!seen.has(k)) seen.set(k, { name, empId, w });
+  });
+  // Always include the logged-in user's own name as the default option
+  const myName  = String(currentUser.name||'').trim();
+  const myEmp   = String(currentUser.empId||'').trim();
+  if (myName && !seen.has(myName + '|' + myEmp)) {
+    seen.set(myName + '|' + myEmp, { name: myName, empId: myEmp, w: currentUser.warehouse });
+  }
+  const opts = [...seen.values()].sort((a,b) => a.name.localeCompare(b.name, 'th'));
+  const curName = counterDisplayName();
+  const curEmp  = counterDisplayEmpId();
+  sel.innerHTML = opts.map(o => {
+    const v = `${o.name}|${o.empId}`;
+    const label = o.empId ? `${o.name} · ${o.empId}` : o.name;
+    const sel2 = (o.name === curName && o.empId === curEmp) ? ' selected' : '';
+    return `<option value="${v.replace(/"/g,'&quot;')}"${sel2}>${label}</option>`;
+  }).join('');
+  // Hide entire picker if only 1 option total (no point picking)
+  const wrap = document.getElementById('counterBar');
+  if (wrap) wrap.style.display = opts.length > 1 ? 'flex' : 'none';
+}
+function onCounterChange() {
+  const sel = document.getElementById('counterSel');
+  if (!sel || !sel.value) return;
+  const [name, empId] = sel.value.split('|');
+  counterPick = { name, empId };
+  try { localStorage.setItem('counterPick_'+(currentUser.email||'').toLowerCase(), JSON.stringify(counterPick)); } catch {}
+  showToast(`ผู้นับ: ${name}`, 'success');
 }
 
 function showLogin() {
@@ -795,6 +862,7 @@ function enterApp() {
 
   loadData();
   setMode('count');   // start in count mode (lookup tab removed)
+  renderCounterPicker();
 }
 
 function logout() {
@@ -1391,7 +1459,7 @@ async function syncDraftNow() {
         action:'saveDraft',
         userKey: userKey(),
         email: currentUser.email,
-        empId: currentUser.empId || '',
+        empId: counterDisplayEmpId(),
         warehouse: countSession.warehouse,
         sessionStart: countSession.startedAt,
         items: countSession.items,
@@ -1989,8 +2057,8 @@ async function saveCountToSheet() {
   const payload = {
     warehouse: countSession.warehouse,
     sessionStart: countSession.startedAt,
-    counterName: currentUser?.name || '',
-    empId: currentUser?.empId || '',
+    counterName: counterDisplayName(),
+    empId: counterDisplayEmpId(),
     email: currentUser?.email || '',
     savedAt: new Date().toISOString(),
     rows: rows.map(r => ({
