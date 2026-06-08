@@ -63,14 +63,7 @@
       #modeCount .wh-bar{order:-1}
       /* Live list and dock occupy left column; show a live summary card on the right */
       #modeCount #countListCard{align-self:start}
-      /* Live summary panel — right column, sticky so it scrolls with content */
-      #liveSummaryPanel{display:block !important;grid-column:2;grid-row:1 / span 99;align-self:start;position:sticky;top:12px;margin:0}
-      #liveSummaryPanel .sum-row{padding:8px 10px;gap:8px}
-      #liveSummaryPanel .sr-name{font-size:13px}
-      #liveSummaryPanel .sr-sub{font-size:11.5px}
-      #liveSummaryPanel .stat3{margin-bottom:10px}
       /* Hide the global tab nav summary button on wide screens since both panes are visible */
-      body.desktop-split .tab-summary{display:none}
     }
 
     .card{background:var(--card-bg);border-radius:var(--radius-md);border:1px solid var(--border);box-shadow:var(--shadow-md);margin-bottom:12px}
@@ -552,19 +545,6 @@
       <button class="cam-btn" id="btnCountCam" onclick="toggleCountCamera()" title="เปิดกล้อง" type="button">📷</button>
     </div>
 
-    <!-- Desktop-only live summary panel (≥980px) -->
-    <aside id="liveSummaryPanel" class="card" style="display:none">
-      <div class="card-head">
-        <h3>📊 สรุปผลสด</h3>
-        <span id="liveSumMeta" style="font-size:12px;color:var(--muted);font-weight:600"></span>
-      </div>
-      <div class="card-body" id="liveSummaryBody" style="padding:14px"></div>
-      <div class="card-foot" id="liveSumActions" style="display:none;padding:10px 14px 14px;gap:8px;display:flex;flex-wrap:wrap">
-        <button class="btn btn-outline" onclick="exportCountExcel()" style="flex:1;min-width:120px">⬇ Excel</button>
-        <button class="btn btn-gold" onclick="saveCountToSheet()" style="flex:2;min-width:160px">☁ บันทึกผล</button>
-      </div>
-    </aside>
-
   </div><!-- /modeCount -->
 
   <!-- ══════════ SUMMARY MODE ══════════ -->
@@ -644,7 +624,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v3.12';
+const APP_VERSION = 'v3.11';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -1725,7 +1705,6 @@ function piecesToCSEA(pieces, factorCS) {
 const liveOpen = new Set();   // one key at a time
 
 function renderCountList() {
-  try { renderLiveSummary(); } catch(e) {}
   const card = document.getElementById('countListCard');
   const list = document.getElementById('countList');
   const items = countSession ? Object.values(countSession.items) : [];
@@ -1916,52 +1895,7 @@ function buildSummaryRows() {
   }).sort((a,b) => Math.abs(b.diff) - Math.abs(a.diff));
 }
 
-function renderLiveSummary() {
-  const panel = document.getElementById('liveSummaryPanel');
-  const body = document.getElementById('liveSummaryBody');
-  const actions = document.getElementById('liveSumActions');
-  const meta = document.getElementById('liveSumMeta');
-  if (!panel || !body) return;
-  if (!countSession || !Object.keys(countSession.items).length) {
-    body.innerHTML = `<div class="txt-center txt-muted" style="padding:24px 8px;font-size:13px">ยังไม่มีรายการนับ<br><span style="font-size:11px">สแกนสินค้าทางซ้ายเพื่อเริ่ม</span></div>`;
-    if (actions) actions.style.display = 'none';
-    if (meta) meta.textContent = '';
-    return;
-  }
-  const rows = buildSummaryRows();
-  const nShort = rows.filter(r=>r.status==='short').length;
-  const nOver  = rows.filter(r=>r.status==='over').length;
-  const nOk    = rows.filter(r=>r.status==='ok').length;
-  if (meta) meta.textContent = `${rows.length} รายการ · คลัง ${countSession.warehouse}`;
-  const sumRowsHtml = rows.map(r => {
-    const a = Math.abs(r.diff), f = r.factorCS > 0 ? r.factorCS : 1;
-    const cs = Math.floor(a / f), ea = a - cs * f;
-    const csea = cs > 0 ? `${cs} CS ${ea} EA` : `${ea} EA`;
-    const word = r.status==='ok' ? 'ตรง' : (r.status==='short' ? 'ขาด' : 'เกิน');
-    const srp = r.status==='ok'
-      ? `<span class="srp srp-ok">✓ ตรง</span>`
-      : `<span class="srp srp-${r.status==='short'?'short':'over'}">${word} ${csea}</span>`;
-    return `<div class="sum-row sr-${r.status==='ok'?'ok':(r.status==='short'?'short':'over')}">
-      <div class="sr-main">
-        <div class="sr-name">${r.name}</div>
-        <div class="sr-sub">นับ <b>${r.counted.toLocaleString()}</b> · ระบบ ${r.system.toLocaleString()} ชิ้น</div>
-      </div>
-      ${srp}
-    </div>`;
-  }).join('');
-  body.innerHTML = `
-    <div class="stat3">
-      <div class="stat stat-ok"><div class="st-v">${nOk}</div><div class="st-l">ตรง</div></div>
-      <div class="stat stat-short"><div class="st-v">${nShort}</div><div class="st-l">ขาด</div></div>
-      <div class="stat stat-over"><div class="st-v">${nOver}</div><div class="st-l">เกิน</div></div>
-    </div>
-    <div class="sum-rows">${sumRowsHtml}</div>`;
-  if (actions) actions.style.display = 'flex';
-}
-
 function renderSummary() {
-  // Mirror to live desktop panel too
-  try { renderLiveSummary(); } catch(e) {}
   const body = document.getElementById('summaryBody');
   const actions = document.getElementById('summaryActions');
   if (!countSession || !Object.keys(countSession.items).length) {
