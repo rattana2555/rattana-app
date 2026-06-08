@@ -1,5 +1,6 @@
 /**
- * Rattana Stock Count — Apps Script Web App (v1.8)
+ * Rattana Stock Count — Apps Script Web App (v1.9)
+ * v1.9 — apostrophe-prefix + per-cell text format for System Stock too
  * v1.8 — add Email column (counter's email) after Expiry Date
  * v1.7 — append Diff CS.EA with apostrophe prefix + per-cell text format (Sheets was still coercing it to a number)
  * v1.6 — Diff CS.EA stored as numeric-text "+1.2" / "-0.12"; column forced to text
@@ -66,13 +67,17 @@ function doPost(e) {
     }
     // Force PLAIN TEXT on columns that must keep leading/trailing zeros:
     //   col 6  — Product Key (barcodes like 0812345678 / 13-digit EAN)
+    //   col 13 — System Stock (CS.EA from the master sheet)
     //   col 16 — Diff CS.EA (so "0.10" stays "0.10" = 10 EA, not "0.1")
     sheet.getRange(1, 6,  sheet.getMaxRows(), 1).setNumberFormat('@');
+    sheet.getRange(1, 13, sheet.getMaxRows(), 1).setNumberFormat('@');
     sheet.getRange(1, 16, sheet.getMaxRows(), 1).setNumberFormat('@');
     var savedAt = data.savedAt || new Date().toISOString();
     (data.rows || []).forEach(function (r) {
-      // Prefix Diff CS.EA with apostrophe so Sheets treats it as text and
-      // preserves trailing zeros (e.g. "0.20" must stay 20 EA).
+      // Prefix CS.EA values with apostrophe so Sheets treats them as text
+      // and preserves trailing zeros (e.g. "0.20" must stay 20 EA).
+      var systemRaw = r.systemRaw || '';
+      if (systemRaw && systemRaw.charAt(0) !== "'") systemRaw = "'" + systemRaw;
       var diffCSEA = r.diffCSEA || '';
       if (diffCSEA && diffCSEA.charAt(0) !== "'") diffCSEA = "'" + diffCSEA;
       sheet.appendRow([
@@ -88,7 +93,7 @@ function doPost(e) {
         r.pa || 0,
         r.ea || 0,
         r.countedPieces || 0,
-        r.systemRaw || '',
+        systemRaw,
         r.systemPieces || 0,
         r.diffPieces || 0,
         r.status || '',
@@ -96,9 +101,12 @@ function doPost(e) {
         r.expiryDate || '',
         data.email || ''
       ]);
-      // Belt + suspenders — force the column-16 cell on this exact row to plain text
+      // Belt + suspenders — force System Stock (col 13) and Diff CS.EA (col 16)
+      // on this exact row to plain text format
       try {
-        sheet.getRange(sheet.getLastRow(), 16).setNumberFormat('@');
+        var rowN = sheet.getLastRow();
+        sheet.getRange(rowN, 13).setNumberFormat('@');
+        sheet.getRange(rowN, 16).setNumberFormat('@');
       } catch (e2) {}
     });
     return ContentService
