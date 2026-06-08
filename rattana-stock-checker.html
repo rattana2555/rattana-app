@@ -638,7 +638,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v3.22';
+const APP_VERSION = 'v3.23';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -881,6 +881,15 @@ function onCounterChange() {
   const wrap = document.getElementById('counterBar');
   if (wrap) wrap.classList.remove('need-pick');
   updateHeaderSubtitle();
+  // Reload this counter's own draft (per-person storage key changed)
+  try {
+    if (countSession && countSession.warehouse) {
+      loadCountSession(countSession.warehouse);
+      renderCountList();
+      renderPending();
+      maybeAdoptRemoteDraft(countSession.warehouse);
+    }
+  } catch (e) { console.warn('reload draft after counter pick failed', e); }
   showToast(`ผู้นับ: ${nickname || name}`, 'success');
 }
 function clearCounterPick() {
@@ -1438,7 +1447,15 @@ let countCamOpen = false;
 let countQR      = null;
 let editKey      = null;
 
-const countStoreKey = wh => `rattana_count_${wh}`;
+// Counter identifier — drafts are per-person so two people sharing an email
+// keep separate in-progress lists. Falls back to email if no pick yet.
+function counterTag() {
+  const t = (counterPick && (counterPick.empId || counterPick.name))
+         || (currentUser && (currentUser.empId || currentUser.email))
+         || '';
+  return String(t).toLowerCase().replace(/[^a-z0-9ก-๙_]+/gi, '_');
+}
+const countStoreKey = wh => `rattana_count_${wh}_${counterTag()}`;
 
 function setMode(mode) {
   currentMode = mode;
@@ -1510,7 +1527,13 @@ function saveCountSession() {
 }
 
 // ── Cross-device draft sync via Google Sheet ──
-const userKey = () => String((currentUser && (currentUser.empId || currentUser.email)) || '').toLowerCase();
+// userKey for cross-device draft sync — keyed by the PICKED counter so
+// each person's in-progress count syncs only with their own devices.
+const userKey = () => {
+  const base = String((counterPick && (counterPick.empId || counterPick.name))
+                   || (currentUser && (currentUser.empId || currentUser.email)) || '').toLowerCase();
+  return base;
+};
 let draftSyncTimer = null;
 function queueDraftSync() {
   if (!COUNT_SAVE_URL || !currentUser || !countSession) return;
