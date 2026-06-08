@@ -617,7 +617,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v3.7';
+const APP_VERSION = 'v3.8';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -2002,11 +2002,14 @@ async function saveCountToSheet() {
       countedPieces: r.counted, systemRaw: r.systemRaw, systemPieces: r.system,
       diffPieces: r.diff,
       diffCSEA: (() => {
-        if (r.diff === 0) return '';
+        // Numeric CS.EA: "{cs}.{ea}" — EA part is literal (no leading zero padding),
+        // matches the stock sheet convention. Sign mirrors diffPieces:
+        //   -1.2  = ขาด 1 CS 2 EA        +0.12 = เกิน 12 EA
+        if (r.diff === 0) return '0';
         const sign = r.diff > 0 ? '+' : '-';
         const a = Math.abs(r.diff), f = r.factorCS > 0 ? r.factorCS : 1;
         const cs = Math.floor(a / f), ea = a - cs * f;
-        return cs > 0 ? `${sign}${cs} CS ${ea} EA` : `${sign}${ea} EA`;
+        return `${sign}${cs}.${ea}`;
       })(),
       status: r.status==='ok' ? 'ตรง' : r.status==='short' ? 'ขาด' : 'เกิน',
       expiryDate: r.item.expiryDate || '',

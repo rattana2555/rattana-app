@@ -1,5 +1,6 @@
 /**
- * Rattana Stock Count — Apps Script Web App (v1.5)
+ * Rattana Stock Count — Apps Script Web App (v1.6)
+ * v1.6 — Diff CS.EA stored as numeric-text "+1.2" / "-0.12"; column forced to text
  * v1.5 — add Diff CS.EA column (e.g. "-4 CS 17 EA")
  * v1.4 — add Expiry Date column (user-entered, optional)
  * v1.3 — sync in-progress draft counts per user across devices
@@ -60,10 +61,11 @@ function doPost(e) {
       sheet.getRange(1, 1, 1, HEADERS.length).setFontWeight('bold');
       sheet.setFrozenRows(1);
     }
-    // Force Product Key column (6) to PLAIN TEXT so leading zeros & long
-    // barcodes are preserved (otherwise Sheets turns "0812345678" into a
-    // number and 13-digit codes into 1.23E+12).
-    sheet.getRange(1, 6, sheet.getMaxRows(), 1).setNumberFormat('@');
+    // Force PLAIN TEXT on columns that must keep leading/trailing zeros:
+    //   col 6  — Product Key (barcodes like 0812345678 / 13-digit EAN)
+    //   col 16 — Diff CS.EA (so "0.10" stays "0.10" = 10 EA, not "0.1")
+    sheet.getRange(1, 6,  sheet.getMaxRows(), 1).setNumberFormat('@');
+    sheet.getRange(1, 16, sheet.getMaxRows(), 1).setNumberFormat('@');
     var savedAt = data.savedAt || new Date().toISOString();
     (data.rows || []).forEach(function (r) {
       sheet.appendRow([
