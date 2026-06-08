@@ -531,7 +531,9 @@
     <!-- Counter name picker (shown only when email has 2+ staff in Users sheet) -->
     <div class="wh-bar mt-8" id="counterBar" style="display:none">
       <span class="wh-bar-l">ผู้นับ</span>
-      <select id="counterSel" class="input input-compact wh-bar-sel" onchange="onCounterChange()"></select>
+      <input id="counterSel" class="input input-compact wh-bar-sel" list="counterOpts"
+             autocomplete="off" placeholder="พิมพ์ค้นหา / เลือกชื่อ..." onchange="onCounterChange()" oninput="onCounterChange()">
+      <datalist id="counterOpts"></datalist>
     </div>
 
     <!-- Camera (collapsed by default — opens above the list) -->
@@ -635,7 +637,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v3.19';
+const APP_VERSION = 'v3.20';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -829,15 +831,17 @@ async function renderCounterPicker() {
   const opts = [...seen.values()].sort((a,b) => a.name.localeCompare(b.name, 'th'));
   const curName = counterDisplayName();
   const curEmp  = counterDisplayEmpId();
-  const placeholder = !counterPick
-    ? `<option value="" selected disabled>— เลือกชื่อผู้นับ —</option>`
-    : '';
-  sel.innerHTML = placeholder + opts.map(o => {
-    const v = `${o.name}|${o.empId}`;
-    const label = o.name;
-    const sel2 = (counterPick && o.name === curName && o.empId === curEmp) ? ' selected' : '';
-    return `<option value="${v.replace(/"/g,'&quot;')}"${sel2}>${label}</option>`;
-  }).join('');
+  // Build datalist options (just names — empId looked up on change)
+  const list = document.getElementById('counterOpts');
+  if (list) {
+    list.innerHTML = opts.map(o =>
+      `<option value="${o.name.replace(/"/g,'&quot;')}"></option>`
+    ).join('');
+  }
+  // Set current value
+  sel.value = counterPick ? curName : '';
+  // Stash name→empId map for change handler
+  window._counterMap = Object.fromEntries(opts.map(o => [o.name, o.empId || '']));
   // Shared email (no own name): always show picker if there's at least 1 option
   if (wrap) wrap.style.display = opts.length >= 1 ? 'flex' : 'none';
   // If no choice yet → force user to pick before counting
@@ -858,8 +862,14 @@ function counterRequiredButMissing() {
 }
 function onCounterChange() {
   const sel = document.getElementById('counterSel');
-  if (!sel || !sel.value) return;
-  const [name, empId] = sel.value.split('|');
+  if (!sel) return;
+  const name = String(sel.value || '').trim();
+  if (!name) return;
+  // Only commit when name matches a known option (avoids saving partial typing)
+  const map = window._counterMap || {};
+  if (!(name in map)) return;
+  const empId = map[name];
+  if (counterPick && counterPick.name === name) return;  // unchanged
   counterPick = { name, empId };
   try { localStorage.setItem('counterPick_'+(currentUser.email||'').toLowerCase(), JSON.stringify(counterPick)); } catch {}
   const wrap = document.getElementById('counterBar');
