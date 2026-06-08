@@ -617,7 +617,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v3.6';
+const APP_VERSION = 'v3.7';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -2000,7 +2000,15 @@ async function saveCountToSheet() {
       key: r.key, name: r.name,
       cs: r.item.counts.CS, bp: r.item.counts.BP, pa: r.item.counts.PA, ea: r.item.counts.EA,
       countedPieces: r.counted, systemRaw: r.systemRaw, systemPieces: r.system,
-      diffPieces: r.diff, status: r.status==='ok' ? 'ตรง' : r.status==='short' ? 'ขาด' : 'เกิน',
+      diffPieces: r.diff,
+      diffCSEA: (() => {
+        if (r.diff === 0) return '';
+        const sign = r.diff > 0 ? '+' : '-';
+        const a = Math.abs(r.diff), f = r.factorCS > 0 ? r.factorCS : 1;
+        const cs = Math.floor(a / f), ea = a - cs * f;
+        return cs > 0 ? `${sign}${cs} CS ${ea} EA` : `${sign}${ea} EA`;
+      })(),
+      status: r.status==='ok' ? 'ตรง' : r.status==='short' ? 'ขาด' : 'เกิน',
       expiryDate: r.item.expiryDate || '',
     })),
   };

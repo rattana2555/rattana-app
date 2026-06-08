@@ -1,5 +1,6 @@
 /**
- * Rattana Stock Count — Apps Script Web App (v1.4)
+ * Rattana Stock Count — Apps Script Web App (v1.5)
+ * v1.5 — add Diff CS.EA column (e.g. "-4 CS 17 EA")
  * v1.4 — add Expiry Date column (user-entered, optional)
  * v1.3 — sync in-progress draft counts per user across devices
  * v1.2 — doGet?action=history returns saved rows for the History tab
@@ -41,6 +42,7 @@ var HEADERS = [
   'System Stock',    // สต็อกระบบ (รูปแบบ CS.EA)
   'System Pieces',   // สต็อกระบบ (ชิ้น)
   'Diff Pieces',     // ต่าง (+ เกิน / - ขาด)
+  'Diff CS.EA',      // ต่าง รูปแบบ CS.EA (เช่น "-4 CS 17 EA")
   'Status',          // ตรง / ขาด / เกิน
   'Expiry Date'      // วันหมดอายุ (ผู้ใช้กรอก, YYYY-MM-DD; ว่างได้)
 ];
@@ -80,6 +82,7 @@ function doPost(e) {
         r.systemRaw || '',
         r.systemPieces || 0,
         r.diffPieces || 0,
+        r.diffCSEA || '',
         r.status || '',
         r.expiryDate || ''
       ]);
@@ -141,8 +144,9 @@ function doGet(e) {
           systemRaw:     String(r[12] || ''),
           systemPieces:  Number(r[13] || 0),
           diffPieces:    Number(r[14] || 0),
-          status:        String(r[15] || ''),
-          expiryDate:    _iso(r[16]),
+          diffCSEA:      String(r[15] || ''),
+          status:        String(r[16] || ''),
+          expiryDate:    _iso(r[17]),
         };
       });
       return _json({ ok: true, rows: rows });
