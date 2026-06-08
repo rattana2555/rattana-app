@@ -1,5 +1,6 @@
 /**
- * Rattana Stock Count — Apps Script Web App (v1.6)
+ * Rattana Stock Count — Apps Script Web App (v1.7)
+ * v1.7 — append Diff CS.EA with apostrophe prefix + per-cell text format (Sheets was still coercing it to a number)
  * v1.6 — Diff CS.EA stored as numeric-text "+1.2" / "-0.12"; column forced to text
  * v1.5 — add Diff CS.EA column (e.g. "-4 CS 17 EA")
  * v1.4 — add Expiry Date column (user-entered, optional)
@@ -68,6 +69,10 @@ function doPost(e) {
     sheet.getRange(1, 16, sheet.getMaxRows(), 1).setNumberFormat('@');
     var savedAt = data.savedAt || new Date().toISOString();
     (data.rows || []).forEach(function (r) {
+      // Prefix Diff CS.EA with apostrophe so Sheets treats it as text and
+      // preserves trailing zeros (e.g. "0.20" must stay 20 EA).
+      var diffCSEA = r.diffCSEA || '';
+      if (diffCSEA && diffCSEA.charAt(0) !== "'") diffCSEA = "'" + diffCSEA;
       sheet.appendRow([
         savedAt,
         data.sessionStart || '',
@@ -85,9 +90,13 @@ function doPost(e) {
         r.systemPieces || 0,
         r.diffPieces || 0,
         r.status || '',
-        r.diffCSEA || '',
+        diffCSEA,
         r.expiryDate || ''
       ]);
+      // Belt + suspenders — force the column-16 cell on this exact row to plain text
+      try {
+        sheet.getRange(sheet.getLastRow(), 16).setNumberFormat('@');
+      } catch (e2) {}
     });
     return ContentService
       .createTextOutput(JSON.stringify({ ok: true, saved: (data.rows || []).length }))
