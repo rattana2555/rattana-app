@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.15</title>
+<title>Rattana D-Delivery v1.16</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -308,7 +308,7 @@ body.dark .banner-gold{color:var(--gold-light)}
          data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left"></div>
     <div id="loginError"></div>
-    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.15 — Powered by Rattana Group</div>
+    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.16 — Powered by Rattana Group</div>
   </div>
 </div>
 
@@ -316,7 +316,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div id="appScreen" class="page" style="display:none">
   <header>
     <div class="logo-text">D<span>-DELIVERY</span></div>
-    <span class="ver-tag" id="verTag">v1.15</span>
+    <span class="ver-tag" id="verTag">v1.16</span>
     <span class="role-tag" id="roleTag">-</span>
     <div class="spacer"></div>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="อัพเดท">↻</button>
@@ -512,7 +512,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.15';
+const APP_VERSION='1.16';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -1026,6 +1026,24 @@ function confirmPickup(){
   switchTab('sec-driver-job');
 }
 
+function cancelPickup(){
+  const j=findMyActiveJob(); if(!j) return;
+  const billsDone=j.bills.filter(b=>b.status!=='pending').length;
+  const msg=billsDone>0
+    ? `⚠️ มี ${billsDone} บิลที่บันทึกไว้แล้ว — ถ้ายกเลิก ข้อมูลการเก็บเงินจะหายทั้งหมด\n\nต้องการยกเลิกการรับงาน ${j.id} หรือไม่?`
+    : `ยกเลิกการรับงาน ${j.id} และคืนเป็นงานว่าง?`;
+  if(!confirm(msg)) return;
+  // คืนสถานะเป็น available + ล้าง team + ล้าง payment ทุกบิล
+  j.team=null; j.driver=''; j.helper=''; j.plate=''; j.pickup='';
+  j.status='available';
+  j.startedAt=null;
+  j.bills.forEach(b=>{ b.status='pending'; b.payment={}; b.isCN=false; b.failReason=''; b.nextResp=''; b.note=''; b.savedAt=null; });
+  state.activeJobId=null;
+  persistJobs();
+  showToast(`ยกเลิกการรับงาน ${j.id} แล้ว`,'info');
+  switchTab('sec-driver-home');
+}
+
 /* ========== ACTIVE JOB (driver) ========== */
 function findMyActiveJob(){
   const me=state.user.nickname||state.user.name;
@@ -1063,6 +1081,9 @@ function renderActiveJob(){
           <div><div class="txt-xs txt-muted">บิลทั้งหมด</div><div class="txt-lg num">${done}/${j.bills.length}</div></div>
           <div><div class="txt-xs txt-muted">ยอดเก็บได้</div><div class="txt-lg num txt-gold">${fmt(collected)} / ${fmt(total)}</div></div>
         </div>
+        ${j.status==='in_progress'?`<div class="row mt-12" style="justify-content:flex-end">
+          <button class="btn btn-outline btn-sm txt-danger" onclick="cancelPickup()">🗑 ยกเลิกการรับงานนี้</button>
+        </div>`:''}
       </div>
     </div>
 
