@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.8</title>
+<title>Rattana D-Delivery v1.9</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -296,7 +296,7 @@ body.dark .banner-gold{color:var(--gold-light)}
          data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left"></div>
     <div id="loginError"></div>
-    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.8 — Powered by Rattana Group</div>
+    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.9 — Powered by Rattana Group</div>
   </div>
 </div>
 
@@ -304,7 +304,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div id="appScreen" class="page" style="display:none">
   <header>
     <div class="logo-text">D<span>-DELIVERY</span></div>
-    <span class="ver-tag" id="verTag">v1.8</span>
+    <span class="ver-tag" id="verTag">v1.9</span>
     <span class="role-tag" id="roleTag">-</span>
     <div class="spacer"></div>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="อัพเดท">↻</button>
@@ -497,7 +497,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.8';
+const APP_VERSION='1.9';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -1315,7 +1315,10 @@ async function submitForApproval(){
 }
 
 /* ========== SUPERVISOR ========== */
-function renderSupHome(){
+async function renderSupHome(){
+  // Sync จากชีทก่อน render เพื่อให้เห็นงานที่คนขับเพิ่งส่ง
+  const got=await syncJobsFromSheet().catch(()=>0);
+  if(got) console.log('synced',got,'jobs from sheet');
   const pending=state.jobs.filter(j=>j.status==='pending_approval');
   const today=new Date().toDateString();
   const todayBills=state.jobs.flatMap(j=>j.bills.filter(b=>b.savedAt&&new Date(b.savedAt).toDateString()===today));
@@ -1530,6 +1533,9 @@ async function syncToSheets(job){
     submittedAt:job.submittedAt,
     approvedAt:job.approvedAt,
     approvedBy:job.approvedBy,
+    rejectedAt:job.rejectedAt,
+    rejectedBy:job.rejectedBy,
+    rejectReason:job.rejectReason,
     bills:job.bills.map(b=>({
       doc:b.doc,code:b.code,name:b.name,amount:b.amount,
       status:b.status,isCN:!!b.isCN,failReason:b.failReason||'',nextResp:b.nextResp||'',
@@ -1539,6 +1545,111 @@ async function syncToSheets(job){
   try{
     await fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)});
   }catch(e){ console.warn('sync failed',e); }
+}
+
+/* อ่านงานทั้งหมดจากชีท "บันทึกการเก็บเงิน" (Apps Script bound to Jobs sheet) */
+async function loadJobsFromSheet(){
+  try{
+    const rows=await fetchSheet(CFG.jobsSheetId,'บันทึกการเก็บเงิน');
+    if(!rows||!rows.length) return [];
+    // group by jobId (เลขใบคุม)
+    const groups={};
+    rows.forEach(r=>{
+      const jid=cleanCell(r['เลขใบคุม']||r['เลขที่ใบคุม']||r['JobId']||'');
+      if(!jid) return;
+      if(!groups[jid]) groups[jid]={id:jid,events:[]};
+      groups[jid].events.push(r);
+    });
+    return Object.values(groups).map(g=>{
+      // เรียงตามเวลา (ใหม่สุดท้าย)
+      g.events.sort((a,b)=>new Date(a['วันที่บันทึก'])-new Date(b['วันที่บันทึก']));
+      const latest=g.events[g.events.length-1];
+      // รวมบิล: ใช้รายการล่าสุดของแต่ละ Doc_No
+      const billMap={};
+      g.events.forEach(r=>{
+        const doc=cleanCell(r['Doc_No']); if(!doc) return;
+        billMap[doc]={
+          doc,
+          code:cleanCell(r['Customer_Code']),
+          name:cleanCell(r['Customer_Name']),
+          amount:parseFloat(r['TotalBaht'])||0,
+          status:cleanCell(r['สถานะ'])||'done',
+          isCN:cleanCell(r['สถานะ'])==='cn',
+          failReason:cleanCell(r['สาเหตุ']),
+          nextResp:cleanCell(r['ผู้รับผิดชอบส่งต่อ']),
+          payment:{
+            banknotes:parseFloat(r['ธนบัตร'])||0,
+            coins:parseFloat(r['เหรียญ'])||0,
+            transfer1:parseFloat(r['โอน1'])||0,
+            transfer2:parseFloat(r['โอน2'])||0,
+            cheque:parseFloat(r['เช็ค'])||0,
+            creditNote:parseFloat(r['ใบลดหนี้'])||0,
+          },
+          lat:null,lng:null,address:'',phone:'',salesman:'',creditDays:0,creditLimit:0,
+        };
+      });
+      const bills=Object.values(billMap);
+      const approvedBy=cleanCell(latest['หัวหน้าอนุมัติ']);
+      const rejectedBy=cleanCell(latest['ตีกลับโดย']||'');
+      let status='in_progress';
+      if(approvedBy) status='approved';
+      else if(rejectedBy) status='rejected';
+      else if(bills.length&&bills.every(b=>b.status!=='pending')) status='pending_approval';
+      return {
+        id:g.id,
+        team:{
+          driver:cleanCell(latest['คนขับ']),
+          helper:cleanCell(latest['ผู้ช่วย']),
+          plate:cleanCell(latest['ทะเบียนรถ']),
+          pattern:cleanCell(latest['รูปแบบ']),
+        },
+        driver:cleanCell(latest['คนขับ']),
+        plate:cleanCell(latest['ทะเบียนรถ']),
+        pickup:cleanCell(latest['รูปแบบ']),
+        warehouse:'W1',
+        status,
+        bills,
+        submittedAt:latest['วันที่บันทึก']?new Date(latest['วันที่บันทึก']).getTime():Date.now(),
+        approvedBy,
+        approvedAt:latest['วันที่อนุมัติ']?new Date(latest['วันที่อนุมัติ']).getTime():null,
+        rejectedBy,
+        rejectReason:cleanCell(latest['เหตุผลตีกลับ']||''),
+        _fromSheet:true,
+      };
+    });
+  }catch(e){ console.warn('loadJobsFromSheet failed:',e); return []; }
+}
+
+/* รวมข้อมูลจากชีทเข้ากับ state.jobs (ชีท override local)
+   normalize ID: ตัด leading zero เพราะ Sheets อาจแปลงเลขเป็น number */
+const normJobId=s=>String(s||'').trim().replace(/^0+(?=\d)/,'').toLowerCase();
+async function syncJobsFromSheet(){
+  const sheetJobs=await loadJobsFromSheet();
+  if(!sheetJobs.length) return 0;
+  const idx={};
+  state.jobs.forEach((j,i)=>idx[normJobId(j.id)]=i);
+  sheetJobs.forEach(sj=>{
+    const key=normJobId(sj.id);
+    if(idx[key]!==undefined){
+      const local=state.jobs[idx[key]];
+      // ผสมรายละเอียดร้านค้าจาก local (พิกัด, เครดิต, ที่อยู่)
+      sj.bills.forEach(sb=>{
+        const lb=local.bills.find(x=>x.doc===sb.doc);
+        if(lb){ sb.lat=lb.lat;sb.lng=lb.lng;sb.address=lb.address;sb.phone=lb.phone;sb.salesman=lb.salesman;sb.creditDays=lb.creditDays;sb.creditLimit=lb.creditLimit; }
+      });
+      // ใส่บิลจาก local ที่ไม่อยู่ในชีท (กรณีคนขับยังส่งไม่ครบ)
+      local.bills.forEach(lb=>{
+        if(!sj.bills.find(sb=>sb.doc===lb.doc)) sj.bills.push(lb);
+      });
+      // เก็บ id เดิมที่ user เห็นบนแอป (ไม่เอา id ที่โดน Sheets เปลี่ยน)
+      sj.id=local.id;
+      state.jobs[idx[key]]=sj;
+    } else {
+      state.jobs.push(sj);
+    }
+  });
+  persistJobs();
+  return sheetJobs.length;
 }
 
 const APPS_SCRIPT_CODE=`/* D-Delivery — Apps Script Backend v1.0 */
@@ -1635,6 +1746,7 @@ async function refreshData(){
   showSpinner('อัพเดทข้อมูล...');
   try{
     await Promise.all([loadUsers(),loadVehicles(),loadCustomers(),loadChoices()]);
+    await syncJobsFromSheet().catch(()=>{});
     showToast('อัพเดทข้อมูลแล้ว ✓','success');
     renderCurrent();
   }catch(e){ showToast('โหลดไม่สำเร็จ','error'); }
@@ -1653,6 +1765,7 @@ async function bootApp(){
     if(!state.users.length){ await loadUsers(); }
     await Promise.all([loadVehicles(),loadCustomers(),loadChoices()]);
     await loadJobs();
+    await syncJobsFromSheet().catch(()=>{});
     $('loginScreen').style.display='none';
     $('appScreen').style.display='flex';
     $('roleTag').textContent=state.role==='supervisor'?'👨‍💼 '+state.user.nickname:'🚚 '+state.user.nickname;
