@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.21</title>
+<title>Rattana D-Delivery v1.22</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -320,7 +320,7 @@ body.dark .banner-gold{color:var(--gold-light)}
          data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left"></div>
     <div id="loginError"></div>
-    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.21 — Powered by Rattana Group</div>
+    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.22 — Powered by Rattana Group</div>
   </div>
 </div>
 
@@ -328,7 +328,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div id="appScreen" class="page" style="display:none">
   <header>
     <div class="logo-text">D<span>-DELIVERY</span></div>
-    <span class="ver-tag" id="verTag">v1.21</span>
+    <span class="ver-tag" id="verTag">v1.22</span>
     <span class="role-tag" id="roleTag">-</span>
     <div class="spacer"></div>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="อัพเดท">↻</button>
@@ -446,7 +446,7 @@ body.dark .banner-gold{color:var(--gold-light)}
             แอปนี้เชื่อมต่อ Google Sheets อัตโนมัติแล้ว — ทุกงานที่ส่งให้หัวหน้าอนุมัติจะถูกบันทึกลง <b>"บันทึกการเก็บเงิน"</b> และ <b>"CN"</b>
           </div>
           <div class="banner-warn mt-12">
-            ⚠️ <b>Apps Script v2.0 (upsert)</b> — ถ้าใช้ script v1.0 จะมีแถวซ้ำใน sheet ทุกครั้งที่ส่ง. กรุณา redeploy ด้วยโค้ดล่าสุด (ขั้นสูง → คัดลอกโค้ด) แล้วรัน <code>dedupeExistingRows</code> ใน Apps Script editor 1 ครั้งเพื่อล้างแถวเก่า
+            ⚠️ <b>Apps Script v3.0 (INPUT + Cin)</b> — โครงชีทใหม่: ข้อมูลรับงานลงชีท <code>INPUT</code> (1 แถว/1 ใบคุม), รายละเอียดบิลลงชีท <code>Cin</code> (1 แถว/1 บิล) ตรงโครงเดิม. กรุณา redeploy ด้วยโค้ดล่าสุด (ขั้นสูง → คัดลอกโค้ด)
           </div>
           <div class="row mt-12">
             <button class="btn btn-outline" onclick="testAppsUrl()">🧪 ทดสอบการเชื่อมต่อ</button>
@@ -546,7 +546,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.21';
+const APP_VERSION='1.22';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -834,9 +834,11 @@ async function loadAvailableJobs(){
       const amount=parseFloat(cleanCell(r['TotalBaht']).replace(/,/g,''))||0;
       byCode[tc].bills.push({
         doc:cleanCell(r['Doc_No']),
+        docDate:cleanCell(r['Doc_Date']),
         code,
         name:cleanCell(r['Customer_Name']),
         salesman:cleanCell(r['Salesman_Name']),
+        salesmanCode:cleanCell(r['Salesman_Code']),
         amount,
         lat:cust.lat||null, lng:cust.lng||null,
         address:cust.address||'',
@@ -1874,17 +1876,25 @@ async function syncToSheets(job){
     jobId:job.id,
     status:job.status,
     team:job.team,
+    warehouse:job.warehouse||'W1',
+    special:job.special||null,
+    startedAt:job.startedAt,
     submittedAt:job.submittedAt,
     approvedAt:job.approvedAt,
     approvedBy:job.approvedBy,
     rejectedAt:job.rejectedAt,
     rejectedBy:job.rejectedBy,
     rejectReason:job.rejectReason,
-    special:job.special||null,
     bills:job.bills.map(b=>({
-      doc:b.doc,code:b.code,name:b.name,amount:b.amount,
-      status:b.status,isCN:!!b.isCN,failReason:b.failReason||'',nextResp:b.nextResp||'',
-      payment:b.payment,total:payTotal(b.payment),
+      doc:b.doc, docDate:b.docDate,
+      code:b.code, name:b.name,
+      salesman:b.salesman, salesmanCode:b.salesmanCode,
+      amount:b.amount,
+      status:b.status, isCN:!!b.isCN,
+      failReason:b.failReason||'', nextResp:b.nextResp||'', note:b.note||'',
+      creditDays:b.creditDays||0,
+      payment:b.payment, total:payTotal(b.payment),
+      savedAt:b.savedAt,
     })),
   };
   try{
@@ -1895,70 +1905,82 @@ async function syncToSheets(job){
 /* อ่านงานทั้งหมดจากชีท "บันทึกการเก็บเงิน" (Apps Script bound to Jobs sheet) */
 async function loadJobsFromSheet(){
   try{
-    const rows=await fetchSheet(CFG.jobsSheetId,'บันทึกการเก็บเงิน');
-    if(!rows||!rows.length) return [];
-    // group by jobId (เลขใบคุม)
-    const groups={};
-    rows.forEach(r=>{
-      const jid=cleanCell(r['เลขใบคุม']||r['เลขที่ใบคุม']||r['JobId']||'');
+    // อ่านจาก 2 ชีท: Cin (ข้อมูลบิล) + INPUT (ข้อมูลรับงาน/อนุมัติ)
+    const [cinRows,inputRows]=await Promise.all([
+      fetchSheet(CFG.jobsSheetId,'Cin').catch(()=>[]),
+      fetchSheet(CFG.jobsSheetId,'INPUT').catch(()=>[]),
+    ]);
+    if(!cinRows.length&&!inputRows.length) return [];
+
+    // index INPUT (1 แถวต่อ 1 รหัสใบคุม)
+    const inputByJob={};
+    inputRows.forEach(r=>{
+      const jid=cleanCell(r['รหัสใบคุม']||r['🔒 Row ID']||'');
       if(!jid) return;
-      if(!groups[jid]) groups[jid]={id:jid,events:[]};
-      groups[jid].events.push(r);
+      inputByJob[jid]=r;
     });
-    return Object.values(groups).map(g=>{
-      // เรียงตามเวลา (ใหม่สุดท้าย)
-      g.events.sort((a,b)=>new Date(a['วันที่บันทึก'])-new Date(b['วันที่บันทึก']));
-      const latest=g.events[g.events.length-1];
-      // รวมบิล: ใช้รายการล่าสุดของแต่ละ Doc_No
-      const billMap={};
-      g.events.forEach(r=>{
-        const doc=cleanCell(r['Doc_No']); if(!doc) return;
-        billMap[doc]={
-          doc,
+
+    // group Cin rows by เลขใบคุม
+    const billsByJob={};
+    cinRows.forEach(r=>{
+      const jid=cleanCell(r['เลขใบคุม']||'');
+      if(!jid) return;
+      if(!billsByJob[jid]) billsByJob[jid]=[];
+      billsByJob[jid].push(r);
+    });
+
+    const allJobIds=new Set([...Object.keys(inputByJob),...Object.keys(billsByJob)]);
+    return [...allJobIds].map(jid=>{
+      const inRow=inputByJob[jid]||{};
+      const billRows=billsByJob[jid]||[];
+      const bills=billRows.map(r=>{
+        const banknotes=parseFloat(r['ธนบัตร'])||0;
+        const coins=parseFloat(r['เหรียญ'])||0;
+        const transfer1=parseFloat(r['โอนครั้งที่1'])||0;
+        const transfer2=parseFloat(r['โอนครั้งที่2'])||0;
+        const cheque=parseFloat(r['เช็ค'])||0;
+        const creditNote=parseFloat(r['ใบลดหนี้'])||0;
+        const billStatus=cleanCell(r['Status บิล'])||'done';
+        return {
+          doc:cleanCell(r['Doc_No']),
           code:cleanCell(r['Customer_Code']),
           name:cleanCell(r['Customer_Name']),
+          salesman:cleanCell(r['Salesman_Name']),
+          salesmanCode:cleanCell(r['Salesman_Code']),
           amount:parseFloat(r['TotalBaht'])||0,
-          status:cleanCell(r['สถานะ'])||'done',
-          isCN:cleanCell(r['สถานะ'])==='cn',
-          failReason:cleanCell(r['สาเหตุ']),
-          nextResp:cleanCell(r['ผู้รับผิดชอบส่งต่อ']),
-          payment:{
-            banknotes:parseFloat(r['ธนบัตร'])||0,
-            coins:parseFloat(r['เหรียญ'])||0,
-            transfer1:parseFloat(r['โอน1'])||0,
-            transfer2:parseFloat(r['โอน2'])||0,
-            cheque:parseFloat(r['เช็ค'])||0,
-            creditNote:parseFloat(r['ใบลดหนี้'])||0,
-          },
-          lat:null,lng:null,address:'',phone:'',salesman:'',creditDays:0,creditLimit:0,
+          status:billStatus,
+          isCN:billStatus==='cn',
+          failReason:cleanCell(r['สาเหตุไม่ส่ง']),
+          nextResp:cleanCell(r['ผู้รับผิดชอบส่งวันถัดไป']),
+          note:cleanCell(r['หมายเหตุ']),
+          payment:{banknotes,coins,transfer1,transfer2,cheque,creditNote},
+          savedAt:r['วัน+เวลา ที่ส่งสินค้า']?new Date(r['วัน+เวลา ที่ส่งสินค้า']).getTime():null,
+          lat:null,lng:null,address:'',phone:'',creditDays:0,creditLimit:0,
         };
       });
-      const bills=Object.values(billMap);
-      const approvedBy=cleanCell(latest['หัวหน้าอนุมัติ']);
-      const rejectedBy=cleanCell(latest['ตีกลับโดย']||'');
+      const approvedBy=cleanCell(inRow['ผู้อนุมัติปิดงาน']);
       let status='in_progress';
       if(approvedBy) status='approved';
-      else if(rejectedBy) status='rejected';
       else if(bills.length&&bills.every(b=>b.status!=='pending')) status='pending_approval';
       return {
-        id:g.id,
+        id:jid,
         team:{
-          driver:cleanCell(latest['คนขับ']),
-          helper:cleanCell(latest['ผู้ช่วย']),
-          plate:cleanCell(latest['ทะเบียนรถ']),
-          pattern:cleanCell(latest['รูปแบบ']),
+          driver:cleanCell(inRow['ชื่อคนขับ']),
+          helper:[1,2,3,4,5,6].map(i=>cleanCell(inRow['ผู้ช่วย'+i])).filter(Boolean).join(', '),
+          plate:cleanCell(inRow['ทะเบียน']),
+          pattern:cleanCell(inRow['การส่ง']),
         },
-        driver:cleanCell(latest['คนขับ']),
-        plate:cleanCell(latest['ทะเบียนรถ']),
-        pickup:cleanCell(latest['รูปแบบ']),
-        warehouse:'W1',
+        driver:cleanCell(inRow['ชื่อคนขับ']),
+        plate:cleanCell(inRow['ทะเบียน']),
+        pickup:cleanCell(inRow['การส่ง']),
+        warehouse:cleanCell(inRow['คลัง'])||'W1',
+        special:inRow['ส่งพิเศษ']?{type:cleanCell(inRow['ส่งพิเศษ']),destination:cleanCell(inRow['สรุปส่งพิเศษ']),item:cleanCell(inRow['หมายเหตุขน']),qty:parseInt(cleanCell(inRow['จำนวนขนกลับ']))||0}:null,
         status,
         bills,
-        submittedAt:latest['วันที่บันทึก']?new Date(latest['วันที่บันทึก']).getTime():Date.now(),
+        submittedAt:inRow['วันเวลาปิดงาน']?new Date(inRow['วันเวลาปิดงาน']).getTime():Date.now(),
         approvedBy,
-        approvedAt:latest['วันที่อนุมัติ']?new Date(latest['วันที่อนุมัติ']).getTime():null,
-        rejectedBy,
-        rejectReason:cleanCell(latest['เหตุผลตีกลับ']||''),
+        approvedAt:inRow['วันเวลาอนุมัติ']?new Date(inRow['วันเวลาอนุมัติ']).getTime():null,
+        startedAt:inRow['วันเวลาส่งงาน']?new Date(inRow['วันเวลาส่งงาน']).getTime():null,
         _fromSheet:true,
       };
     });
@@ -2007,21 +2029,29 @@ async function syncJobsFromSheet(){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-Delivery — Apps Script Backend v2.1 (upsert + transfer) */
-const SHEET_RECORD='บันทึกการเก็บเงิน';
-const SHEET_CN='CN';
-const SHEET_TRANSFER='เที่ยวพิเศษ';
+const APPS_SCRIPT_CODE=`/* D-Delivery — Apps Script Backend v3.0 (INPUT + Cin schema) */
+const SHEET_INPUT='INPUT';
+const SHEET_CIN='Cin';
 
-const HEADERS_RECORD=['วันที่บันทึก','เลขใบคุม','Doc_No','Customer_Code','Customer_Name','Salesman',
-  'TotalBaht','ธนบัตร','เหรียญ','โอน1','โอน2','เช็ค','ใบลดหนี้','รวมเก็บได้',
-  'สถานะ','สาเหตุ','ผู้รับผิดชอบส่งต่อ','คนขับ','ผู้ช่วย','ทะเบียนรถ','รูปแบบ',
-  'หัวหน้าอนุมัติ','วันที่อนุมัติ','ตีกลับโดย','เหตุผลตีกลับ','วันที่ตีกลับ'];
+const HEADERS_INPUT=['🔒 Row ID','วันเวลาปิดงาน','จำนวนพาเลทนำขึ้นรถ','ทะเบียน','ลังนำไป',
+  'รหัสใบคุม','ชื่อคนขับ','ผู้ช่วย1','ผู้ช่วย2','ผู้ช่วย3','ผู้ช่วย4','ผู้ช่วย5','ผู้ช่วย6',
+  'พนง.ใหม่','การส่ง','ส่งพิเศษ','หมายเหตุขน','จำนวนขนกลับ','ประเภทส่ง',
+  'สรุปส่งพิเศษ','สรุปหมายเหตุขน','สรุปจำนวนขนกลับ','คลัง',
+  'เช็คพาเลทคืน','เช็คลังน้ำคืน','เช็คถังคืน',
+  'ผู้อนุมัติปิดงาน','วันเวลาอนุมัติ','ถังนำไป','วันเวลาส่งงาน'];
 
-const HEADERS_CN=['วันที่บันทึก','เลขใบคุม','Doc_No','Customer_Code','Customer_Name','Salesman',
-  'TotalBaht','สาเหตุ','ผู้รับผิดชอบส่งต่อ','คนขับ','ทะเบียนรถ','หมายเหตุ'];
+const HEADERS_CIN=['เลขใบคุม','Doc_Date','Doc_No','Customer_Code','Customer_Name',
+  'Salesman_Code','Salesman_Name','ทะเบียนรถ','TotalBaht','วัน+เวลา ที่ส่งสินค้า',
+  'U_ADD','Warehouse','ธนบัตร','เหรียญ','โอนครั้งที่1','แบงค์1','วันที่โอนครั้งที่1',
+  'โอนครั้งที่2','แบงค์2','วันที่โอนครั้งที่2','รูปสลิปที่1','รูปสลิปที่2',
+  'เช็ค','รูปเช็ค','วันที่ในเช็ค','เดือนในเช็ค','ปีในเช็ค','วัน-เดือน-ปี ของเช็ค','รูปเช็ค',
+  'ใบลดหนี้','รวมยอดชำระ','ชำระขาด-เกิน','Status จ่าย','หมายเหตุ','Status บิล',
+  'ผู้ส่งสินค้า','เครดิต','แก้ไขเมื่อ','จ่ายรวมบิล','วันที่',
+  'ไม่ได้ส่ง','สาเหตุไม่ส่ง','ผู้รับผิดชอบส่งวันถัดไป',
+  'จำนวนพาเลท','จำนวนเงินต่อเลท','จำนวนเงินรวม','รับใบคุม'];
 
 function doGet(e){
-  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'2.0'}))
+  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.0'}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -2030,54 +2060,126 @@ function doPost(e){
     const data=JSON.parse(e.postData.contents);
     const ss=SpreadsheetApp.getActiveSpreadsheet();
     const now=new Date();
-    // เที่ยวพิเศษ — โอนย้าย/ขนสินค้า
-    if(data.action==='save_transfer'){
-      const tSh=ensureSheet_(ss,SHEET_TRANSFER,
-        ['วันที่บันทึก','เลขใบคุม','ประเภท','คลังโอนย้าย','ชื่อสินค้า/สถานที่','จำนวนลัง','คนขับ','รหัสพนักงาน']);
-      const tIdx=buildIndex_(tSh,1,2);
-      const row=[now,String(data.jobId),data.type||'',data.destination||'',data.item||'',data.qty||0,data.driver||'',data.empId||''];
-      upsert_(tSh,tIdx,String(data.jobId)+'|'+String(data.type),row);
-      tSh.getRange('B:B').setNumberFormat('@');
-      return ContentService.createTextOutput(JSON.stringify({ok:true})).setMimeType(ContentService.MimeType.JSON);
-    }
-    const sh=ensureSheet_(ss,SHEET_RECORD,HEADERS_RECORD);
-    const cnSh=ensureSheet_(ss,SHEET_CN,HEADERS_CN);
+    const inSh=ensureSheet_(ss,SHEET_INPUT,HEADERS_INPUT);
+    const cinSh=ensureSheet_(ss,SHEET_CIN,HEADERS_CIN);
     const team=data.team||{};
+    const sp=data.special||{};
 
-    // Build index ของแถวเดิม (jobId|doc_no → rowNum)
-    const recIdx=buildIndex_(sh,1,2); // col B=jobId, col C=doc
-    const cnIdx=buildIndex_(cnSh,1,2);
+    // ===== INPUT — 1 แถวต่อ 1 รหัสใบคุม =====
+    const inIdx=buildIndex1_(inSh,5); // col F (index 5) = รหัสใบคุม
+    // ผู้ช่วย 1-6
+    const helpers=Array.isArray(data.helperList)?data.helperList:
+      [team.helper1,team.helper2,team.helperExtra].filter(Boolean);
+    const h=[];
+    for(let i=0;i<6;i++) h.push(helpers[i]||'');
+    const inRow=[
+      String(data.jobId),                                                    // 🔒 Row ID (ใช้ jobId เป็น key)
+      data.submittedAt?new Date(data.submittedAt):'',                        // วันเวลาปิดงาน
+      data.palletLoaded||'',                                                 // จำนวนพาเลทนำขึ้นรถ
+      team.plate||'',                                                        // ทะเบียน
+      data.cratesOut||'',                                                    // ลังนำไป
+      String(data.jobId),                                                    // รหัสใบคุม
+      team.driver||'',                                                       // ชื่อคนขับ
+      h[0],h[1],h[2],h[3],h[4],h[5],                                         // ผู้ช่วย 1-6
+      data.newStaff||'',                                                     // พนง.ใหม่
+      team.pattern||'',                                                      // การส่ง
+      sp.type||'',                                                           // ส่งพิเศษ
+      sp.item||'',                                                           // หมายเหตุขน
+      sp.qty||'',                                                            // จำนวนขนกลับ
+      data.deliveryType||'',                                                 // ประเภทส่ง
+      sp.destination||'',                                                    // สรุปส่งพิเศษ
+      sp.item||'',                                                           // สรุปหมายเหตุขน
+      sp.qty||'',                                                            // สรุปจำนวนขนกลับ
+      data.warehouse||'',                                                    // คลัง
+      data.palletReturn||'',                                                 // เช็คพาเลทคืน
+      data.crateWaterReturn||'',                                             // เช็คลังน้ำคืน
+      data.tankReturn||'',                                                   // เช็คถังคืน
+      data.approvedBy||'',                                                   // ผู้อนุมัติปิดงาน
+      data.approvedAt?new Date(data.approvedAt):'',                          // วันเวลาอนุมัติ
+      data.tankOut||'',                                                      // ถังนำไป
+      data.startedAt?new Date(data.startedAt):''                             // วันเวลาส่งงาน
+    ];
+    upsert_(inSh,inIdx,String(data.jobId),inRow);
+    inSh.getRange('A:A').setNumberFormat('@');
+    inSh.getRange('F:F').setNumberFormat('@');
 
-    data.bills.forEach(b=>{
-      const p=b.payment||{};
-      const row=[now,String(data.jobId),String(b.doc),String(b.code),b.name,'',
-        b.amount,p.banknotes||0,p.coins||0,p.transfer1||0,p.transfer2||0,p.cheque||0,p.creditNote||0,b.total||0,
-        b.status,b.failReason||'',b.nextResp||'',team.driver||'',team.helper||'',team.plate||'',team.pattern||'',
-        data.approvedBy||'',data.approvedAt?new Date(data.approvedAt):'',
-        data.rejectedBy||'',data.rejectReason||'',data.rejectedAt?new Date(data.rejectedAt):''];
-      upsert_(sh,recIdx,String(data.jobId)+'|'+String(b.doc),row);
+    // ===== Cin — 1 แถวต่อ 1 บิล =====
+    if(Array.isArray(data.bills)){
+      const cinIdx=buildIndex_(cinSh,0,2); // col A=เลขใบคุม, col C=Doc_No
+      data.bills.forEach(b=>{
+        const p=b.payment||{};
+        const totalPaid=(parseFloat(p.banknotes)||0)+(parseFloat(p.coins)||0)+(parseFloat(p.transfer1)||0)
+          +(parseFloat(p.transfer2)||0)+(parseFloat(p.cheque)||0)+(parseFloat(p.creditNote)||0);
+        const diff=totalPaid-(parseFloat(b.amount)||0);
+        const payStatus=Math.abs(diff)<0.005?'ครบ':(diff<0?'ขาด':'เกิน');
+        const cinRow=[
+          String(data.jobId),                       // เลขใบคุม
+          b.docDate?new Date(b.docDate):'',         // Doc_Date
+          String(b.doc),                            // Doc_No
+          String(b.code||''),                       // Customer_Code
+          b.name||'',                               // Customer_Name
+          b.salesmanCode||'',                       // Salesman_Code
+          b.salesman||'',                           // Salesman_Name
+          team.plate||'',                           // ทะเบียนรถ
+          b.amount||0,                              // TotalBaht
+          b.savedAt?new Date(b.savedAt):now,        // วัน+เวลา ที่ส่งสินค้า
+          team.driver||'',                          // U_ADD (recorder)
+          data.warehouse||'',                       // Warehouse
+          p.banknotes||0,                           // ธนบัตร
+          p.coins||0,                               // เหรียญ
+          p.transfer1||0,                           // โอนครั้งที่1
+          p.transfer1Bank||'',                      // แบงค์1
+          p.transfer1Date?new Date(p.transfer1Date):'', // วันที่โอนครั้งที่1
+          p.transfer2||0,                           // โอนครั้งที่2
+          p.transfer2Bank||'',                      // แบงค์2
+          p.transfer2Date?new Date(p.transfer2Date):'', // วันที่โอนครั้งที่2
+          p.transfer1Photo?'YES':'',                // รูปสลิปที่1 (มี/ไม่มี — base64 ใหญ่เกินใส่ cell)
+          p.transfer2Photo?'YES':'',                // รูปสลิปที่2
+          p.cheque||0,                              // เช็ค
+          p.chequePhoto?'YES':'',                   // รูปเช็ค
+          p.chequeDay||'',                          // วันที่ในเช็ค
+          p.chequeMonth||'',                        // เดือนในเช็ค
+          p.chequeYear||'',                         // ปีในเช็ค
+          p.chequeDate?new Date(p.chequeDate):'',   // วัน-เดือน-ปี ของเช็ค
+          p.chequePhoto?'YES':'',                   // รูปเช็ค (dup col)
+          p.creditNote||0,                          // ใบลดหนี้
+          totalPaid,                                // รวมยอดชำระ
+          diff,                                     // ชำระขาด-เกิน
+          payStatus,                                // Status จ่าย
+          b.note||'',                               // หมายเหตุ
+          b.status||'',                             // Status บิล
+          team.driver||'',                          // ผู้ส่งสินค้า
+          b.creditDays||'',                         // เครดิต
+          now,                                      // แก้ไขเมื่อ
+          (totalPaid>0?'YES':''),                   // จ่ายรวมบิล
+          b.savedAt?new Date(b.savedAt):'',         // วันที่
+          (b.status==='failed'||b.status==='cn')?'YES':'', // ไม่ได้ส่ง
+          b.failReason||'',                         // สาเหตุไม่ส่ง
+          b.nextResp||'',                           // ผู้รับผิดชอบส่งวันถัดไป
+          b.palletCount||'',                        // จำนวนพาเลท
+          b.amountPerPallet||'',                    // จำนวนเงินต่อเลท
+          b.amountTotal||totalPaid,                 // จำนวนเงินรวม
+          b.receivedTicket||''                      // รับใบคุม
+        ];
+        upsert_(cinSh,cinIdx,String(data.jobId)+'|'+String(b.doc),cinRow);
+      });
+      cinSh.getRange('A:A').setNumberFormat('@');
+      cinSh.getRange('C:C').setNumberFormat('@');
+    }
 
-      if(b.isCN){
-        const cnRow=[now,String(data.jobId),String(b.doc),String(b.code),b.name,'',
-          b.amount,b.failReason||'',b.nextResp||'',team.driver||'',team.plate||'',''];
-        upsert_(cnSh,cnIdx,String(data.jobId)+'|'+String(b.doc),cnRow);
-      } else {
-        // ถ้าก่อนหน้านี้เคย CN แล้วเปลี่ยนใจ → ลบจากชีท CN
-        const key=String(data.jobId)+'|'+String(b.doc);
-        if(cnIdx[key]){ cnSh.deleteRow(cnIdx[key]); delete cnIdx[key]; rebuildIndex_(cnSh,1,2,cnIdx); }
-      }
-    });
-
-    // บังคับให้คอลัมน์ B (เลขใบคุม) เป็น text เพื่อกัน leading zero หาย
-    sh.getRange('B:B').setNumberFormat('@');
-    cnSh.getRange('B:B').setNumberFormat('@');
-
-    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'2.0'}))
+    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.0'}))
       .setMimeType(ContentService.MimeType.JSON);
   }catch(err){
     return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err)}))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+/* Index ด้วย 1 คอลัมน์ (col index 0-based → rowNum) */
+function buildIndex1_(sh,col){
+  const idx={}; const data=sh.getDataRange().getValues();
+  for(let i=1;i<data.length;i++){ const k=String(data[i][col]); if(k) idx[k]=i+1; }
+  return idx;
 }
 
 /* สร้าง index (key=col1|col2 → rowNum 1-indexed) */
@@ -2122,14 +2224,14 @@ function ensureSheet_(ss,name,headers){
    เปิดเมนู Extensions → Apps Script → เลือก dedupeExistingRows → Run */
 function dedupeExistingRows(){
   const ss=SpreadsheetApp.getActiveSpreadsheet();
-  [SHEET_RECORD,SHEET_CN].forEach(name=>{
-    const sh=ss.getSheetByName(name); if(!sh) return;
+  // INPUT keyed by col F (5) = รหัสใบคุม; Cin keyed by col A (0) + col C (2) = (เลขใบคุม, Doc_No)
+  [{name:SHEET_INPUT,keys:[5]},{name:SHEET_CIN,keys:[0,2]}].forEach(cfg=>{
+    const sh=ss.getSheetByName(cfg.name); if(!sh) return;
     const data=sh.getDataRange().getValues();
     const seen={};
-    const toKeep=[data[0]]; // header
-    // เก็บแถวล่าสุดของแต่ละ (jobId, doc)
+    const toKeep=[data[0]];
     for(let i=data.length-1;i>=1;i--){
-      const key=String(data[i][1])+'|'+String(data[i][2]);
+      const key=cfg.keys.map(c=>String(data[i][c])).join('|');
       if(!seen[key]){ seen[key]=true; toKeep.splice(1,0,data[i]); }
     }
     sh.clearContents();
