@@ -1,5 +1,10 @@
 /**
- * Rattana Stock Count — Apps Script Web App (v1.4)
+ * Rattana Stock Count — Apps Script Web App (v1.9)
+ * v1.9 — apostrophe-prefix + per-cell text format for System Stock too
+ * v1.8 — add Email column (counter's email) after Expiry Date
+ * v1.7 — append Diff CS.EA with apostrophe prefix + per-cell text format (Sheets was still coercing it to a number)
+ * v1.6 — Diff CS.EA stored as numeric-text "+1.2" / "-0.12"; column forced to text
+ * v1.5 — add Diff CS.EA column (e.g. "-4 CS 17 EA")
  * v1.4 — add Expiry Date column (user-entered, optional)
  * v1.3 — sync in-progress draft counts per user across devices
  * v1.2 — doGet?action=history returns saved rows for the History tab
@@ -42,7 +47,9 @@ var HEADERS = [
   'System Pieces',   // สต็อกระบบ (ชิ้น)
   'Diff Pieces',     // ต่าง (+ เกิน / - ขาด)
   'Status',          // ตรง / ขาด / เกิน
-  'Expiry Date'      // วันหมดอายุ (ผู้ใช้กรอก, YYYY-MM-DD; ว่างได้)
+  'Diff CS.EA',      // ต่าง รูปแบบ CS.EA (เช่น "-1.2")
+  'Expiry Date',     // วันหมดอายุ (ผู้ใช้กรอก, YYYY-MM-DD; ว่างได้)
+  'Email'            // อีเมลผู้นับ
 ];
 
 function doPost(e) {
@@ -58,12 +65,21 @@ function doPost(e) {
       sheet.getRange(1, 1, 1, HEADERS.length).setFontWeight('bold');
       sheet.setFrozenRows(1);
     }
-    // Force Product Key column (6) to PLAIN TEXT so leading zeros & long
-    // barcodes are preserved (otherwise Sheets turns "0812345678" into a
-    // number and 13-digit codes into 1.23E+12).
-    sheet.getRange(1, 6, sheet.getMaxRows(), 1).setNumberFormat('@');
+    // Force PLAIN TEXT on columns that must keep leading/trailing zeros:
+    //   col 6  — Product Key (barcodes like 0812345678 / 13-digit EAN)
+    //   col 13 — System Stock (CS.EA from the master sheet)
+    //   col 16 — Diff CS.EA (so "0.10" stays "0.10" = 10 EA, not "0.1")
+    sheet.getRange(1, 6,  sheet.getMaxRows(), 1).setNumberFormat('@');
+    sheet.getRange(1, 13, sheet.getMaxRows(), 1).setNumberFormat('@');
+    sheet.getRange(1, 16, sheet.getMaxRows(), 1).setNumberFormat('@');
     var savedAt = data.savedAt || new Date().toISOString();
     (data.rows || []).forEach(function (r) {
+      // Prefix CS.EA values with apostrophe so Sheets treats them as text
+      // and preserves trailing zeros (e.g. "0.20" must stay 20 EA).
+      var systemRaw = r.systemRaw || '';
+      if (systemRaw && systemRaw.charAt(0) !== "'") systemRaw = "'" + systemRaw;
+      var diffCSEA = r.diffCSEA || '';
+      if (diffCSEA && diffCSEA.charAt(0) !== "'") diffCSEA = "'" + diffCSEA;
       sheet.appendRow([
         savedAt,
         data.sessionStart || '',
@@ -77,12 +93,21 @@ function doPost(e) {
         r.pa || 0,
         r.ea || 0,
         r.countedPieces || 0,
-        r.systemRaw || '',
+        systemRaw,
         r.systemPieces || 0,
         r.diffPieces || 0,
         r.status || '',
-        r.expiryDate || ''
+        diffCSEA,
+        r.expiryDate || '',
+        data.email || ''
       ]);
+      // Belt + suspenders — force System Stock (col 13) and Diff CS.EA (col 16)
+      // on this exact row to plain text format
+      try {
+        var rowN = sheet.getLastRow();
+        sheet.getRange(rowN, 13).setNumberFormat('@');
+        sheet.getRange(rowN, 16).setNumberFormat('@');
+      } catch (e2) {}
     });
     return ContentService
       .createTextOutput(JSON.stringify({ ok: true, saved: (data.rows || []).length }))
@@ -142,7 +167,9 @@ function doGet(e) {
           systemPieces:  Number(r[13] || 0),
           diffPieces:    Number(r[14] || 0),
           status:        String(r[15] || ''),
-          expiryDate:    _iso(r[16]),
+          diffCSEA:      String(r[16] || ''),
+          expiryDate:    _iso(r[17]),
+          email:         String(r[18] || ''),
         };
       });
       return _json({ ok: true, rows: rows });
