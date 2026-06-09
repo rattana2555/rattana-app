@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.12</title>
+<title>Rattana D-Delivery v1.13</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -194,6 +194,18 @@ body.dark .job-card .job-id{color:var(--gold)}
 .job-card .job-meta{font-size:12px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;margin-top:6px}
 .job-card .job-amount{font-family:var(--font-mono);font-weight:700;color:var(--gold);font-size:14px}
 
+/* Bills preview grid (pickup form) */
+.bills-grid{display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:12px}
+@media(min-width:560px){.bills-grid{grid-template-columns:repeat(2,1fr);gap:10px}}
+.bill-cell{background:var(--row-alt);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;display:flex;align-items:center;gap:10px;border-left:3px solid var(--gold)}
+.bill-cell-no{font-family:var(--font-mono);font-weight:700;color:var(--muted);font-size:13px;background:var(--card-bg);border:1px solid var(--border);border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.bill-cell-body{flex:1;min-width:0}
+.bill-cell-name{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bill-cell-doc{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:2px}
+.bill-cell-amt{font-family:var(--font-mono);font-weight:700;color:var(--gold);font-size:14px;text-align:right;white-space:nowrap}
+.bills-total{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--gold-soft);border:1px solid var(--gold);border-radius:var(--radius-sm);font-weight:700;font-size:14px}
+.bills-total .num{color:var(--gold);font-size:16px}
+
 /* Bill row */
 .bill-row{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer;transition:all .15s;border-left:4px solid var(--gold)}
 .bill-row:hover{box-shadow:var(--shadow-md)}
@@ -296,7 +308,7 @@ body.dark .banner-gold{color:var(--gold-light)}
          data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left"></div>
     <div id="loginError"></div>
-    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.12 — Powered by Rattana Group</div>
+    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.13 — Powered by Rattana Group</div>
   </div>
 </div>
 
@@ -304,7 +316,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div id="appScreen" class="page" style="display:none">
   <header>
     <div class="logo-text">D<span>-DELIVERY</span></div>
-    <span class="ver-tag" id="verTag">v1.12</span>
+    <span class="ver-tag" id="verTag">v1.13</span>
     <span class="role-tag" id="roleTag">-</span>
     <div class="spacer"></div>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="อัพเดท">↻</button>
@@ -500,7 +512,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.12';
+const APP_VERSION='1.13';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -945,13 +957,20 @@ function previewPickupBills(){
   const total=j.bills.reduce((s,b)=>s+b.amount,0);
   cnt.textContent=`${j.bills.length} บิล · ${fmt(total)} ฿`;
   list.innerHTML=`
-    <div class="tbl-wrap"><table class="tbl" style="min-width:0">
-      <thead><tr><th>ชื่อร้านค้า</th><th class="num" style="text-align:right">ยอดเงิน</th></tr></thead>
-      <tbody>
-        ${j.bills.map(b=>`<tr><td>${esc(b.name)}</td><td class="num">${fmt(b.amount)}</td></tr>`).join('')}
-        <tr style="background:var(--gold-soft);font-weight:700"><td>รวม</td><td class="num">${fmt(total)}</td></tr>
-      </tbody>
-    </table></div>
+    <div class="bills-grid">
+      ${j.bills.map((b,i)=>`<div class="bill-cell">
+        <div class="bill-cell-no">${String(i+1).padStart(2,'0')}</div>
+        <div class="bill-cell-body">
+          <div class="bill-cell-name">${esc(b.name)}</div>
+          <div class="bill-cell-doc">${esc(b.doc||'')}</div>
+        </div>
+        <div class="bill-cell-amt">${fmt(b.amount)}</div>
+      </div>`).join('')}
+    </div>
+    <div class="bills-total">
+      <span>รวมทั้งหมด ${j.bills.length} บิล</span>
+      <span class="num">${fmt(total)} ฿</span>
+    </div>
   `;
   btn.disabled=false;
 }
