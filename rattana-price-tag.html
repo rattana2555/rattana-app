@@ -2404,23 +2404,46 @@ function restorePriceOverrides() {
   } catch {}
 }
 
-/* v2.8 — Load Check sheet → barcode→location lookup */
+/* v2.9 — Re-render whichever preview is currently visible (after async data lands) */
+function refreshActivePreview() {
+  if ($('#tab-design')?.classList.contains('active')) renderDesignStage();
+  if ($('#tab-print')?.classList.contains('active'))  buildPdfPreview();
+}
+/* Normalize a code for matching: strip spaces, zero-width, leading apostrophe */
+function normCode(s) {
+  return String(s||'').replace(/[​‌‍﻿\s']/g,'').trim();
+}
+/* Attach location to a product by trying every code it carries */
+function lookupLocation(p) {
+  const candidates = [p.sku, p.barcode, ...(p.allCodes||[])];
+  for (const c of candidates) {
+    const key = normCode(c);
+    if (key && locationMap.has(key)) return locationMap.get(key);
+  }
+  return '';
+}
+
+/* v2.9 — Load Check sheet → barcode→location lookup (robust + auto re-render) */
 async function loadLocations() {
   try {
     const rows = await loadFromSheets(SHEET_CONFIG.locSheetId, SHEET_CONFIG.locSheetName);
     locationMap.clear();
     rows.forEach(r => {
-      const bc  = String(r['บาร์โค้ด']||'').trim();
+      const bc  = normCode(r['บาร์โค้ด']);
       const loc = String(r['โลเคชัน']||'').trim();
       if (bc && loc) locationMap.set(bc, loc);
     });
     // Persist for fast subsequent loads
-    localStorage.setItem('rattanaPriceTag_locCache', JSON.stringify({
-      ts: Date.now(),
-      pairs: Array.from(locationMap.entries()),
-    }));
-    // Update any already-loaded products with their location
-    products.forEach(p => { p.location = locationMap.get(p.sku) || locationMap.get(p.barcode) || ''; });
+    try {
+      localStorage.setItem('rattanaPriceTag_locCache', JSON.stringify({
+        ts: Date.now(),
+        pairs: Array.from(locationMap.entries()),
+      }));
+    } catch {}
+    // Re-attach location to every loaded product
+    products.forEach(p => { p.location = lookupLocation(p); });
+    // Re-render whatever preview is open so locations appear immediately
+    refreshActivePreview();
     return locationMap.size;
   } catch (e) {
     console.warn('loadLocations failed:', e);
@@ -2432,7 +2455,9 @@ function restoreLocationsFromCache() {
     const raw = localStorage.getItem('rattanaPriceTag_locCache');
     if (!raw) return;
     const { pairs } = JSON.parse(raw);
-    if (Array.isArray(pairs)) pairs.forEach(([k,v]) => locationMap.set(k,v));
+    if (Array.isArray(pairs)) pairs.forEach(([k,v]) => locationMap.set(normCode(k), v));
+    // Apply to any products already in memory
+    products.forEach(p => { p.location = lookupLocation(p); });
   } catch {}
 }
 
