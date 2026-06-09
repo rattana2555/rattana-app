@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.18</title>
+<title>Rattana D-Delivery v1.19</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -320,7 +320,7 @@ body.dark .banner-gold{color:var(--gold-light)}
          data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left"></div>
     <div id="loginError"></div>
-    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.18 — Powered by Rattana Group</div>
+    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.19 — Powered by Rattana Group</div>
   </div>
 </div>
 
@@ -328,7 +328,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div id="appScreen" class="page" style="display:none">
   <header>
     <div class="logo-text">D<span>-DELIVERY</span></div>
-    <span class="ver-tag" id="verTag">v1.18</span>
+    <span class="ver-tag" id="verTag">v1.19</span>
     <span class="role-tag" id="roleTag">-</span>
     <div class="spacer"></div>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="อัพเดท">↻</button>
@@ -341,6 +341,23 @@ body.dark .banner-gold{color:var(--gold-light)}
     <!-- HOME hub (5 launchpad cards) -->
     <div class="section" id="sec-home">
       <div class="home-grid" id="homeGrid"></div>
+    </div>
+
+    <!-- TRANSFER: เที่ยวพิเศษ -->
+    <div class="section" id="sec-transfer">
+      <div class="card card-gold">
+        <div class="card-head">
+          <h3>🏬 เที่ยวพิเศษ — โอนย้าย/ขนสินค้า</h3>
+          <div class="row gap-8">
+            <button class="btn btn-outline btn-sm" onclick="switchTab('sec-home')">↩ กลับหน้าหลัก</button>
+            <button class="btn btn-outline btn-sm" onclick="resetTransferForm()">🗑 ล้างข้อมูล</button>
+          </div>
+        </div>
+        <div class="card-body" id="transferFormBody"></div>
+      </div>
+      <div class="row mt-12" style="justify-content:flex-end">
+        <button class="btn btn-gold btn-lg" id="btnSaveTransfer" onclick="confirmTransfer()">✓ บันทึก</button>
+      </div>
     </div>
 
     <!-- DRIVER: Pickup form -->
@@ -529,7 +546,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.18';
+const APP_VERSION='1.19';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -918,6 +935,7 @@ function switchTab(id){
 function renderCurrent(){
   const id=state.currentTab;
   if(id==='sec-home') renderHome();
+  else if(id==='sec-transfer') renderTransfer();
   else if(id==='sec-driver-home') renderDriverHome();
   else if(id==='sec-driver-job') renderActiveJob();
   else if(id==='sec-bill-form') {/* handled by openBillForm */}
@@ -931,7 +949,7 @@ function renderCurrent(){
 /* ========== HOME HUB ========== */
 const HOME_MODULES=[
   {id:'pickup',     icon:'🚛', label:'บันทึกเที่ยวส่ง',  sub:'รับงาน · เก็บเงิน · ตีกลับ',     target:'sec-driver-home', ready:true},
-  {id:'transfer',   icon:'🏬', label:'โอนย้าย-ขนสินค้า',  sub:'ระหว่างคลัง',                    target:null,              ready:false},
+  {id:'transfer',   icon:'🏬', label:'โอนย้าย-ขนสินค้า',  sub:'เที่ยวพิเศษ',                     target:'sec-transfer',    ready:true},
   {id:'returns',    icon:'📦', label:'รับคืน',           sub:'รับสินค้าคืนจากลูกค้า',           target:null,              ready:false},
   {id:'reports',    icon:'📊', label:'รายงาน',           sub:'สรุปยอด · ดาวน์โหลด',             target:null,              ready:false},
   {id:'customers',  icon:'🏪', label:'ข้อมูลร้านค้า',     sub:'ค้นหา · พิกัด · ผู้ดูแล',        target:null,              ready:false},
@@ -949,6 +967,108 @@ function renderHome(){
 }
 function showComingSoon(name){
   showToast(`"${name}" อยู่ระหว่างพัฒนา`,'info');
+}
+
+/* ========== TRANSFER (เที่ยวพิเศษ) ========== */
+const TRANSFER_TYPES=['โอนย้าย','ขนตักเลท','ขนเรียงมือ'];
+const TRANSFER_DESTINATIONS=['กลับ สนญ.','สุพรรณบุรี','ราชบุรี','นครปฐม'];
+const transferState={type:'โอนย้าย', jobId:'', destination:'', item:'', qty:''};
+
+function renderTransfer(){
+  const jobsForDD=state.jobs.map(j=>({v:j.id,l:j.id}));
+  $('transferFormBody').innerHTML=`
+    <div class="field">
+      <label>เลขที่ใบคุม</label>
+      ${buildDD('ddTransJob',jobsForDD,jobsForDD.length?'-- เลือกหรือพิมพ์ --':'(ไม่มี)')}
+    </div>
+    <div class="field">
+      <label>เที่ยวพิเศษ</label>
+      <div class="pills" id="transferType">
+        ${TRANSFER_TYPES.map(t=>`<button type="button" class="pill ${t===transferState.type?'active gold':''}" data-v="${esc(t)}" onclick="pickTransferType(this)">${esc(t)}</button>`).join('')}
+      </div>
+    </div>
+    <div id="transferExtra"></div>
+  `;
+  // Restore selected job
+  if(transferState.jobId){ ddPick('ddTransJob',transferState.jobId,transferState.jobId); }
+  renderTransferExtra();
+}
+
+function renderTransferExtra(){
+  const el=$('transferExtra'); if(!el) return;
+  if(transferState.type==='โอนย้าย'){
+    el.innerHTML=`
+      <div class="field">
+        <label>คลังโอนย้าย</label>
+        <div class="pills" id="transferDest">
+          ${TRANSFER_DESTINATIONS.map(d=>`<button type="button" class="pill ${d===transferState.destination?'active gold':''}" data-v="${esc(d)}" onclick="pickTransferDest(this)">${esc(d)}</button>`).join('')}
+        </div>
+      </div>
+    `;
+  } else if(transferState.type==='ขนตักเลท'){
+    el.innerHTML=`
+      <div class="field">
+        <label>ชื่อสินค้าหรือสถานที่ขนสินค้า</label>
+        <textarea class="input" id="transferItem" placeholder="ระบุชื่อสินค้าหรือสถานที่" oninput="transferState.item=this.value">${esc(transferState.item)}</textarea>
+      </div>
+    `;
+  } else { // ขนเรียงมือ
+    el.innerHTML=`
+      <div class="field">
+        <label>ชื่อสินค้าหรือสถานที่ขนสินค้า</label>
+        <textarea class="input" id="transferItem" placeholder="ระบุชื่อสินค้าหรือสถานที่" oninput="transferState.item=this.value">${esc(transferState.item)}</textarea>
+      </div>
+      <div class="field">
+        <label>จำนวนลัง</label>
+        <input class="input input-num" type="number" inputmode="numeric" min="0" id="transferQty" value="${esc(transferState.qty)}" oninput="transferState.qty=this.value" placeholder="0">
+      </div>
+    `;
+  }
+}
+
+function pickTransferType(btn){
+  btn.parentElement.querySelectorAll('.pill').forEach(p=>{p.classList.remove('active');p.classList.remove('gold');});
+  btn.classList.add('active','gold');
+  transferState.type=btn.dataset.v;
+  // เก็บค่า jobId ก่อน rerender
+  transferState.jobId=ddValue('ddTransJob')||transferState.jobId;
+  renderTransferExtra();
+}
+function pickTransferDest(btn){
+  btn.parentElement.querySelectorAll('.pill').forEach(p=>{p.classList.remove('active');p.classList.remove('gold');});
+  btn.classList.add('active','gold');
+  transferState.destination=btn.dataset.v;
+}
+function resetTransferForm(){
+  transferState.type='โอนย้าย'; transferState.jobId=''; transferState.destination=''; transferState.item=''; transferState.qty='';
+  renderTransfer();
+  showToast('ล้างข้อมูลแล้ว','info');
+}
+async function confirmTransfer(){
+  transferState.jobId=ddValue('ddTransJob')||transferState.jobId;
+  if(!transferState.jobId){ showToast('กรุณาเลือก/พิมพ์เลขที่ใบคุม','warning'); return; }
+  if(transferState.type==='โอนย้าย'&&!transferState.destination){ showToast('กรุณาเลือกคลังโอนย้าย','warning'); return; }
+  if(transferState.type!=='โอนย้าย'&&!transferState.item){ showToast('กรุณาระบุชื่อสินค้า/สถานที่','warning'); return; }
+  if(transferState.type==='ขนเรียงมือ'&&!transferState.qty){ showToast('กรุณาระบุจำนวนลัง','warning'); return; }
+  const payload={
+    action:'save_transfer',
+    jobId:transferState.jobId,
+    type:transferState.type,
+    destination:transferState.destination,
+    item:transferState.item,
+    qty:parseInt(transferState.qty)||0,
+    driver:state.user.nickname||state.user.name,
+    empId:state.user.empId,
+    submittedAt:Date.now(),
+  };
+  const url=getAppsUrl();
+  if(url){
+    try{ await fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)}); }
+    catch(e){ console.warn('transfer sync failed',e); }
+  }
+  showToast(`บันทึก "${transferState.type}" ${transferState.jobId} เรียบร้อย ✓`,'success');
+  resetTransferForm();
+  switchTab('sec-home');
 }
 
 function renderDriverHome(){
@@ -1850,9 +1970,10 @@ async function syncJobsFromSheet(){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-Delivery — Apps Script Backend v2.0 (upsert) */
+const APPS_SCRIPT_CODE=`/* D-Delivery — Apps Script Backend v2.1 (upsert + transfer) */
 const SHEET_RECORD='บันทึกการเก็บเงิน';
 const SHEET_CN='CN';
+const SHEET_TRANSFER='เที่ยวพิเศษ';
 
 const HEADERS_RECORD=['วันที่บันทึก','เลขใบคุม','Doc_No','Customer_Code','Customer_Name','Salesman',
   'TotalBaht','ธนบัตร','เหรียญ','โอน1','โอน2','เช็ค','ใบลดหนี้','รวมเก็บได้',
@@ -1871,10 +1992,20 @@ function doPost(e){
   try{
     const data=JSON.parse(e.postData.contents);
     const ss=SpreadsheetApp.getActiveSpreadsheet();
+    const now=new Date();
+    // เที่ยวพิเศษ — โอนย้าย/ขนสินค้า
+    if(data.action==='save_transfer'){
+      const tSh=ensureSheet_(ss,SHEET_TRANSFER,
+        ['วันที่บันทึก','เลขใบคุม','ประเภท','คลังโอนย้าย','ชื่อสินค้า/สถานที่','จำนวนลัง','คนขับ','รหัสพนักงาน']);
+      const tIdx=buildIndex_(tSh,1,2);
+      const row=[now,String(data.jobId),data.type||'',data.destination||'',data.item||'',data.qty||0,data.driver||'',data.empId||''];
+      upsert_(tSh,tIdx,String(data.jobId)+'|'+String(data.type),row);
+      tSh.getRange('B:B').setNumberFormat('@');
+      return ContentService.createTextOutput(JSON.stringify({ok:true})).setMimeType(ContentService.MimeType.JSON);
+    }
     const sh=ensureSheet_(ss,SHEET_RECORD,HEADERS_RECORD);
     const cnSh=ensureSheet_(ss,SHEET_CN,HEADERS_CN);
     const team=data.team||{};
-    const now=new Date();
 
     // Build index ของแถวเดิม (jobId|doc_no → rowNum)
     const recIdx=buildIndex_(sh,1,2); // col B=jobId, col C=doc
