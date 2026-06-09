@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.19</title>
+<title>Rattana D-Delivery v1.20</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -320,7 +320,7 @@ body.dark .banner-gold{color:var(--gold-light)}
          data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left"></div>
     <div id="loginError"></div>
-    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.19 — Powered by Rattana Group</div>
+    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.20 — Powered by Rattana Group</div>
   </div>
 </div>
 
@@ -328,7 +328,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div id="appScreen" class="page" style="display:none">
   <header>
     <div class="logo-text">D<span>-DELIVERY</span></div>
-    <span class="ver-tag" id="verTag">v1.19</span>
+    <span class="ver-tag" id="verTag">v1.20</span>
     <span class="role-tag" id="roleTag">-</span>
     <div class="spacer"></div>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="อัพเดท">↻</button>
@@ -546,7 +546,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.19';
+const APP_VERSION='1.20';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -949,7 +949,7 @@ function renderCurrent(){
 /* ========== HOME HUB ========== */
 const HOME_MODULES=[
   {id:'pickup',     icon:'🚛', label:'บันทึกเที่ยวส่ง',  sub:'รับงาน · เก็บเงิน · ตีกลับ',     target:'sec-driver-home', ready:true},
-  {id:'transfer',   icon:'🏬', label:'โอนย้าย-ขนสินค้า',  sub:'เที่ยวพิเศษ',                     target:'sec-transfer',    ready:true},
+  {id:'transfer',   icon:'🏬', label:'โอนย้าย-ขนสินค้า',  sub:'รวมในหน้ารับงานแล้ว — แตะที่นี่ก็ใช้ได้',  target:'sec-transfer',    ready:true},
   {id:'returns',    icon:'📦', label:'รับคืน',           sub:'รับสินค้าคืนจากลูกค้า',           target:null,              ready:false},
   {id:'reports',    icon:'📊', label:'รายงาน',           sub:'สรุปยอด · ดาวน์โหลด',             target:null,              ready:false},
   {id:'customers',  icon:'🏪', label:'ข้อมูลร้านค้า',     sub:'ค้นหา · พิกัด · ผู้ดูแล',        target:null,              ready:false},
@@ -1118,6 +1118,16 @@ function renderDriverHome(){
       <label>ผู้ช่วยที่ไม่มีในรายชื่อ</label>
       <input class="input" id="helperExtra" placeholder="พิมพ์ชื่อผู้ช่วยอื่น (ถ้ามี)">
     </div>
+
+    <div class="divider"></div>
+
+    <div class="field">
+      <label>เที่ยวพิเศษ (ถ้ามี)</label>
+      <div class="pills" id="pickupSpecial">
+        ${['ไม่มี',...TRANSFER_TYPES].map((t,i)=>`<button type="button" class="pill ${i===0?'active':''}" data-v="${esc(t)}" onclick="pickPickupSpecial(this)">${esc(t)}</button>`).join('')}
+      </div>
+    </div>
+    <div id="pickupSpecialExtra"></div>
   `;
 
   // Re-bind: ddJob onchange → preview bills
@@ -1190,6 +1200,42 @@ function renderJobCard(j,locked){
 
 function pickPattern(btn){ btn.parentElement.querySelectorAll('.pill').forEach(p=>p.classList.remove('active')); btn.classList.add('active'); }
 
+function pickPickupSpecial(btn){
+  btn.parentElement.querySelectorAll('.pill').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active');
+  renderPickupSpecialExtra(btn.dataset.v);
+}
+function renderPickupSpecialExtra(type){
+  const el=$('pickupSpecialExtra'); if(!el) return;
+  if(!type||type==='ไม่มี'){ el.innerHTML=''; return; }
+  if(type==='โอนย้าย'){
+    el.innerHTML=`<div class="field">
+      <label>คลังโอนย้าย</label>
+      <div class="pills" id="pickupTransferDest">
+        ${TRANSFER_DESTINATIONS.map(d=>`<button type="button" class="pill" data-v="${esc(d)}" onclick="pickTransferDestInline(this)">${esc(d)}</button>`).join('')}
+      </div>
+    </div>`;
+  } else if(type==='ขนตักเลท'){
+    el.innerHTML=`<div class="field">
+      <label>ชื่อสินค้าหรือสถานที่ขนสินค้า</label>
+      <textarea class="input" id="pickupTransferItem" placeholder="ระบุชื่อสินค้าหรือสถานที่"></textarea>
+    </div>`;
+  } else { // ขนเรียงมือ
+    el.innerHTML=`<div class="field">
+      <label>ชื่อสินค้าหรือสถานที่ขนสินค้า</label>
+      <textarea class="input" id="pickupTransferItem" placeholder="ระบุชื่อสินค้าหรือสถานที่"></textarea>
+    </div>
+    <div class="field">
+      <label>จำนวนลัง</label>
+      <input class="input input-num" type="number" inputmode="numeric" min="0" id="pickupTransferQty" placeholder="0">
+    </div>`;
+  }
+}
+function pickTransferDestInline(btn){
+  btn.parentElement.querySelectorAll('.pill').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active');
+}
+
 function confirmPickup(){
   const jid=ddValue('ddJob');
   const j=state.jobs.find(x=>x.id===jid);
@@ -1202,8 +1248,29 @@ function confirmPickup(){
   if(h1&&h2&&h1===h2){ showToast('ผู้ช่วย 1 กับ 2 ต้องไม่ซ้ำกัน','warning'); return; }
   const pattern=document.querySelector('#pickupPattern .pill.active')?.dataset.v||PICKUP_PATTERNS[0];
   const helpers=[h1,h2,hExtra].filter(Boolean);
-  j.team={driver:state.user.nickname||state.user.name,helper:helpers.join(', '),helper1:h1,helper2:h2,helperExtra:hExtra,plate,pattern};
+  // เที่ยวพิเศษ (optional)
+  const specialType=document.querySelector('#pickupSpecial .pill.active')?.dataset.v||'ไม่มี';
+  let special=null;
+  if(specialType&&specialType!=='ไม่มี'){
+    if(specialType==='โอนย้าย'){
+      const dest=document.querySelector('#pickupTransferDest .pill.active')?.dataset.v||'';
+      if(!dest){ showToast('กรุณาเลือกคลังโอนย้าย','warning'); return; }
+      special={type:specialType,destination:dest};
+    } else if(specialType==='ขนตักเลท'){
+      const item=$('pickupTransferItem')?.value.trim()||'';
+      if(!item){ showToast('กรุณาระบุชื่อสินค้า/สถานที่','warning'); return; }
+      special={type:specialType,item};
+    } else { // ขนเรียงมือ
+      const item=$('pickupTransferItem')?.value.trim()||'';
+      const qty=parseInt($('pickupTransferQty')?.value)||0;
+      if(!item){ showToast('กรุณาระบุชื่อสินค้า/สถานที่','warning'); return; }
+      if(!qty){ showToast('กรุณาระบุจำนวนลัง','warning'); return; }
+      special={type:specialType,item,qty};
+    }
+  }
+  j.team={driver:state.user.nickname||state.user.name,helper:helpers.join(', '),helper1:h1,helper2:h2,helperExtra:hExtra,plate,pattern,special};
   j.driver=state.user.nickname||state.user.name; j.helper=helpers.join(', '); j.plate=plate; j.pickup=pattern;
+  j.special=special;
   j.status='in_progress';
   j.startedAt=Date.now();
   state.activeJobId=j.id;
@@ -1844,6 +1911,7 @@ async function syncToSheets(job){
     rejectedAt:job.rejectedAt,
     rejectedBy:job.rejectedBy,
     rejectReason:job.rejectReason,
+    special:job.special||null,
     bills:job.bills.map(b=>({
       doc:b.doc,code:b.code,name:b.name,amount:b.amount,
       status:b.status,isCN:!!b.isCN,failReason:b.failReason||'',nextResp:b.nextResp||'',
