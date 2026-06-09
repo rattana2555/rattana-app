@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.17</title>
+<title>Rattana D-Delivery v1.18</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -194,6 +194,18 @@ body.dark .job-card .job-id{color:var(--gold)}
 .job-card .job-meta{font-size:12px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;margin-top:6px}
 .job-card .job-amount{font-family:var(--font-mono);font-weight:700;color:var(--gold);font-size:14px}
 
+/* Home hub — 5 big launchpad cards */
+.home-grid{display:grid;grid-template-columns:1fr;gap:14px;max-width:520px;margin:0 auto;padding:8px 0}
+.home-card{background:linear-gradient(135deg,var(--navy) 0%,var(--navy-mid) 100%);border-radius:var(--radius-lg);padding:24px 28px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;color:#fff;min-height:96px;box-shadow:var(--shadow-lg);border:2px solid transparent;transition:transform .12s,border-color .15s;-webkit-tap-highlight-color:transparent}
+.home-card:hover{border-color:var(--gold)}
+.home-card:active{transform:scale(.97)}
+.home-card.disabled{opacity:.65;cursor:not-allowed;background:linear-gradient(135deg,#3a4560 0%,#4a5575 100%)}
+.home-card.disabled:hover{border-color:transparent}
+.home-card-text{font-family:var(--font-head);font-size:24px;font-weight:700;letter-spacing:.5px}
+.home-card-icon{font-size:48px;line-height:1}
+.home-card-sub{font-size:11px;font-weight:400;opacity:.7;margin-top:4px;letter-spacing:0}
+@media(min-width:640px){.home-grid{grid-template-columns:repeat(2,1fr);max-width:780px}}
+
 /* Bills preview grid (pickup form) */
 .bills-grid{display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:12px}
 @media(min-width:560px){.bills-grid{grid-template-columns:repeat(2,1fr);gap:10px}}
@@ -308,7 +320,7 @@ body.dark .banner-gold{color:var(--gold-light)}
          data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left"></div>
     <div id="loginError"></div>
-    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.17 — Powered by Rattana Group</div>
+    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.18 — Powered by Rattana Group</div>
   </div>
 </div>
 
@@ -316,7 +328,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div id="appScreen" class="page" style="display:none">
   <header>
     <div class="logo-text">D<span>-DELIVERY</span></div>
-    <span class="ver-tag" id="verTag">v1.17</span>
+    <span class="ver-tag" id="verTag">v1.18</span>
     <span class="role-tag" id="roleTag">-</span>
     <div class="spacer"></div>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="อัพเดท">↻</button>
@@ -326,7 +338,12 @@ body.dark .banner-gold{color:var(--gold-light)}
   <nav class="tab-nav" id="tabNav"></nav>
 
   <div class="content">
-    <!-- DRIVER: Home (pickup form) -->
+    <!-- HOME hub (5 launchpad cards) -->
+    <div class="section" id="sec-home">
+      <div class="home-grid" id="homeGrid"></div>
+    </div>
+
+    <!-- DRIVER: Pickup form -->
     <div class="section" id="sec-driver-home">
       <div class="card card-gold">
         <div class="card-head">
@@ -512,7 +529,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.17';
+const APP_VERSION='1.18';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -873,15 +890,15 @@ async function loadJobs(){
 /* ========== TABS / NAV ========== */
 function buildTabs(){
   const nav=$('tabNav'); nav.innerHTML='';
-  const tabs=state.role==='driver'?[
-    {id:'sec-driver-home',label:'🚚 งานว่าง'},
-    {id:'sec-driver-job',label:'📦 งานของฉัน'},
-    {id:'sec-settings',label:'⚙️ ตั้งค่า'},
-  ]:[
-    {id:'sec-sup-home',label:'📥 รออนุมัติ'},
-    {id:'sec-sup-history',label:'📚 ประวัติ'},
-    {id:'sec-settings',label:'⚙️ ตั้งค่า'},
-  ];
+  const common=[{id:'sec-home',label:'🏠 หน้าหลัก'}];
+  const tabs=state.role==='driver'
+    ? [...common,
+        {id:'sec-driver-job',label:'📦 งานของฉัน'},
+        {id:'sec-settings',label:'⚙️ ตั้งค่า'}]
+    : [...common,
+        {id:'sec-sup-home',label:'📥 รออนุมัติ'},
+        {id:'sec-sup-history',label:'📚 ประวัติ'},
+        {id:'sec-settings',label:'⚙️ ตั้งค่า'}];
   tabs.forEach((t,i)=>{
     const b=document.createElement('button');
     b.className='tab-btn'+(i===0?' active':'');
@@ -900,7 +917,8 @@ function switchTab(id){
 }
 function renderCurrent(){
   const id=state.currentTab;
-  if(id==='sec-driver-home') renderDriverHome();
+  if(id==='sec-home') renderHome();
+  else if(id==='sec-driver-home') renderDriverHome();
   else if(id==='sec-driver-job') renderActiveJob();
   else if(id==='sec-bill-form') {/* handled by openBillForm */}
   else if(id==='sec-sup-home') renderSupHome();
@@ -910,6 +928,29 @@ function renderCurrent(){
 }
 
 /* ========== DRIVER HOME ========== */
+/* ========== HOME HUB ========== */
+const HOME_MODULES=[
+  {id:'pickup',     icon:'🚛', label:'บันทึกเที่ยวส่ง',  sub:'รับงาน · เก็บเงิน · ตีกลับ',     target:'sec-driver-home', ready:true},
+  {id:'transfer',   icon:'🏬', label:'โอนย้าย-ขนสินค้า',  sub:'ระหว่างคลัง',                    target:null,              ready:false},
+  {id:'returns',    icon:'📦', label:'รับคืน',           sub:'รับสินค้าคืนจากลูกค้า',           target:null,              ready:false},
+  {id:'reports',    icon:'📊', label:'รายงาน',           sub:'สรุปยอด · ดาวน์โหลด',             target:null,              ready:false},
+  {id:'customers',  icon:'🏪', label:'ข้อมูลร้านค้า',     sub:'ค้นหา · พิกัด · ผู้ดูแล',        target:null,              ready:false},
+];
+function renderHome(){
+  $('homeGrid').innerHTML=HOME_MODULES.map(m=>`
+    <div class="home-card ${m.ready?'':'disabled'}" onclick="${m.ready?`switchTab('${m.target}')`:`showComingSoon('${esc(m.label)}')`}">
+      <div>
+        <div class="home-card-text">${esc(m.label)}</div>
+        <div class="home-card-sub">${esc(m.sub)}</div>
+      </div>
+      <div class="home-card-icon">${m.icon}</div>
+    </div>
+  `).join('');
+}
+function showComingSoon(name){
+  showToast(`"${name}" อยู่ระหว่างพัฒนา`,'info');
+}
+
 function renderDriverHome(){
   const wh=state.user.warehouse||'W1';
   // ถ้าผู้ใช้ไม่มีคลัง (HQ หรืออื่นๆ) ใช้ W1 เป็นค่าเริ่มต้น
