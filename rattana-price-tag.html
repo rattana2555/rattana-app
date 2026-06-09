@@ -2529,7 +2529,9 @@ async function loadProducts(opts = {}) {
       return;
     }
     products = rows.map(r => normalizeProduct(r)).filter(p => p.name);
-    localStorage.setItem(STORAGE.cache, JSON.stringify({ products, ts: Date.now() }));
+    // Cache slimmed products (drops allCodes etc.) — safe against quota limits
+    const saved = safeSetItem(STORAGE.cache, JSON.stringify({ products: products.map(slimProduct), ts: Date.now() }));
+    if (!saved) showToast('ℹ️ ข้อมูลเยอะเกินกว่าจะ cache — จะโหลดใหม่ทุกครั้ง (ใช้งานได้ปกติ)', 'info');
     selectedSkus.clear();
     tplOverrides = {};
     updateStats();
