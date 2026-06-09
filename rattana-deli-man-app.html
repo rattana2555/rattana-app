@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.13</title>
+<title>Rattana D-Delivery v1.14</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -308,7 +308,7 @@ body.dark .banner-gold{color:var(--gold-light)}
          data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left"></div>
     <div id="loginError"></div>
-    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.13 — Powered by Rattana Group</div>
+    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.14 — Powered by Rattana Group</div>
   </div>
 </div>
 
@@ -316,7 +316,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div id="appScreen" class="page" style="display:none">
   <header>
     <div class="logo-text">D<span>-DELIVERY</span></div>
-    <span class="ver-tag" id="verTag">v1.13</span>
+    <span class="ver-tag" id="verTag">v1.14</span>
     <span class="role-tag" id="roleTag">-</span>
     <div class="spacer"></div>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="อัพเดท">↻</button>
@@ -512,7 +512,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.13';
+const APP_VERSION='1.14';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -1524,7 +1524,7 @@ function openReject(id){
   $('rejectReason').value='';
   openModal('modalReject');
 }
-function confirmReject(){
+async function confirmReject(){
   const j=state.jobs.find(x=>x.id===state.rejectingId); if(!j) return;
   const reason=$('rejectReason').value.trim();
   if(!reason){ showToast('กรุณาระบุเหตุผล','warning'); return; }
@@ -1532,9 +1532,8 @@ function confirmReject(){
   j.rejectReason=reason;
   j.rejectedAt=Date.now();
   j.rejectedBy=state.user.nickname||state.user.name;
-  // เปิดให้คนขับแก้: บิลที่ done ปล่อยไว้ (เผื่อแก้บางบิล), supervisor ตี = back to in_progress
-  // ผู้ใช้สามารถแก้บิลที่ต้องการแล้วส่งใหม่
   persistJobs();
+  await syncToSheets(j).catch(e=>console.warn(e));
   closeModal('modalReject');
   showToast(`ตีกลับ ${j.id} แล้ว`,'info');
   switchTab('sec-sup-home');
@@ -1743,6 +1742,15 @@ async function syncJobsFromSheet(){
       });
       // เก็บ id เดิมที่ user เห็นบนแอป (ไม่เอา id ที่โดน Sheets เปลี่ยน)
       sj.id=local.id;
+      // ★ ป้องกัน race: ถ้า local มี action ใหม่กว่าใน sheet ให้เก็บสถานะ local ไว้
+      // (เช่น supervisor เพิ่งกดอนุมัติ/ตีกลับ — sheet ยังไม่ได้รับเขียน)
+      const localLast=Math.max(local.rejectedAt||0,local.approvedAt||0);
+      const sheetLast=Math.max(sj.rejectedAt||0,sj.approvedAt||0,sj.submittedAt||0);
+      if(localLast>sheetLast&&(local.status==='rejected'||local.status==='approved')){
+        sj.status=local.status;
+        sj.rejectedAt=local.rejectedAt; sj.rejectedBy=local.rejectedBy; sj.rejectReason=local.rejectReason;
+        sj.approvedAt=local.approvedAt; sj.approvedBy=local.approvedBy;
+      }
       state.jobs[idx[key]]=sj;
     } else {
       state.jobs.push(sj);
