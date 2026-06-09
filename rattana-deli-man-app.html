@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.16</title>
+<title>Rattana D-Delivery v1.17</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -308,7 +308,7 @@ body.dark .banner-gold{color:var(--gold-light)}
          data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left"></div>
     <div id="loginError"></div>
-    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.16 — Powered by Rattana Group</div>
+    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.17 — Powered by Rattana Group</div>
   </div>
 </div>
 
@@ -316,7 +316,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div id="appScreen" class="page" style="display:none">
   <header>
     <div class="logo-text">D<span>-DELIVERY</span></div>
-    <span class="ver-tag" id="verTag">v1.16</span>
+    <span class="ver-tag" id="verTag">v1.17</span>
     <span class="role-tag" id="roleTag">-</span>
     <div class="spacer"></div>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="อัพเดท">↻</button>
@@ -512,7 +512,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.16';
+const APP_VERSION='1.17';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -827,6 +827,30 @@ async function loadAvailableJobs(){
   }catch(e){ console.warn('loadAvailableJobs failed:',e); return []; }
 }
 
+/* เติมข้อมูลร้าน (coords, address, phone) ให้บิลทุกตัวจาก state.customers
+   เรียกหลังจาก loadJobs / syncJobsFromSheet — backfill ให้บิลที่ถูกบันทึก
+   ไว้ใน localStorage ก่อน v1.15 (ตอน custByCode ผิด) ก็ได้พิกัดด้วย */
+function enrichBills(){
+  if(!state.customers.length) return;
+  const byCode={};
+  state.customers.forEach(c=>{ if(c.code) byCode[c.code]=c; });
+  state.jobs.forEach(j=>{
+    j.bills.forEach(b=>{
+      if(b.lat&&b.lng) return; // มีอยู่แล้ว
+      const cust=byCode[b.code];
+      if(cust&&cust.lat){
+        b.lat=cust.lat; b.lng=cust.lng;
+        b.address=b.address||cust.address;
+        b.phone=b.phone||cust.phone;
+        b.salesman=b.salesman||cust.salesman;
+        b.creditDays=b.creditDays||cust.creditDays;
+        b.creditLimit=b.creditLimit||cust.creditLimit;
+        b.photoUrl=b.photoUrl||cust.photoUrl;
+      }
+    });
+  });
+}
+
 async function loadJobs(){
   // โหลดงานว่างจากชีท Jobs
   const fresh=await loadAvailableJobs();
@@ -842,6 +866,7 @@ async function loadJobs(){
   });
   // fallback ใช้ seed ถ้าโหลดจากชีทไม่ได้และยังไม่มีใน local
   if(!state.jobs.length){ state.jobs=seedJobs(); }
+  enrichBills();
   persistJobs();
 }
 
@@ -1779,6 +1804,7 @@ async function syncJobsFromSheet(){
       state.jobs.push(sj);
     }
   });
+  enrichBills();
   persistJobs();
   return sheetJobs.length;
 }
