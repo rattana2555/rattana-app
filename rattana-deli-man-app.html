@@ -283,9 +283,9 @@ body.dark .banner-gold{color:var(--gold-light)}
     <h1>D<span>-Delivery</span></h1>
     <p class="subtitle">Rattana Group — บันทึกการส่งสินค้าและเก็บเงิน</p>
     <div style="background:rgba(201,168,50,.1);border:1px solid var(--gold);border-radius:var(--radius-md);padding:14px;margin:14px 0;text-align:left;font-size:12px;color:rgba(255,255,255,.85)">
-      <div class="txt-gold txt-bold mb-8" style="text-transform:uppercase;letter-spacing:.5px">เข้าใช้งานได้เฉพาะ</div>
-      <div>👨‍💼 หัวหน้างาน / ผู้บริหาร (Role 4+)</div>
-      <div>🚚 พนักงานคลังและขนส่ง (คนขับ)</div>
+      <div class="txt-gold txt-bold mb-8" style="text-transform:uppercase;letter-spacing:.5px">เข้าใช้งานได้</div>
+      <div>👨‍💼 หัวหน้างาน / ผู้บริหาร — อนุมัติ</div>
+      <div>🚚 พนักงาน Active ทุกคน — รับงาน</div>
     </div>
     <div id="g_id_onload"
          data-client_id="76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com"
@@ -618,12 +618,11 @@ async function handleGoogleLogin(resp){
     const userRole=parseInt(cleanCell(u['User Role']||'0'))||0;
 
     // Detect role
-    // - หัวหน้างาน: ชื่อปรากฏใน "ชื่อหัวหน้างาน" ของแถวอื่น (หัวหน้าคลัง) ★ หรือ ★ User Role >= 4 (ผู้บริหาร)
-    // - คนขับ: แผนก "คลังและขนส่ง"
+    // - หัวหน้างาน (supervisor): ชื่ออยู่ใน "ชื่อหัวหน้างาน" ของแถวอื่น ★ หรือ ★ User Role >= 4
+    // - คนรับงาน (driver): พนักงาน Active ทุกคนที่ไม่ใช่หัวหน้างาน
     let role=null;
     if(state.supervisors.some(s=>s===name||s===nick)||userRole>=4){ role='supervisor'; }
-    else if(dept==='คลังและขนส่ง'){ role='driver'; }
-    else { showLoginError('ไม่มีสิทธิ์เข้าใช้แอพนี้ (แผนก: '+dept+', Role: '+userRole+')'); return; }
+    else { role='driver'; }
 
     state.user={email,name,nickname:nick,empId,dept,warehouse:wh,userRole,picture:payload.picture||''};
     state.role=role;
@@ -789,12 +788,13 @@ function renderCurrent(){
 /* ========== DRIVER HOME ========== */
 function renderDriverHome(){
   const wh=state.user.warehouse||'W1';
-  const whForVeh=wh==='HQ'?'W1':wh;
+  // ถ้าผู้ใช้ไม่มีคลัง (HQ หรืออื่นๆ) ใช้ W1 เป็นค่าเริ่มต้น
+  const whEff=/^W[1-4]$/.test(wh)?wh:'W1';
   const driverNick=state.user.nickname||state.user.name;
   const avail=state.jobs.filter(j=>j.status==='available'&&!j.team);
   const taken=state.jobs.filter(j=>j.team&&j.team.driver!==driverNick);
-  const helpers=state.drivers.filter(d=>cleanCell(d['W'])===wh&&cleanCell(d['ชื่อเล่น'])!==driverNick);
-  const veh=state.vehicles.filter(v=>v.warehouse===whForVeh);
+  const helpers=state.drivers.filter(d=>cleanCell(d['W'])===whEff&&cleanCell(d['ชื่อเล่น'])!==driverNick);
+  const veh=state.vehicles.filter(v=>v.warehouse===whEff);
   const helperItems=helpers.map(h=>{
     const nk=cleanCell(h['ชื่อเล่น']);
     const fn=cleanCell(h['ชื่อ - สกุล']||h['ชื่อ-สกุล']||'');
