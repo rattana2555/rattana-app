@@ -1970,6 +1970,36 @@ const AUTH_CONFIG = {
 };
 const STORAGE = { user: 'rattanaUser_priceTag', config: 'rattanaPriceTag_cfg', cache: 'rattanaPriceTag_cache' };
 
+/* v2.9.1 — Safe localStorage write. Returns true if saved, false if quota/error.
+   Never throws, so the app keeps working even when the cache is too big. */
+function safeSetItem(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (e) {
+    // Quota exceeded — free space by dropping our own big caches, then retry once
+    try {
+      localStorage.removeItem('rattanaPriceTag_cache');
+      localStorage.removeItem('rattanaPriceTag_locCache');
+      localStorage.setItem(key, value);
+      return true;
+    } catch (e2) {
+      console.warn('safeSetItem: cache too large, skipping persist for', key);
+      return false;
+    }
+  }
+}
+/* Trim a product to only the fields needed for rendering — keeps the cache small */
+function slimProduct(p) {
+  return {
+    sku: p.sku, name: p.name, price: p.price, oldPrice: p.oldPrice,
+    unit: p.unit, size: p.size, image: p.image, barcode: p.barcode,
+    tagType: p.tagType, category: p.category, brand: p.brand, vendor: p.vendor,
+    location: p.location, usedUnit: p.usedUnit, promo: p.promo,
+    // allCodes dropped: location is already resolved into `location`
+  };
+}
+
 let currentUser = null;
 let products = [];          // loaded raw products
 let selectedSkus = new Set();
