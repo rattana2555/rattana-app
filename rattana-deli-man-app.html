@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.11</title>
+<title>Rattana D-Delivery v1.12</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -296,7 +296,7 @@ body.dark .banner-gold{color:var(--gold-light)}
          data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left"></div>
     <div id="loginError"></div>
-    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.11 — Powered by Rattana Group</div>
+    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.12 — Powered by Rattana Group</div>
   </div>
 </div>
 
@@ -304,7 +304,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div id="appScreen" class="page" style="display:none">
   <header>
     <div class="logo-text">D<span>-DELIVERY</span></div>
-    <span class="ver-tag" id="verTag">v1.11</span>
+    <span class="ver-tag" id="verTag">v1.12</span>
     <span class="role-tag" id="roleTag">-</span>
     <div class="spacer"></div>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="อัพเดท">↻</button>
@@ -318,7 +318,7 @@ body.dark .banner-gold{color:var(--gold-light)}
     <div class="section" id="sec-driver-home">
       <div class="card card-gold">
         <div class="card-head">
-          <h3>📋 รับงาน</h3>
+          <h3>📋 รับงาน <span class="txt-sm txt-muted" id="todayLabel" style="font-weight:400"></span></h3>
           <button class="btn btn-outline btn-sm" onclick="resetPickupForm()">🗑 ล้างข้อมูล</button>
         </div>
         <div class="card-body" id="pickupFormBody">
@@ -500,7 +500,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.11';
+const APP_VERSION='1.12';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -746,7 +746,26 @@ function seedJobs(){
       ]},
   ];
 }
-/* ดึงงานว่าง (status=available) จากชีท Jobs — group rows by Trans_Code */
+/* แปลงวันที่ "DD/MM/YYYY" (รองรับทั้ง พ.ศ. และ ค.ศ.) → "YYYY-MM-DD" */
+function parseDeliverDate(s){
+  if(!s) return null;
+  const m=String(s).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(!m) return null;
+  let [,d,mo,y]=m; y=parseInt(y);
+  if(y>2500) y-=543; // พ.ศ. → ค.ศ.
+  return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+function todayIsoStr(){
+  const n=new Date();
+  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+}
+function todayDisplayStr(){
+  const n=new Date();
+  return `${String(n.getDate()).padStart(2,'0')}/${String(n.getMonth()+1).padStart(2,'0')}/${n.getFullYear()+543}`;
+}
+
+/* ดึงงานว่าง (status=available) จากชีท Jobs — group rows by Trans_Code
+   กรองเฉพาะวันที่ส่งสินค้า = วันนี้ */
 async function loadAvailableJobs(){
   try{
     const rows=await fetchSheet(CFG.jobsSheetId,CFG.jobsSheetName);
@@ -754,10 +773,13 @@ async function loadAvailableJobs(){
     // map ลูกค้าสำหรับ enrich
     const custByCode={};
     state.customers.forEach(c=>{ if(c.code) custByCode[c.code]=c; });
-    // จัดกลุ่มตาม Trans_Code
+    const today=todayIsoStr();
+    // จัดกลุ่มตาม Trans_Code (กรองเฉพาะวันนี้)
     const byCode={};
     rows.forEach(r=>{
       const tc=cleanCell(r['Trans_Code']); if(!tc) return;
+      const deliverDate=parseDeliverDate(cleanCell(r['วันที่ส่งสินค้า']));
+      if(deliverDate!==today) return; // ← FILTER เฉพาะวันนี้
       if(!byCode[tc]) byCode[tc]={id:tc,bills:[],docDate:cleanCell(r['Doc_Date'])};
       const code=cleanCell(r['Customer_Code']);
       const cust=custByCode[code]||{};
@@ -864,10 +886,11 @@ function renderDriverHome(){
     return {v:nk,l:fn?`${fn} (${nk})`:nk};
   });
 
+  const todayLabel=$('todayLabel'); if(todayLabel) todayLabel.textContent=`— ส่งวันที่ ${todayDisplayStr()}`;
   $('pickupFormBody').innerHTML=`
     <div class="field">
-      <label>เลขที่ใบคุม</label>
-      ${buildDD('ddJob',avail.map(j=>({v:j.id,l:`${j.id} — ${j.bills.length} ร้าน · ${fmt(j.bills.reduce((s,b)=>s+b.amount,0))} ฿`})),avail.length?'-- เลือกชุดงาน --':'(ไม่มีงานว่าง)')}
+      <label>เลขที่ใบคุม <span class="txt-xs txt-muted">(เฉพาะงานวันนี้ ${todayDisplayStr()})</span></label>
+      ${buildDD('ddJob',avail.map(j=>({v:j.id,l:`${j.id} — ${j.bills.length} ร้าน · ${fmt(j.bills.reduce((s,b)=>s+b.amount,0))} ฿`})),avail.length?'-- เลือกชุดงาน --':'(ไม่มีงานสำหรับวันนี้)')}
     </div>
     <div class="field">
       <label>ทะเบียน</label>
