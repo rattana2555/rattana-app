@@ -9,7 +9,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600;700&family=Sarabun:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
 <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIlJhdHRhbmEgRC1EZWxpdmVyeSIsCiAgInNob3J0X25hbWUiOiAiRC1EZWxpdmVyeSIsCiAgInN0YXJ0X3VybCI6ICIuLyIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzBBMUIzRSIsCiAgInRoZW1lX2NvbG9yIjogIiMwQTFCM0UiLAogICJpY29ucyI6IFt7InNyYyI6ICJodHRwczovL3d3dy5nb29nbGUuY29tL3MyL2Zhdmljb25zP2RvbWFpbj1nb29nbGUuY29tJnN6PTE5MiIsICJzaXplcyI6ICIxOTJ4MTkyIiwgInR5cGUiOiAiaW1hZ2UvcG5nIn1dCn0=">
@@ -25,7 +25,7 @@
   --radius-sm:6px;--radius-md:12px;--radius-lg:16px;--radius-xl:20px;
   --shadow-sm:0 1px 4px rgba(0,0,0,.06);--shadow-md:0 2px 8px rgba(0,0,0,.08);
   --shadow-lg:0 8px 24px rgba(13,27,62,.12);--shadow-gold:0 4px 12px rgba(201,168,50,.35);
-  --font-head:'Prompt',sans-serif;--font-body:'Sarabun',sans-serif;--font-mono:'IBM Plex Mono',monospace;
+  --font-head:'Kanit',sans-serif;--font-body:'Kanit',sans-serif;--font-mono:'Kanit',sans-serif;
 }
 body.dark{--bg:#0a1020;--text:#e8eaf0;--card-bg:#111c35;--border:#243b73;--muted:#8a98b8;--row-alt:#0f1830;}
 
@@ -284,7 +284,7 @@ body.dark .banner-gold{color:var(--gold-light)}
     <p class="subtitle">Rattana Group — บันทึกการส่งสินค้าและเก็บเงิน</p>
     <div style="background:rgba(201,168,50,.1);border:1px solid var(--gold);border-radius:var(--radius-md);padding:14px;margin:14px 0;text-align:left;font-size:12px;color:rgba(255,255,255,.85)">
       <div class="txt-gold txt-bold mb-8" style="text-transform:uppercase;letter-spacing:.5px">เข้าใช้งานได้เฉพาะ</div>
-      <div>👨‍💼 หัวหน้างาน (อนุมัติ)</div>
+      <div>👨‍💼 หัวหน้างาน / ผู้บริหาร (Role 4+)</div>
       <div>🚚 พนักงานคลังและขนส่ง (คนขับ)</div>
     </div>
     <div id="g_id_onload"
@@ -606,14 +606,17 @@ async function handleGoogleLogin(resp){
     const dept=cleanCell(u['แผนก']||'');
     const empId=cleanCell(u['รหัสพนักงาน']||'');
     const wh=cleanCell(u['W']||'')||'HQ';
+    const userRole=parseInt(cleanCell(u['User Role']||'0'))||0;
 
     // Detect role
+    // - หัวหน้างาน: ชื่อปรากฏใน "ชื่อหัวหน้างาน" ของแถวอื่น (หัวหน้าคลัง) ★ หรือ ★ User Role >= 4 (ผู้บริหาร)
+    // - คนขับ: แผนก "คลังและขนส่ง"
     let role=null;
-    if(state.supervisors.some(s=>s===name||s===nick)){ role='supervisor'; }
+    if(state.supervisors.some(s=>s===name||s===nick)||userRole>=4){ role='supervisor'; }
     else if(dept==='คลังและขนส่ง'){ role='driver'; }
-    else { showLoginError('ไม่มีสิทธิ์เข้าใช้แอพนี้ (แผนก: '+dept+')'); return; }
+    else { showLoginError('ไม่มีสิทธิ์เข้าใช้แอพนี้ (แผนก: '+dept+', Role: '+userRole+')'); return; }
 
-    state.user={email,name,nickname:nick,empId,dept,warehouse:wh,picture:payload.picture||''};
+    state.user={email,name,nickname:nick,empId,dept,warehouse:wh,userRole,picture:payload.picture||''};
     state.role=role;
     persistUser();
     await bootApp();
@@ -1422,6 +1425,7 @@ function renderSettings(){
     <div class="cust-row"><span class="lbl">แผนก</span><span class="val">${esc(state.user.dept)}</span></div>
     <div class="cust-row"><span class="lbl">คลัง</span><span class="val">${esc(state.user.warehouse)}</span></div>
     <div class="cust-row"><span class="lbl">บทบาท</span><span class="val">${state.role==='supervisor'?'👨‍💼 หัวหน้างาน':'🚚 คนขับ'}</span></div>
+    ${state.user.userRole?`<div class="cust-row"><span class="lbl">User Role</span><span class="val"><span class="badge badge-gold">${state.user.userRole}</span></span></div>`:''}
     <div class="cust-row"><span class="lbl">อีเมล</span><span class="val">${esc(state.user.email)}</span></div>
   `;
   $('codeBlock').textContent=APPS_SCRIPT_CODE;
