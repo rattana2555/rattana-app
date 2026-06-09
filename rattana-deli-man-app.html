@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.9</title>
+<title>Rattana D-Delivery v1.10</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -296,7 +296,7 @@ body.dark .banner-gold{color:var(--gold-light)}
          data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left"></div>
     <div id="loginError"></div>
-    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.9 — Powered by Rattana Group</div>
+    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.10 — Powered by Rattana Group</div>
   </div>
 </div>
 
@@ -304,7 +304,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div id="appScreen" class="page" style="display:none">
   <header>
     <div class="logo-text">D<span>-DELIVERY</span></div>
-    <span class="ver-tag" id="verTag">v1.9</span>
+    <span class="ver-tag" id="verTag">v1.10</span>
     <span class="role-tag" id="roleTag">-</span>
     <div class="spacer"></div>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="อัพเดท">↻</button>
@@ -398,6 +398,9 @@ body.dark .banner-gold{color:var(--gold-light)}
         <div class="card-body">
           <div class="banner-gold">
             แอปนี้เชื่อมต่อ Google Sheets อัตโนมัติแล้ว — ทุกงานที่ส่งให้หัวหน้าอนุมัติจะถูกบันทึกลง <b>"บันทึกการเก็บเงิน"</b> และ <b>"CN"</b>
+          </div>
+          <div class="banner-warn mt-12">
+            ⚠️ <b>Apps Script v2.0 (upsert)</b> — ถ้าใช้ script v1.0 จะมีแถวซ้ำใน sheet ทุกครั้งที่ส่ง. กรุณา redeploy ด้วยโค้ดล่าสุด (ขั้นสูง → คัดลอกโค้ด) แล้วรัน <code>dedupeExistingRows</code> ใน Apps Script editor 1 ครั้งเพื่อล้างแถวเก่า
           </div>
           <div class="row mt-12">
             <button class="btn btn-outline" onclick="testAppsUrl()">🧪 ทดสอบการเชื่อมต่อ</button>
@@ -497,7 +500,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.9';
+const APP_VERSION='1.10';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -1652,12 +1655,20 @@ async function syncJobsFromSheet(){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-Delivery — Apps Script Backend v1.0 */
+const APPS_SCRIPT_CODE=`/* D-Delivery — Apps Script Backend v2.0 (upsert) */
 const SHEET_RECORD='บันทึกการเก็บเงิน';
 const SHEET_CN='CN';
 
+const HEADERS_RECORD=['วันที่บันทึก','เลขใบคุม','Doc_No','Customer_Code','Customer_Name','Salesman',
+  'TotalBaht','ธนบัตร','เหรียญ','โอน1','โอน2','เช็ค','ใบลดหนี้','รวมเก็บได้',
+  'สถานะ','สาเหตุ','ผู้รับผิดชอบส่งต่อ','คนขับ','ผู้ช่วย','ทะเบียนรถ','รูปแบบ',
+  'หัวหน้าอนุมัติ','วันที่อนุมัติ','ตีกลับโดย','เหตุผลตีกลับ','วันที่ตีกลับ'];
+
+const HEADERS_CN=['วันที่บันทึก','เลขใบคุม','Doc_No','Customer_Code','Customer_Name','Salesman',
+  'TotalBaht','สาเหตุ','ผู้รับผิดชอบส่งต่อ','คนขับ','ทะเบียนรถ','หมายเหตุ'];
+
 function doGet(e){
-  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date()}))
+  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'2.0'}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -1665,28 +1676,40 @@ function doPost(e){
   try{
     const data=JSON.parse(e.postData.contents);
     const ss=SpreadsheetApp.getActiveSpreadsheet();
-    const tsRecord=ensureSheet_(ss,SHEET_RECORD,
-      ['วันที่บันทึก','เลขใบคุม','Doc_No','Customer_Code','Customer_Name','Salesman',
-       'TotalBaht','ธนบัตร','เหรียญ','โอน1','โอน2','เช็ค','ใบลดหนี้','รวมเก็บได้',
-       'สถานะ','สาเหตุ','ผู้รับผิดชอบส่งต่อ','คนขับ','ผู้ช่วย','ทะเบียนรถ','รูปแบบ',
-       'หัวหน้าอนุมัติ','วันที่อนุมัติ']);
-    const tsCN=ensureSheet_(ss,SHEET_CN,
-      ['วันที่บันทึก','เลขใบคุม','Doc_No','Customer_Code','Customer_Name','Salesman',
-       'TotalBaht','สาเหตุ','ผู้รับผิดชอบส่งต่อ','คนขับ','ทะเบียนรถ','หมายเหตุ']);
-    const now=new Date();
+    const sh=ensureSheet_(ss,SHEET_RECORD,HEADERS_RECORD);
+    const cnSh=ensureSheet_(ss,SHEET_CN,HEADERS_CN);
     const team=data.team||{};
+    const now=new Date();
+
+    // Build index ของแถวเดิม (jobId|doc_no → rowNum)
+    const recIdx=buildIndex_(sh,1,2); // col B=jobId, col C=doc
+    const cnIdx=buildIndex_(cnSh,1,2);
+
     data.bills.forEach(b=>{
       const p=b.payment||{};
-      tsRecord.appendRow([now,data.jobId,b.doc,b.code,b.name,'',
+      const row=[now,String(data.jobId),String(b.doc),String(b.code),b.name,'',
         b.amount,p.banknotes||0,p.coins||0,p.transfer1||0,p.transfer2||0,p.cheque||0,p.creditNote||0,b.total||0,
         b.status,b.failReason||'',b.nextResp||'',team.driver||'',team.helper||'',team.plate||'',team.pattern||'',
-        data.approvedBy||'',data.approvedAt?new Date(data.approvedAt):'']);
+        data.approvedBy||'',data.approvedAt?new Date(data.approvedAt):'',
+        data.rejectedBy||'',data.rejectReason||'',data.rejectedAt?new Date(data.rejectedAt):''];
+      upsert_(sh,recIdx,String(data.jobId)+'|'+String(b.doc),row);
+
       if(b.isCN){
-        tsCN.appendRow([now,data.jobId,b.doc,b.code,b.name,'',
-          b.amount,b.failReason||'',b.nextResp||'',team.driver||'',team.plate||'','']);
+        const cnRow=[now,String(data.jobId),String(b.doc),String(b.code),b.name,'',
+          b.amount,b.failReason||'',b.nextResp||'',team.driver||'',team.plate||'',''];
+        upsert_(cnSh,cnIdx,String(data.jobId)+'|'+String(b.doc),cnRow);
+      } else {
+        // ถ้าก่อนหน้านี้เคย CN แล้วเปลี่ยนใจ → ลบจากชีท CN
+        const key=String(data.jobId)+'|'+String(b.doc);
+        if(cnIdx[key]){ cnSh.deleteRow(cnIdx[key]); delete cnIdx[key]; rebuildIndex_(cnSh,1,2,cnIdx); }
       }
     });
-    return ContentService.createTextOutput(JSON.stringify({ok:true}))
+
+    // บังคับให้คอลัมน์ B (เลขใบคุม) เป็น text เพื่อกัน leading zero หาย
+    sh.getRange('B:B').setNumberFormat('@');
+    cnSh.getRange('B:B').setNumberFormat('@');
+
+    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'2.0'}))
       .setMimeType(ContentService.MimeType.JSON);
   }catch(err){
     return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err)}))
@@ -1694,11 +1717,63 @@ function doPost(e){
   }
 }
 
+/* สร้าง index (key=col1|col2 → rowNum 1-indexed) */
+function buildIndex_(sh,col1Index,col2Index){
+  const idx={};
+  const data=sh.getDataRange().getValues();
+  for(let i=1;i<data.length;i++){
+    const key=String(data[i][col1Index])+'|'+String(data[i][col2Index]);
+    idx[key]=i+1;
+  }
+  return idx;
+}
+function rebuildIndex_(sh,c1,c2,idxOut){
+  Object.keys(idxOut).forEach(k=>delete idxOut[k]);
+  const fresh=buildIndex_(sh,c1,c2);
+  Object.assign(idxOut,fresh);
+}
+function upsert_(sh,idx,key,row){
+  if(idx[key]){
+    sh.getRange(idx[key],1,1,row.length).setValues([row]);
+  } else {
+    sh.appendRow(row);
+    idx[key]=sh.getLastRow();
+  }
+}
+
 function ensureSheet_(ss,name,headers){
   let sh=ss.getSheetByName(name);
-  if(!sh){ sh=ss.insertSheet(name); sh.appendRow(headers);
-    sh.getRange(1,1,1,headers.length).setFontWeight('bold').setBackground('#0A1B3E').setFontColor('#fff'); }
+  if(!sh){
+    sh=ss.insertSheet(name);
+    sh.appendRow(headers);
+    sh.getRange(1,1,1,headers.length).setFontWeight('bold').setBackground('#0A1B3E').setFontColor('#fff');
+  } else if(sh.getLastColumn()<headers.length){
+    // เพิ่ม header ใหม่ถ้าไม่ครบ (forward-compat)
+    sh.getRange(1,1,1,headers.length).setValues([headers]);
+    sh.getRange(1,1,1,headers.length).setFontWeight('bold').setBackground('#0A1B3E').setFontColor('#fff');
+  }
   return sh;
+}
+
+/* เครื่องมือลบ duplicate ที่มีอยู่เก่า — รันใน Apps Script editor ตอนต้น
+   เปิดเมนู Extensions → Apps Script → เลือก dedupeExistingRows → Run */
+function dedupeExistingRows(){
+  const ss=SpreadsheetApp.getActiveSpreadsheet();
+  [SHEET_RECORD,SHEET_CN].forEach(name=>{
+    const sh=ss.getSheetByName(name); if(!sh) return;
+    const data=sh.getDataRange().getValues();
+    const seen={};
+    const toKeep=[data[0]]; // header
+    // เก็บแถวล่าสุดของแต่ละ (jobId, doc)
+    for(let i=data.length-1;i>=1;i--){
+      const key=String(data[i][1])+'|'+String(data[i][2]);
+      if(!seen[key]){ seen[key]=true; toKeep.splice(1,0,data[i]); }
+    }
+    sh.clearContents();
+    sh.getRange(1,1,toKeep.length,toKeep[0].length).setValues(toKeep);
+    sh.getRange(1,1,1,toKeep[0].length).setFontWeight('bold').setBackground('#0A1B3E').setFontColor('#fff');
+  });
+  SpreadsheetApp.getUi().alert('ลบ duplicate แล้ว');
 }`;
 
 /* ========== DROPDOWN (searchable) ========== */
