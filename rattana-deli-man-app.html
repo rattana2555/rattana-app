@@ -310,19 +310,28 @@ body.dark .banner-gold{color:var(--gold-light)}
   <nav class="tab-nav" id="tabNav"></nav>
 
   <div class="content">
-    <!-- DRIVER: Home -->
+    <!-- DRIVER: Home (pickup form) -->
     <div class="section" id="sec-driver-home">
       <div class="card card-gold">
         <div class="card-head">
-          <h3>🚚 งานว่าง</h3>
-          <span class="txt-sm txt-muted" id="availCount">0 ชุดงาน</span>
+          <h3>📋 รับงาน</h3>
+          <button class="btn btn-outline btn-sm" onclick="resetPickupForm()">🗑 ล้างข้อมูล</button>
         </div>
-        <div class="card-body" id="availJobsList">
-          <div class="txt-center txt-muted p-16">ไม่มีงานว่างในขณะนี้</div>
+        <div class="card-body" id="pickupFormBody">
+          <!-- rendered by renderDriverHome() -->
         </div>
       </div>
 
-      <div class="card">
+      <div class="card" id="pickupBillsCard" style="display:none">
+        <div class="card-head"><h3>📄 รายการบิลในชุดงาน</h3><span class="txt-sm txt-muted" id="pickupBillsCount">-</span></div>
+        <div class="card-body" id="pickupBillsList"></div>
+      </div>
+
+      <div class="row mt-12" style="justify-content:flex-end">
+        <button class="btn btn-gold btn-lg" id="btnSavePickup" onclick="confirmPickup()" disabled>✓ บันทึก — รับงาน</button>
+      </div>
+
+      <div class="card mt-16">
         <div class="card-head">
           <h3>🔒 งานที่ดำเนินการแล้ว</h3>
           <span class="txt-sm txt-muted" id="takenCount">0</span>
@@ -780,22 +789,95 @@ function renderCurrent(){
 /* ========== DRIVER HOME ========== */
 function renderDriverHome(){
   const wh=state.user.warehouse||'W1';
+  const whForVeh=wh==='HQ'?'W1':wh;
   const driverNick=state.user.nickname||state.user.name;
-  // งานว่าง = available & ไม่มี team
   const avail=state.jobs.filter(j=>j.status==='available'&&!j.team);
-  // งานของทีมอื่น = มี team แต่ team.driver ≠ ฉัน
   const taken=state.jobs.filter(j=>j.team&&j.team.driver!==driverNick);
-  // งานของฉันเอง → ไม่แสดงตรงนี้ (อยู่ในแท็บ "งานของฉัน")
-  $('availCount').textContent=`${avail.length} ชุดงาน`;
+  const helpers=state.drivers.filter(d=>cleanCell(d['W'])===wh&&cleanCell(d['ชื่อเล่น'])!==driverNick);
+  const veh=state.vehicles.filter(v=>v.warehouse===whForVeh);
+  const helperItems=helpers.map(h=>{
+    const nk=cleanCell(h['ชื่อเล่น']);
+    const fn=cleanCell(h['ชื่อ - สกุล']||h['ชื่อ-สกุล']||'');
+    return {v:nk,l:fn?`${fn} (${nk})`:nk};
+  });
+
+  $('pickupFormBody').innerHTML=`
+    <div class="field">
+      <label>เลขที่ใบคุม</label>
+      ${buildDD('ddJob',avail.map(j=>({v:j.id,l:`${j.id} — ${j.bills.length} ร้าน · ${fmt(j.bills.reduce((s,b)=>s+b.amount,0))} ฿`})),avail.length?'-- เลือกชุดงาน --':'(ไม่มีงานว่าง)')}
+    </div>
+    <div class="field">
+      <label>ทะเบียน</label>
+      ${buildDD('ddPlate',veh.map(v=>({v:v.plate,l:v.plate})),'-- เลือกทะเบียน --')}
+    </div>
+    <div class="field">
+      <label>การส่ง</label>
+      <div class="pills" id="pickupPattern">
+        ${PICKUP_PATTERNS.map((p,i)=>`<button type="button" class="pill gold ${i===0?'active':''}" data-v="${esc(p)}" onclick="pickPattern(this)">${esc(p)}</button>`).join('')}
+      </div>
+    </div>
+    <div class="field">
+      <label>คนขับ</label>
+      <div class="input" style="display:flex;align-items:center;background:var(--row-alt);font-weight:600">${esc(driverNick)} <span class="badge badge-info" style="margin-left:auto">${esc(state.user.empId)}</span></div>
+    </div>
+    <div class="field">
+      <label>ผู้ช่วย 1</label>
+      ${buildDD('ddHelper1',helperItems,'-- เลือกผู้ช่วย --')}
+    </div>
+    <div class="field">
+      <label>ผู้ช่วย 2</label>
+      ${buildDD('ddHelper2',helperItems,'-- (ถ้ามี) --')}
+    </div>
+    <div class="field">
+      <label>ผู้ช่วยที่ไม่มีในรายชื่อ</label>
+      <input class="input" id="helperExtra" placeholder="พิมพ์ชื่อผู้ช่วยอื่น (ถ้ามี)">
+    </div>
+  `;
+
+  // Re-bind: ddJob onchange → preview bills
+  const obsPanel=document.getElementById('ddJob_panel');
+  if(obsPanel){
+    obsPanel.querySelectorAll('li[data-v]').forEach(li=>{
+      const orig=li.onclick; li.onclick=(e)=>{ if(orig) orig.call(li,e); previewPickupBills(); };
+    });
+  }
+  previewPickupBills();
+
+  // Taken section
   $('takenCount').textContent=`${taken.length}`;
-  $('availJobsList').innerHTML=avail.length?avail.map(j=>renderJobCard(j,false)).join(''):
-    '<div class="txt-center txt-muted p-16">ไม่มีงานว่างในขณะนี้</div>';
   $('takenJobsList').innerHTML=taken.length?taken.map(j=>renderJobCard(j,true)).join(''):
     '<div class="txt-center txt-muted p-16">—</div>';
 }
+
+function previewPickupBills(){
+  const jid=ddValue('ddJob');
+  const j=jid?state.jobs.find(x=>x.id===jid):null;
+  const card=$('pickupBillsCard'); const list=$('pickupBillsList'); const cnt=$('pickupBillsCount');
+  const btn=$('btnSavePickup');
+  if(!j){ card.style.display='none'; btn.disabled=true; return; }
+  card.style.display='block';
+  const total=j.bills.reduce((s,b)=>s+b.amount,0);
+  cnt.textContent=`${j.bills.length} บิล · ${fmt(total)} ฿`;
+  list.innerHTML=`
+    <div class="tbl-wrap"><table class="tbl" style="min-width:0">
+      <thead><tr><th>ชื่อร้านค้า</th><th class="num" style="text-align:right">ยอดเงิน</th></tr></thead>
+      <tbody>
+        ${j.bills.map(b=>`<tr><td>${esc(b.name)}</td><td class="num">${fmt(b.amount)}</td></tr>`).join('')}
+        <tr style="background:var(--gold-soft);font-weight:700"><td>รวม</td><td class="num">${fmt(total)}</td></tr>
+      </tbody>
+    </table></div>
+  `;
+  btn.disabled=false;
+}
+
+function resetPickupForm(){
+  renderDriverHome();
+  showToast('ล้างข้อมูลแล้ว','info');
+}
+
 function renderJobCard(j,locked){
   const total=(j.bills||[]).reduce((s,b)=>s+(b.amount||0),0);
-  return `<div class="job-card ${locked?'locked':''}" onclick="${locked?'':"openPickup('"+j.id+"')"}">
+  return `<div class="job-card ${locked?'locked':''}">
     <div class="job-head">
       <div>
         <div class="job-id">${esc(j.id)}</div>
@@ -806,58 +888,33 @@ function renderJobCard(j,locked){
       </div>
       <div class="txt-right">
         <div class="job-amount">${fmt(total)} ฿</div>
-        ${locked?'<span class="badge badge-lock mt-4">🔒 ดำเนินการแล้ว</span>':'<span class="badge badge-gold mt-4">รับงาน</span>'}
+        ${locked?'<span class="badge badge-lock mt-4">🔒 ดำเนินการแล้ว</span>':''}
       </div>
     </div>
     ${locked&&j.team?`<div class="txt-xs txt-muted mt-8">👤 ${esc(j.team.driver)} • 🚗 ${esc(j.team.plate)}</div>`:''}
   </div>`;
 }
 
-/* ========== PICKUP MODAL ========== */
-function openPickup(jobId){
-  const j=state.jobs.find(x=>x.id===jobId); if(!j) return;
-  state.activeJobId=jobId;
-  const wh=j.warehouse||state.user.warehouse||'W1';
-  const whForVeh=wh==='HQ'?'W1':wh;
-  const helpers=state.drivers.filter(d=>cleanCell(d['W'])===wh&&cleanCell(d['ชื่อเล่น'])!==state.user.nickname);
-  const veh=state.vehicles.filter(v=>v.warehouse===whForVeh);
-  $('pickupBody').innerHTML=`
-    <div class="banner-gold">ชุดงาน <b>${esc(jobId)}</b> · ${j.bills.length} ร้าน · ${fmt(j.bills.reduce((s,b)=>s+b.amount,0))} ฿</div>
-    <div class="field">
-      <label>คนขับ</label>
-      <div class="input" style="display:flex;align-items:center;background:var(--row-alt);font-weight:600">${esc(state.user.nickname||state.user.name)} <span class="badge badge-info" style="margin-left:auto">${esc(state.user.empId)}</span></div>
-    </div>
-    <div class="field">
-      <label>ผู้ช่วย (เลือก 1 คน)</label>
-      ${buildDD('ddHelper',helpers.map(h=>({v:cleanCell(h['ชื่อเล่น']),l:cleanCell(h['ชื่อเล่น'])+' — '+cleanCell(h['ชื่อ - สกุล']||h['ชื่อ-สกุล']||'')})),'-- เลือกผู้ช่วย --')}
-    </div>
-    <div class="field">
-      <label>ทะเบียนรถ (คลัง ${esc(whForVeh)})</label>
-      ${buildDD('ddPlate',veh.map(v=>({v:v.plate,l:v.plate})),'-- เลือกทะเบียน --')}
-    </div>
-    <div class="field">
-      <label>รูปแบบการลงของ</label>
-      <div class="pills" id="pickupPattern">
-        ${PICKUP_PATTERNS.map((p,i)=>`<button class="pill gold ${i===0?'active':''}" data-v="${esc(p)}" onclick="pickPattern(this)">${esc(p)}</button>`).join('')}
-      </div>
-    </div>
-    <button class="btn btn-gold btn-block btn-lg mt-12" onclick="confirmPickup()">✓ รับงานนี้</button>
-  `;
-  openModal('modalPickup');
-}
 function pickPattern(btn){ btn.parentElement.querySelectorAll('.pill').forEach(p=>p.classList.remove('active')); btn.classList.add('active'); }
+
 function confirmPickup(){
-  const j=state.jobs.find(x=>x.id===state.activeJobId); if(!j) return;
-  const helper=ddValue('ddHelper');
+  const jid=ddValue('ddJob');
+  const j=state.jobs.find(x=>x.id===jid);
+  if(!j){ showToast('กรุณาเลือกเลขใบคุม','warning'); return; }
   const plate=ddValue('ddPlate');
-  const pattern=$('pickupPattern').querySelector('.pill.active')?.dataset.v||'';
   if(!plate){ showToast('กรุณาเลือกทะเบียนรถ','warning'); return; }
-  j.team={driver:state.user.nickname||state.user.name,helper,plate,pattern};
-  j.driver=state.user.nickname||state.user.name; j.helper=helper; j.plate=plate; j.pickup=pattern;
+  const h1=ddValue('ddHelper1');
+  const h2=ddValue('ddHelper2');
+  const hExtra=$('helperExtra').value.trim();
+  if(h1&&h2&&h1===h2){ showToast('ผู้ช่วย 1 กับ 2 ต้องไม่ซ้ำกัน','warning'); return; }
+  const pattern=document.querySelector('#pickupPattern .pill.active')?.dataset.v||PICKUP_PATTERNS[0];
+  const helpers=[h1,h2,hExtra].filter(Boolean);
+  j.team={driver:state.user.nickname||state.user.name,helper:helpers.join(', '),helper1:h1,helper2:h2,helperExtra:hExtra,plate,pattern};
+  j.driver=state.user.nickname||state.user.name; j.helper=helpers.join(', '); j.plate=plate; j.pickup=pattern;
   j.status='in_progress';
   j.startedAt=Date.now();
+  state.activeJobId=j.id;
   persistJobs();
-  closeModal('modalPickup');
   showToast(`รับงาน ${j.id} เรียบร้อย ✓`,'success');
   switchTab('sec-driver-job');
 }
