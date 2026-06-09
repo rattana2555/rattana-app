@@ -638,7 +638,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v3.24';
+const APP_VERSION = 'v3.25';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -741,11 +741,14 @@ async function handleGoogleLogin(r) {
     if (!user)                                                           { showLoginError('ไม่พบอีเมลนี้ในระบบ — ติดต่อผู้ดูแล'); return; }
     if (String(user['Status']||'').trim().toLowerCase() !== 'active')   { showLoginError('บัญชีถูกระงับ — ติดต่อผู้ดูแล'); return; }
     const rawName = String(user['ชื่อ - สกุล']||'').trim();
+    const rawNick = String(user['ชื่อเล่น']||'').trim();
     currentUser = {
       email,
-      name:      rawName || user['ชื่อเล่น'] || email,
-      hasOwnName: !!rawName,                  // true = email's row has a name → no picker needed
-      nickname:  user['ชื่อเล่น'] || '',
+      name:      rawName || rawNick || email,
+      // Treat as personal email if EITHER full name OR nickname is filled.
+      // Shared accounts typically leave BOTH empty.
+      hasOwnName: !!(rawName || rawNick),
+      nickname:  rawNick,
       role:      parseInt(user['User Role']) || 1,
       warehouse: String(user['W']||'').trim().toUpperCase(),
       empId:     String(user['รหัสพนักงาน']||''),
