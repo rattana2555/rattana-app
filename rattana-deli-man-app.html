@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.37</title>
+<title>Rattana D-Delivery v1.38</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -347,7 +347,7 @@ body.dark .banner-gold{color:var(--gold-light)}
          data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left"></div>
     <div id="loginError"></div>
-    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.37 — Powered by Rattana Group</div>
+    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.38 — Powered by Rattana Group</div>
   </div>
 </div>
 
@@ -355,7 +355,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div id="appScreen" class="page" style="display:none">
   <header>
     <div class="logo-text">D<span>-DELIVERY</span></div>
-    <span class="ver-tag" id="verTag">v1.37</span>
+    <span class="ver-tag" id="verTag">v1.38</span>
     <span id="liveDot" title="Live sync" style="width:7px;height:7px;border-radius:50%;background:#2ecc71;box-shadow:0 0 6px #2ecc71;display:inline-block;transition:all .25s"></span>
     <span class="role-tag" id="roleTag">-</span>
     <div class="spacer"></div>
@@ -616,7 +616,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.37';
+const APP_VERSION='1.38';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -715,6 +715,23 @@ async function fetchSheet(sheetId,sheetName){
   return parseCsv(await res.text());
 }
 
+/* ===== Sheet cache ใน localStorage (5 นาที) เพื่อเปิดแอปเร็วขึ้น ===== */
+const SHEET_CACHE_TTL=5*60*1000;
+function cacheKey(key){ return 'rdm_cache_'+key; }
+function getCachedSheet(key){
+  try{
+    const raw=localStorage.getItem(cacheKey(key));
+    if(!raw) return null;
+    const c=JSON.parse(raw);
+    if(Date.now()-c.ts<SHEET_CACHE_TTL) return c.data;
+  }catch(e){}
+  return null;
+}
+function setCachedSheet(key,data){
+  try{ localStorage.setItem(cacheKey(key),JSON.stringify({ts:Date.now(),data})); }
+  catch(e){ /* quota exceeded — เงียบไป */ }
+}
+
 /* localStorage helpers */
 function loadStore(){
   try{ return JSON.parse(localStorage.getItem(CFG.storageKey))||{}; }catch{ return {}; }
@@ -773,7 +790,7 @@ function checkSession(){
   const s=loadStore();
   if(!s.user||!s.exp||Date.now()>s.exp) return false;
   state.user=s.user; state.role=s.role;
-  // backfill displayName สำหรับ session ที่บันทึกไว้ก่อน v1.37
+  // backfill displayName สำหรับ session ที่บันทึกไว้ก่อน v1.38
   if(!state.user.displayName){
     const n=state.user.name||'', nk=state.user.nickname||'';
     state.user.displayName=n&&nk?`${n} (${nk})`:(n||nk);
@@ -824,6 +841,8 @@ async function loadVehicles(){
 
 async function loadProducts(){
   if(state.products.length) return;
+  const cached=getCachedSheet('products');
+  if(cached){ state.products=cached; return; }
   try{
     const rows=await fetchSheet(CFG.productsSheetId,CFG.productsSheetName);
     state.products=rows.map(r=>{
@@ -860,11 +879,14 @@ async function loadProducts(){
         },
       };
     }).filter(Boolean);
+    setCachedSheet('products',state.products);
   }catch(e){ console.warn('loadProducts failed:',e); }
 }
 
 async function loadBillDetails(){
   if(Object.keys(state.billDetails).length) return;
+  const cached=getCachedSheet('billDetails');
+  if(cached){ state.billDetails=cached; return; }
   try{
     const rows=await fetchSheet(CFG.jobsSheetId,CFG.billDetailSheetName);
     rows.forEach(r=>{
@@ -878,10 +900,14 @@ async function loadBillDetails(){
         amount:parseFloat(cleanCell(r['TRD_G_AMT']||'0').replace(/,/g,''))||0,
       });
     });
+    setCachedSheet('billDetails',state.billDetails);
   }catch(e){ console.warn('loadBillDetails failed:',e); }
 }
 
 async function loadCustomers(){
+  // ใช้ cache 5 นาที (5,303 rows — หนัก)
+  const cached=getCachedSheet('customers');
+  if(cached){ state.customers=cached; return; }
   try{
     const rows=await fetchSheet(CFG.customerSheetId,CFG.customerSheetName);
     state.customers=rows.map(r=>{
@@ -901,6 +927,7 @@ async function loadCustomers(){
         warehouse:cleanCell(r['WH']||''),
       };
     });
+    setCachedSheet('customers',state.customers);
   }catch(e){ state.customers=[]; }
 }
 
@@ -1235,16 +1262,17 @@ function exportReportExcel(){
 const customerSearchState={q:'',selected:null};
 function renderCustomers(){
   const q=customerSearchState.q.toLowerCase().trim();
+  const LIMIT=50;
   const filtered=q?state.customers.filter(c=>
     (c.name||'').toLowerCase().includes(q)||
     (c.code||'').toLowerCase().includes(q)||
     (c.phone||'').includes(q)||
     (c.address||'').toLowerCase().includes(q)
-  ).slice(0,100):state.customers.slice(0,100);
+  ).slice(0,LIMIT):state.customers.slice(0,LIMIT);
   $('customersBody').innerHTML=`
     <div class="field">
       <input class="input" id="custSearch" value="${esc(customerSearchState.q)}" oninput="customerSearchState.q=this.value;renderCustomers()" placeholder="🔍 ค้นหาชื่อร้าน / รหัส / เบอร์โทร / ที่อยู่..." autocomplete="off">
-      <small class="txt-muted mt-4">มีทั้งหมด ${fmtInt(state.customers.length)} ร้าน · แสดงสูงสุด 100 รายการ</small>
+      <small class="txt-muted mt-4">มีทั้งหมด ${fmtInt(state.customers.length)} ร้าน · แสดงสูงสุด ${LIMIT} รายการ${state._bgLoading?' · กำลังโหลด...':''}</small>
     </div>
     <div class="cust-grid mt-12">
       ${filtered.length?filtered.map(c=>`
@@ -3144,20 +3172,33 @@ window.addEventListener('scroll',()=>$('backToTop').classList.toggle('show',wind
 
 /* ========== BOOT ========== */
 async function bootApp(){
-  showSpinner('กำลังเตรียมข้อมูล...');
+  showSpinner('เข้าสู่ระบบ...');
   try{
     if(loadStore().dark) document.body.classList.add('dark');
     if(!state.users.length){ await loadUsers(); }
-    await Promise.all([loadVehicles(),loadCustomers(),loadChoices()]);
-    await loadJobs();
-    await syncJobsFromSheet().catch(()=>{});
+    // ★ แสดง UI ทันที (หน้าหลัก 5 การ์ดไม่ต้องใช้ข้อมูล)
     $('loginScreen').style.display='none';
     $('appScreen').style.display='flex';
     $('roleTag').textContent=state.role==='supervisor'?'👨‍💼 '+state.user.nickname:'🚚 '+state.user.nickname;
     $('verTag').textContent='v'+APP_VERSION;
     buildTabs();
-    startAutoRefresh();
-  }finally{ hideSpinner(); }
+    hideSpinner();
+    // โหลดข้อมูลที่เหลือใน background (ไม่บล็อก UI)
+    state._bgLoading=true;
+    Promise.all([
+      loadVehicles().catch(()=>{}),
+      loadCustomers().catch(()=>{}),
+      loadChoices().catch(()=>{}),
+    ]).then(()=>loadJobs().catch(()=>{}))
+      .then(()=>syncJobsFromSheet().catch(()=>{}))
+      .then(()=>{
+        state._bgLoading=false;
+        // re-render ถ้าผู้ใช้อยู่ในแท็บที่ใช้ข้อมูลเหล่านี้
+        const dataDepTabs=['sec-driver-home','sec-driver-job','sec-sup-home','sec-sup-history','sec-reports','sec-transfer','sec-returns','sec-customers'];
+        if(dataDepTabs.includes(state.currentTab)) renderCurrent();
+        startAutoRefresh();
+      });
+  }catch(e){ hideSpinner(); throw e; }
 }
 
 /* ===== Auto-refresh ทุก 60 วินาที (silent) ===== */
