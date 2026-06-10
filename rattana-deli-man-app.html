@@ -1,11 +1,11 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.26</title>
+<title>Rattana D-Delivery v1.27</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -320,7 +320,7 @@ body.dark .banner-gold{color:var(--gold-light)}
          data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left"></div>
     <div id="loginError"></div>
-    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.26 — Powered by Rattana Group</div>
+    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.27 — Powered by Rattana Group</div>
   </div>
 </div>
 
@@ -328,7 +328,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div id="appScreen" class="page" style="display:none">
   <header>
     <div class="logo-text">D<span>-DELIVERY</span></div>
-    <span class="ver-tag" id="verTag">v1.26</span>
+    <span class="ver-tag" id="verTag">v1.27</span>
     <span id="liveDot" title="Live sync" style="width:7px;height:7px;border-radius:50%;background:#2ecc71;box-shadow:0 0 6px #2ecc71;display:inline-block;transition:all .25s"></span>
     <span class="role-tag" id="roleTag">-</span>
     <div class="spacer"></div>
@@ -564,7 +564,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.26';
+const APP_VERSION='1.27';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -716,7 +716,7 @@ function checkSession(){
   const s=loadStore();
   if(!s.user||!s.exp||Date.now()>s.exp) return false;
   state.user=s.user; state.role=s.role;
-  // backfill displayName สำหรับ session ที่บันทึกไว้ก่อน v1.26
+  // backfill displayName สำหรับ session ที่บันทึกไว้ก่อน v1.27
   if(!state.user.displayName){
     const n=state.user.name||'', nk=state.user.nickname||'';
     state.user.displayName=n&&nk?`${n} (${nk})`:(n||nk);
@@ -997,73 +997,45 @@ function showComingSoon(name){
   showToast(`"${name}" อยู่ระหว่างพัฒนา`,'info');
 }
 
-/* ========== รับคืนสินค้า (CN sheet) ========== */
-const RETURN_TYPES=['คืนเต็มบิล','คืนบางส่วน','ผิดพลาดจากรัตน'];
-const BILL_TYPES=['DS (ส่ง)','DC (ปลีก)'];
-const RETURN_REASONS=['ปิดร้าน','สินค้าชำรุด','สินค้าหมดอายุ','รับออเดอร์ผิด','ลูกค้าไม่รับ','อื่นๆ'];
-const ERROR_FROMS=['ร้านค้า','คลัง','คนขับ','เซลล์'];
-const UNITS=['ลัง','แพ็ค','ขวด','กระป๋อง','ถาด','ลูก','ชิ้น'];
+/* ========== รับคืนสินค้า (CN sheet) — โครงตามแอป Glide เก่า ========== */
+const RETURN_TYPES=['คืนเต็มทั้งบิล','คืนบ้างบิล'];
+const BILL_TYPES=['DC (ปลีก)','DS (ส่ง)'];
+// สาเหตุ 2 ชั้น (category → sub)
+const REASON_TREE={
+  'รถส่ง':['สินค้าชำรุด(จากขนส่ง)','สินค้าตกหล่น','ส่งผิดออเดอร์'],
+  'ร้านค้า':['ปิดร้าน','ไม่รับสินค้า','สั่งผิด','ร้านค้าคืน'],
+  'คลัง':['สินค้าหมดอายุ','สินค้าชำรุด(จากคลัง)','จ่ายผิดสินค้า','จ่ายผิดจำนวน'],
+  'เซลล์':['ขายผิด','ราคาผิด','โปรโมชั่นผิด'],
+  'อื่นๆ':['อื่นๆ'],
+};
+const ITEM_UNITS=['ชิ้น(EA)','แพ็ค(CS)'];
 const returnState={
-  jobId:'', docNo:'', customerCode:'', customerName:'', warehouse:'',
-  returnType:'', billType:'', reason:'', errorFrom:'',
-  items:[{barcode:'',name:'',qty:'',unit:'ลัง',price:''}],
-  totalAmount:'', note:'', photo:'',
+  photo:'',
+  returnType:'', billType:'',
+  customerCode:'', customerName:'',
+  docNo:'',
+  loaderName:'',
+  driverName:'',
+  reasonCategory:'', reasonSub:'',
+  note:'',
+  items:[{productId:'',productName:'',unit:'ชิ้น(EA)',qty:'',price:''}],
 };
 
+function returnGrandTotal(){
+  return returnState.items.reduce((s,it)=>s+(parseFloat(it.qty)||0)*(parseFloat(it.price)||0),0);
+}
+
 function renderReturn(){
-  const todayJobs=state.jobs.filter(j=>j.status==='available'||j.status==='in_progress');
-  const jobsForDD=todayJobs.map(j=>({v:j.id,l:j.id}));
+  const drivers=state.drivers.map(d=>{
+    const nk=cleanCell(d['ชื่อเล่น']); const fn=cleanCell(d['ชื่อ - สกุล']||d['ชื่อ-สกุล']||'');
+    const full=fn?`${fn} (${nk})`:nk; return {v:full,l:full};
+  });
+  const customers=state.customers.filter(c=>c.code&&c.name).map(c=>({v:c.code,l:`${c.name} — ${c.code}`}));
+  const subReasons=returnState.reasonCategory?(REASON_TREE[returnState.reasonCategory]||[]):[];
+
   $('returnFormBody').innerHTML=`
     <div class="field">
-      <label>เลขที่ใบคุม</label>
-      ${buildDD('ddReturnJob',jobsForDD,jobsForDD.length?'-- เลือกชุดงาน --':'(ไม่มี)')}
-    </div>
-    <div class="field">
-      <label>เลขที่บิล (Doc_No)</label>
-      ${buildDD('ddReturnDoc',[],'-- เลือกบิล --')}
-    </div>
-    <div id="returnCustInfo"></div>
-    <div class="field">
-      <label>ประเภทคืน</label>
-      <div class="pills" id="returnTypePills">
-        ${RETURN_TYPES.map(t=>`<button type="button" class="pill ${t===returnState.returnType?'active gold':''}" data-v="${esc(t)}" onclick="pickReturnType(this)">${esc(t)}</button>`).join('')}
-      </div>
-    </div>
-    <div class="field">
-      <label>ประเภทบิล</label>
-      <div class="pills" id="billTypePills">
-        ${BILL_TYPES.map(t=>`<button type="button" class="pill ${t===returnState.billType?'active gold':''}" data-v="${esc(t)}" onclick="pickBillType(this)">${esc(t)}</button>`).join('')}
-      </div>
-    </div>
-    <div class="field">
-      <label>สาเหตุรับคืน</label>
-      <div class="pills" id="reasonPills">
-        ${RETURN_REASONS.map(r=>`<button type="button" class="pill ${r===returnState.reason?'active gold':''}" data-v="${esc(r)}" onclick="pickReasonReturn(this)">${esc(r)}</button>`).join('')}
-      </div>
-    </div>
-    <div class="field">
-      <label>ผิดพลาดจาก</label>
-      <div class="pills" id="errorPills">
-        ${ERROR_FROMS.map(e=>`<button type="button" class="pill ${e===returnState.errorFrom?'active gold':''}" data-v="${esc(e)}" onclick="pickErrorFrom(this)">${esc(e)}</button>`).join('')}
-      </div>
-    </div>
-
-    <div class="divider"></div>
-    <h3 class="mb-8">📋 รายการสินค้าคืน <span class="txt-sm txt-muted">(สูงสุด 5 รายการ)</span></h3>
-    <div id="returnItems"></div>
-    <button class="btn btn-outline btn-sm mt-8" id="btnAddItem" onclick="addReturnItem()">+ เพิ่มรายการ</button>
-
-    <div class="divider"></div>
-    <div class="field">
-      <label>ยอดเงินรวมรับคืน (บาท)</label>
-      <input class="input input-num" type="number" inputmode="decimal" step="any" min="0" id="returnTotalAmount" value="${esc(returnState.totalAmount)}" oninput="returnState.totalAmount=this.value" placeholder="0.00">
-    </div>
-    <div class="field">
-      <label>หมายเหตุ</label>
-      <textarea class="input" id="returnNote" placeholder="ระบุรายละเอียดเพิ่มเติม (ถ้ามี)" oninput="returnState.note=this.value">${esc(returnState.note)}</textarea>
-    </div>
-    <div class="field">
-      <label>รูปสินค้าคืน</label>
+      <label>รูปสินค้าคืน <span class="txt-xs txt-muted">(ใส่ภาพการคืนสินค้าที่นี่)</span></label>
       <div class="photo-controls">
         <label class="btn btn-outline btn-sm" style="cursor:pointer">📷 กล้อง
           <input type="file" accept="image/*" capture="environment" hidden onchange="handleReturnPhoto(event)">
@@ -1074,87 +1046,157 @@ function renderReturn(){
       </div>
       <div class="photo-preview" id="returnPhotoPreview">${returnState.photo?renderReturnThumb():''}</div>
     </div>
+
+    <div class="field">
+      <label>ประเภทการคืน</label>
+      <div class="pills" id="returnTypePills">
+        ${RETURN_TYPES.map(t=>`<button type="button" class="pill ${t===returnState.returnType?'active gold':''}" data-v="${esc(t)}" onclick="pickReturnType(this)">${esc(t)}</button>`).join('')}
+      </div>
+    </div>
+
+    <div class="field">
+      <label>ประเภทบิล</label>
+      <div class="pills" id="billTypePills">
+        ${BILL_TYPES.map(t=>`<button type="button" class="pill ${t===returnState.billType?'active gold':''}" data-v="${esc(t)}" onclick="pickBillType(this)">${esc(t)}</button>`).join('')}
+      </div>
+    </div>
+
+    <div class="field">
+      <label>ชื่อร้านค้า</label>
+      ${buildDD('ddReturnCust',customers,'-- ค้นหาชื่อร้าน --')}
+    </div>
+
+    <div class="field">
+      <label>เลขที่เอกสาร</label>
+      <input class="input" id="returnDocNo" value="${esc(returnState.docNo)}" oninput="returnState.docNo=this.value" placeholder="DSI..../00xxx">
+    </div>
+
+    <div class="field">
+      <label>ชื่อพนักงานขนของ</label>
+      ${buildDD('ddReturnLoader',drivers,'-- เลือกพนักงาน --')}
+    </div>
+
+    <div class="field">
+      <label>ชื่อผู้ขับ</label>
+      ${buildDD('ddReturnDriver',drivers,'-- เลือกผู้ขับ --')}
+    </div>
+
+    <div class="field">
+      <label>สาเหตุการคืน</label>
+      ${buildDD('ddReturnReasonCat',Object.keys(REASON_TREE).map(k=>({v:k,l:k})),'-- เลือกสาเหตุ --')}
+    </div>
+
+    <div class="field" id="reasonSubWrap" style="${returnState.reasonCategory?'':'display:none'}">
+      <label>รายละเอียดสาเหตุ</label>
+      ${buildDD('ddReturnReasonSub',subReasons.map(s=>({v:s,l:s})),'-- เลือก --')}
+    </div>
+
+    <div class="field">
+      <label>หมายเหตุ</label>
+      <textarea class="input" id="returnNote" placeholder="ระบุเพิ่มเติม (ถ้ามี)" oninput="returnState.note=this.value">${esc(returnState.note)}</textarea>
+    </div>
+
+    <div class="divider"></div>
+    <h3 class="mb-8">📋 รายการสินค้าคืน <span class="txt-sm txt-muted">(สูงสุด 5 รายการ)</span></h3>
+    <div id="returnItems"></div>
+    <button class="btn btn-outline btn-sm mt-8" id="btnAddItem" onclick="addReturnItem()">+ เพิ่มรายการ</button>
+
+    <div class="divider"></div>
+    <div class="bills-total" id="returnGrandTotal">
+      <span>รวมทั้งหมด</span>
+      <span class="num">0.00 ฿</span>
+    </div>
   `;
-  if(returnState.jobId){ ddPick('ddReturnJob',returnState.jobId,returnState.jobId); fillReturnBills(); }
-  if(returnState.docNo){ ddPick('ddReturnDoc',returnState.docNo,returnState.docNo); }
-  renderReturnCustInfo();
-  renderReturnItems();
-  // bind jobId change
-  document.querySelectorAll('#ddReturnJob_list li').forEach(li=>{
-    li.addEventListener('click',()=>{ returnState.jobId=li.dataset.v; returnState.docNo=''; fillReturnBills(); renderReturnCustInfo(); },{once:false});
+  if(returnState.customerCode){
+    const cust=state.customers.find(c=>c.code===returnState.customerCode);
+    if(cust) ddPick('ddReturnCust',cust.code,`${cust.name} — ${cust.code}`);
+  }
+  if(returnState.loaderName) ddPick('ddReturnLoader',returnState.loaderName,returnState.loaderName);
+  if(returnState.driverName) ddPick('ddReturnDriver',returnState.driverName,returnState.driverName);
+  if(!returnState.driverName&&state.user.displayName){
+    returnState.driverName=state.user.displayName;
+    ddPick('ddReturnDriver',state.user.displayName,state.user.displayName);
+  }
+  if(returnState.reasonCategory) ddPick('ddReturnReasonCat',returnState.reasonCategory,returnState.reasonCategory);
+  if(returnState.reasonSub) ddPick('ddReturnReasonSub',returnState.reasonSub,returnState.reasonSub);
+  document.querySelectorAll('#ddReturnCust_list li').forEach(li=>{
+    li.addEventListener('click',()=>{
+      returnState.customerCode=li.dataset.v;
+      const cust=state.customers.find(c=>c.code===returnState.customerCode);
+      returnState.customerName=cust?cust.name:'';
+    });
   });
-}
-
-function fillReturnBills(){
-  const job=state.jobs.find(j=>j.id===returnState.jobId);
-  if(!job){ return; }
-  const list=$('ddReturnDoc_list'); if(!list) return;
-  list.innerHTML=job.bills.map(b=>`<li data-v="${esc(b.doc)}" onclick="ddPick('ddReturnDoc','${esc(b.doc)}','${esc(b.doc+' — '+b.name)}');returnState.docNo='${esc(b.doc)}';renderReturnCustInfo()">${esc(b.doc)} — ${esc(b.name)}</li>`).join('')
-    +`<li class="no-result" style="display:none">ไม่มีตัวเลือก</li>`;
-}
-
-function renderReturnCustInfo(){
-  const el=$('returnCustInfo'); if(!el) return;
-  const job=state.jobs.find(j=>j.id===returnState.jobId);
-  const bill=job?.bills.find(b=>b.doc===returnState.docNo);
-  if(!bill){ el.innerHTML=''; return; }
-  returnState.customerCode=bill.code; returnState.customerName=bill.name;
-  returnState.warehouse=job.warehouse||'W1';
-  el.innerHTML=`<div class="banner-gold">
-    🏪 <b>${esc(bill.name)}</b> · รหัส ${esc(bill.code)} · คลัง ${esc(job.warehouse||'-')}
-  </div>`;
+  document.querySelectorAll('#ddReturnLoader_list li').forEach(li=>{
+    li.addEventListener('click',()=>{ returnState.loaderName=li.dataset.v; });
+  });
+  document.querySelectorAll('#ddReturnDriver_list li').forEach(li=>{
+    li.addEventListener('click',()=>{ returnState.driverName=li.dataset.v; });
+  });
+  document.querySelectorAll('#ddReturnReasonCat_list li').forEach(li=>{
+    li.addEventListener('click',()=>{
+      returnState.reasonCategory=li.dataset.v; returnState.reasonSub='';
+      renderReturn();
+    });
+  });
+  document.querySelectorAll('#ddReturnReasonSub_list li').forEach(li=>{
+    li.addEventListener('click',()=>{ returnState.reasonSub=li.dataset.v; });
+  });
+  renderReturnItems();
 }
 
 function renderReturnItems(){
   const el=$('returnItems'); if(!el) return;
-  el.innerHTML=returnState.items.map((it,i)=>`
-    <div class="card" style="margin-bottom:8px">
+  el.innerHTML=returnState.items.map((it,i)=>{
+    const lineTotal=(parseFloat(it.qty)||0)*(parseFloat(it.price)||0);
+    return `<div class="card" style="margin-bottom:8px">
       <div class="card-head" style="background:var(--row-alt)">
-        <span class="txt-bold">รายการ ${i+1}</span>
+        <span class="txt-bold">รายการที่ ${i+1}</span>
         ${returnState.items.length>1?`<button class="btn btn-outline btn-sm txt-danger" onclick="removeReturnItem(${i})">× ลบ</button>`:''}
       </div>
       <div class="card-body">
-        <div class="grid-2">
-          <div class="field" style="margin-bottom:8px">
-            <label>บาร์โค้ด</label>
-            <input class="input" value="${esc(it.barcode)}" oninput="returnState.items[${i}].barcode=this.value" placeholder="8851234567890">
-          </div>
-          <div class="field" style="margin-bottom:8px">
-            <label>ราคา/หน่วย</label>
-            <input class="input input-num" type="number" inputmode="decimal" step="any" min="0" value="${esc(it.price)}" oninput="returnState.items[${i}].price=this.value" placeholder="0.00">
-          </div>
+        <div class="field" style="margin-bottom:8px">
+          <label>สินค้า</label>
+          <input class="input" value="${esc(it.productName)}" oninput="returnState.items[${i}].productName=this.value" placeholder="ชื่อสินค้า / บาร์โค้ด">
         </div>
         <div class="field" style="margin-bottom:8px">
-          <label>ชื่อสินค้า</label>
-          <input class="input" value="${esc(it.name)}" oninput="returnState.items[${i}].name=this.value" placeholder="ชื่อสินค้า">
+          <label>หน่วย</label>
+          <div class="pills">
+            ${ITEM_UNITS.map(u=>`<button type="button" class="pill ${u===it.unit?'active gold':''}" onclick="pickItemUnit(${i},'${esc(u)}')">${esc(u)}</button>`).join('')}
+          </div>
         </div>
         <div class="grid-2">
           <div class="field" style="margin-bottom:0">
             <label>จำนวน</label>
-            <input class="input input-num" type="number" inputmode="numeric" min="0" value="${esc(it.qty)}" oninput="returnState.items[${i}].qty=this.value" placeholder="0">
+            <input class="input input-num" type="number" inputmode="numeric" min="0" value="${esc(it.qty)}" oninput="returnState.items[${i}].qty=this.value;recalcReturnTotal()" placeholder="0">
           </div>
           <div class="field" style="margin-bottom:0">
-            <label>หน่วย</label>
-            <select class="input" onchange="returnState.items[${i}].unit=this.value">
-              ${UNITS.map(u=>`<option value="${esc(u)}" ${u===it.unit?'selected':''}>${esc(u)}</option>`).join('')}
-            </select>
+            <label>ราคา/หน่วย</label>
+            <input class="input input-num" type="number" inputmode="decimal" step="any" min="0" value="${esc(it.price)}" oninput="returnState.items[${i}].price=this.value;recalcReturnTotal()" placeholder="0.00">
           </div>
         </div>
+        <div class="txt-right txt-sm txt-muted mt-8">รวม <span class="num txt-gold txt-bold">${fmt(lineTotal)}</span></div>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
   $('btnAddItem').disabled=returnState.items.length>=5;
+  recalcReturnTotal();
+}
+function recalcReturnTotal(){
+  const t=returnGrandTotal();
+  const el=$('returnGrandTotal'); if(el) el.children[1].textContent=`${fmt(t)} ฿`;
+}
+function pickItemUnit(idx,unit){
+  returnState.items[idx].unit=unit;
+  renderReturnItems();
 }
 function addReturnItem(){
   if(returnState.items.length>=5){ showToast('ใส่ได้สูงสุด 5 รายการ','warning'); return; }
-  returnState.items.push({barcode:'',name:'',qty:'',unit:'ลัง',price:''});
+  returnState.items.push({productId:'',productName:'',unit:'ชิ้น(EA)',qty:'',price:''});
   renderReturnItems();
 }
 function removeReturnItem(i){ returnState.items.splice(i,1); renderReturnItems(); }
 function pickReturnType(btn){ btn.parentElement.querySelectorAll('.pill').forEach(p=>{p.classList.remove('active','gold');}); btn.classList.add('active','gold'); returnState.returnType=btn.dataset.v; }
 function pickBillType(btn){ btn.parentElement.querySelectorAll('.pill').forEach(p=>{p.classList.remove('active','gold');}); btn.classList.add('active','gold'); returnState.billType=btn.dataset.v; }
-function pickReasonReturn(btn){ btn.parentElement.querySelectorAll('.pill').forEach(p=>{p.classList.remove('active','gold');}); btn.classList.add('active','gold'); returnState.reason=btn.dataset.v; }
-function pickErrorFrom(btn){ btn.parentElement.querySelectorAll('.pill').forEach(p=>{p.classList.remove('active','gold');}); btn.classList.add('active','gold'); returnState.errorFrom=btn.dataset.v; }
 function renderReturnThumb(){ return `<div class="photo-thumb"><img src="${returnState.photo}"><button class="photo-del" onclick="returnState.photo='';$('returnPhotoPreview').innerHTML=''">×</button></div>`; }
 function handleReturnPhoto(ev){
   const f=ev.target.files[0]; if(!f) return;
@@ -1174,31 +1216,43 @@ function handleReturnPhoto(ev){
   reader.readAsDataURL(f);
 }
 function resetReturnForm(){
-  Object.assign(returnState,{jobId:'',docNo:'',customerCode:'',customerName:'',warehouse:'',returnType:'',billType:'',reason:'',errorFrom:'',items:[{barcode:'',name:'',qty:'',unit:'ลัง',price:''}],totalAmount:'',note:'',photo:''});
+  Object.assign(returnState,{
+    photo:'',returnType:'',billType:'',
+    customerCode:'',customerName:'',docNo:'',
+    loaderName:'',driverName:'',
+    reasonCategory:'',reasonSub:'',note:'',
+    items:[{productId:'',productName:'',unit:'ชิ้น(EA)',qty:'',price:''}]
+  });
   renderReturn();
   showToast('ล้างข้อมูลแล้ว','info');
 }
 async function confirmReturn(){
-  if(!returnState.jobId){ showToast('กรุณาเลือกเลขที่ใบคุม','warning'); return; }
-  if(!returnState.docNo){ showToast('กรุณาเลือกเลขที่บิล','warning'); return; }
-  if(!returnState.returnType){ showToast('กรุณาเลือกประเภทคืน','warning'); return; }
-  if(!returnState.reason){ showToast('กรุณาเลือกสาเหตุ','warning'); return; }
+  if(!returnState.customerCode){ showToast('กรุณาเลือกชื่อร้านค้า','warning'); return; }
+  if(!returnState.docNo){ showToast('กรุณาใส่เลขที่เอกสาร','warning'); return; }
+  if(!returnState.returnType){ showToast('กรุณาเลือกประเภทการคืน','warning'); return; }
+  if(!returnState.reasonCategory){ showToast('กรุณาเลือกสาเหตุการคืน','warning'); return; }
+  const job=state.jobs.find(j=>j.bills.some(b=>b.doc===returnState.docNo));
+  const total=returnGrandTotal();
   const payload={
     action:'save_return',
-    jobId:returnState.jobId,
+    jobId:job?.id||'',
     docNo:returnState.docNo,
     customerCode:returnState.customerCode,
     customerName:returnState.customerName,
-    warehouse:returnState.warehouse,
+    warehouse:job?.warehouse||state.user.warehouse||'',
     returnType:returnState.returnType,
     billType:returnState.billType,
-    reason:returnState.reason,
-    errorFrom:returnState.errorFrom,
-    items:returnState.items.filter(it=>it.barcode||it.name).slice(0,5),
-    totalAmount:parseFloat(returnState.totalAmount)||0,
+    reason:returnState.reasonSub||returnState.reasonCategory,
+    errorFrom:returnState.reasonCategory,
+    items:returnState.items.filter(it=>it.productName).slice(0,5).map(it=>({
+      barcode:'',name:it.productName,qty:parseFloat(it.qty)||0,
+      price:parseFloat(it.price)||0,unit:it.unit
+    })),
+    totalAmount:total,
     note:returnState.note,
     photo:returnState.photo,
-    driver:state.user.displayName||state.user.nickname,
+    driver:returnState.driverName||state.user.displayName||state.user.nickname,
+    loader:returnState.loaderName||'',
     submittedAt:Date.now(),
   };
   const url=getAppsUrl();
