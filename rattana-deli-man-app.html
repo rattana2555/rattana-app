@@ -595,7 +595,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.43';
+const APP_VERSION='1.44';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -742,15 +742,16 @@ async function handleGoogleLogin(resp){
     const wh=cleanCell(u['W']||'')||'HQ';
     const userRole=parseInt(cleanCell(u['User Role']||'0'))||0;
 
-    // Detect role
-    // - หัวหน้างาน (supervisor): ★ชื่อต้องอยู่ใน "ชื่อหัวหน้างาน" ของแถวอื่นเท่านั้น★
-    // - คนรับงาน (driver): พนักงาน Active ทุกคนที่ไม่ใช่หัวหน้างาน (รวม Role 4+ ที่ไม่ได้เป็นหัวหน้าจริง)
-    let role=null;
-    if(state.supervisors.some(s=>s===name||s===nick)){ role='supervisor'; }
-    else { role='driver'; }
+    // Detect capabilities (v1.44)
+    // - canApprove (กดอนุมัติได้): ★User Role >= 3★ OR ชื่ออยู่ใน "ชื่อหัวหน้างาน"
+    // - canDeliver (บันทึกเที่ยวส่งได้): พนักงาน Active ทุกคน (รวมหัวหน้างานด้วย)
+    const inSupervisorList=state.supervisors.some(s=>s===name||s===nick);
+    const canApprove=userRole>=3||inSupervisorList;
+    const canDeliver=true;
+    const role=canApprove?'supervisor':'driver';
 
     const displayName=name&&nick?`${name} (${nick})`:(name||nick);
-    state.user={email,name,nickname:nick,displayName,empId,dept,warehouse:wh,userRole,picture:payload.picture||''};
+    state.user={email,name,nickname:nick,displayName,empId,dept,warehouse:wh,userRole,canApprove,canDeliver,picture:payload.picture||''};
     state.role=role;
     persistUser();
     await bootApp();
@@ -774,6 +775,9 @@ function checkSession(){
     const n=state.user.name||'', nk=state.user.nickname||'';
     state.user.displayName=n&&nk?`${n} (${nk})`:(n||nk);
   }
+  // backfill capabilities สำหรับ session ที่บันทึกไว้ก่อน v1.44
+  if(typeof state.user.canDeliver==='undefined') state.user.canDeliver=true;
+  if(typeof state.user.canApprove==='undefined') state.user.canApprove=(state.role==='supervisor');
   if(s.jobs) state.jobs=s.jobs;
   return true;
 }
@@ -1056,15 +1060,13 @@ async function loadJobs(){
 /* ========== TABS / NAV ========== */
 function buildTabs(){
   const nav=$('tabNav'); nav.innerHTML='';
-  const common=[{id:'sec-home',label:'🏠 หน้าหลัก'}];
-  const tabs=state.role==='driver'
-    ? [...common,
-        {id:'sec-driver-job',label:'📦 งานของฉัน'},
-        {id:'sec-settings',label:'⚙️ ตั้งค่า'}]
-    : [...common,
-        {id:'sec-sup-home',label:'📥 รออนุมัติ'},
-        {id:'sec-sup-history',label:'📚 ประวัติ'},
-        {id:'sec-settings',label:'⚙️ ตั้งค่า'}];
+  const tabs=[{id:'sec-home',label:'🏠 หน้าหลัก'}];
+  if(state.user.canDeliver!==false) tabs.push({id:'sec-driver-job',label:'📦 งานของฉัน'});
+  if(state.user.canApprove){
+    tabs.push({id:'sec-sup-home',label:'📥 รออนุมัติ'});
+    tabs.push({id:'sec-sup-history',label:'📚 ประวัติ'});
+  }
+  tabs.push({id:'sec-settings',label:'⚙️ ตั้งค่า'});
   tabs.forEach((t,i)=>{
     const b=document.createElement('button');
     b.className='tab-btn'+(i===0?' active':'');
@@ -2614,8 +2616,12 @@ function renderSettings(){
     <div class="cust-row"><span class="lbl">รหัสพนักงาน</span><span class="val code">${esc(state.user.empId)}</span></div>
     <div class="cust-row"><span class="lbl">แผนก</span><span class="val">${esc(state.user.dept)}</span></div>
     <div class="cust-row"><span class="lbl">คลัง</span><span class="val">${esc(state.user.warehouse)}</span></div>
-    <div class="cust-row"><span class="lbl">บทบาท</span><span class="val">${state.role==='supervisor'?'👨‍💼 หัวหน้างาน':'🚚 คนขับ'}</span></div>
+    <div class="cust-row"><span class="lbl">บทบาท</span><span class="val">${state.user.canApprove?'👨‍💼 หัวหน้างาน':'🚚 คนขับ'}</span></div>
     ${state.user.userRole?`<div class="cust-row"><span class="lbl">User Role</span><span class="val"><span class="badge badge-gold">${state.user.userRole}</span></span></div>`:''}
+    <div class="cust-row"><span class="lbl">สิทธิ์</span><span class="val">
+      ${state.user.canDeliver?'<span class="badge badge-ok">🚚 บันทึกเที่ยวส่ง</span>':''}
+      ${state.user.canApprove?' <span class="badge badge-gold">✅ อนุมัติ</span>':''}
+    </span></div>
     <div class="cust-row"><span class="lbl">อีเมล</span><span class="val">${esc(state.user.email)}</span></div>
     <div class="cust-row"><span class="lbl">เวอร์ชันแอป</span><span class="val txt-gold txt-bold">v${APP_VERSION}</span></div>
   `;
@@ -3128,7 +3134,7 @@ async function bootApp(){
     // ★ แสดง UI ทันที (หน้าหลัก 5 การ์ดไม่ต้องใช้ข้อมูล)
     $('loginScreen').style.display='none';
     $('appScreen').style.display='flex';
-    $('roleTag').textContent=state.role==='supervisor'?'👨‍💼 '+state.user.nickname:'🚚 '+state.user.nickname;
+    $('roleTag').textContent=(state.user.canApprove?'👨‍💼 ':'🚚 ')+state.user.nickname;
     $('verTag').textContent='v'+APP_VERSION;
     buildTabs();
     hideSpinner();
