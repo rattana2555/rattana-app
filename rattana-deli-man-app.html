@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.29</title>
+<title>Rattana D-Delivery v1.30</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -329,7 +329,7 @@ body.dark .banner-gold{color:var(--gold-light)}
          data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left"></div>
     <div id="loginError"></div>
-    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.29 — Powered by Rattana Group</div>
+    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.30 — Powered by Rattana Group</div>
   </div>
 </div>
 
@@ -337,7 +337,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div id="appScreen" class="page" style="display:none">
   <header>
     <div class="logo-text">D<span>-DELIVERY</span></div>
-    <span class="ver-tag" id="verTag">v1.29</span>
+    <span class="ver-tag" id="verTag">v1.30</span>
     <span id="liveDot" title="Live sync" style="width:7px;height:7px;border-radius:50%;background:#2ecc71;box-shadow:0 0 6px #2ecc71;display:inline-block;transition:all .25s"></span>
     <span class="role-tag" id="roleTag">-</span>
     <div class="spacer"></div>
@@ -573,7 +573,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.29';
+const APP_VERSION='1.30';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -728,7 +728,7 @@ function checkSession(){
   const s=loadStore();
   if(!s.user||!s.exp||Date.now()>s.exp) return false;
   state.user=s.user; state.role=s.role;
-  // backfill displayName สำหรับ session ที่บันทึกไว้ก่อน v1.29
+  // backfill displayName สำหรับ session ที่บันทึกไว้ก่อน v1.30
   if(!state.user.displayName){
     const n=state.user.name||'', nk=state.user.nickname||'';
     state.user.displayName=n&&nk?`${n} (${nk})`:(n||nk);
@@ -1083,6 +1083,7 @@ function renderReturn(){
   const docOptions=returnState.customerCode
     ? state.jobs.flatMap(j=>j.bills.filter(b=>b.code===returnState.customerCode).map(b=>b.doc)).filter((v,i,a)=>v&&a.indexOf(v)===i)
     : [];
+  returnState._docOptions=docOptions;
 
   $('returnFormBody').innerHTML=`
     <div class="field">
@@ -1119,8 +1120,11 @@ function renderReturn(){
 
     <div class="field">
       <label>เลขที่เอกสาร ${docOptions.length?`<span class="txt-xs txt-muted">(${docOptions.length} บิลของร้านนี้ — หรือพิมพ์ใหม่ได้)</span>`:''}</label>
-      <input class="input" id="returnDocNo" list="returnDocList" value="${esc(returnState.docNo)}" oninput="returnState.docNo=this.value" placeholder="DSI..../00xxx" autocomplete="off">
-      <datalist id="returnDocList">${docOptions.map(d=>`<option value="${esc(d)}">`).join('')}</datalist>
+      <div class="product-picker">
+        <input class="input" id="returnDocNo" value="${esc(returnState.docNo)}" placeholder="DSI..../00xxx" autocomplete="off"
+               oninput="onDocInput(this.value)" onfocus="onDocInput(this.value)">
+        <ul class="product-results" id="docOptionsList" style="display:none"></ul>
+      </div>
     </div>
 
     <div class="field">
@@ -1176,9 +1180,8 @@ function renderReturn(){
       returnState.customerCode=li.dataset.v;
       const cust=state.customers.find(c=>c.code===returnState.customerCode);
       returnState.customerName=cust?cust.name:'';
-      // refresh เลขที่เอกสาร datalist
-      const docs=state.jobs.flatMap(j=>j.bills.filter(b=>b.code===returnState.customerCode).map(b=>b.doc)).filter((v,i,a)=>v&&a.indexOf(v)===i);
-      const dl=$('returnDocList'); if(dl) dl.innerHTML=docs.map(d=>`<option value="${esc(d)}">`).join('');
+      // เก็บ list ของ Doc_No สำหรับลูกค้านี้ — จะใช้ใน onDocInput
+      returnState._docOptions=state.jobs.flatMap(j=>j.bills.filter(b=>b.code===returnState.customerCode).map(b=>b.doc)).filter((v,i,a)=>v&&a.indexOf(v)===i);
     });
   });
   document.querySelectorAll('#ddReturnLoader_list li').forEach(li=>{
@@ -1303,6 +1306,28 @@ function pickProduct(idx,name){
 document.addEventListener('click',e=>{
   if(!e.target.closest('.product-picker')) document.querySelectorAll('.product-results').forEach(u=>u.style.display='none');
 });
+
+/* เลขที่เอกสาร — combobox: พิมพ์ค้นหาในรายการ หรือพิมพ์ใหม่ได้ */
+function onDocInput(q){
+  returnState.docNo=q;
+  const ul=$('docOptionsList'); if(!ul) return;
+  const opts=returnState._docOptions||[];
+  const ql=(q||'').trim().toLowerCase();
+  const matches=opts.filter(d=>!ql||d.toLowerCase().includes(ql)).slice(0,30);
+  if(!opts.length){
+    ul.innerHTML='<li class="muted">เลือกชื่อร้านก่อนเพื่อโหลดรายการบิล (หรือพิมพ์ Doc_No ใหม่ได้)</li>';
+  } else if(!matches.length){
+    ul.innerHTML='<li class="muted">ไม่ตรงกับรายการ — ใช้ที่พิมพ์ได้เลย</li>';
+  } else {
+    ul.innerHTML=matches.map(d=>`<li onclick="pickDocNo('${esc(d)}')">${esc(d)}</li>`).join('');
+  }
+  ul.style.display='block';
+}
+function pickDocNo(d){
+  returnState.docNo=d;
+  $('returnDocNo').value=d;
+  $('docOptionsList').style.display='none';
+}
 function addReturnItem(){
   if(returnState.items.length>=5){ showToast('ใส่ได้สูงสุด 5 รายการ','warning'); return; }
   returnState.items.push({productId:'',productName:'',unit:'ชิ้น(EA)',qty:'',price:''});
