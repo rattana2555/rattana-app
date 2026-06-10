@@ -585,7 +585,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.46';
+const APP_VERSION='1.47';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -2135,6 +2135,8 @@ function renderActiveJob(){
   }
   const j=state.jobs.find(x=>x.id===state.activeJobId);
   if(!j){ backToMyJobsList(); return; }
+  // v1.47: approved → สรุปข้อมูลที่จำเป็นแทน detail/edit view
+  if(j.status==='approved'){ renderApprovedSummary(j); return; }
   const total=j.bills.reduce((s,b)=>s+b.amount,0);
   const done=j.bills.filter(b=>b.status!=='pending').length;
   const collected=j.bills.reduce((s,b)=>s+payTotal(b.payment),0);
@@ -2212,6 +2214,100 @@ function renderActiveJob(){
   // Render map
   setTimeout(()=>renderRouteMap(j),50);
 }
+
+/* v1.47: approved summary — ใบคุม / ชื่อร้าน / ยอดเงิน / สรุปรวม */
+function renderApprovedSummary(j){
+  const total=j.bills.reduce((s,b)=>s+(b.amount||0),0);
+  const collected=j.bills.reduce((s,b)=>s+payTotal(b.payment),0);
+  const diff=collected-total;
+  const okCount=j.bills.filter(b=>b.status==='done'&&Math.abs(payTotal(b.payment)-b.amount)<0.005).length;
+  const shortCount=j.bills.filter(b=>b.status==='done'&&payTotal(b.payment)<b.amount-0.005).length;
+  const cnCount=j.bills.filter(b=>b.status==='cn').length;
+  const failedCount=j.bills.filter(b=>b.status==='failed').length;
+  const stRow=(b)=>{
+    const t=payTotal(b.payment);
+    const cls=b.status==='cn'?'badge-gold':b.status==='failed'?'badge-danger':Math.abs(t-b.amount)<0.005?'badge-ok':t<b.amount?'badge-warn':'badge-info';
+    const lbl=b.status==='cn'?'CN':b.status==='failed'?'ไม่ส่ง':Math.abs(t-b.amount)<0.005?'ครบ':t<b.amount?'ขาด':'เกิน';
+    return `<span class="badge ${cls}">${lbl}</span>`;
+  };
+  $('activeJobContent').innerHTML=`
+    <div class="row mb-12">
+      <button class="btn btn-outline btn-sm" onclick="backToMyJobsList()">← กลับงานของฉัน</button>
+    </div>
+
+    <div class="card card-gold">
+      <div class="card-head">
+        <h3>✅ สรุปชุดงาน ${esc(j.id)}</h3>
+        <span class="badge badge-ok">อนุมัติแล้ว</span>
+      </div>
+      <div class="card-body">
+        <div class="cust-row"><span class="lbl">ใบคุม</span><span class="val code txt-bold">${esc(j.id)}</span></div>
+        <div class="cust-row"><span class="lbl">คลัง</span><span class="val">${esc(j.warehouse||'-')}</span></div>
+        <div class="cust-row"><span class="lbl">ทะเบียน</span><span class="val">${esc(j.team?.plate||'-')}</span></div>
+        <div class="cust-row"><span class="lbl">การส่ง</span><span class="val">${esc(j.team?.pattern||'-')}</span></div>
+        <div class="cust-row"><span class="lbl">คนขับ</span><span class="val">${esc(j.team?.driver||'-')}</span></div>
+        ${j.team?.helper?`<div class="cust-row"><span class="lbl">ผู้ช่วย</span><span class="val">${esc(j.team.helper)}</span></div>`:''}
+        ${j.submittedAt?`<div class="cust-row"><span class="lbl">ส่งหัวหน้า</span><span class="val">${formatThaiDateTime(j.submittedAt)}</span></div>`:''}
+        ${j.approvedAt?`<div class="cust-row"><span class="lbl">อนุมัติเมื่อ</span><span class="val">${formatThaiDateTime(j.approvedAt)}</span></div>`:''}
+        ${j.approvedBy?`<div class="cust-row"><span class="lbl">ผู้อนุมัติ</span><span class="val">${esc(j.approvedBy)}</span></div>`:''}
+      </div>
+    </div>
+
+    <div class="card mt-12">
+      <div class="card-head">
+        <h3>📄 รายการบิล</h3>
+        <span class="txt-sm txt-muted">${j.bills.length} บิล</span>
+      </div>
+      <div class="card-body">
+        <div class="tbl-wrap"><table class="tbl" style="font-size:13px">
+          <thead><tr>
+            <th>#</th><th>เลขที่บิล</th><th>ชื่อร้าน</th>
+            <th class="num">ยอดบิล</th><th class="num">เก็บได้</th><th>สถานะ</th>
+          </tr></thead>
+          <tbody>
+            ${j.bills.map((b,i)=>{
+              const t=payTotal(b.payment);
+              return `<tr>
+                <td>${i+1}</td>
+                <td class="code">${esc(b.doc)}</td>
+                <td>${esc(b.name)}</td>
+                <td class="num">${fmt(b.amount)}</td>
+                <td class="num ${b.status==='cn'?'txt-muted':''}">${fmt(t)}</td>
+                <td>${stRow(b)}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+          <tfoot><tr style="font-weight:700;background:var(--row-alt)">
+            <td colspan="3" class="txt-right">รวมทั้งหมด</td>
+            <td class="num">${fmt(total)}</td>
+            <td class="num txt-gold">${fmt(collected)}</td>
+            <td></td>
+          </tr></tfoot>
+        </table></div>
+      </div>
+    </div>
+
+    <div class="card mt-12">
+      <div class="card-head"><h3>💰 สรุปรวม</h3></div>
+      <div class="card-body">
+        <div class="stat-grid">
+          <div class="stat-card"><div class="s-label">ยอดบิลรวม</div><div class="s-value num">${fmtInt(total)}</div><div class="s-sub">บาท</div></div>
+          <div class="stat-card"><div class="s-label">ยอดเก็บได้</div><div class="s-value num txt-gold">${fmtInt(collected)}</div><div class="s-sub">บาท</div></div>
+          <div class="stat-card ${Math.abs(diff)<0.005?'success':diff<0?'danger':''}">
+            <div class="s-label">${diff<0?'ขาด':diff>0?'เกิน':'ครบ'}</div>
+            <div class="s-value num">${fmtInt(Math.abs(diff))}</div>
+            <div class="s-sub">บาท</div>
+          </div>
+          <div class="stat-card success"><div class="s-label">ครบ</div><div class="s-value">${okCount}</div><div class="s-sub">บิล</div></div>
+          <div class="stat-card danger"><div class="s-label">ขาด</div><div class="s-value">${shortCount}</div><div class="s-sub">บิล</div></div>
+          <div class="stat-card"><div class="s-label">CN</div><div class="s-value">${cnCount}</div><div class="s-sub">บิล</div></div>
+          ${failedCount?`<div class="stat-card danger"><div class="s-label">ส่งไม่ได้</div><div class="s-value">${failedCount}</div><div class="s-sub">บิล</div></div>`:''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderBillRow(b,idx,locked){
   const klass=b.status==='done'?'done':b.status==='failed'?'failed':b.status==='cn'?'cn':'';
   const statusBadge=b.status==='done'?'<span class="badge badge-ok">✓ ส่งแล้ว</span>':
