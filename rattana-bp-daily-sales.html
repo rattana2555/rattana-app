@@ -356,13 +356,7 @@ body.dark .w1{background:#0f2245;color:#7fb8e8}body.dark .w2{background:#0f2a1a;
             <!-- Line Chart -->
             <div class="chart-card" style="margin-top:10px">
               <div class="chart-card-head">
-                <h3>📈 ยอดขายรายวัน แยก Cat_BU</h3>
-                <select class="chart-range-select" id="chartRange" onchange="renderLineChart()">
-                  <option value="7">7 วันล่าสุด</option>
-                  <option value="14">14 วันล่าสุด</option>
-                  <option value="30" selected>30 วันล่าสุด</option>
-                  <option value="60">60 วันล่าสุด</option>
-                </select>
+                <h3 id="chartTitle">📈 ยอดขายรายวัน 7 วันล่าสุด</h3>
               </div>
               <div class="chart-wrap"><canvas id="lineChart"></canvas></div>
             </div>
@@ -387,38 +381,50 @@ body.dark .w1{background:#0f2245;color:#7fb8e8}body.dark .w2{background:#0f2a1a;
       <!-- ═══ REPORT PAGE ═══ -->
       <div id="pageReport" class="page" style="display:none">
         <div style="padding-top:10px"></div>
-        <div class="report-filters">
-          <input type="date" id="rDate" class="input" style="width:150px" onchange="renderReport()">
-          <select id="rWS" class="input" style="width:110px" onchange="renderReport()">
-            <option value="">ทุกคลัง</option>
-            <option value="W1">W1</option><option value="W2">W2</option>
-            <option value="W3">W3</option><option value="W4">W4</option>
-          </select>
-          <select id="rBU" class="input" style="width:150px" onchange="renderReport()">
-            <option value="">ทุก BU</option>
-            <option value="Bplus FMCG">Bplus FMCG</option>
-            <option value="Bplus Thaibev Al">Bplus Thaibev Al</option>
-            <option value="Bplus บุหรี่">Bplus บุหรี่</option>
-            <option value="F&N">F&N</option>
-          </select>
-          <input type="text" id="rSearch" class="input" placeholder="🔍 ค้นหา..." oninput="renderReport()" style="width:150px">
-          <button class="btn btn-gold" onclick="exportReport()">⬇ Excel</button>
-        </div>
-        <div class="card-wrap">
+
+        <!-- Top 20 SKU Card -->
+        <div class="card" style="margin-bottom:12px">
+          <div class="card-head" style="flex-wrap:wrap;gap:8px">
+            <h3 style="font-size:14px;font-weight:700">🏆 Top 20 SKU ยอดขายสูงสุด</h3>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <select id="topPeriod" class="input input-sm" style="width:120px" onchange="renderTop20()">
+                <option value="yesterday">เมื่อวาน</option>
+                <option value="week">สัปดาห์นี้</option>
+                <option value="month" selected>เดือนนี้</option>
+                <option value="year">ปีนี้</option>
+              </select>
+              <select id="topBU" class="input input-sm" style="width:150px" onchange="renderTop20()">
+                <option value="">ทุก BU</option>
+                <option value="Bplus FMCG">Bplus FMCG</option>
+                <option value="Bplus Thaibev Al">Bplus Thaibev Al</option>
+                <option value="Bplus บุหรี่">Bplus บุหรี่</option>
+                <option value="F&N">F&N</option>
+              </select>
+              <select id="topWS" class="input input-sm" style="width:100px" onchange="renderTop20()">
+                <option value="">ทุกคลัง</option>
+                <option value="W1">W1</option>
+                <option value="W2">W2</option>
+                <option value="W3">W3</option>
+                <option value="W4">W4</option>
+              </select>
+            </div>
+          </div>
           <div class="tbl-wrap">
-            <table class="tbl" id="repTbl">
+            <table class="tbl">
               <thead><tr>
-                <th data-key="Doc_Date" data-type="date">วันที่ <span class="sort-ind"></span></th>
-                <th data-key="WS" data-type="str">คลัง <span class="sort-ind"></span></th>
-                <th data-key="Cat_BU" data-type="str">BU <span class="sort-ind"></span></th>
-                <th data-key="Product_Name" data-type="str">สินค้า <span class="sort-ind"></span></th>
-                <th data-key="Sales_CS" data-type="num">ลัง <span class="sort-ind"></span></th>
-                <th data-key="EXVat" data-type="num">บาท (ไม่รวม VAT) <span class="sort-ind"></span></th>
+                <th style="width:36px">#</th>
+                <th>สินค้า</th>
+                <th>BU</th>
+                <th>คลัง</th>
+                <th class="num">ลัง</th>
+                <th class="num">บาท (ไม่รวม VAT)</th>
+                <th class="num">%ยอด</th>
               </tr></thead>
-              <tbody id="repBody"></tbody>
+              <tbody id="top20Body"></tbody>
             </table>
           </div>
         </div>
+
       </div>
 
       <!-- ═══ TREND PAGE ═══ -->
@@ -524,6 +530,7 @@ const TARGET_TTL        = 60 * 60 * 1000; // 1 hour
 
 // Dynamic monthly target — populated by loadTargets()
 let monthlyTarget = {'Bplus FMCG':0,'Bplus Thaibev Al':0,'Bplus บุหรี่':0,'F&N':0};
+let allTargets = {}; // {bu: {'2026/01': val, '2026/06': val, ...}}
 const BU_ICON = {'Bplus FMCG':'🛒','Bplus Thaibev Al':'🍺','Bplus บุหรี่':'🚬','F&N':'🥤'};
 const BU_BG   = {'Bplus FMCG':'#e3f0fd','Bplus Thaibev Al':'#d4f5e4','Bplus บุหรี่':'#ffe0de','F&N':'#ecdefa'};
 const BU_COLOR= {'Bplus FMCG':'#1a6fb8','Bplus Thaibev Al':'#1e8449','Bplus บุหรี่':'#c0392b','F&N':'#6c3483'};
@@ -670,18 +677,35 @@ async function loadTargets(ws){
       else{headerMap[key]=key;firstRow[key]='';}
     });
     const whKey=headerMap['WH'],buKey=headerMap['Cat_BU'];
-    const monthKey=monthCols[getMonthKey()];
-    if(!whKey||!buKey||!monthKey)return;
+    if(!whKey||!buKey)return;
+    const BP_WH_T=['W1','W2','W3','W4'];
+
+    // รีเซ็ต
     const result={};BU_LIST.forEach(b=>result[b]=0);
+    const allT={};BU_LIST.forEach(b=>allT[b]={});
+
     [firstRow,...rows].forEach(r=>{
       const wh=String(r[whKey]||'').trim(),bu=String(r[buKey]||'').trim();
       if(!BU_LIST.includes(bu))return;
       if(ws){if(wh!==ws)return;}
-      else{if(!['W1','W2','W3','W4'].includes(wh))return;}
-      const val=parseFloat(String(r[monthKey]||'').replace(/,/g,''))||0;
-      result[bu]=(result[bu]||0)+val;
+      else{if(!BP_WH_T.includes(wh))return;}
+
+      // วนทุก month column
+      Object.entries(monthCols).forEach(([mmyyyy, key])=>{
+        const val=parseFloat(String(r[key]||'').replace(/,/g,''))||0;
+        if(!val)return;
+        // แปลง "06/2026" → "2026/06"
+        const[mm,yyyy]=mmyyyy.split('/');
+        const my=`${yyyy}/${mm}`;
+        if(!allT[bu][my])allT[bu][my]=0;
+        allT[bu][my]+=val;
+        // เดือนปัจจุบัน → monthlyTarget
+        if(mmyyyy===getMonthKey()) result[bu]=(result[bu]||0)+val;
+      });
     });
+
     monthlyTarget=result;
+    allTargets=allT;
   }catch(e){console.warn('Target load failed',e);}
 }
 
@@ -1109,66 +1133,202 @@ let lineChartInst = null;
 
 function renderLineChart(){
   if(!window.Chart)return;
-  const days = parseInt(document.getElementById('chartRange')?.value||'30');
-  const dates = [...allDates].slice(0,days).reverse();
-  if(!dates.length)return;
-
-  // Build dataset per BU
-  const datasets = BU_LIST.map(bu=>({
-    label: bu,
-    data: dates.map(d=>
-      allData.filter(r=>r.Doc_Date===d&&r.Cat_BU===bu&&(!curWS||r.WS===curWS))
-              .reduce((s,r)=>s+numVal(r.EXVat),0)
-    ),
-    borderColor: BU_CHART_COLORS[bu],
-    backgroundColor: BU_CHART_COLORS[bu]+'22',
-    borderWidth: 2,
-    pointRadius: dates.length>20?2:4,
-    pointHoverRadius: 6,
-    tension: 0.3,
-    fill: false,
-  }));
-
-  const labels = dates.map(d=>{
-    const p=String(d).split('/');
-    return`${p[0]}/${p[1]}`;
-  });
-
-  const isDark = document.body.classList.contains('dark');
-  const gridColor = isDark?'rgba(255,255,255,.06)':'rgba(0,0,0,.06)';
-  const textColor = isDark?'#8a98b8':'#8a98b8';
-
-  const ctx = document.getElementById('lineChart');
+  const ctx=document.getElementById('lineChart');
   if(!ctx)return;
   if(lineChartInst){lineChartInst.destroy();lineChartInst=null;}
-  lineChartInst = new Chart(ctx,{
-    type:'line',
+  if(curPeriod==='yesterday'||curPeriod==='week')  _chartDaily();
+  else if(curPeriod==='month') _chartMonthly();
+  else if(curPeriod==='year')  _chartMonthly(mYearForHome);
+}
+
+// ── helpers ──────────────────────────────────────────────────────────
+function _chartMakeInst(type,labels,datasets){
+  const isDark=document.body.classList.contains('dark');
+  const gc=isDark?'rgba(255,255,255,.06)':'rgba(0,0,0,.06)';
+  const tc='#8a98b8';
+  const ctx=document.getElementById('lineChart');
+  lineChartInst=new Chart(ctx,{
+    type,
     data:{labels,datasets},
     options:{
-      responsive:true,
-      maintainAspectRatio:false,
+      responsive:true,maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
       plugins:{
-        legend:{
-          position:'bottom',
-          labels:{font:{family:'Sarabun',size:11},color:textColor,boxWidth:12,padding:12}
-        },
-        tooltip:{
-          callbacks:{
-            label:ctx=>`${ctx.dataset.label}: ฿${Math.round(ctx.parsed.y).toLocaleString('th-TH')}`
-          }
-        }
+        legend:{position:'bottom',labels:{font:{family:'Sarabun',size:11},color:tc,boxWidth:12,padding:10}},
+        tooltip:{callbacks:{label:c=>`${c.dataset.label}: ฿${Math.round(c.parsed.y).toLocaleString('th-TH')}`}}
       },
       scales:{
-        x:{grid:{color:gridColor},ticks:{color:textColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:10}},
-        y:{grid:{color:gridColor},ticks:{color:textColor,font:{size:10},callback:v=>'฿'+Math.round(v).toLocaleString('th-TH')}}
+        x:{grid:{color:gc},ticks:{color:tc,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:12}},
+        y:{grid:{color:gc},stacked:type==='bar',ticks:{color:tc,font:{size:10},callback:v=>'฿'+Math.round(v/1e6*10)/10+'M'}}
       }
     }
   });
 }
 
+// โหมด 1: รายวัน 7 วัน (เมื่อวาน) หรือ รายสัปดาห์ 4 สัปดาห์ (สัปดาห์)
+function _chartDaily(){
+  const BP_WH=['W1','W2','W3','W4'];
+  if(curPeriod==='yesterday'){
+    // 7 วันล่าสุด จาก Sheets
+    document.getElementById('chartTitle').textContent='📈 ยอดขายรายวัน 7 วันล่าสุด';
+    const dates=[...allDates].slice(0,7).reverse();
+    if(!dates.length)return;
+    const datasets=BU_LIST.map(bu=>({
+      label:bu,
+      data:dates.map(d=>allData.filter(r=>r.Doc_Date===d&&r.Cat_BU===bu&&(!curWS||r.WS===curWS)&&BP_WH.includes(r.WS)).reduce((s,r)=>s+numVal(r.EXVat),0)),
+      borderColor:BU_CHART_COLORS[bu],backgroundColor:BU_CHART_COLORS[bu]+'22',
+      borderWidth:2,pointRadius:4,pointHoverRadius:6,tension:0.3,fill:false,
+    }));
+    const labels=dates.map(d=>{const p=d.split('/');return`${p[0]}/${p[1]}`;});
+    _chartMakeInst('line',labels,datasets);
+  } else {
+    // 4 สัปดาห์ — แต่ละสัปดาห์รวม 7 วัน ถ้า Sheets ไม่มีข้อมูล ใช้ BQ เฉลี่ยรายวัน×7
+    document.getElementById('chartTitle').textContent='📊 ยอดขายรายสัปดาห์ 4 สัปดาห์ล่าสุด';
+    const latest=getLatestDate();if(!latest)return;
+    const ld=parseDocDate(latest);
+    // สร้าง 4 buckets: [from, to] วนจากล่าสุดย้อนหลัง
+    const buckets=[];
+    for(let w=0;w<4;w++){
+      const to=new Date(ld);to.setDate(ld.getDate()-w*7);
+      const from=new Date(to);from.setDate(to.getDate()-6);
+      buckets.unshift({from,to});
+    }
+    const monthsInSheets=new Set(allDates.map(d=>{const p=d.split('/');return p[2]+'/'+p[1];}));
+    const datasets=BU_LIST.map(bu=>{
+      const data=buckets.map(({from,to})=>{
+        let total=0;
+        // วนแต่ละวันใน bucket
+        for(let d=new Date(from);d<=to;d.setDate(d.getDate()+1)){
+          const dd=`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+          const my=`${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}`;
+          // ถ้าเดือนนี้มีใน Sheets ใช้ Sheets
+          if(monthsInSheets.has(my)){
+            total+=allData.filter(r=>r.Doc_Date===dd&&r.Cat_BU===bu&&(!curWS||r.WS===curWS)&&BP_WH.includes(r.WS)).reduce((s,r)=>s+numVal(r.EXVat),0);
+          } else {
+            // ไม่มีใน Sheets → ใช้ BQ monthly ÷ จำนวนวันในเดือน
+            const bqSnap=BQ_SNAPSHOT.filter(r=>r.my===my&&r.bu===bu&&(curWS?r.wh===curWS:BP_WH.includes(r.wh)));
+            const monthTotal=bqSnap.reduce((s,r)=>s+r.total,0);
+            const daysInM=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
+            total+=monthTotal/daysInM;
+          }
+        }
+        return Math.round(total);
+      });
+      return{label:bu,data,borderColor:BU_CHART_COLORS[bu],backgroundColor:BU_CHART_COLORS[bu]+'22',borderWidth:2,pointRadius:5,pointHoverRadius:7,tension:0.3,fill:false};
+    });
+    const thMonths=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    const labels=buckets.map(({from,to})=>`${from.getDate()} ${thMonths[from.getMonth()]} – ${to.getDate()} ${thMonths[to.getMonth()]}`);
+    _chartMakeInst('line',labels,datasets);
+  }
+}
+
+// โหมด 2: รายเดือน — BQ + Sheets เดือนปัจจุบัน (เดือน tab)
+// โหมด 3: รายเดือนของปีที่เลือก (ปี tab)
+function _chartMonthly(filterYear){
+  const BP_WH=['W1','W2','W3','W4'];
+  const thMonths=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+  // รวบรวมเดือนทั้งหมด
+  const bqMonthSet=new Set(BQ_SNAPSHOT.filter(r=>!filterYear||r.yr===filterYear).map(r=>r.my));
+  const sheetMonths=new Set(allDates.map(d=>{const p=d.split('/');return p[2]+'/'+p[1];}));
+  sheetMonths.forEach(m=>{if(!filterYear||m.startsWith(String(filterYear)))bqMonthSet.add(m);});
+  const allMonths=[...bqMonthSet].sort();
+  if(!allMonths.length)return;
+
+  const labels=allMonths.map(my=>{const[y,m]=my.split('/');return`${thMonths[parseInt(m)-1]} ${parseInt(y)+543}`;});
+
+  // helper: ยอดต่อเดือนต่อ BU
+  function getMonthBU(my,bu){
+    const bqRows=BQ_SNAPSHOT.filter(r=>r.my===my&&r.bu===bu&&(curWS?r.wh===curWS:BP_WH.includes(r.wh)));
+    if(bqRows.length) return bqRows.reduce((s,r)=>s+r.total,0);
+    const[y,m2]=my.split('/');
+    return allData.filter(r=>{
+      const p=(r.Doc_Date||'').split('/');
+      return p[2]===y&&p[1]===m2&&r.Cat_BU===bu&&(!curWS||r.WS===curWS)&&BP_WH.includes(r.WS);
+    }).reduce((s,r)=>s+numVal(r.EXVat),0);
+  }
+
+  if(!filterYear){
+    // เดือน tab → เส้นแยก Cat_BU + เส้นประ target
+    document.getElementById('chartTitle').textContent='📈 ยอดขายรายเดือน แยก Cat_BU';
+    const datasets=BU_LIST.map(bu=>{
+      const data=allMonths.map(my=>Math.round(getMonthBU(my,bu)));
+      return{label:bu,data,borderColor:BU_CHART_COLORS[bu],backgroundColor:BU_CHART_COLORS[bu]+'22',borderWidth:2,pointRadius:4,pointHoverRadius:6,tension:0.3,fill:false};
+    });
+    _chartMakeInst('line',labels,datasets);
+  } else {
+    // ปี tab → แยก BU stacked
+    document.getElementById('chartTitle').textContent=`📈 ยอดขายรายเดือน ปี ${filterYear+543} แยก Cat_BU`;
+    const datasets=BU_LIST.map(bu=>{
+      const data=allMonths.map(my=>Math.round(getMonthBU(my,bu)));
+      return{label:bu,data,borderColor:BU_CHART_COLORS[bu],backgroundColor:BU_CHART_COLORS[bu]+'22',borderWidth:2,pointRadius:4,pointHoverRadius:6,tension:0.3,fill:false};
+    });
+    _chartMakeInst('line',labels,datasets);
+  }
+}
+
 // ── Report ────────────────────────────────────────────────────────
 let repRows=[];
+function renderTop20(){
+  const period=document.getElementById('topPeriod')?.value||'month';
+  const bu=document.getElementById('topBU')?.value||'';
+  const ws=document.getElementById('topWS')?.value||'';
+  const BP_WH=['W1','W2','W3','W4'];
+  const latest=getLatestDate();
+  if(!latest||!allData.length)return;
+  const ld=parseDocDate(latest);
+
+  // กำหนดช่วงวันที่
+  let fd,td2;
+  if(period==='yesterday'){
+    fd=td2=latest;
+  } else if(period==='week'){
+    td2=latest;
+    const from=new Date(ld);from.setDate(ld.getDate()-6);
+    fd=`${String(from.getDate()).padStart(2,'0')}/${String(from.getMonth()+1).padStart(2,'0')}/${from.getFullYear()}`;
+  } else if(period==='month'){
+    const mm=String(ld.getMonth()+1).padStart(2,'0');
+    fd=`01/${mm}/${ld.getFullYear()}`;
+    td2=latest;
+  } else { // year
+    fd=`01/01/${ld.getFullYear()}`;
+    td2=`31/12/${ld.getFullYear()}`;
+  }
+  const fromD=parseDocDate(fd),toD=parseDocDate(td2);
+
+  // กรอง + group by Product_Name + Cat_BU
+  const map={};
+  allData.forEach(r=>{
+    if(!BP_WH.includes(r.WS))return;
+    if(ws&&r.WS!==ws)return;
+    if(bu&&r.Cat_BU!==bu)return;
+    const d=parseDocDate(r.Doc_Date);
+    if(!d||d<fromD||d>toD)return;
+    const key=`${r.Product_Name||'-'}||${r.Cat_BU||'-'}`;
+    if(!map[key])map[key]={name:r.Product_Name||'-',bu:r.Cat_BU||'-',ws_set:new Set(),cs:0,amt:0};
+    map[key].cs+=parseFloat(r.Sales_CS)||0;
+    map[key].amt+=parseFloat(r.EXVat)||0;
+    map[key].ws_set.add(r.WS);
+  });
+
+  const rows=Object.values(map).sort((a,b)=>b.amt-a.amt).slice(0,20);
+  const grandTotal=rows.reduce((s,r)=>s+r.amt,0)||1;
+
+  const body=document.getElementById('top20Body');
+  if(!body)return;
+  body.innerHTML=rows.length?rows.map((r,i)=>`
+    <tr>
+      <td style="text-align:center;font-weight:700;color:${i<3?'var(--gold)':'var(--muted)'}">${i+1}</td>
+      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.name}">${r.name}</td>
+      <td><span style="font-size:11px;font-weight:600;color:${BU_COLOR[r.bu]||'#666'}">${r.bu}</span></td>
+      <td style="font-size:11px">${[...r.ws_set].sort().join(', ')}</td>
+      <td class="num">${fmtI(r.cs)}</td>
+      <td class="num">${fmt(r.amt)}</td>
+      <td class="num" style="font-size:11px;color:var(--muted)">${(r.amt/grandTotal*100).toFixed(1)}%</td>
+    </tr>
+  `).join(''):'<tr class="empty-row"><td colspan="7">ไม่มีข้อมูล</td></tr>';
+}
+
 function renderReport(){
   const dv=document.getElementById('rDate').value;
   const ws=document.getElementById('rWS').value;
@@ -1243,6 +1403,7 @@ function setWS(ws,btn){
   if(curPeriod==='year'){
     mWH=ws||'ALL';
     mLoadDataForHome();
+    renderLineChart();
   } else {
     loadTargets(ws).then(()=>{renderAll();renderLineChart();});
   }
@@ -1269,10 +1430,12 @@ function setPeriod(p,btn){
     pills.style.display='flex';
     if(curWS)mWH=curWS;
     mLoadDataForHome();
+    renderLineChart();
   } else {
     pills.style.display='none';
     mBQYearData=[];
     renderHero();renderBUList();renderAside();renderTrend7();
+    renderLineChart();
   }
 }
 
@@ -1290,7 +1453,7 @@ function switchPage(page,btn,type){
   if(btn&&btn.classList.contains('bnav-item'))btn.classList.add('active');
   if(btn&&btn.classList.contains('snav-item'))btn.classList.add('active');
   window.scrollTo({top:0,behavior:'smooth'});
-  if(page==='report')renderReport();
+  if(page==='report'){renderTop20();renderReport();}
   if(page==='monthly'&&!mData.length)mLoadData();
 }
 
@@ -1836,6 +1999,7 @@ function mSetYear(yr,btn){
   document.querySelectorAll('#yearPills .ws-pill').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   mLoadDataForHome();
+  renderLineChart();
 }
 
 function mSetWH(wh,btn){
