@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.32</title>
+<title>Rattana D-Delivery v1.33</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -329,7 +329,7 @@ body.dark .banner-gold{color:var(--gold-light)}
          data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left"></div>
     <div id="loginError"></div>
-    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.32 — Powered by Rattana Group</div>
+    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.33 — Powered by Rattana Group</div>
   </div>
 </div>
 
@@ -337,7 +337,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div id="appScreen" class="page" style="display:none">
   <header>
     <div class="logo-text">D<span>-DELIVERY</span></div>
-    <span class="ver-tag" id="verTag">v1.32</span>
+    <span class="ver-tag" id="verTag">v1.33</span>
     <span id="liveDot" title="Live sync" style="width:7px;height:7px;border-radius:50%;background:#2ecc71;box-shadow:0 0 6px #2ecc71;display:inline-block;transition:all .25s"></span>
     <span class="role-tag" id="roleTag">-</span>
     <div class="spacer"></div>
@@ -573,7 +573,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.32';
+const APP_VERSION='1.33';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -730,7 +730,7 @@ function checkSession(){
   const s=loadStore();
   if(!s.user||!s.exp||Date.now()>s.exp) return false;
   state.user=s.user; state.role=s.role;
-  // backfill displayName สำหรับ session ที่บันทึกไว้ก่อน v1.32
+  // backfill displayName สำหรับ session ที่บันทึกไว้ก่อน v1.33
   if(!state.user.displayName){
     const n=state.user.name||'', nk=state.user.nickname||'';
     state.user.displayName=n&&nk?`${n} (${nk})`:(n||nk);
@@ -1453,10 +1453,32 @@ function resetReturnForm(){
   showToast('ล้างข้อมูลแล้ว','info');
 }
 async function confirmReturn(){
+  // ✅ ตรวจครบทุก field
+  if(!returnState.photo){ showToast('กรุณาใส่รูปสินค้าคืน','warning'); return; }
+  if(!returnState.returnType){ showToast('กรุณาเลือกประเภทการคืน','warning'); return; }
+  if(!returnState.billType){ showToast('กรุณาเลือกประเภทบิล','warning'); return; }
   if(!returnState.customerCode){ showToast('กรุณาเลือกชื่อร้านค้า','warning'); return; }
   if(!returnState.docNo){ showToast('กรุณาใส่เลขที่เอกสาร','warning'); return; }
-  if(!returnState.returnType){ showToast('กรุณาเลือกประเภทการคืน','warning'); return; }
+  if(!returnState.loaderName){ showToast('กรุณาเลือกชื่อพนักงานขนของ','warning'); return; }
+  if(!returnState.driverName){ showToast('กรุณาเลือกชื่อผู้ขับ','warning'); return; }
   if(!returnState.reasonCategory){ showToast('กรุณาเลือกสาเหตุการคืน','warning'); return; }
+  const subOpts=REASON_TREE[returnState.reasonCategory]||[];
+  if(subOpts.length&&!returnState.reasonSub){ showToast('กรุณาเลือกรายละเอียดสาเหตุ','warning'); return; }
+  // รายการสินค้า: อย่างน้อย 1 รายการที่กรอกครบ (ชื่อ + จำนวน > 0 + ราคา > 0)
+  const completeItems=returnState.items.filter(it=>
+    it.productName&&parseFloat(it.qty)>0&&parseFloat(it.price)>0&&it.unit);
+  if(!completeItems.length){
+    showToast('กรุณาใส่รายการสินค้าให้ครบ (ชื่อสินค้า + จำนวน + ราคา + หน่วย)','warning'); return;
+  }
+  // ถ้ามี item ที่กรอกบางส่วน (มีชื่อแต่ขาด qty หรือ price) → ไม่ให้ส่ง
+  const partial=returnState.items.find(it=>
+    (it.productName||it.qty||it.price)&&
+    !(it.productName&&parseFloat(it.qty)>0&&parseFloat(it.price)>0&&it.unit));
+  if(partial){
+    const idx=returnState.items.indexOf(partial);
+    showToast(`รายการที่ ${idx+1} กรอกไม่ครบ — ใส่ชื่อสินค้า, จำนวน, ราคา, หน่วย หรือลบรายการนี้`,'warning');
+    return;
+  }
   const job=state.jobs.find(j=>j.bills.some(b=>b.doc===returnState.docNo));
   const total=returnGrandTotal();
   const payload={
@@ -1470,9 +1492,12 @@ async function confirmReturn(){
     billType:returnState.billType,
     reason:returnState.reasonSub||returnState.reasonCategory,
     errorFrom:returnState.reasonCategory,
-    items:returnState.items.filter(it=>it.productName).slice(0,5).map(it=>({
-      barcode:'',name:it.productName,qty:parseFloat(it.qty)||0,
-      price:parseFloat(it.price)||0,unit:it.unit
+    items:completeItems.slice(0,5).map(it=>({
+      barcode:it.product?.codes?.[it.unitKey]||'',
+      name:it.productName,
+      qty:parseFloat(it.qty)||0,
+      price:parseFloat(it.price)||0,
+      unit:it.unit
     })),
     totalAmount:total,
     note:returnState.note,
