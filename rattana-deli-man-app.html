@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.24</title>
+<title>Rattana D-Delivery v1.25</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -320,7 +320,7 @@ body.dark .banner-gold{color:var(--gold-light)}
          data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left"></div>
     <div id="loginError"></div>
-    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.24 — Powered by Rattana Group</div>
+    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.25 — Powered by Rattana Group</div>
   </div>
 </div>
 
@@ -328,7 +328,8 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div id="appScreen" class="page" style="display:none">
   <header>
     <div class="logo-text">D<span>-DELIVERY</span></div>
-    <span class="ver-tag" id="verTag">v1.24</span>
+    <span class="ver-tag" id="verTag">v1.25</span>
+    <span id="liveDot" title="Live sync" style="width:7px;height:7px;border-radius:50%;background:#2ecc71;box-shadow:0 0 6px #2ecc71;display:inline-block;transition:all .25s"></span>
     <span class="role-tag" id="roleTag">-</span>
     <div class="spacer"></div>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="อัพเดท">↻</button>
@@ -546,7 +547,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.24';
+const APP_VERSION='1.25';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -690,6 +691,7 @@ function showLoginError(msg){
   const el=$('loginError'); el.textContent=msg; el.style.display='block';
 }
 function logout(){
+  stopAutoRefresh();
   localStorage.removeItem(CFG.storageKey);
   location.reload();
 }
@@ -697,7 +699,7 @@ function checkSession(){
   const s=loadStore();
   if(!s.user||!s.exp||Date.now()>s.exp) return false;
   state.user=s.user; state.role=s.role;
-  // backfill displayName สำหรับ session ที่บันทึกไว้ก่อน v1.24
+  // backfill displayName สำหรับ session ที่บันทึกไว้ก่อน v1.25
   if(!state.user.displayName){
     const n=state.user.name||'', nk=state.user.nickname||'';
     state.user.displayName=n&&nk?`${n} (${nk})`:(n||nk);
@@ -2321,8 +2323,44 @@ async function bootApp(){
     $('roleTag').textContent=state.role==='supervisor'?'👨‍💼 '+state.user.nickname:'🚚 '+state.user.nickname;
     $('verTag').textContent='v'+APP_VERSION;
     buildTabs();
+    startAutoRefresh();
   }finally{ hideSpinner(); }
 }
+
+/* ===== Auto-refresh ทุก 60 วินาที (silent) ===== */
+const AUTO_REFRESH_MS=60000;
+let _autoRefreshTimer=null;
+let _autoRefreshing=false;
+
+async function autoRefreshTick(){
+  if(_autoRefreshing) return;
+  if(document.hidden) return; // หยุดเมื่อแท็บไม่ได้ใช้งาน
+  _autoRefreshing=true;
+  setLiveDot(true);
+  try{
+    // snapshot ก่อน เพื่อตรวจว่าควร rerender หรือไม่
+    const before=JSON.stringify(state.jobs.map(j=>({id:j.id,status:j.status,bills:j.bills.length})));
+    await loadJobs();
+    await syncJobsFromSheet().catch(()=>{});
+    const after=JSON.stringify(state.jobs.map(j=>({id:j.id,status:j.status,bills:j.bills.length})));
+    if(before!==after) renderCurrent();
+  }catch(e){ console.warn('auto-refresh failed:',e); }
+  finally{ _autoRefreshing=false; setLiveDot(false); }
+}
+function startAutoRefresh(){
+  stopAutoRefresh();
+  _autoRefreshTimer=setInterval(autoRefreshTick,AUTO_REFRESH_MS);
+}
+function stopAutoRefresh(){
+  if(_autoRefreshTimer){ clearInterval(_autoRefreshTimer); _autoRefreshTimer=null; }
+}
+function setLiveDot(active){
+  const el=$('liveDot'); if(!el) return;
+  el.style.background=active?'var(--gold)':'#2ecc71';
+  el.style.boxShadow=active?'0 0 8px var(--gold)':'0 0 6px #2ecc71';
+}
+// Refresh ทันทีเมื่อ user กลับมาที่แท็บ
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) autoRefreshTick(); });
 
 window.handleGoogleLogin=handleGoogleLogin;
 window.addEventListener('load',async()=>{
