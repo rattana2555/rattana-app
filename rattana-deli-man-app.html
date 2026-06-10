@@ -585,7 +585,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.45';
+const APP_VERSION='1.46';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -2182,7 +2182,7 @@ function renderActiveJob(){
     <div class="card">
       <div class="card-head"><h3>📄 รายการบิล</h3><span class="txt-sm txt-muted">${j.bills.length} บิล</span></div>
       <div class="card-body">
-        ${sorted.map((b,i)=>renderBillRow(b,j.bills.indexOf(b))).join('')}
+        ${sorted.map((b,i)=>renderBillRow(b,j.bills.indexOf(b),j.status==='approved')).join('')}
       </div>
     </div>
 
@@ -2212,17 +2212,18 @@ function renderActiveJob(){
   // Render map
   setTimeout(()=>renderRouteMap(j),50);
 }
-function renderBillRow(b,idx){
+function renderBillRow(b,idx,locked){
   const klass=b.status==='done'?'done':b.status==='failed'?'failed':b.status==='cn'?'cn':'';
   const statusBadge=b.status==='done'?'<span class="badge badge-ok">✓ ส่งแล้ว</span>':
                     b.status==='failed'?'<span class="badge badge-danger">✗ ส่งไม่ได้</span>':
                     b.status==='cn'?'<span class="badge badge-gold">CN</span>':
                     '<span class="badge badge-warn">รอส่ง</span>';
-  return `<div class="bill-row ${klass}" onclick="openBillForm(${idx})">
+  const lockBadge=locked?' <span class="badge badge-lock">🔒 อนุมัติแล้ว</span>':'';
+  return `<div class="bill-row ${klass}" onclick="openBillForm(${idx})" title="${locked?'ดูข้อมูล (แก้ไขไม่ได้)':''}">
     <div class="bill-info">
       <div class="bill-doc">${esc(b.doc)}</div>
       <div class="bill-name">${esc(b.name)}</div>
-      <div class="txt-xs txt-muted mt-4">${statusBadge}</div>
+      <div class="txt-xs txt-muted mt-4">${statusBadge}${lockBadge}</div>
     </div>
     <div class="bill-amt">${fmt(b.amount)}</div>
   </div>`;
@@ -2273,8 +2274,10 @@ function openBillForm(idx){
   const j=state.jobs.find(x=>x.id===state.activeJobId); if(!j) return;
   const b=j.bills[idx]; if(!b) return;
   b.payment=b.payment||{};
+  const ro=(j.status==='approved'); // v1.46: read-only when อนุมัติแล้ว
   switchTab('sec-bill-form');
   $('billFormContent').innerHTML=`
+    ${ro?`<div class="banner-gold mb-12">🔒 <b>ชุดงานถูกอนุมัติแล้ว</b> — ดูข้อมูลได้อย่างเดียว แก้ไขไม่ได้</div>`:''}
     <div class="bill-header">
       <div class="doc">${esc(b.doc)}</div>
       <div class="name">${esc(b.name)}</div>
@@ -2290,19 +2293,19 @@ function openBillForm(idx){
       <div class="card-body">
         <div class="flex-between mb-12">
           <div><div class="txt-xs txt-muted">ยอดที่ต้องเก็บ</div><div class="txt-2xl num txt-gold txt-bold">${fmt(b.amount)} ฿</div></div>
-          <div class="row">
+          ${ro?'':`<div class="row">
             <button class="btn btn-gold btn-sm" onclick="quickCash()">💵 เงินสดเต็มจำนวน</button>
             <button class="btn btn-outline btn-sm" onclick="quickTransfer()">📲 โอนเต็มจำนวน</button>
-          </div>
+          </div>`}
         </div>
 
         <div class="pay-grid">
-          ${payRow('banknotes','💵 ธนบัตร',b.payment.banknotes)}
-          ${payRow('coins','🪙 เหรียญ',b.payment.coins)}
-          ${payRowWithPhoto('transfer1','📲 โอน 1',b.payment.transfer1,b.payment.transfer1Photo)}
-          ${payRowWithPhoto('transfer2','📲 โอน 2',b.payment.transfer2,b.payment.transfer2Photo)}
-          ${payRowWithPhoto('cheque','📝 เช็ค',b.payment.cheque,b.payment.chequePhoto)}
-          ${payRow('creditNote','📃 ใบลดหนี้',b.payment.creditNote)}
+          ${payRow('banknotes','💵 ธนบัตร',b.payment.banknotes,ro)}
+          ${payRow('coins','🪙 เหรียญ',b.payment.coins,ro)}
+          ${payRowWithPhoto('transfer1','📲 โอน 1',b.payment.transfer1,b.payment.transfer1Photo,ro)}
+          ${payRowWithPhoto('transfer2','📲 โอน 2',b.payment.transfer2,b.payment.transfer2Photo,ro)}
+          ${payRowWithPhoto('cheque','📝 เช็ค',b.payment.cheque,b.payment.chequePhoto,ro)}
+          ${payRow('creditNote','📃 ใบลดหนี้',b.payment.creditNote,ro)}
         </div>
 
         <div class="sticky-foot">
@@ -2310,10 +2313,10 @@ function openBillForm(idx){
             <div class="txt-xs txt-muted">รวมทั้งหมด</div>
             <div class="total" id="payTotalShow">0.00 <span class="diff" id="payDiff"></span></div>
           </div>
-          <div class="row">
+          ${ro?`<span class="badge badge-ok" style="font-size:14px;padding:8px 14px">🔒 อนุมัติแล้ว</span>`:`<div class="row">
             <button class="btn btn-outline" onclick="openCannot(${idx})">❌ ส่งไม่ได้</button>
             <button class="btn btn-success" onclick="saveBill(${idx})">✓ บันทึก</button>
-          </div>
+          </div>`}
         </div>
       </div>
     </div>
@@ -2322,29 +2325,29 @@ function openBillForm(idx){
   `;
   recalcPayTotal();
 }
-function payRow(key,label,val){
+function payRow(key,label,val,ro){
   return `<div class="pay-row">
     <div class="pay-head"><span class="pay-label">${label}</span></div>
-    <input class="input pay-input" type="number" inputmode="decimal" step="any" min="0" id="p_${key}" value="${val||''}" oninput="onPayInput()" placeholder="0.00">
+    <input class="input pay-input" type="number" inputmode="decimal" step="any" min="0" id="p_${key}" value="${val||''}" ${ro?'readonly disabled':'oninput="onPayInput()"'} placeholder="0.00">
   </div>`;
 }
-function payRowWithPhoto(key,label,val,photo){
+function payRowWithPhoto(key,label,val,photo,ro){
   return `<div class="pay-row">
     <div class="pay-head"><span class="pay-label">${label}</span></div>
-    <input class="input pay-input" type="number" inputmode="decimal" step="any" min="0" id="p_${key}" value="${val||''}" oninput="onPayInput()" placeholder="0.00">
-    <div class="photo-controls">
+    <input class="input pay-input" type="number" inputmode="decimal" step="any" min="0" id="p_${key}" value="${val||''}" ${ro?'readonly disabled':'oninput="onPayInput()"'} placeholder="0.00">
+    ${ro?'':`<div class="photo-controls">
       <label class="btn btn-outline btn-sm" style="cursor:pointer">📷 กล้อง
         <input type="file" accept="image/*" capture="environment" hidden onchange="handlePhoto(event,'${key}Photo')">
       </label>
       <label class="btn btn-outline btn-sm" style="cursor:pointer">🖼 อัลบั้ม
         <input type="file" accept="image/*" hidden onchange="handlePhoto(event,'${key}Photo')">
       </label>
-    </div>
-    <div class="photo-preview" id="prev_${key}Photo">${photo?renderThumb(photo,key+'Photo'):''}</div>
+    </div>`}
+    <div class="photo-preview" id="prev_${key}Photo">${photo?renderThumb(photo,key+'Photo',ro):''}</div>
   </div>`;
 }
-function renderThumb(dataUrl,key){
-  return `<div class="photo-thumb"><img src="${dataUrl}"><button class="photo-del" onclick="delPhoto('${key}')">×</button></div>`;
+function renderThumb(dataUrl,key,ro){
+  return `<div class="photo-thumb"><img src="${dataUrl}">${ro?'':`<button class="photo-del" onclick="delPhoto('${key}')">×</button>`}</div>`;
 }
 function handlePhoto(ev,key){
   const f=ev.target.files[0]; if(!f) return;
@@ -2417,6 +2420,7 @@ function recalcPayTotal(){
 }
 function saveBill(idx){
   const j=state.jobs.find(x=>x.id===state.activeJobId);
+  if(j.status==='approved'){ showToast('ชุดงานอนุมัติแล้ว — แก้ไขไม่ได้','warning'); return; } // v1.46
   const b=j.bills[idx];
   const total=payTotal(b.payment);
   if(total<=0){ showToast('ยังไม่ได้ใส่ยอดชำระ','warning'); return; }
@@ -2492,6 +2496,7 @@ function pickReason(btn){
 }
 function confirmCannot(idx){
   const j=state.jobs.find(x=>x.id===state.activeJobId);
+  if(j.status==='approved'){ showToast('ชุดงานอนุมัติแล้ว — แก้ไขไม่ได้','warning'); return; } // v1.46
   const b=j.bills[idx];
   const sel=$('cannotReason').querySelector('.pill.active');
   if(!sel){ showToast('กรุณาเลือกสาเหตุ','warning'); return; }
