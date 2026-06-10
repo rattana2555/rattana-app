@@ -7,6 +7,7 @@
 <title>Rattana BP Daily Sales v2.0</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 :root{
   --bg:#f0f2f7;--card:#fff;--navy:#0d1b3e;--navy2:#1a2f5e;--navy3:#243b73;
@@ -234,6 +235,14 @@ body.dark .w1{background:#0f2245;color:#7fb8e8}body.dark .w2{background:#0f2a1a;
 
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:none;opacity:1}}
+
+/* Line Chart Card */
+.chart-card{background:var(--card);border-radius:var(--r2);padding:14px;box-shadow:var(--shadow);margin-bottom:10px}
+.chart-card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+.chart-card-head h3{font-size:14px;font-weight:700}
+.chart-range-select{height:32px;padding:0 10px;border-radius:var(--r3);border:1.5px solid var(--border);background:var(--card);color:var(--text);font-size:12px;font-family:inherit;outline:none;cursor:pointer}
+.chart-range-select:focus{border-color:var(--navy)}
+.chart-wrap{position:relative;height:220px}
 </style>
 </head>
 <body>
@@ -331,6 +340,20 @@ body.dark .w1{background:#0f2245;color:#7fb8e8}body.dark .w2{background:#0f2a1a;
               <button class="ptab" onclick="setPeriod('week',this)">สัปดาห์</button>
               <button class="ptab" onclick="setPeriod('month',this)">เดือน</button>
               <button class="ptab" onclick="setPeriod('year',this)">ปี</button>
+            </div>
+
+            <!-- Line Chart -->
+            <div class="chart-card">
+              <div class="chart-card-head">
+                <h3>📈 ยอดขายรายวัน แยก Cat_BU</h3>
+                <select class="chart-range-select" id="chartRange" onchange="renderLineChart()">
+                  <option value="7">7 วันล่าสุด</option>
+                  <option value="14">14 วันล่าสุด</option>
+                  <option value="30" selected>30 วันล่าสุด</option>
+                  <option value="60">60 วันล่าสุด</option>
+                </select>
+              </div>
+              <div class="chart-wrap"><canvas id="lineChart"></canvas></div>
             </div>
 
             <!-- BU Section -->
@@ -499,7 +522,7 @@ function parseCsv(text){
   }
   if(cell.length||row.length){row.push(cell);rows.push(row);}
   if(!rows.length)return[];
-  const clean=s=>String(s||'').replace(/[​‌‍﻿]/g,'').replace(/ /g,' ').trim();
+  const clean=s=>String(s||'').replace(/[​‌‍﻿]/g,'').replace(/ /g,' ').trim();
   const hdr=rows[0].map(clean);
   return rows.slice(1).filter(r=>r.some(c=>clean(c))).map(r=>Object.fromEntries(hdr.map((k,i)=>[k,clean(r[i])])));
 }
@@ -703,7 +726,7 @@ function renderAll(){
   const g=greeting();
   document.getElementById('mobGreeting').textContent=g;
   document.getElementById('deskGreeting').textContent=g;
-  renderHero();renderBUList();renderAside();renderTrend7();renderReport();renderTrend30();
+  renderHero();renderBUList();renderAside();renderTrend7();renderReport();renderTrend30();renderLineChart();
   // sidebar info
   const latest=getLatestDate();
   document.getElementById('sidebarInfo').textContent=latest?`ข้อมูล: ${thaiDate(latest)}`:'';
@@ -890,6 +913,75 @@ function renderTrend30(){
   document.getElementById('trendBUCards').innerHTML=buCards.join('');
 }
 
+// ── Line Chart ────────────────────────────────────────────────────
+const BU_CHART_COLORS = {
+  'Bplus FMCG':       '#1a6fb8',
+  'Bplus Thaibev Al': '#1e8449',
+  'Bplus บุหรี่':     '#c0392b',
+  'F&N':              '#6c3483'
+};
+let lineChartInst = null;
+
+function renderLineChart(){
+  if(!window.Chart)return;
+  const days = parseInt(document.getElementById('chartRange')?.value||'30');
+  const dates = [...allDates].slice(0,days).reverse();
+  if(!dates.length)return;
+
+  // Build dataset per BU
+  const datasets = BU_LIST.map(bu=>({
+    label: bu,
+    data: dates.map(d=>
+      allData.filter(r=>r.Doc_Date===d&&r.Cat_BU===bu&&(!curWS||r.WS===curWS))
+              .reduce((s,r)=>s+numVal(r.EXVat),0)
+    ),
+    borderColor: BU_CHART_COLORS[bu],
+    backgroundColor: BU_CHART_COLORS[bu]+'22',
+    borderWidth: 2,
+    pointRadius: dates.length>20?2:4,
+    pointHoverRadius: 6,
+    tension: 0.3,
+    fill: false,
+  }));
+
+  const labels = dates.map(d=>{
+    const p=String(d).split('/');
+    return`${p[0]}/${p[1]}`;
+  });
+
+  const isDark = document.body.classList.contains('dark');
+  const gridColor = isDark?'rgba(255,255,255,.06)':'rgba(0,0,0,.06)';
+  const textColor = isDark?'#8a98b8':'#8a98b8';
+
+  const ctx = document.getElementById('lineChart');
+  if(!ctx)return;
+  if(lineChartInst){lineChartInst.destroy();lineChartInst=null;}
+  lineChartInst = new Chart(ctx,{
+    type:'line',
+    data:{labels,datasets},
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{
+          position:'bottom',
+          labels:{font:{family:'Sarabun',size:11},color:textColor,boxWidth:12,padding:12}
+        },
+        tooltip:{
+          callbacks:{
+            label:ctx=>`${ctx.dataset.label}: ฿${Math.round(ctx.parsed.y).toLocaleString('th-TH')}`
+          }
+        }
+      },
+      scales:{
+        x:{grid:{color:gridColor},ticks:{color:textColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:10}},
+        y:{grid:{color:gridColor},ticks:{color:textColor,font:{size:10},callback:v=>'฿'+Math.round(v).toLocaleString('th-TH')}}
+      }
+    }
+  });
+}
+
 // ── Report ────────────────────────────────────────────────────────
 let repRows=[];
 function renderReport(){
@@ -963,7 +1055,7 @@ function setWS(ws,btn){
   curWS=ws;
   document.querySelectorAll('.ws-pill').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  loadTargets(ws).then(()=>renderAll());
+  loadTargets(ws).then(()=>{renderAll();renderLineChart();});
 }
 function setPeriod(p,btn){
   curPeriod=p;
