@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.35</title>
+<title>Rattana D-Delivery v1.36</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -217,6 +217,19 @@ body.dark .job-card .job-id{color:var(--gold)}
 /* Required-field indicator (* red) */
 .req{color:var(--danger);font-weight:700;margin-left:4px}
 
+/* Customer grid (ข้อมูลร้านค้า) */
+.cust-grid{display:grid;grid-template-columns:1fr;gap:10px}
+@media(min-width:640px){.cust-grid{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:1024px){.cust-grid{grid-template-columns:repeat(3,1fr)}}
+.cust-card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px;display:flex;gap:12px;cursor:pointer;transition:all .15s;border-left:3px solid var(--gold);align-items:center}
+.cust-card:hover{box-shadow:var(--shadow-md);transform:translateY(-1px)}
+.cust-card .photo{width:80px;height:80px;border-radius:var(--radius-sm);background:var(--row-alt);flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--muted);border:1px solid var(--border)}
+.cust-card .photo img{width:100%;height:100%;object-fit:cover}
+.cust-card .info{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.cust-card .info .name{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.3}
+.cust-card .info .code{font-family:var(--font-mono);font-size:11px;color:var(--gold);font-weight:600}
+.cust-card .info .meta{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
 /* Product picker (search-first dropdown for 12k+ products) */
 .product-picker{position:relative;width:100%}
 .product-results{position:absolute;top:calc(100% + 2px);left:0;right:0;background:var(--card-bg);border:1.5px solid var(--border);border-radius:var(--radius-md);max-height:420px;overflow-y:auto;z-index:1500;list-style:none;padding:6px 0;margin:0;box-shadow:var(--shadow-lg)}
@@ -332,7 +345,7 @@ body.dark .banner-gold{color:var(--gold-light)}
          data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left"></div>
     <div id="loginError"></div>
-    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.35 — Powered by Rattana Group</div>
+    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.36 — Powered by Rattana Group</div>
   </div>
 </div>
 
@@ -340,7 +353,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div id="appScreen" class="page" style="display:none">
   <header>
     <div class="logo-text">D<span>-DELIVERY</span></div>
-    <span class="ver-tag" id="verTag">v1.35</span>
+    <span class="ver-tag" id="verTag">v1.36</span>
     <span id="liveDot" title="Live sync" style="width:7px;height:7px;border-radius:50%;background:#2ecc71;box-shadow:0 0 6px #2ecc71;display:inline-block;transition:all .25s"></span>
     <span class="role-tag" id="roleTag">-</span>
     <div class="spacer"></div>
@@ -601,7 +614,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.35';
+const APP_VERSION='1.36';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -758,7 +771,7 @@ function checkSession(){
   const s=loadStore();
   if(!s.user||!s.exp||Date.now()>s.exp) return false;
   state.user=s.user; state.role=s.role;
-  // backfill displayName สำหรับ session ที่บันทึกไว้ก่อน v1.35
+  // backfill displayName สำหรับ session ที่บันทึกไว้ก่อน v1.36
   if(!state.user.displayName){
     const n=state.user.name||'', nk=state.user.nickname||'';
     state.user.displayName=n&&nk?`${n} (${nk})`:(n||nk);
@@ -1231,19 +1244,21 @@ function renderCustomers(){
       <input class="input" id="custSearch" value="${esc(customerSearchState.q)}" oninput="customerSearchState.q=this.value;renderCustomers()" placeholder="🔍 ค้นหาชื่อร้าน / รหัส / เบอร์โทร / ที่อยู่..." autocomplete="off">
       <small class="txt-muted mt-4">มีทั้งหมด ${fmtInt(state.customers.length)} ร้าน · แสดงสูงสุด 100 รายการ</small>
     </div>
-    <div class="mt-12">
+    <div class="cust-grid mt-12">
       ${filtered.length?filtered.map(c=>`
-        <div class="bill-row" onclick="openCustomerInfo('${esc(c.code).replace(/'/g,"\\'")}')">
-          <div class="bill-info">
-            <div class="bill-name">${esc(c.name)}</div>
-            <div class="bill-doc" style="margin-top:4px">${esc(c.code)} ${c.warehouse?`· ${esc(c.warehouse)}`:''}</div>
-            <div class="txt-xs txt-muted mt-4">
-              ${c.salesman?`👤 ${esc(c.salesman)}`:''}
-              ${c.phone?` · ☎ ${esc(c.phone)}`:''}
-              ${c.address?` · 📍 ${esc(c.address.slice(0,40))}${c.address.length>40?'...':''}`:''}
-            </div>
+        <div class="cust-card" onclick="openCustomerInfo('${esc(c.code).replace(/'/g,"\\'")}')">
+          <div class="photo">
+            ${c.photoUrl
+              ?`<img src="${esc(c.photoUrl)}" loading="lazy" onerror="this.style.display='none';this.parentElement.textContent='🏪'">`
+              :'🏪'}
           </div>
-          ${c.lat&&c.lng?`<a class="btn btn-outline btn-sm" target="_blank" onclick="event.stopPropagation()" href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lng}">🗺</a>`:''}
+          <div class="info">
+            <div class="name">${esc(c.name)}</div>
+            <div class="code">${esc(c.code)} ${c.warehouse?`· ${esc(c.warehouse)}`:''}</div>
+            ${c.salesman?`<div class="meta">👤 ${esc(c.salesman)}</div>`:''}
+            ${c.phone?`<div class="meta">☎ ${esc(c.phone)}</div>`:''}
+            ${c.address?`<div class="meta">📍 ${esc(c.address)}</div>`:''}
+          </div>
         </div>
       `).join(''):`<div class="txt-center txt-muted p-16">ไม่พบร้านค้า</div>`}
     </div>
