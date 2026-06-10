@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.30</title>
+<title>Rattana D-Delivery v1.31</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -329,7 +329,7 @@ body.dark .banner-gold{color:var(--gold-light)}
          data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left"></div>
     <div id="loginError"></div>
-    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.30 — Powered by Rattana Group</div>
+    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.31 — Powered by Rattana Group</div>
   </div>
 </div>
 
@@ -337,7 +337,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div id="appScreen" class="page" style="display:none">
   <header>
     <div class="logo-text">D<span>-DELIVERY</span></div>
-    <span class="ver-tag" id="verTag">v1.30</span>
+    <span class="ver-tag" id="verTag">v1.31</span>
     <span id="liveDot" title="Live sync" style="width:7px;height:7px;border-radius:50%;background:#2ecc71;box-shadow:0 0 6px #2ecc71;display:inline-block;transition:all .25s"></span>
     <span class="role-tag" id="roleTag">-</span>
     <div class="spacer"></div>
@@ -573,7 +573,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.30';
+const APP_VERSION='1.31';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -728,7 +728,7 @@ function checkSession(){
   const s=loadStore();
   if(!s.user||!s.exp||Date.now()>s.exp) return false;
   state.user=s.user; state.role=s.role;
-  // backfill displayName สำหรับ session ที่บันทึกไว้ก่อน v1.30
+  // backfill displayName สำหรับ session ที่บันทึกไว้ก่อน v1.31
   if(!state.user.displayName){
     const n=state.user.name||'', nk=state.user.nickname||'';
     state.user.displayName=n&&nk?`${n} (${nk})`:(n||nk);
@@ -792,18 +792,26 @@ async function loadProducts(){
           BP:cleanCell(r['CODE BP']||''),
           CS:cleanCell(r['CODE CS']||''),
         },
+        // UNIT EA/PA/BP/CS = label ยาว เช่น "ชิ้นx1(EA)", "ลังx12(CS)" (แสดงให้ผู้ใช้)
         units:{
-          EA:cleanCell(r['RATTANA UNIT EA']||r['UNIT EA']||''),
-          PA:cleanCell(r['RATTANA UNIT PA']||r['UNIT PA']||''),
-          BP:cleanCell(r['RATTANA UNIT BP']||r['UNIT BP']||''),
-          CS:cleanCell(r['RATTANA UNIT CS']||r['UNIT CS']||''),
+          EA:cleanCell(r['UNIT EA']||r['RATTANA UNIT EA']||''),
+          PA:cleanCell(r['UNIT PA']||r['RATTANA UNIT PA']||''),
+          BP:cleanCell(r['UNIT BP']||r['RATTANA UNIT BP']||''),
+          CS:cleanCell(r['UNIT CS']||r['RATTANA UNIT CS']||''),
         },
-        // ใช้ราคา CC00 (default channel) เป็นราคาแสดง
+        // ใช้ราคา CC00 (default channel) เป็นราคา auto-fill
         prices:{
           EA:parseFloat(cleanCell(r['PRICE CC00 EA']||'0'))||0,
           PA:parseFloat(cleanCell(r['PRICE CC00 PA']||'0'))||0,
           BP:parseFloat(cleanCell(r['PRICE CC00 BP']||'0'))||0,
           CS:parseFloat(cleanCell(r['PRICE CC00 CS']||'0'))||0,
+        },
+        // ราคา S03 — แสดงเป็นราคาแนะนำสีจาง
+        s03:{
+          EA:parseFloat(cleanCell(r['PRICE S03 EA']||'0'))||0,
+          PA:parseFloat(cleanCell(r['PRICE S03 PA']||'0'))||0,
+          BP:parseFloat(cleanCell(r['PRICE S03 BP']||'0'))||0,
+          CS:parseFloat(cleanCell(r['PRICE S03 CS']||'0'))||0,
         },
       };
     }).filter(Boolean);
@@ -1223,7 +1231,7 @@ function renderReturnItems(){
         <div class="field" style="margin-bottom:8px">
           <label>หน่วย</label>
           <div class="pills">
-            ${ITEM_UNITS.map(u=>`<button type="button" class="pill ${u===it.unit?'active gold':''}" onclick="pickItemUnit(${i},'${esc(u)}')">${esc(u)}</button>`).join('')}
+            ${getItemUnitOptions(it).map(u=>`<button type="button" class="pill ${u.value===it.unit?'active gold':''}" onclick="pickItemUnit(${i},'${esc(u.value)}','${u.key}')">${esc(u.value)}</button>`).join('')}
           </div>
         </div>
         <div class="grid-2">
@@ -1234,6 +1242,7 @@ function renderReturnItems(){
           <div class="field" style="margin-bottom:0">
             <label>ราคา/หน่วย</label>
             <input class="input input-num" type="number" inputmode="decimal" step="any" min="0" value="${esc(it.price)}" oninput="returnState.items[${i}].price=this.value;recalcReturnTotal()" placeholder="0.00">
+            ${it.product&&it.unitKey&&it.product.s03[it.unitKey]?`<div class="txt-xs mt-4" style="color:var(--muted);font-style:italic">💡 ราคาแนะนำ S03: ${fmt(it.product.s03[it.unitKey])} ฿</div>`:''}
           </div>
         </div>
         <div class="txt-right txt-sm txt-muted mt-8">รวม <span class="num txt-gold txt-bold">${fmt(lineTotal)}</span></div>
@@ -1247,13 +1256,26 @@ function recalcReturnTotal(){
   const t=returnGrandTotal();
   const el=$('returnGrandTotal'); if(el) el.children[1].textContent=`${fmt(t)} ฿`;
 }
-function pickItemUnit(idx,unit){
-  returnState.items[idx].unit=unit;
-  // ถ้าเลือกสินค้าไว้แล้ว → set ราคาตามหน่วยใหม่
-  const it=returnState.items[idx];
+/* คืนรายการหน่วยที่เลือกได้ — ถ้ามีสินค้าเลือก ใช้ UNIT จาก product (ที่ไม่ว่าง) */
+function getItemUnitOptions(it){
   if(it.product){
-    const unitKey=unit.includes('EA')?'EA':unit.includes('PA')?'PA':unit.includes('BP')?'BP':'CS';
-    const price=it.product.prices[unitKey];
+    const out=[];
+    ['EA','PA','BP','CS'].forEach(k=>{
+      const label=it.product.units[k];
+      if(label) out.push({key:k,value:label});
+    });
+    if(out.length) return out;
+  }
+  return ITEM_UNITS.map(u=>({key:u.includes('EA')?'EA':u.includes('PA')?'PA':u.includes('BP')?'BP':'CS',value:u}));
+}
+
+function pickItemUnit(idx,unit,unitKey){
+  const it=returnState.items[idx];
+  it.unit=unit;
+  it.unitKey=unitKey||(unit.includes('EA')?'EA':unit.includes('PA')?'PA':unit.includes('BP')?'BP':'CS');
+  // ถ้าเลือกสินค้าไว้แล้ว → set ราคา default ตามหน่วยใหม่
+  if(it.product){
+    const price=it.product.prices[it.unitKey];
     if(price) it.price=price;
   }
   renderReturnItems();
@@ -1287,13 +1309,14 @@ function pickProduct(idx,name){
   const it=returnState.items[idx];
   it.productName=name;
   it.product=p||null;
-  // เลือกหน่วยตามที่มี code ก่อน (CS → BP → PA → EA)
+  // เลือกหน่วยที่มี UNIT ก่อน (CS → BP → PA → EA)
   if(p){
     const order=['CS','BP','PA','EA'];
     for(const k of order){
-      if(p.codes[k]&&p.prices[k]){
-        it.unit=p.units[k]||(k==='EA'?'ชิ้น(EA)':'แพ็ค('+k+')');
-        it.price=p.prices[k];
+      if(p.units[k]){
+        it.unit=p.units[k];
+        it.unitKey=k;
+        if(p.prices[k]) it.price=p.prices[k];
         break;
       }
     }
