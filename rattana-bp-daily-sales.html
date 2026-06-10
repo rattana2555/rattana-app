@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Rattana BP Daily Sales v2.0</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#f0f2f7;--card:#fff;--navy:#0d1b3e;--navy2:#1a2f5e;--navy3:#243b73;
+  --gold:#c9a84c;--gold2:#e8c86a;
+  --success:#2ecc71;--danger:#e74c3c;--warn:#f39c12;--info:#3498db;
+  --text:#0d1b3e;--muted:#8a98b8;--border:#e8ecf4;
+  --shadow:0 2px 12px rgba(13,27,62,.08);--shadow2:0 4px 20px rgba(13,27,62,.13);
+  --r:16px;--r2:12px;--r3:8px;
+  --sidebar:240px;
+}
+body.dark{--bg:#080e1e;--card:#0f1830;--text:#e8eaf0;--muted:#6a7898;--border:#1e2d4e}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);min-height:100dvh;overflow-x:hidden;transition:background .2s,color .2s}
+button{font-family:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+input,select{font-family:inherit}
+a{text-decoration:none;color:inherit}
+
+/* ── Layout shell ── */
+.shell{display:flex;min-height:100dvh}
+
+/* sidebar – desktop only */
+.sidebar{
+  width:var(--sidebar);min-width:var(--sidebar);background:var(--card);
+  border-right:1px solid var(--border);display:flex;flex-direction:column;
+  position:sticky;top:0;height:100dvh;overflow-y:auto;z-index:200;
+  box-shadow:2px 0 12px rgba(13,27,62,.06);
+}
+.sidebar-logo{padding:20px 20px 10px;border-bottom:1px solid var(--border)}
+.sidebar-logo .logo-name{font-size:16px;font-weight:800;color:var(--navy);letter-spacing:.5px}
+.sidebar-logo .logo-name span{color:var(--gold)}
+.sidebar-logo .logo-sub{font-size:10px;color:var(--muted);margin-top:2px}
+.sidebar-nav{padding:12px 10px;flex:1}
+.snav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--r3);font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;transition:all .15s;margin-bottom:2px}
+.snav-item:hover{background:rgba(13,27,62,.06);color:var(--navy)}
+.snav-item.active{background:var(--navy);color:#fff}
+.snav-item .snav-icon{font-size:18px;width:24px;text-align:center}
+.sidebar-footer{padding:14px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)}
+
+/* main content area */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;padding-bottom:env(safe-area-inset-bottom)}
+
+/* mobile top header */
+.mob-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px 10px;padding-top:max(14px,env(safe-area-inset-top));
+  background:var(--bg);
+}
+.mob-greeting{font-size:13px;color:var(--muted);font-weight:500}
+.mob-title{font-size:24px;font-weight:800;color:var(--text);line-height:1.1;margin-top:2px}
+.desktop-header{display:none;padding:20px 24px 0;background:var(--bg)}
+.desktop-header .dh-greeting{font-size:14px;color:var(--muted)}
+.desktop-header .dh-title{font-size:28px;font-weight:800;color:var(--text);margin-top:2px}
+.icon-btn{width:38px;height:38px;border-radius:50%;background:var(--card);border:none;display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:var(--shadow);cursor:pointer;color:var(--text)}
+
+/* WS pills */
+.ws-pills{display:flex;gap:8px;padding:10px 16px;overflow-x:auto;scrollbar-width:none}
+.ws-pills::-webkit-scrollbar{display:none}
+.ws-pill{flex-shrink:0;padding:7px 18px;border-radius:50px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;border:1.5px solid var(--border);background:var(--card);color:var(--muted);transition:all .18s;white-space:nowrap}
+.ws-pill.active{background:var(--navy);border-color:var(--navy);color:#fff;box-shadow:0 4px 12px rgba(13,27,62,.25)}
+.ws-pill:hover:not(.active){border-color:var(--navy3);color:var(--navy)}
+
+/* Page content */
+.pages{flex:1;overflow-y:auto}
+.page{display:none;padding:0 16px 16px}
+.page.active{display:block}
+
+/* Period tabs */
+.period-tabs{display:flex;gap:6px;padding:10px 0 4px}
+.ptab{flex:1;padding:8px 4px;border-radius:50px;font-size:13px;font-weight:700;font-family:inherit;text-align:center;cursor:pointer;border:none;background:transparent;color:var(--muted);transition:all .18s}
+.ptab.active{background:var(--navy);color:#fff;box-shadow:0 3px 10px rgba(13,27,62,.22)}
+
+/* ── HERO CARD ── */
+.hero{
+  background:linear-gradient(135deg,var(--navy) 0%,#162550 60%,var(--navy2) 100%);
+  border-radius:var(--r);padding:18px;color:#fff;position:relative;overflow:hidden;
+  box-shadow:0 8px 32px rgba(13,27,62,.25);
+}
+.hero::before{content:'';position:absolute;top:-40px;right:-40px;width:160px;height:160px;background:rgba(201,168,76,.08);border-radius:50%}
+.hero::after{content:'';position:absolute;bottom:-60px;left:-20px;width:200px;height:200px;background:rgba(255,255,255,.03);border-radius:50%}
+.hero-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.hero-date{font-size:12px;opacity:.75;font-weight:500}
+.hero-badge{background:rgba(255,255,255,.15);backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.2);padding:4px 10px;border-radius:50px;font-size:11px;font-weight:700;color:#fff}
+.hero-amount{font-size:36px;font-weight:800;letter-spacing:-1px;margin:4px 0 8px;line-height:1}
+.hero-amount small{font-size:20px;font-weight:600;opacity:.8}
+.hero-meta{display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.hero-meta-item{display:flex;align-items:center;gap:5px;font-size:12px;opacity:.85}
+.hero-meta-item span{font-weight:600}
+.hero-progress{margin-bottom:8px}
+.hp-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;font-size:12px}
+.hp-label{opacity:.8}
+.hp-pct{font-weight:700}
+.hp-bar{height:6px;background:rgba(255,255,255,.15);border-radius:3px;overflow:hidden;margin-bottom:8px}
+.hp-fill{height:100%;border-radius:3px;transition:width .6s ease}
+.hp-fill.red{background:linear-gradient(90deg,#e74c3c,#c0392b)}
+.hp-fill.gray{background:rgba(255,255,255,.45)}
+.hero-info{font-size:11px;opacity:.7;margin-bottom:4px}
+.hero-bottom{display:flex;justify-content:space-between;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.12)}
+.hero-bottom-item{font-size:12px}
+.hero-bottom-item .hb-label{opacity:.65;margin-bottom:2px}
+.hero-bottom-item .hb-val{font-weight:700;font-size:14px;display:flex;align-items:center;gap:4px}
+.hb-val.up{color:#2ecc71}.hb-val.down{color:#ff6b5b}
+
+/* Section header */
+.section-head{display:flex;align-items:center;justify-content:space-between;padding:14px 0 8px}
+.section-head h2{font-size:16px;font-weight:700}
+.section-head a{font-size:13px;color:var(--navy);font-weight:600;cursor:pointer}
+body.dark .section-head a{color:var(--gold)}
+
+/* BU cards */
+.bu-list{display:flex;flex-direction:column;gap:10px}
+.bu-card{background:var(--card);border-radius:var(--r2);padding:14px;box-shadow:var(--shadow);transition:transform .15s}
+.bu-card:hover{transform:translateY(-2px);box-shadow:var(--shadow2)}
+.bu-card-top{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.bu-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.bu-info{flex:1;min-width:0}
+.bu-name{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bu-txn{font-size:11px;color:var(--muted);margin-top:1px}
+.bu-nums{text-align:right;flex-shrink:0}
+.bu-baht{font-size:15px;font-weight:800;color:var(--navy)}
+body.dark .bu-baht{color:var(--gold2)}
+.bu-cs{font-size:11px;color:var(--muted);margin-top:1px}
+.bu-progress{margin-top:4px}
+.bp-row{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px}
+.bp-pct{font-weight:700;color:var(--danger)}
+.bp-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:4px}
+.bp-fill{height:100%;background:linear-gradient(90deg,var(--danger),#c0392b);border-radius:2px;transition:width .6s ease}
+.bp-detail{font-size:11px;color:var(--muted)}
+
+/* Reports page */
+.report-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding-top:10px}
+.input{height:38px;padding:0 12px;border-radius:var(--r3);border:1.5px solid var(--border);background:var(--card);color:var(--text);font-size:14px;font-family:inherit;outline:none;transition:border-color .15s}
+.input:focus{border-color:var(--navy)}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:var(--r3);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;border:none;min-height:36px;transition:opacity .15s}
+.btn:hover{opacity:.85}
+.btn-navy{background:var(--navy);color:#fff}
+.btn-gold{background:var(--gold);color:var(--navy)}
+.card-wrap{background:var(--card);border-radius:var(--r2);box-shadow:var(--shadow);overflow:hidden}
+.tbl-wrap{overflow-x:auto}
+.tbl{width:100%;border-collapse:collapse}
+.tbl thead{background:var(--navy);color:#fff;position:sticky;top:0;z-index:5}
+.tbl thead th{padding:9px 10px;text-align:left;font-size:12px;font-weight:600;white-space:nowrap;border-bottom:2px solid var(--gold);cursor:pointer;user-select:none}
+.tbl thead th:hover{background:var(--navy2)}
+.tbl tbody tr{border-bottom:1px solid var(--border)}
+.tbl tbody tr:nth-child(even){background:rgba(0,0,0,.015)}
+body.dark .tbl tbody tr:nth-child(even){background:rgba(255,255,255,.02)}
+.tbl tbody tr:hover{background:rgba(201,168,76,.06)}
+.tbl td{padding:8px 10px;font-size:13px;vertical-align:middle}
+.tbl td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:500;white-space:nowrap}
+.empty-row td{text-align:center;padding:36px;color:var(--muted)}
+.sort-ind{font-size:9px;color:var(--gold);margin-left:3px}
+
+/* Bottom nav – mobile only */
+.bottom-nav{
+  position:fixed;bottom:0;left:0;right:0;
+  background:var(--card);border-top:1px solid var(--border);
+  display:flex;padding:6px 0;padding-bottom:max(6px,env(safe-area-inset-bottom));
+  box-shadow:0 -4px 20px rgba(13,27,62,.08);z-index:300;
+}
+.bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px;cursor:pointer;transition:color .15s}
+.bnav-icon{font-size:20px;line-height:1}
+.bnav-label{font-size:10px;font-weight:600;color:var(--muted)}
+.bnav-item.active .bnav-label{color:var(--navy)}
+body.dark .bnav-item.active .bnav-label{color:var(--gold)}
+.bnav-dot{width:5px;height:5px;border-radius:50%;background:var(--navy);margin:0 auto;display:none}
+.bnav-item.active .bnav-dot{display:block}
+body.dark .bnav-item.active .bnav-dot{background:var(--gold)}
+
+/* Badges */
+.badge{display:inline-block;padding:2px 7px;border-radius:8px;font-size:11px;font-weight:600;white-space:nowrap}
+.w1{background:#e3f0fd;color:#1a6fb8}.w2{background:#e8f7ee;color:#1e8449}.w3{background:#fef3d7;color:#a87800}.w4{background:#ffe0de;color:#c0392b}
+body.dark .w1{background:#0f2245;color:#7fb8e8}body.dark .w2{background:#0f2a1a;color:#7be0a3}body.dark .w3{background:#2a2010;color:#e8c86a}body.dark .w4{background:#2a1010;color:#ff8a7e}
+
+/* Trend mini chart */
+.trend-card{background:var(--card);border-radius:var(--r2);padding:14px;box-shadow:var(--shadow);margin-bottom:10px}
+.trend-bars{display:flex;align-items:flex-end;gap:5px;height:80px;padding-bottom:2px}
+.trend-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px}
+.trend-bar{width:100%;background:var(--navy3);border-radius:4px 4px 0 0;transition:height .4s}
+.trend-bar.active{background:var(--gold)}
+.trend-label{font-size:9px;color:var(--muted);font-weight:600}
+.trend-label.active{color:var(--gold);font-weight:700}
+
+/* Spinner */
+.spinner-overlay{display:none;position:fixed;inset:0;background:rgba(8,14,30,.55);align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(4px)}
+.spinner-overlay.show{display:flex}
+.spinner-box{background:var(--card);border-radius:var(--r);padding:28px 36px;text-align:center;border-top:4px solid var(--gold);min-width:180px}
+.spinner-ring{width:44px;height:44px;border:5px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 10px}
+.spinner-msg{font-size:14px;color:var(--muted)}
+
+/* Toast */
+.toast{position:fixed;bottom:max(80px,env(safe-area-inset-bottom));right:14px;padding:10px 16px;border-radius:12px;color:#fff;z-index:9999;animation:slideIn .3s ease;font-size:13px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.2)}
+.toast-success{background:var(--success)}.toast-error{background:var(--danger)}.toast-info{background:var(--navy2);border-left:3px solid var(--gold)}
+#loadingBar{position:fixed;top:0;left:0;height:3px;background:var(--gold);width:0;transition:width .4s;z-index:10001}
+
+/* Desktop overrides */
+@media(min-width:768px){
+  .bottom-nav{display:none}
+  .page{padding:0 24px 24px}
+  .ws-pills{padding:10px 24px}
+  .mob-header{display:none}
+  .desktop-header{display:block}
+  .pages{padding-bottom:0}
+  .main{padding-bottom:0}
+  .bu-list{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  .period-tabs{max-width:400px}
+  .toast{bottom:24px}
+}
+@media(min-width:1024px){
+  .hero{padding:22px}
+  .hero-amount{font-size:42px}
+  .page-home-grid{display:grid;grid-template-columns:1fr 320px;gap:16px;align-items:start}
+  .page-home-aside{display:block}
+}
+@media(max-width:767px){
+  .sidebar{display:none}
+  .pages{padding-bottom:74px}
+}
+
+/* Aside stats (desktop right column) */
+.aside-card{background:var(--card);border-radius:var(--r2);padding:14px;box-shadow:var(--shadow);margin-bottom:12px}
+.aside-card h3{font-size:13px;font-weight:700;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.aside-stat{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
+.aside-stat:last-child{border:none}
+.aside-stat-label{font-size:12px;color:var(--muted)}
+.aside-stat-val{font-size:13px;font-weight:700}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:none;opacity:1}}
+</style>
+</head>
+<body>
+
+<div id="loadingBar"></div>
+<div id="spinner" class="spinner-overlay">
+  <div class="spinner-box">
+    <div class="spinner-ring"></div>
+    <p class="spinner-msg" id="spinMsg">กำลังโหลด...</p>
+  </div>
+</div>
+
+<div class="shell">
+
+  <!-- ── SIDEBAR (Desktop) ── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-name">RATTANA <span>BP</span></div>
+      <div class="logo-sub">Daily Sales Dashboard v2.0</div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="snav-item active" onclick="switchPage('home',this,'home')">
+        <span class="snav-icon">🏠</span><span>หน้าแรก</span>
+      </div>
+      <div class="snav-item" onclick="switchPage('report',this,'report')">
+        <span class="snav-icon">📊</span><span>รายงาน</span>
+      </div>
+      <div class="snav-item" onclick="switchPage('trend',this,'trend')">
+        <span class="snav-icon">📈</span><span>แนวโน้ม</span>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div id="sidebarInfo" style="margin-bottom:6px"></div>
+      <button onclick="toggleDark()" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--muted);padding:0">🌙 Dark Mode</button>
+    </div>
+  </aside>
+
+  <!-- ── MAIN ── -->
+  <div class="main">
+
+    <!-- Mobile Header -->
+    <div class="mob-header">
+      <div>
+        <div class="mob-greeting" id="mobGreeting">สวัสดี rattana.phai 🔥</div>
+        <div class="mob-title">ยอดขายวันนี้</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="icon-btn" onclick="refreshData()" id="btnRefresh" title="รีเฟรช">↻</button>
+        <button class="icon-btn" onclick="toggleDark()">🌙</button>
+      </div>
+    </div>
+
+    <!-- Desktop Header -->
+    <div class="desktop-header">
+      <div class="dh-greeting" id="deskGreeting">สวัสดี rattana.phai 🔥</div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div class="dh-title">ยอดขายวันนี้</div>
+        <button class="btn btn-navy" onclick="refreshData()" id="btnRefresh2" style="margin-top:4px">↻ รีเฟรช</button>
+      </div>
+    </div>
+
+    <!-- Pages -->
+    <div class="pages">
+
+      <!-- ═══ HOME PAGE ═══ -->
+      <div id="pageHome" class="page active">
+
+        <!-- WS Pills -->
+        <div class="ws-pills" id="wsPills">
+          <button class="ws-pill active" onclick="setWS('',this)">ทั้งหมด</button>
+          <button class="ws-pill" onclick="setWS('W1',this)">W1</button>
+          <button class="ws-pill" onclick="setWS('W2',this)">W2</button>
+          <button class="ws-pill" onclick="setWS('W3',this)">W3</button>
+          <button class="ws-pill" onclick="setWS('W4',this)">W4</button>
+        </div>
+
+        <div class="page-home-grid">
+          <div><!-- left column -->
+
+            <!-- HERO CARD -->
+            <div class="hero" id="heroCard">
+              <div class="hero-top">
+                <span class="hero-date" id="heroDate">—</span>
+                <span class="hero-badge">BP DATA</span>
+              </div>
+              <div class="hero-amount" id="heroAmount">฿—</div>
+              <div class="hero-meta" id="heroMeta"></div>
+              <div class="hero-progress" id="heroProgress"></div>
+              <div class="hero-bottom" id="heroBottom"></div>
+            </div>
+
+            <!-- Period Tabs -->
+            <div class="period-tabs">
+              <button class="ptab active" onclick="setPeriod('yesterday',this)">เมื่อวาน</button>
+              <button class="ptab" onclick="setPeriod('week',this)">สัปดาห์</button>
+              <button class="ptab" onclick="setPeriod('month',this)">เดือน</button>
+              <button class="ptab" onclick="setPeriod('year',this)">ปี</button>
+            </div>
+
+            <!-- BU Section -->
+            <div class="section-head">
+              <h2>แยกตาม Cat_BU</h2>
+              <a onclick="switchPage('report',null,'report')">ดูทั้งหมด →</a>
+            </div>
+            <div class="bu-list" id="buList"></div>
+
+          </div><!-- /left column -->
+
+          <!-- RIGHT ASIDE (desktop) -->
+          <div class="page-home-aside" style="display:none" id="aside">
+            <div class="aside-card">
+              <h3>สรุปคลัง</h3>
+              <div id="asideWS"></div>
+            </div>
+            <div class="trend-card">
+              <div style="font-size:13px;font-weight:700;margin-bottom:10px">📅 7 วันล่าสุด</div>
+              <div class="trend-bars" id="trendBars"></div>
+            </div>
+          </div>
+
+        </div><!-- /page-home-grid -->
+      </div><!-- /pageHome -->
+
+      <!-- ═══ REPORT PAGE ═══ -->
+      <div id="pageReport" class="page" style="display:none">
+        <div style="padding-top:10px"></div>
+        <div class="report-filters">
+          <input type="date" id="rDate" class="input" style="width:150px" onchange="renderReport()">
+          <select id="rWS" class="input" style="width:110px" onchange="renderReport()">
+            <option value="">ทุกคลัง</option>
+            <option value="W1">W1</option><option value="W2">W2</option>
+            <option value="W3">W3</option><option value="W4">W4</option>
+          </select>
+          <select id="rBU" class="input" style="width:150px" onchange="renderReport()">
+            <option value="">ทุก BU</option>
+            <option value="Bplus FMCG">Bplus FMCG</option>
+            <option value="Bplus Thaibev Al">Bplus Thaibev Al</option>
+            <option value="Bplus บุหรี่">Bplus บุหรี่</option>
+            <option value="F&N">F&N</option>
+          </select>
+          <input type="text" id="rSearch" class="input" placeholder="🔍 ค้นหา..." oninput="renderReport()" style="width:150px">
+          <button class="btn btn-gold" onclick="exportReport()">⬇ Excel</button>
+        </div>
+        <div class="card-wrap">
+          <div class="tbl-wrap">
+            <table class="tbl" id="repTbl">
+              <thead><tr>
+                <th data-key="Doc_Date" data-type="date">วันที่ <span class="sort-ind"></span></th>
+                <th data-key="WS" data-type="str">คลัง <span class="sort-ind"></span></th>
+                <th data-key="Cat_BU" data-type="str">BU <span class="sort-ind"></span></th>
+                <th data-key="Product_Name" data-type="str">สินค้า <span class="sort-ind"></span></th>
+                <th data-key="Sales_CS" data-type="num">ลัง <span class="sort-ind"></span></th>
+                <th data-key="EXVat" data-type="num">บาท (ไม่รวม VAT) <span class="sort-ind"></span></th>
+              </tr></thead>
+              <tbody id="repBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ TREND PAGE ═══ -->
+      <div id="pageTrend" class="page" style="display:none">
+        <div style="padding-top:10px"></div>
+        <div class="trend-card">
+          <div style="font-size:14px;font-weight:700;margin-bottom:12px">📅 ยอดขาย 30 วันล่าสุด (บาท)</div>
+          <div class="trend-bars" id="trend30Bars" style="height:120px"></div>
+        </div>
+        <div id="trendBUCards" style="display:grid;gap:10px"></div>
+      </div>
+
+    </div><!-- /pages -->
+
+    <!-- Bottom Nav – Mobile -->
+    <nav class="bottom-nav" id="bottomNav">
+      <div class="bnav-item active" onclick="switchPage('home',this,'home')">
+        <div class="bnav-icon">🏠</div>
+        <div class="bnav-dot"></div>
+        <div class="bnav-label">หน้าแรก</div>
+      </div>
+      <div class="bnav-item" onclick="switchPage('report',this,'report')">
+        <div class="bnav-icon">📊</div>
+        <div class="bnav-dot"></div>
+        <div class="bnav-label">รายงาน</div>
+      </div>
+      <div class="bnav-item" onclick="switchPage('trend',this,'trend')">
+        <div class="bnav-icon">📈</div>
+        <div class="bnav-dot"></div>
+        <div class="bnav-label">แนวโน้ม</div>
+      </div>
+      <div class="bnav-item" onclick="toggleDark()">
+        <div class="bnav-icon" id="darkIcon">🌙</div>
+        <div class="bnav-dot" style="display:none"></div>
+        <div class="bnav-label">โหมด</div>
+      </div>
+    </nav>
+
+  </div><!-- /main -->
+</div><!-- /shell -->
+
+<script>
+// ── Config ────────────────────────────────────────────────────────
+const SHEET_ID  = '1NxFkxiQev0xxGir93-qt0flNfzHz848-KuE7jDRSxQE';
+const SHEET_NAME = 'BP';
+const CACHE_KEY  = 'rtn_bp2_v1';
+const TTL        = 5 * 60 * 1000;
+const BU_LIST    = ['Bplus FMCG','Bplus Thaibev Al','Bplus บุหรี่','F&N'];
+const WS_NAMES   = {W1:'สมุทรสงคราม',W2:'สุพรรณบุรี',W3:'ราชบุรี',W4:'นครปฐม'};
+
+const TARGET_SHEET_ID   = '1LY6FoXv3XSylpb2cMotr0lLuz5NkHnNw3n4qevsPfx0';
+const TARGET_SHEET_NAME = 'Target';
+const TARGET_CACHE_KEY  = 'rtn_bp2_target_v1';
+const TARGET_TTL        = 60 * 60 * 1000; // 1 hour
+
+// Dynamic monthly target — populated by loadTargets()
+let monthlyTarget = {'Bplus FMCG':0,'Bplus Thaibev Al':0,'Bplus บุหรี่':0,'F&N':0};
+const BU_ICON = {'Bplus FMCG':'🛒','Bplus Thaibev Al':'🍺','Bplus บุหรี่':'🚬','F&N':'🥤'};
+const BU_BG   = {'Bplus FMCG':'#e3f0fd','Bplus Thaibev Al':'#d4f5e4','Bplus บุหรี่':'#ffe0de','F&N':'#ecdefa'};
+const BU_COLOR= {'Bplus FMCG':'#1a6fb8','Bplus Thaibev Al':'#1e8449','Bplus บุหรี่':'#c0392b','F&N':'#6c3483'};
+
+let allData = [], allDates = [];
+let curWS = '', curPeriod = 'yesterday';
+const sortState = { key:'Doc_Date', dir:'desc' };
+
+// ── Helpers ───────────────────────────────────────────────────────
+const fmt   = n => (+n||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtI  = n => (+n||0).toLocaleString('th-TH');
+const fmtM  = n => '฿'+Math.round(+n||0).toLocaleString('th-TH');
+const fmtS  = n => Math.round(+n||0).toLocaleString('th-TH');
+
+function parseDocDate(s){if(!s)return null;const p=String(s).split('/');if(p.length!==3)return null;return new Date(+p[2],+p[1]-1,+p[0]);}
+function toInputDate(s){const p=String(s||'').split('/');if(p.length!==3)return'';return`${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;}
+function fromInput(v){if(!v)return'';const[y,m,d]=v.split('-');return`${d}/${m}/${y}`;}
+function thaiDate(s){const p=String(s||'').split('/');if(p.length!==3)return s||'-';return`${p[0]}/${p[1]}/${+p[2]+543}`;}
+function thaiDateShort(s){
+  const p=String(s||'').split('/');if(p.length!==3)return s||'-';
+  const months=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  return`${+p[0]} ${months[+p[1]-1]} ${+p[2]+543-2500}`; // short year
+}
+
+function showSpinner(m='กำลังโหลด...'){document.getElementById('spinMsg').textContent=m;document.getElementById('spinner').classList.add('show');}
+function hideSpinner(){document.getElementById('spinner').classList.remove('show');}
+function setBar(on){document.getElementById('loadingBar').style.width=on?'85%':'0';}
+function toast(msg,type='info'){
+  const t=document.createElement('div');t.className=`toast toast-${type}`;t.textContent=msg;
+  document.body.appendChild(t);setTimeout(()=>t.remove(),3200);
+}
+
+function greeting(){
+  const h=new Date().getHours();
+  if(h<12)return'อรุณสวัสดิ์ rattana.phai 🌅';
+  if(h<17)return'สวัสดีตอนบ่าย rattana.phai 🌞';
+  return'สวัสดีตอนเย็น rattana.phai 🔥';
+}
+
+// ── CSV Parser ────────────────────────────────────────────────────
+function parseCsv(text){
+  if(!text)return[];if(text.charCodeAt(0)===0xFEFF)text=text.slice(1);
+  const rows=[];let row=[],cell='',inQ=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(inQ){if(ch==='"'){if(text[i+1]==='"'){cell+='"';i++;}else inQ=false;}else cell+=ch;}
+    else{if(ch==='"')inQ=true;else if(ch===','){row.push(cell);cell='';}else if(ch==='\r'){}else if(ch==='\n'){row.push(cell);rows.push(row);row=[];cell='';}else cell+=ch;}
+  }
+  if(cell.length||row.length){row.push(cell);rows.push(row);}
+  if(!rows.length)return[];
+  const clean=s=>String(s||'').replace(/[​‌‍﻿]/g,'').replace(/ /g,' ').trim();
+  const hdr=rows[0].map(clean);
+  return rows.slice(1).filter(r=>r.some(c=>clean(c))).map(r=>Object.fromEntries(hdr.map((k,i)=>[k,clean(r[i])])));
+}
+
+// ── Cache ─────────────────────────────────────────────────────────
+function getCache(k,ttl=TTL){try{const i=JSON.parse(localStorage.getItem(k));return i&&Date.now()-i.ts<ttl?i.data:null;}catch{return null;}}
+const setCache=(k,d)=>localStorage.setItem(k,JSON.stringify({ts:Date.now(),data:d}));
+
+// ── Target Loader ─────────────────────────────────────────────────
+// gviz merges header row + first data row into one CSV header row
+// e.g. "WH ST", "Channel Ship to", "Cat_BU Bplus FMCG", "06/2026 39,000,000"
+// This parser splits them back out correctly
+function parseTargetCsv(text){
+  if(!text)return[];
+  if(text.charCodeAt(0)===0xFEFF)text=text.slice(1);
+  const rawRows=[];let row=[],cell='',inQ=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(inQ){if(ch==='"'){if(text[i+1]==='"'){cell+='"';i++;}else inQ=false;}else cell+=ch;}
+    else{if(ch==='"')inQ=true;else if(ch===','){row.push(cell);cell='';}else if(ch==='\r'){}else if(ch==='\n'){row.push(cell);rawRows.push(row);row=[];cell='';}else cell+=ch;}
+  }
+  if(cell.length||row.length){row.push(cell);rawRows.push(row);}
+  if(!rawRows.length)return[];
+  const cl=s=>String(s||'').replace(/[​‌‍﻿]/g,'').replace(/ /g,' ').trim();
+  // Parse merged header row → extract column names + first data values
+  const headers=[],firstVals=[];
+  rawRows[0].forEach(c=>{
+    const s=cl(c);
+    const m=s.match(/^(\d{2}\/\d{4})(?:\s+(.*))?$/);
+    if(m){headers.push(m[1]);firstVals.push(cl(m[2]||''));}
+    else{const sp=s.indexOf(' ');if(sp>0){headers.push(s.slice(0,sp));firstVals.push(cl(s.slice(sp+1)));}else{headers.push(s);firstVals.push('');}}
+  });
+  const mkObj=vals=>Object.fromEntries(headers.map((h,i)=>[h,cl(vals[i]||'')]));
+  const result=[];
+  if(firstVals.some(v=>v))result.push(mkObj(firstVals));
+  rawRows.slice(1).filter(r=>r.some(c=>cl(c))).forEach(r=>result.push(mkObj(r)));
+  return result;
+}
+
+function getMonthKey(){const d=new Date();return`${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;}// "06/2026"
+
+async function loadTargets(ws){
+  try{
+    let rows=getCache(TARGET_CACHE_KEY,TARGET_TTL);
+    if(!rows){
+      const url=`https://docs.google.com/spreadsheets/d/${TARGET_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(TARGET_SHEET_NAME)}`;
+      const res=await fetch(url);if(!res.ok)throw new Error();
+      rows=parseTargetCsv(await res.text());
+      setCache(TARGET_CACHE_KEY,rows);
+    }
+    const col=getMonthKey();
+    const result={};BU_LIST.forEach(b=>result[b]=0);
+    rows.forEach(r=>{
+      const wh=r['WH'],bu=r['Cat_BU'];
+      if(!BU_LIST.includes(bu))return;
+      if(ws){if(wh!==ws)return;}
+      else{if(!['W1','W2','W3','W4'].includes(wh))return;}
+      const val=parseFloat(String(r[col]||'').replace(/,/g,''))||0;
+      result[bu]=(result[bu]||0)+val;
+    });
+    monthlyTarget=result;
+  }catch(e){console.warn('Target load failed',e);}
+}
+
+// ── Data Load ─────────────────────────────────────────────────────
+async function loadData(){
+  showSpinner();setBar(true);
+  try{
+    const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
+    const res=await fetch(url);if(!res.ok)throw new Error();
+    const raw=await res.text();
+    allData=parseCsv(raw).filter(r=>BU_LIST.some(b=>r.Cat_BU===b));
+    setCache(CACHE_KEY,allData);
+    await loadTargets(curWS);
+    initDates();renderAll();
+    toast(`โหลด ${fmtI(allData.length)} รายการ ✓`,'success');
+  }catch{
+    const c=getCache(CACHE_KEY);
+    if(c){allData=c;await loadTargets(curWS);initDates();renderAll();toast('ใช้ข้อมูล cache','info');}
+    else toast('โหลดข้อมูลไม่ได้','error');
+  }finally{hideSpinner();setBar(false);}
+}
+
+async function refreshData(){
+  const b=document.querySelectorAll('#btnRefresh,#btnRefresh2');
+  b.forEach(x=>{x.disabled=true;x.style.transform='rotate(360deg)';x.style.transition='transform .6s';});
+  await loadData();
+  b.forEach(x=>{x.disabled=false;setTimeout(()=>{x.style.transform='';x.style.transition='';},600);});
+}
+
+function initDates(){
+  const s=new Set();allData.forEach(r=>{if(r.Doc_Date)s.add(r.Doc_Date);});
+  allDates=[...s].sort((a,b)=>parseDocDate(b)-parseDocDate(a));
+  // Set report date default to latest
+  const rd=document.getElementById('rDate');
+  if(!rd.value&&allDates.length)rd.value=toInputDate(allDates[0]);
+}
+
+// ── Period helpers ─────────────────────────────────────────────────
+function getLatestDate(){return allDates[0]||null;}
+
+function getPeriodRows(period,ws){
+  const latest=getLatestDate();if(!latest)return[];
+  const latestD=parseDocDate(latest);
+  let from,to;
+  if(period==='yesterday'){
+    from=latest;to=latest;
+  } else if(period==='week'){
+    const t=new Date(latestD);t.setDate(t.getDate()-6);
+    from=dateToDocDate(t);to=latest;
+  } else if(period==='month'){
+    from=`01/${String(latestD.getMonth()+1).padStart(2,'0')}/${latestD.getFullYear()}`;
+    to=latest;
+  } else {// year
+    from=`01/01/${latestD.getFullYear()}`;to=latest;
+  }
+  const fd=parseDocDate(from),td=parseDocDate(to);
+  return allData.filter(r=>{
+    if(ws&&r.WS!==ws)return false;
+    const d=parseDocDate(r.Doc_Date);
+    return d&&d>=fd&&d<=td;
+  });
+}
+
+function getPrevPeriodRows(period,ws){
+  const latest=getLatestDate();if(!latest)return[];
+  const latestD=parseDocDate(latest);
+  let from,to;
+  if(period==='yesterday'){
+    // prev available date
+    const prevDate=allDates[1]||allDates[0];
+    from=prevDate;to=prevDate;
+  } else if(period==='week'){
+    const t1=new Date(latestD);t1.setDate(t1.getDate()-7);
+    const t2=new Date(latestD);t2.setDate(t2.getDate()-13);
+    from=dateToDocDate(t2);to=dateToDocDate(t1);
+  } else if(period==='month'){
+    const prevM=new Date(latestD.getFullYear(),latestD.getMonth()-1,1);
+    const prevMLast=new Date(latestD.getFullYear(),latestD.getMonth(),0);
+    from=dateToDocDate(prevM);to=dateToDocDate(prevMLast);
+  } else {
+    const y=latestD.getFullYear()-1;
+    from=`01/01/${y}`;to=`31/12/${y}`;
+  }
+  const fd=parseDocDate(from),td=parseDocDate(to);
+  return allData.filter(r=>{
+    if(ws&&r.WS!==ws)return false;
+    const d=parseDocDate(r.Doc_Date);
+    return d&&d>=fd&&d<=td;
+  });
+}
+
+function getMTDRows(ws){
+  const latest=getLatestDate();if(!latest)return[];
+  const ld=parseDocDate(latest);
+  const from=`01/${String(ld.getMonth()+1).padStart(2,'0')}/${ld.getFullYear()}`;
+  const fd=parseDocDate(from);
+  return allData.filter(r=>{
+    if(ws&&r.WS!==ws)return false;
+    const d=parseDocDate(r.Doc_Date);return d&&d>=fd&&d<=ld;
+  });
+}
+
+function dateToDocDate(d){
+  return`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+}
+
+function countWorkingDaysInMonth(refDate){
+  let count=0;
+  const d=new Date(refDate.getFullYear(),refDate.getMonth(),1);
+  while(d.getMonth()===refDate.getMonth()){
+    if(d.getDay()!==0)count++;// skip Sunday only
+    d.setDate(d.getDate()+1);
+  }
+  return count;
+}
+function countWorkingDaysElapsed(refDate){
+  let count=0;
+  const d=new Date(refDate.getFullYear(),refDate.getMonth(),1);
+  while(d<=refDate){
+    if(d.getDay()!==0)count++;
+    d.setDate(d.getDate()+1);
+  }
+  return count;
+}
+
+const numVal=v=>parseFloat(String(v||'').replace(/,/g,''))||0;
+function sum(rows,field){return rows.reduce((s,r)=>s+numVal(r[field]),0);}
+function periodLabel(period,latestDocDate){
+  if(!latestDocDate)return'—';
+  const ld=parseDocDate(latestDocDate);
+  if(period==='yesterday')return`เมื่อวาน ${thaiDateShort(latestDocDate)}`;
+  if(period==='week')return`7 วัน ถึง ${thaiDateShort(latestDocDate)}`;
+  const months=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  if(period==='month')return`เดือน ${months[ld.getMonth()]} ${ld.getFullYear()+543}`;
+  return`ปี ${ld.getFullYear()+543}`;
+}
+
+// ── Render All ─────────────────────────────────────────────────────
+function renderAll(){
+  const g=greeting();
+  document.getElementById('mobGreeting').textContent=g;
+  document.getElementById('deskGreeting').textContent=g;
+  renderHero();renderBUList();renderAside();renderTrend7();renderReport();renderTrend30();
+  // sidebar info
+  const latest=getLatestDate();
+  document.getElementById('sidebarInfo').textContent=latest?`ข้อมูล: ${thaiDate(latest)}`:'';
+}
+
+// ── Hero Card ──────────────────────────────────────────────────────
+function renderHero(){
+  const rows=getPeriodRows(curPeriod,curWS);
+  const prev=getPrevPeriodRows(curPeriod,curWS);
+  const mtd=getMTDRows(curWS);
+  const latest=getLatestDate();
+
+  const total=sum(rows,'EXVat');
+  const totalCS=sum(rows,'Sales_CS');
+  const prevTotal=sum(prev,'EXVat');
+  const mtdTotal=sum(mtd,'EXVat');
+  const pctChg=prevTotal?((total-prevTotal)/prevTotal*100):0;
+
+  // Date label
+  document.getElementById('heroDate').textContent=periodLabel(curPeriod,latest);
+
+  // Amount
+  document.getElementById('heroAmount').innerHTML=`<small>฿</small>${fmtS(total)}`;
+
+  // Meta
+  document.getElementById('heroMeta').innerHTML=`
+    <div class="hero-meta-item">🟤 <span>${fmtI(totalCS)}</span> ลัง</div>
+    <div class="hero-meta-item">📄 <span>${fmtI(rows.length)}</span> รายการ</div>
+  `;
+
+  // Progress (MTD vs target)
+  const totalMonthlyTarget=Object.values(monthlyTarget).reduce((s,v)=>s+v,0)||1;
+  const mtdPct=totalMonthlyTarget?Math.min(100,mtdTotal/totalMonthlyTarget*100):0;
+  const latestD=parseDocDate(latest);
+  const workTotal=latestD?countWorkingDaysInMonth(latestD):26;
+  const workElapsed=latestD?countWorkingDaysElapsed(latestD):9;
+  const timePct=Math.round(workElapsed/workTotal*100);
+  const onTrack=mtdPct>=timePct-5;
+  const statusBadge=onTrack?'<span style="background:rgba(46,204,113,.25);color:#2ecc71;padding:2px 8px;border-radius:50px;font-size:10px;font-weight:700">✅ ตามแผน</span>':'<span style="background:rgba(231,76,60,.25);color:#ff6b5b;padding:2px 8px;border-radius:50px;font-size:10px;font-weight:700">⚠️ ต่ำกว่าแผน</span>';
+
+  document.getElementById('heroProgress').innerHTML=`
+    <div class="hp-row"><span class="hp-label">เป้าเดือนนี้</span><span class="hp-pct">${mtdPct.toFixed(0)}%</span></div>
+    <div class="hp-bar"><div class="hp-fill red" style="width:${mtdPct}%"></div></div>
+    <div class="hp-row"><span class="hp-label">%TimeUse</span><span class="hp-pct">${timePct}%</span></div>
+    <div class="hp-bar"><div class="hp-fill gray" style="width:${timePct}%"></div></div>
+    <div class="hero-info">${fmtS(mtdTotal)} จาก ${fmtS(totalMonthlyTarget)} (เหลือ ${fmtS(Math.max(0,totalMonthlyTarget-mtdTotal))})</div>
+    <div class="hero-info" style="display:flex;align-items:center;gap:8px">${workElapsed} จาก ${workTotal} วันทำงานในเดือนนี้ ${statusBadge}</div>
+  `;
+
+  // Bottom row: top BU + vs prev
+  const buMap={};BU_LIST.forEach(b=>buMap[b]=0);
+  rows.forEach(r=>{if(buMap[r.Cat_BU]!==undefined)buMap[r.Cat_BU]+=numVal(r.EXVat);});
+  const topBU=Object.entries(buMap).sort((a,b)=>b[1]-a[1])[0];
+  const pctClass=pctChg>=0?'up':'down';
+  const pctSign=pctChg>=0?'+':'';
+
+  document.getElementById('heroBottom').innerHTML=`
+    <div class="hero-bottom-item">
+      <div class="hb-label">ยอดสูงสุด CAT</div>
+      <div class="hb-val">${BU_ICON[topBU?.[0]]||'📦'} ${topBU?.[0]?.replace('Bplus ','').replace('Bplus','')}</div>
+    </div>
+    <div class="hero-bottom-item" style="text-align:right">
+      <div class="hb-label">เทียบ${curPeriod==='yesterday'?'วันก่อน':curPeriod==='week'?'7วันก่อน':'ช่วงก่อน'}</div>
+      <div class="hb-val ${pctClass}">${prevTotal?`${pctSign}${pctChg.toFixed(1)}%`:'N/A'}</div>
+    </div>
+  `;
+}
+
+// ── BU List ────────────────────────────────────────────────────────
+function renderBUList(){
+  const rows=getPeriodRows(curPeriod,curWS);
+  const mtd=getMTDRows(curWS);
+  const totalM=Object.values(monthlyTarget).reduce((s,v)=>s+v,0);
+
+  const cards=BU_LIST.map(bu=>{
+    const buRows=rows.filter(r=>r.Cat_BU===bu);
+    const buMTD=mtd.filter(r=>r.Cat_BU===bu);
+    const baht=sum(buRows,'EXVat');
+    const cs=sum(buRows,'Sales_CS');
+    const mtdBaht=sum(buMTD,'EXVat');
+    const target=monthlyTarget[bu]||1;
+    const pct=Math.min(100,mtdBaht/target*100);
+    const remaining=Math.max(0,target-mtdBaht);
+
+    return`<div class="bu-card">
+      <div class="bu-card-top">
+        <div class="bu-icon" style="background:${BU_BG[bu]};color:${BU_COLOR[bu]}">${BU_ICON[bu]}</div>
+        <div class="bu-info">
+          <div class="bu-name">${bu}</div>
+          <div class="bu-txn">${fmtI(buRows.length)} transactions</div>
+        </div>
+        <div class="bu-nums">
+          <div class="bu-baht">${fmtM(baht)}</div>
+          <div class="bu-cs">${fmtI(cs)} ลัง</div>
+        </div>
+      </div>
+      <div class="bu-progress">
+        <div class="bp-row"><span>เป้าเดือนนี้</span><span class="bp-pct">${pct.toFixed(0)}%</span></div>
+        <div class="bp-bar"><div class="bp-fill" style="width:${pct}%;background:linear-gradient(90deg,${BU_COLOR[bu]},${BU_COLOR[bu]}88)"></div></div>
+        <div class="bp-detail">${fmtS(mtdBaht)} / ${fmtS(target)} · เหลือ ${fmtS(remaining)}</div>
+      </div>
+    </div>`;
+  });
+  document.getElementById('buList').innerHTML=cards.join('');
+  // Show aside on desktop
+  const a=document.getElementById('aside');
+  if(window.innerWidth>=1024)a.style.display='block';
+}
+
+// ── Aside (desktop) ────────────────────────────────────────────────
+function renderAside(){
+  const rows=getPeriodRows(curPeriod,curWS);
+  const wsMap={W1:0,W2:0,W3:0,W4:0};
+  rows.forEach(r=>{if(wsMap[r.WS]!==undefined)wsMap[r.WS]+=numVal(r.EXVat);});
+  const totalAll=Object.values(wsMap).reduce((s,v)=>s+v,0);
+  document.getElementById('asideWS').innerHTML=Object.entries(wsMap).map(([ws,v])=>`
+    <div class="aside-stat">
+      <div class="aside-stat-label"><span class="badge ${ws.toLowerCase()}">${ws}</span> ${WS_NAMES[ws]||''}</div>
+      <div class="aside-stat-val">${fmtM(v)}</div>
+    </div>
+  `).join('');
+}
+
+// ── Trend (7 day, home) ────────────────────────────────────────────
+function renderTrend7(){
+  const latest=getLatestDate();if(!latest)return;
+  const last7=[...allDates].slice(0,7).reverse();
+  const trendMap={};
+  allData.filter(r=>!curWS||r.WS===curWS).forEach(r=>{
+    trendMap[r.Doc_Date]=(trendMap[r.Doc_Date]||0)+numVal(r.EXVat);
+  });
+  const vals=last7.map(d=>trendMap[d]||0);
+  const maxV=Math.max(...vals,1);
+  const latestDocDate=getLatestDate();
+  document.getElementById('trendBars').innerHTML=last7.map((d,i)=>{
+    const pct=Math.max(8,(vals[i]/maxV)*100);
+    const active=d===latestDocDate;
+    return`<div class="trend-bar-wrap">
+      <div class="trend-bar ${active?'active':''}" style="height:${pct}%"></div>
+      <div class="trend-label ${active?'active':''}">${String(d).split('/')[0]}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Trend 30 ──────────────────────────────────────────────────────
+function renderTrend30(){
+  const last30=[...allDates].slice(0,30).reverse();
+  const trendMap={};
+  allData.filter(r=>!curWS||r.WS===curWS).forEach(r=>{
+    trendMap[r.Doc_Date]=(trendMap[r.Doc_Date]||0)+numVal(r.EXVat);
+  });
+  const vals=last30.map(d=>trendMap[d]||0);
+  const maxV=Math.max(...vals,1);
+  document.getElementById('trend30Bars').innerHTML=last30.map((d,i)=>{
+    const pct=Math.max(4,(vals[i]/maxV)*100);
+    const day=String(d).split('/')[0];
+    return`<div class="trend-bar-wrap">
+      <div class="trend-bar" style="height:${pct}%"></div>
+      <div class="trend-label" style="font-size:8px">${+day%5===0?day:''}</div>
+    </div>`;
+  }).join('');
+
+  // BU trend cards
+  const buCards=BU_LIST.map(bu=>{
+    const buVals=last30.map(d=>{
+      return allData.filter(r=>(!curWS||r.WS===curWS)&&r.Cat_BU===bu&&r.Doc_Date===d).reduce((s,r)=>s+numVal(r.EXVat),0);
+    });
+    const maxBU=Math.max(...buVals,1);
+    return`<div class="trend-card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <div style="background:${BU_BG[bu]};color:${BU_COLOR[bu]};width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px">${BU_ICON[bu]}</div>
+        <div style="font-size:13px;font-weight:700">${bu}</div>
+      </div>
+      <div class="trend-bars" style="height:60px">
+        ${last30.map((d,i)=>{
+          const pct=Math.max(4,(buVals[i]/maxBU)*100);
+          return`<div class="trend-bar-wrap">
+            <div class="trend-bar" style="height:${pct}%;background:${BU_COLOR[bu]}88"></div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  });
+  document.getElementById('trendBUCards').innerHTML=buCards.join('');
+}
+
+// ── Report ────────────────────────────────────────────────────────
+let repRows=[];
+function renderReport(){
+  const dv=document.getElementById('rDate').value;
+  const ws=document.getElementById('rWS').value;
+  const bu=document.getElementById('rBU').value;
+  const q=(document.getElementById('rSearch').value||'').toLowerCase();
+  const td=fromInput(dv);
+  let rows=allData.filter(r=>{
+    if(td&&r.Doc_Date!==td)return false;
+    if(ws&&r.WS!==ws)return false;
+    if(bu&&r.Cat_BU!==bu)return false;
+    if(q&&![r.Product_Name,r.Cat_BU,r.WS].some(v=>v&&v.toLowerCase().includes(q)))return false;
+    return true;
+  });
+  rows=doSort(rows,sortState.key,sortState.dir);
+  repRows=rows;
+  const body=document.getElementById('repBody');
+  body.innerHTML=rows.slice(0,500).map(r=>`
+    <tr>
+      <td style="white-space:nowrap">${thaiDate(r.Doc_Date)}</td>
+      <td><span class="badge ${r.WS?.toLowerCase()}">${r.WS||'-'}</span></td>
+      <td><span style="font-size:11px;font-weight:600;color:${BU_COLOR[r.Cat_BU]||'#666'}">${r.Cat_BU||'-'}</span></td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.Product_Name||''}">${r.Product_Name||'-'}</td>
+      <td class="num">${fmtI(r.Sales_CS)}</td>
+      <td class="num">${fmt(r.EXVat)}</td>
+    </tr>
+  `).join('')||'<tr class="empty-row"><td colspan="6">ไม่มีข้อมูล</td></tr>';
+  if(rows.length>500)body.innerHTML+=`<tr><td colspan="6" style="text-align:center;padding:10px;color:var(--muted);font-size:12px">แสดง 500/${fmtI(rows.length)} — ใช้ filter</td></tr>`;
+  updInd('repTbl');
+}
+
+function exportReport(){
+  if(!window.XLSX)return toast('กำลังโหลด XLSX','info');
+  const d=repRows.map(r=>({'วันที่':thaiDate(r.Doc_Date),'คลัง':r.WS,'BU':r.Cat_BU,'สินค้า':r.Product_Name,'ลัง':+r.Sales_CS,'บาท':+r.EXVat}));
+  const ws=XLSX.utils.json_to_sheet(d),wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Report');XLSX.writeFile(wb,'Rattana_BP_Report.xlsx');
+}
+
+// ── Sort ──────────────────────────────────────────────────────────
+function doSort(rows,key,dir){
+  const m=dir==='asc'?1:-1;
+  return[...rows].sort((a,b)=>{
+    const va=a[key],vb=b[key];
+    if(key==='Doc_Date'){const da=parseDocDate(va),db=parseDocDate(vb);return((da||0)-(db||0))*m;}
+    const na=parseFloat(va),nb=parseFloat(vb);
+    if(!isNaN(na)&&!isNaN(nb))return(na-nb)*m;
+    return String(va||'').localeCompare(String(vb||''),'th')*m;
+  });
+}
+function updInd(tid){
+  document.querySelectorAll(`#${tid} thead th`).forEach(th=>{
+    const ind=th.querySelector('.sort-ind');if(!ind)return;
+    ind.textContent=th.dataset.key===sortState.key?(sortState.dir==='asc'?'▲':'▼'):'';
+  });
+}
+function bindSort(tid){
+  document.querySelectorAll(`#${tid} thead th`).forEach(th=>{
+    if(!th.dataset.key)return;
+    th.addEventListener('click',()=>{
+      const k=th.dataset.key;
+      if(sortState.key===k)sortState.dir=sortState.dir==='asc'?'desc':'asc';
+      else{sortState.key=k;sortState.dir='desc';}
+      renderReport();
+    });
+  });
+}
+
+// ── UI Controls ───────────────────────────────────────────────────
+function setWS(ws,btn){
+  curWS=ws;
+  document.querySelectorAll('.ws-pill').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  loadTargets(ws).then(()=>renderAll());
+}
+function setPeriod(p,btn){
+  curPeriod=p;
+  document.querySelectorAll('.ptab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderHero();renderBUList();renderAside();renderTrend7();
+}
+
+function switchPage(page,btn,type){
+  // Hide all pages
+  document.getElementById('pageHome').classList.remove('active');
+  document.getElementById('pageReport').classList.remove('active');
+  document.getElementById('pageTrend').classList.remove('active');
+  document.getElementById('pageHome').style.display='none';
+  document.getElementById('pageReport').style.display='none';
+  document.getElementById('pageTrend').style.display='none';
+  // Show target
+  const target=page==='home'?'pageHome':page==='report'?'pageReport':'pageTrend';
+  document.getElementById(target).style.display='block';
+  document.getElementById(target).classList.add('active');
+  // Update bottom nav
+  document.querySelectorAll('.bnav-item').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.snav-item').forEach(b=>b.classList.remove('active'));
+  if(btn&&btn.classList.contains('bnav-item'))btn.classList.add('active');
+  if(btn&&btn.classList.contains('snav-item'))btn.classList.add('active');
+  window.scrollTo({top:0,behavior:'smooth'});
+  if(page==='report')renderReport();
+}
+
+function toggleDark(){
+  document.body.classList.toggle('dark');
+  const dark=document.body.classList.contains('dark');
+  document.getElementById('darkIcon').textContent=dark?'☀️':'🌙';
+  localStorage.setItem('bp2_dark',dark?'1':'0');
+}
+
+// ── Boot ──────────────────────────────────────────────────────────
+window.addEventListener('load',()=>{
+  if(localStorage.getItem('bp2_dark')==='1'){
+    document.body.classList.add('dark');
+    document.getElementById('darkIcon').textContent='☀️';
+  }
+  bindSort('repTbl');
+  // Show aside on desktop
+  if(window.innerWidth>=1024)document.getElementById('aside').style.display='block';
+  window.addEventListener('resize',()=>{
+    document.getElementById('aside').style.display=window.innerWidth>=1024?'block':'none';
+  });
+  const c=getCache(CACHE_KEY);
+  if(c){allData=c;initDates();renderAll();}
+  loadData();
+  // Background auto-refresh every 5 min
+  setInterval(async()=>{
+    try{
+      const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
+      const res=await fetch(url);if(!res.ok)return;
+      const fresh=parseCsv(await res.text()).filter(r=>BU_LIST.some(b=>r.Cat_BU===b));
+      if(fresh.length){allData=fresh;setCache(CACHE_KEY,fresh);initDates();renderAll();}
+    }catch{}
+  },5*60*1000);
+});
+</script>
+</body>
+</html>
