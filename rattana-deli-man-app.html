@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.41</title>
+<title>Rattana D-Delivery v1.42</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -368,7 +368,7 @@ body.dark .banner-gold{color:var(--gold-light)}
          data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left"></div>
     <div id="loginError"></div>
-    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.41 — Powered by Rattana Group</div>
+    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.42 — Powered by Rattana Group</div>
   </div>
 </div>
 
@@ -376,7 +376,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div id="appScreen" class="page" style="display:none">
   <header>
     <div class="logo-text">D<span>-DELIVERY</span></div>
-    <span class="ver-tag" id="verTag">v1.41</span>
+    <span class="ver-tag" id="verTag">v1.42</span>
     <span id="liveDot" title="Live sync" style="width:7px;height:7px;border-radius:50%;background:#2ecc71;box-shadow:0 0 6px #2ecc71;display:inline-block;transition:all .25s"></span>
     <span class="role-tag" id="roleTag">-</span>
     <div class="spacer"></div>
@@ -537,7 +537,11 @@ body.dark .banner-gold{color:var(--gold-light)}
             แอปนี้เชื่อมต่อ Google Sheets อัตโนมัติแล้ว — ทุกงานที่ส่งให้หัวหน้าอนุมัติจะถูกบันทึกลง <b>"บันทึกการเก็บเงิน"</b> และ <b>"CN"</b>
           </div>
           <div class="banner-warn mt-12">
-            ⚠️ <b>Apps Script v3.1</b> — โครงชีทใหม่: ข้อมูลรับงานลงชีท <code>บันทึกเที่ยวส่ง</code> (1 แถว/1 ใบคุม), รายละเอียดบิลลงชีท <code>บันทึกบิลและการชำระ</code> (1 แถว/1 บิล). กรุณา redeploy ด้วยโค้ดล่าสุด (ขั้นสูง → คัดลอกโค้ด)
+            ⚠️ <b>Apps Script v3.3</b> — โครงชีทล่าสุด:
+            <code>บันทึกเที่ยวส่ง</code> (1 แถว/1 ใบคุม) ·
+            <code>บันทึกบิลและการชำระ</code> (1 แถว/1 บิล) ·
+            <code>CN</code> (1 แถว/1 สินค้าคืน — Normalized).
+            กรุณา redeploy ด้วยโค้ดล่าสุด (ขั้นสูง → คัดลอกโค้ด)
           </div>
           <div class="row mt-12">
             <button class="btn btn-outline" onclick="testAppsUrl()">🧪 ทดสอบการเชื่อมต่อ</button>
@@ -637,7 +641,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.41';
+const APP_VERSION='1.42';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -811,7 +815,7 @@ function checkSession(){
   const s=loadStore();
   if(!s.user||!s.exp||Date.now()>s.exp) return false;
   state.user=s.user; state.role=s.role;
-  // backfill displayName สำหรับ session ที่บันทึกไว้ก่อน v1.41
+  // backfill displayName สำหรับ session ที่บันทึกไว้ก่อน v1.42
   if(!state.user.displayName){
     const n=state.user.name||'', nk=state.user.nickname||'';
     state.user.displayName=n&&nk?`${n} (${nk})`:(n||nk);
@@ -2858,22 +2862,20 @@ async function syncJobsFromSheet(){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-Delivery — Apps Script Backend v3.2 (เพิ่ม CN รับคืนสินค้า) */
+const APPS_SCRIPT_CODE=`/* D-Delivery — Apps Script Backend v3.3 (CN: 1 row per item) */
 const SHEET_INPUT='บันทึกเที่ยวส่ง';
 const SHEET_CIN='บันทึกบิลและการชำระ';
 const SHEET_CN='CN';
 
+// ★ Normalized: 1 แถว = 1 สินค้า (header info ซ้ำกันต่อแถวของใบเดียวกัน)
 const HEADERS_CN=['วัน เวลา','วันที่คืน','ชื่อ-สกุล','รหัสใบคุม','คลัง','ชื่อร้าน','รหัสร้าน',
-  'ประเภทคืน','ประเภทบิล','xx','เลขที่บิล DS',
-  'บาร์1','บาร์2','บาร์3','บาร์4','บาร์5',
-  'สินค้า1','สินค้า2','สินค้า3','สินค้า4','สินค้า5',
-  'จำนวน1','จำนวน2','จำนวน3','จำนวน4','จำนวน5',
-  'ราคา1','ราคา2','ราคา3','ราคา4','ราคา5',
-  'สาเหตุรับคืน','ผิดพลาดจาก','ยอดเงิน',
-  'หน่วย1','หน่วย2','หน่วย3','หน่วย4','หน่วย5',
-  'หมายเหตุการคืน','รวมรับคืน','ภาพคืน','สถานะคืน','อนุมัติคืน','รายละเอียดบิล',
-  'ผู้อนุมัติ','วันอนุมัติ','วันที่เก็บ','x','หมายเหตุอนุมัติ',
-  'ชื่อเซลล์','ผู้ขับ','รูปลายเซ็น','picture'];
+  'ประเภทคืน','ประเภทบิล','เลขที่บิล DS',
+  'ลำดับ','รวมรายการ',
+  'บาร์โค้ด','ชื่อสินค้า','จำนวน','ราคา','หน่วย','รวม',
+  'สาเหตุรับคืน','ผิดพลาดจาก',
+  'หมายเหตุการคืน','ยอดรวมทั้งใบ','ภาพคืน',
+  'สถานะคืน','อนุมัติคืน','ผู้อนุมัติ','วันอนุมัติ','หมายเหตุอนุมัติ',
+  'ผู้ขับ','พนักงานขนของ'];
 
 const HEADERS_INPUT=['🔒 Row ID','วันเวลาปิดงาน','จำนวนพาเลทนำขึ้นรถ','ทะเบียน','ลังนำไป',
   'รหัสใบคุม','ชื่อคนขับ','ผู้ช่วย1','ผู้ช่วย2','ผู้ช่วย3','ผู้ช่วย4','ผู้ช่วย5','ผู้ช่วย6',
@@ -2905,54 +2907,59 @@ function doPost(e){
     // ===== รับคืนสินค้า → ชีท CN =====
     if(data.action==='save_return'){
       const cnSh=ensureSheet_(ss,SHEET_CN,HEADERS_CN);
-      const cnIdx=buildIndex_(cnSh,3,10); // col D=รหัสใบคุม, col K=เลขที่บิล DS
       const items=Array.isArray(data.items)?data.items:[];
-      const pad=(arr,n)=>{const r=[...arr];while(r.length<n)r.push('');return r.slice(0,n);};
-      const barcodes=pad(items.map(it=>it.barcode||''),5);
-      const names=pad(items.map(it=>it.name||''),5);
-      const qtys=pad(items.map(it=>parseFloat(it.qty)||0),5);
-      const prices=pad(items.map(it=>parseFloat(it.price)||0),5);
-      const units=pad(items.map(it=>it.unit||''),5);
-      const cnRow=[
-        now,                                 // วัน เวลา
-        now,                                 // วันที่คืน
-        data.driver||'',                     // ชื่อ-สกุล
-        String(data.jobId||''),              // รหัสใบคุม
-        data.warehouse||'',                  // คลัง
-        data.customerName||'',               // ชื่อร้าน
-        String(data.customerCode||''),       // รหัสร้าน
-        data.returnType||'',                 // ประเภทคืน
-        data.billType||'',                   // ประเภทบิล
-        '',                                  // xx
-        String(data.docNo||''),              // เลขที่บิล DS
-        ...barcodes,                         // บาร์1-5
-        ...names,                            // สินค้า1-5
-        ...qtys,                             // จำนวน1-5
-        ...prices,                           // ราคา1-5
-        data.reason||'',                     // สาเหตุรับคืน
-        data.errorFrom||'',                  // ผิดพลาดจาก
-        data.totalAmount||0,                 // ยอดเงิน
-        ...units,                            // หน่วย1-5
-        data.note||'',                       // หมายเหตุการคืน
-        data.totalAmount||0,                 // รวมรับคืน
-        data.photo||'',                      // ภาพคืน (base64 หรือ URL)
-        'รออนุมัติ',                          // สถานะคืน
-        '',                                  // อนุมัติคืน
-        '',                                  // รายละเอียดบิล
-        '',                                  // ผู้อนุมัติ
-        '',                                  // วันอนุมัติ
-        '',                                  // วันที่เก็บ
-        '',                                  // x
-        '',                                  // หมายเหตุอนุมัติ
-        '',                                  // ชื่อเซลล์
-        data.driver||'',                     // ผู้ขับ
-        '',                                  // รูปลายเซ็น
-        ''                                   // picture
-      ];
-      upsert_(cnSh,cnIdx,String(data.jobId)+'|'+String(data.docNo),cnRow);
+      const jobId=String(data.jobId||'');
+      const docNo=String(data.docNo||'');
+      // ★ ลบแถวเดิมของ (รหัสใบคุม, เลขที่บิล DS) ก่อน เพื่อ replace ทั้งหมด
+      const sheetData=cnSh.getDataRange().getValues();
+      for(let i=sheetData.length-1;i>=1;i--){
+        if(String(sheetData[i][3])===jobId&&String(sheetData[i][9])===docNo){
+          cnSh.deleteRow(i+1);
+        }
+      }
+      const total=data.totalAmount||items.reduce((s,it)=>s+(parseFloat(it.qty)||0)*(parseFloat(it.price)||0),0);
+      // เขียน 1 แถวต่อ 1 สินค้า
+      items.forEach((it,idx)=>{
+        const qty=parseFloat(it.qty)||0;
+        const price=parseFloat(it.price)||0;
+        const lineTotal=qty*price;
+        cnSh.appendRow([
+          now,                                 // วัน เวลา
+          now,                                 // วันที่คืน
+          data.driver||'',                     // ชื่อ-สกุล (ผู้บันทึก)
+          jobId,                               // รหัสใบคุม
+          data.warehouse||'',                  // คลัง
+          data.customerName||'',               // ชื่อร้าน
+          String(data.customerCode||''),       // รหัสร้าน
+          data.returnType||'',                 // ประเภทคืน
+          data.billType||'',                   // ประเภทบิล
+          docNo,                               // เลขที่บิล DS
+          idx+1,                               // ลำดับ
+          items.length,                        // รวมรายการ
+          String(it.barcode||''),              // บาร์โค้ด
+          it.name||'',                         // ชื่อสินค้า
+          qty,                                 // จำนวน
+          price,                               // ราคา
+          it.unit||'',                         // หน่วย
+          lineTotal,                           // รวม (qty×ราคา)
+          data.reason||'',                     // สาเหตุรับคืน
+          data.errorFrom||'',                  // ผิดพลาดจาก
+          data.note||'',                       // หมายเหตุการคืน
+          total,                               // ยอดรวมทั้งใบ
+          data.photo||'',                      // ภาพคืน
+          'รออนุมัติ',                          // สถานะคืน
+          '',                                  // อนุมัติคืน
+          '',                                  // ผู้อนุมัติ
+          '',                                  // วันอนุมัติ
+          '',                                  // หมายเหตุอนุมัติ
+          data.driver||'',                     // ผู้ขับ
+          data.loader||''                      // พนักงานขนของ
+        ]);
+      });
       cnSh.getRange('D:D').setNumberFormat('@');
-      cnSh.getRange('K:K').setNumberFormat('@');
-      return ContentService.createTextOutput(JSON.stringify({ok:true})).setMimeType(ContentService.MimeType.JSON);
+      cnSh.getRange('J:J').setNumberFormat('@');
+      cnSh.getRange('M:M').setNumberFormat('@');
+      return ContentService.createTextOutput(JSON.stringify({ok:true,rows:items.length})).setMimeType(ContentService.MimeType.JSON);
     }
     const inSh=ensureSheet_(ss,SHEET_INPUT,HEADERS_INPUT);
     const cinSh=ensureSheet_(ss,SHEET_CIN,HEADERS_CIN);
