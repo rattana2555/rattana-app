@@ -471,16 +471,6 @@ body.dark .banner-gold{color:var(--gold-light)}
       <div class="sticky-action">
         <button class="btn btn-gold btn-lg" id="btnSavePickup" onclick="confirmPickup()" disabled>✓ บันทึก — รับงาน</button>
       </div>
-
-      <div class="card mt-16">
-        <div class="card-head">
-          <h3>🔒 งานที่ดำเนินการแล้ว</h3>
-          <span class="txt-sm txt-muted" id="takenCount">0</span>
-        </div>
-        <div class="card-body" id="takenJobsList">
-          <div class="txt-center txt-muted p-16">—</div>
-        </div>
-      </div>
     </div>
 
     <!-- DRIVER: My active job -->
@@ -595,7 +585,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.44';
+const APP_VERSION='1.45';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -628,6 +618,7 @@ let state={
   billDetails:{},                             // รายการสินค้าในบิล: { 'DC516906/00149': [{sku,unit,qty,...}] }
   jobs:[],                                    // ชุดงานทั้งหมด
   activeJobId:null,                           // งานที่กำลังทำ (driver)
+  driverJobView:'list',                       // 'list' | 'detail' (v1.45)
   reviewJobId:null,                           // งานที่กำลังตรวจ (supervisor)
   rejectingId:null,
   currentTab:null,
@@ -1071,7 +1062,11 @@ function buildTabs(){
     const b=document.createElement('button');
     b.className='tab-btn'+(i===0?' active':'');
     b.textContent=t.label; b.dataset.target=t.id;
-    b.onclick=()=>switchTab(t.id);
+    b.onclick=()=>{
+      // v1.45: tab click → reset งานของฉัน เป็น list view เสมอ
+      if(t.id==='sec-driver-job') state.driverJobView='list';
+      switchTab(t.id);
+    };
     nav.appendChild(b);
   });
   switchTab(tabs[0].id);
@@ -1865,7 +1860,6 @@ function renderDriverHome(){
   const myNick=state.user.nickname||state.user.name;
   const myDisplay=state.user.displayName||myNick;
   const avail=state.jobs.filter(j=>j.status==='available'&&!j.team);
-  const taken=state.jobs.filter(j=>j.team&&j.team.driver!==myDisplay&&j.team.driver!==myNick);
   const helpers=state.drivers.filter(d=>cleanCell(d['W'])===whEff&&cleanCell(d['ชื่อเล่น'])!==myNick);
   const veh=state.vehicles.filter(v=>v.warehouse===whEff);
   const helperItems=helpers.map(h=>{
@@ -1917,11 +1911,6 @@ function renderDriverHome(){
     });
   }
   previewPickupBills();
-
-  // Taken section
-  $('takenCount').textContent=`${taken.length}`;
-  $('takenJobsList').innerHTML=taken.length?taken.map(j=>renderJobCard(j,true)).join(''):
-    '<div class="txt-center txt-muted p-16">—</div>';
 }
 
 function previewPickupBills(){
@@ -2033,6 +2022,7 @@ function confirmPickup(){
   j.status='in_progress';
   j.startedAt=Date.now();
   state.activeJobId=j.id;
+  state.driverJobView='detail';
   persistJobs();
   showToast(`รับงาน ${j.id} เรียบร้อย ✓`,'success');
   switchTab('sec-driver-job');
@@ -2051,6 +2041,7 @@ function cancelPickup(){
   j.startedAt=null;
   j.bills.forEach(b=>{ b.status='pending'; b.payment={}; b.isCN=false; b.failReason=''; b.nextResp=''; b.note=''; b.savedAt=null; });
   state.activeJobId=null;
+  state.driverJobView='list';
   persistJobs();
   showToast(`ยกเลิกการรับงาน ${j.id} แล้ว`,'info');
   switchTab('sec-driver-home');
@@ -2062,13 +2053,88 @@ function findMyActiveJob(){
   const meNick=state.user.nickname||state.user.name;
   return state.jobs.find(j=>j.team&&(j.team.driver===meDisplay||j.team.driver===meNick)&&(j.status==='in_progress'||j.status==='pending_approval'||j.status==='rejected'));
 }
+function listMyJobs(){
+  // v1.45: ทุกงานของฉัน (ไม่จำกัดสถานะ) เพื่อแสดงเป็น 3 กล่อง
+  const meDisplay=state.user.displayName||'';
+  const meNick=state.user.nickname||state.user.name;
+  return state.jobs.filter(j=>j.team&&(j.team.driver===meDisplay||j.team.driver===meNick));
+}
+function renderMyJobsList(){
+  const mine=listMyJobs();
+  const inProg=mine.filter(j=>j.status==='in_progress'||j.status==='rejected');
+  const pending=mine.filter(j=>j.status==='pending_approval');
+  const approved=mine.filter(j=>j.status==='approved');
+  const empty=`<div class="txt-center txt-muted p-16">—</div>`;
+  const renderRow=(j)=>{
+    const total=(j.bills||[]).reduce((s,b)=>s+(b.amount||0),0);
+    const stCls=j.status==='in_progress'?'badge-info':j.status==='rejected'?'badge-danger':j.status==='pending_approval'?'badge-warn':'badge-ok';
+    const stLbl=j.status==='in_progress'?'กำลังส่ง':j.status==='rejected'?'↩️ ตีกลับ':j.status==='pending_approval'?'⏳ รออนุมัติ':j.status==='approved'?'✓ อนุมัติแล้ว':j.status;
+    const done=(j.bills||[]).filter(b=>b.status!=='pending').length;
+    return `<div class="job-card" onclick="openMyJob('${esc(j.id)}')" style="cursor:pointer">
+      <div class="job-head">
+        <div>
+          <div class="job-id">${esc(j.id)}</div>
+          <div class="job-meta">
+            <span>📍 ${(j.bills||[]).length} ร้าน</span>
+            <span>🏪 คลัง ${esc(j.warehouse||'-')}</span>
+            <span>📄 ${done}/${(j.bills||[]).length} บิล</span>
+          </div>
+        </div>
+        <div class="txt-right">
+          <div class="job-amount">${fmt(total)} ฿</div>
+          <span class="badge ${stCls} mt-4">${stLbl}</span>
+        </div>
+      </div>
+      ${j.team?`<div class="txt-xs txt-muted mt-8">🚗 ${esc(j.team.plate||'-')} ${j.team.helper?'• 👥 '+esc(j.team.helper):''}</div>`:''}
+    </div>`;
+  };
+  $('activeJobContent').innerHTML=`
+    <div class="card card-gold">
+      <div class="card-head">
+        <h3>🚚 กำลังทำอยู่</h3>
+        <span class="txt-sm txt-muted">${inProg.length}</span>
+      </div>
+      <div class="card-body">${inProg.length?inProg.map(renderRow).join(''):empty}</div>
+    </div>
+    <div class="card mt-12">
+      <div class="card-head">
+        <h3>⏳ รออนุมัติ</h3>
+        <span class="txt-sm txt-muted">${pending.length}</span>
+      </div>
+      <div class="card-body">${pending.length?pending.map(renderRow).join(''):empty}</div>
+    </div>
+    <div class="card mt-12">
+      <div class="card-head">
+        <h3>✅ อนุมัติแล้ว</h3>
+        <span class="txt-sm txt-muted">${approved.length}</span>
+      </div>
+      <div class="card-body">${approved.length?approved.map(renderRow).join(''):empty}</div>
+    </div>
+    ${mine.length===0?`<div class="card mt-12"><div class="card-body txt-center p-16">
+      <div class="txt-xl mb-8">📦</div>
+      <div class="txt-muted">ยังไม่มีงาน — ไปรับงานก่อน</div>
+      <button class="btn btn-gold mt-12" onclick="switchTab('sec-driver-home')">→ บันทึกเที่ยวส่ง</button>
+    </div></div>`:''}
+  `;
+}
+function openMyJob(id){
+  state.activeJobId=id;
+  state.driverJobView='detail';
+  renderActiveJob();
+}
+function backToMyJobsList(){
+  state.activeJobId=null;
+  state.driverJobView='list';
+  renderActiveJob();
+}
 function renderActiveJob(){
-  const j=findMyActiveJob();
-  if(!j){
-    $('activeJobContent').innerHTML=`<div class="card"><div class="card-body txt-center p-16"><div class="txt-xl mb-8">📦</div><div class="txt-muted">ยังไม่ได้รับงาน — ไปที่ "งานว่าง" เพื่อรับงาน</div><button class="btn btn-gold mt-12" onclick="switchTab('sec-driver-home')">→ งานว่าง</button></div></div>`;
+  // v1.45: list view (3 กล่อง) เป็น default; detail เมื่อมี activeJobId
+  if(state.driverJobView!=='detail'||!state.activeJobId){
+    renderMyJobsList();
     return;
   }
-  state.activeJobId=j.id;
+  const j=state.jobs.find(x=>x.id===state.activeJobId);
+  if(!j){ backToMyJobsList(); return; }
   const total=j.bills.reduce((s,b)=>s+b.amount,0);
   const done=j.bills.filter(b=>b.status!=='pending').length;
   const collected=j.bills.reduce((s,b)=>s+payTotal(b.payment),0);
@@ -2079,10 +2145,13 @@ function renderActiveJob(){
     return ap-bp;
   });
   let html=`
+    <div class="row mb-12">
+      <button class="btn btn-outline btn-sm" onclick="backToMyJobsList()">← กลับงานของฉัน</button>
+    </div>
     <div class="card card-gold">
       <div class="card-head">
         <h3>📦 ชุดงาน ${esc(j.id)}</h3>
-        <span class="badge badge-info">${esc(j.status==='in_progress'?'กำลังส่ง':j.status==='pending_approval'?'รออนุมัติ':j.status==='rejected'?'ตีกลับ':j.status)}</span>
+        <span class="badge badge-info">${esc(j.status==='in_progress'?'กำลังส่ง':j.status==='pending_approval'?'รออนุมัติ':j.status==='rejected'?'ตีกลับ':j.status==='approved'?'อนุมัติแล้ว':j.status)}</span>
       </div>
       <div class="card-body">
         <div class="row mb-8">
@@ -2123,9 +2192,15 @@ function renderActiveJob(){
           <div class="txt-xs txt-muted">สรุปยอดเก็บ</div>
           <div class="txt-xl num txt-gold txt-bold">${fmt(collected)} ฿</div>
         </div>
-        <button class="btn btn-gold btn-lg" ${done<j.bills.length?'disabled':''} onclick="submitForApproval()">
-          ${done<j.bills.length?`ค้าง ${j.bills.length-done} บิล`:'✓ ส่งหัวหน้าอนุมัติ'}
-        </button>
+        ${(j.status==='in_progress'||j.status==='rejected')?`
+          <button class="btn btn-gold btn-lg" ${done<j.bills.length?'disabled':''} onclick="submitForApproval()">
+            ${done<j.bills.length?`ค้าง ${j.bills.length-done} บิล`:'✓ ส่งหัวหน้าอนุมัติ'}
+          </button>
+        `:`
+          <span class="badge ${j.status==='pending_approval'?'badge-warn':'badge-ok'}" style="font-size:14px;padding:8px 14px">
+            ${j.status==='pending_approval'?'⏳ รอหัวหน้าอนุมัติ':'✓ อนุมัติแล้ว'}
+          </span>
+        `}
       </div>
     </div>
   `;
@@ -2447,7 +2522,10 @@ async function submitForApproval(){
   showToast('ส่งหัวหน้าอนุมัติแล้ว ✓','success');
   // POST ไป Apps Script (ถ้ามี URL)
   await syncToSheets(j).catch(e=>console.warn('sync:',e));
-  switchTab('sec-driver-home');
+  // v1.45: กลับไป list view หน้างานของฉัน — งานจะไปอยู่กล่อง "รออนุมัติ"
+  state.activeJobId=null;
+  state.driverJobView='list';
+  switchTab('sec-driver-job');
 }
 
 /* ========== SUPERVISOR ========== */
