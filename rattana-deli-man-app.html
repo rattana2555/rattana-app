@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.31</title>
+<title>Rattana D-Delivery v1.32</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -329,7 +329,7 @@ body.dark .banner-gold{color:var(--gold-light)}
          data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left"></div>
     <div id="loginError"></div>
-    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.31 — Powered by Rattana Group</div>
+    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.32 — Powered by Rattana Group</div>
   </div>
 </div>
 
@@ -337,7 +337,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div id="appScreen" class="page" style="display:none">
   <header>
     <div class="logo-text">D<span>-DELIVERY</span></div>
-    <span class="ver-tag" id="verTag">v1.31</span>
+    <span class="ver-tag" id="verTag">v1.32</span>
     <span id="liveDot" title="Live sync" style="width:7px;height:7px;border-radius:50%;background:#2ecc71;box-shadow:0 0 6px #2ecc71;display:inline-block;transition:all .25s"></span>
     <span class="role-tag" id="roleTag">-</span>
     <div class="spacer"></div>
@@ -573,7 +573,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.31';
+const APP_VERSION='1.32';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -587,6 +587,7 @@ const CFG = {
   jobsSheetName:'Jobs',
   productsSheetId:'16mYDqAqqJma-_0vCIAajy6bcjdOZ7F6VagxkdkqAB2I',
   productsSheetName:'Sheet1',
+  billDetailSheetName:'รายละเอียด',
   cacheTTL:5*60*1000,
   storageKey:'d_delivery_v1',
   defaultAppsUrl:'https://script.google.com/macros/s/AKfycbwLs22hQFQdcUYjO8xzFPA3DydtBi5YUdVq6u6r8Iev_ltZdSLUj5h2H59uZfd7WtmC/exec',
@@ -602,6 +603,7 @@ let state={
   vehicles:[],                                // ทะเบียนรถ
   customers:[],                               // ลูกค้า (พิกัด, ที่อยู่, รูป)
   products:[],                                // สินค้า (โหลด lazy ตอนเปิด รับคืน)
+  billDetails:{},                             // รายการสินค้าในบิล: { 'DC516906/00149': [{sku,unit,qty,...}] }
   jobs:[],                                    // ชุดงานทั้งหมด
   activeJobId:null,                           // งานที่กำลังทำ (driver)
   reviewJobId:null,                           // งานที่กำลังตรวจ (supervisor)
@@ -728,7 +730,7 @@ function checkSession(){
   const s=loadStore();
   if(!s.user||!s.exp||Date.now()>s.exp) return false;
   state.user=s.user; state.role=s.role;
-  // backfill displayName สำหรับ session ที่บันทึกไว้ก่อน v1.31
+  // backfill displayName สำหรับ session ที่บันทึกไว้ก่อน v1.32
   if(!state.user.displayName){
     const n=state.user.name||'', nk=state.user.nickname||'';
     state.user.displayName=n&&nk?`${n} (${nk})`:(n||nk);
@@ -816,6 +818,24 @@ async function loadProducts(){
       };
     }).filter(Boolean);
   }catch(e){ console.warn('loadProducts failed:',e); }
+}
+
+async function loadBillDetails(){
+  if(Object.keys(state.billDetails).length) return;
+  try{
+    const rows=await fetchSheet(CFG.jobsSheetId,CFG.billDetailSheetName);
+    rows.forEach(r=>{
+      const doc=cleanCell(r['DI_REF']); if(!doc) return;
+      if(!state.billDetails[doc]) state.billDetails[doc]=[];
+      state.billDetails[doc].push({
+        barcode:cleanCell(r['TRD_SH_CODE']),
+        sku:cleanCell(r['SKU_NAME']),
+        unit:cleanCell(r['TRD_UTQNAME']),
+        qty:parseFloat(cleanCell(r['EA']||'0'))||0,
+        amount:parseFloat(cleanCell(r['TRD_G_AMT']||'0').replace(/,/g,''))||0,
+      });
+    });
+  }catch(e){ console.warn('loadBillDetails failed:',e); }
 }
 
 async function loadCustomers(){
@@ -1079,8 +1099,9 @@ function returnGrandTotal(){
 }
 
 function renderReturn(){
-  // โหลดสินค้าครั้งแรก (background, ไม่บล็อก UI)
+  // โหลดสินค้า + รายละเอียดบิลครั้งแรก (background, ไม่บล็อก UI)
   if(!state.products.length) loadProducts();
+  if(!Object.keys(state.billDetails).length) loadBillDetails();
   const drivers=state.drivers.map(d=>{
     const nk=cleanCell(d['ชื่อเล่น']); const fn=cleanCell(d['ชื่อ - สกุล']||d['ชื่อ-สกุล']||'');
     const full=fn?`${fn} (${nk})`:nk; return {v:full,l:full};
@@ -1221,7 +1242,11 @@ function renderReturnItems(){
       </div>
       <div class="card-body">
         <div class="field" style="margin-bottom:8px">
-          <label>สินค้า ${state.products.length?`<span class="txt-xs txt-muted">(${fmtInt(state.products.length)} รายการ — พิมพ์เพื่อค้นหา)</span>`:''}</label>
+          <label>สินค้า ${(()=>{
+            const bill=returnState.docNo?state.billDetails[returnState.docNo]:null;
+            if(bill&&bill.length) return `<span class="txt-xs txt-gold">⭐ ${bill.length} รายการในบิลนี้</span>`;
+            return state.products.length?`<span class="txt-xs txt-muted">(${fmtInt(state.products.length)} รายการ — พิมพ์เพื่อค้นหา)</span>`:'';
+          })()}</label>
           <div class="product-picker" id="prodPick_${i}">
             <input class="input" value="${esc(it.productName)}" placeholder="ค้นหาชื่อสินค้า..."
                    oninput="onProductInput(${i},this.value)" onfocus="onProductInput(${i},this.value)" autocomplete="off">
@@ -1281,11 +1306,28 @@ function pickItemUnit(idx,unit,unitKey){
   renderReturnItems();
 }
 
-/* ค้นหาสินค้า — ใช้ debounced render, แสดงสูงสุด 30 รายการ */
+/* ค้นหาสินค้า — กรองตาม รายละเอียด ของ Doc_No ก่อน, fallback ทั้งหมด 12k */
 function onProductInput(idx,q){
   returnState.items[idx].productName=q;
   const ul=$('prodRes_'+idx); if(!ul) return;
   q=(q||'').trim().toLowerCase();
+  // กรองเฉพาะสินค้าในบิล ถ้ามีข้อมูลใน รายละเอียด
+  const billItems=returnState.docNo?state.billDetails[returnState.docNo]:null;
+  if(billItems&&billItems.length){
+    // map sku → product เต็ม (ถ้าหาเจอ) เพื่อ pick แล้วเซ็ตหน่วย/ราคา/หน่วยให้ตรง
+    let list=billItems.map(b=>{
+      const full=state.products.find(p=>p.name===b.sku);
+      return {name:b.sku,_bill:b,product:full};
+    });
+    if(q) list=list.filter(x=>x.name.toLowerCase().includes(q));
+    if(!list.length){
+      ul.innerHTML='<li class="muted">ไม่พบในบิล — พิมพ์ค้นหาทั้งหมดด้านล่าง</li>';
+    } else {
+      ul.innerHTML=list.slice(0,30).map(x=>`<li onclick="pickProductFromBill(${idx},'${esc(x.name).replace(/'/g,"\\'")}')">${esc(x.name)} <span class="txt-xs txt-muted">· ${esc(x._bill.unit)} · ${fmtInt(x._bill.qty)}</span></li>`).join('');
+    }
+    ul.style.display='block';
+    return;
+  }
   if(!q){ ul.style.display='none'; return; }
   if(!state.products.length){
     ul.style.display='block';
@@ -1303,6 +1345,26 @@ function onProductInput(idx,q){
     ul.innerHTML=matches.map(p=>`<li onclick="pickProduct(${idx},'${esc(p.name).replace(/'/g,"\\'")}')">${esc(p.name)}</li>`).join('');
   }
   ul.style.display='block';
+}
+/* เลือกสินค้าจากรายการในบิล — auto-set หน่วยจาก TRD_UTQNAME ของบิลเอง */
+function pickProductFromBill(idx,name){
+  const bill=state.billDetails[returnState.docNo]?.find(b=>b.sku===name);
+  const product=state.products.find(p=>p.name===name);
+  const it=returnState.items[idx];
+  it.productName=name;
+  it.product=product||null;
+  if(bill){
+    it.unit=bill.unit;
+    // จับ key จากชื่อหน่วย "ชิ้นx1(CS)" → "CS"
+    const m=bill.unit.match(/\(([A-Z]+)\)$/);
+    it.unitKey=m?m[1]:'CS';
+    // ราคา default — ถ้ามี product ใช้ CC00, ถ้าไม่ใช้จากบิล (amount/qty)
+    if(product&&product.prices[it.unitKey]) it.price=product.prices[it.unitKey];
+    else if(bill.qty>0) it.price=bill.amount/bill.qty;
+  }
+  $('prodRes_'+idx).style.display='none';
+  renderReturnItems();
+  recalcReturnTotal();
 }
 function pickProduct(idx,name){
   const p=state.products.find(x=>x.name===name);
@@ -1350,6 +1412,8 @@ function pickDocNo(d){
   returnState.docNo=d;
   $('returnDocNo').value=d;
   $('docOptionsList').style.display='none';
+  // refresh product picker labels (bill filter)
+  renderReturnItems();
 }
 function addReturnItem(){
   if(returnState.items.length>=5){ showToast('ใส่ได้สูงสุด 5 รายการ','warning'); return; }
