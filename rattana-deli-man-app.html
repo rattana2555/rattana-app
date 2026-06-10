@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.25</title>
+<title>Rattana D-Delivery v1.26</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -320,7 +320,7 @@ body.dark .banner-gold{color:var(--gold-light)}
          data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left"></div>
     <div id="loginError"></div>
-    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.25 — Powered by Rattana Group</div>
+    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.26 — Powered by Rattana Group</div>
   </div>
 </div>
 
@@ -328,7 +328,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div id="appScreen" class="page" style="display:none">
   <header>
     <div class="logo-text">D<span>-DELIVERY</span></div>
-    <span class="ver-tag" id="verTag">v1.25</span>
+    <span class="ver-tag" id="verTag">v1.26</span>
     <span id="liveDot" title="Live sync" style="width:7px;height:7px;border-radius:50%;background:#2ecc71;box-shadow:0 0 6px #2ecc71;display:inline-block;transition:all .25s"></span>
     <span class="role-tag" id="roleTag">-</span>
     <div class="spacer"></div>
@@ -342,6 +342,23 @@ body.dark .banner-gold{color:var(--gold-light)}
     <!-- HOME hub (5 launchpad cards) -->
     <div class="section" id="sec-home">
       <div class="home-grid" id="homeGrid"></div>
+    </div>
+
+    <!-- RETURN: รับคืน → CN sheet -->
+    <div class="section" id="sec-returns">
+      <div class="card card-gold">
+        <div class="card-head">
+          <h3>📦 รับคืนสินค้า</h3>
+          <div class="row gap-8">
+            <button class="btn btn-outline btn-sm" onclick="switchTab('sec-home')">↩ กลับหน้าหลัก</button>
+            <button class="btn btn-outline btn-sm" onclick="resetReturnForm()">🗑 ล้างข้อมูล</button>
+          </div>
+        </div>
+        <div class="card-body" id="returnFormBody"></div>
+      </div>
+      <div class="row mt-12" style="justify-content:flex-end">
+        <button class="btn btn-gold btn-lg" onclick="confirmReturn()">✓ บันทึกการรับคืน</button>
+      </div>
     </div>
 
     <!-- TRANSFER: เที่ยวพิเศษ -->
@@ -547,7 +564,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.25';
+const APP_VERSION='1.26';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -699,7 +716,7 @@ function checkSession(){
   const s=loadStore();
   if(!s.user||!s.exp||Date.now()>s.exp) return false;
   state.user=s.user; state.role=s.role;
-  // backfill displayName สำหรับ session ที่บันทึกไว้ก่อน v1.25
+  // backfill displayName สำหรับ session ที่บันทึกไว้ก่อน v1.26
   if(!state.user.displayName){
     const n=state.user.name||'', nk=state.user.nickname||'';
     state.user.displayName=n&&nk?`${n} (${nk})`:(n||nk);
@@ -946,6 +963,7 @@ function renderCurrent(){
   const id=state.currentTab;
   if(id==='sec-home') renderHome();
   else if(id==='sec-transfer') renderTransfer();
+  else if(id==='sec-returns') renderReturn();
   else if(id==='sec-driver-home') renderDriverHome();
   else if(id==='sec-driver-job') renderActiveJob();
   else if(id==='sec-bill-form') {/* handled by openBillForm */}
@@ -960,7 +978,7 @@ function renderCurrent(){
 const HOME_MODULES=[
   {id:'pickup',     icon:'🚛', label:'บันทึกเที่ยวส่ง',  sub:'รับงาน · เก็บเงิน · ตีกลับ',     target:'sec-driver-home', ready:true},
   {id:'transfer',   icon:'🏬', label:'โอนย้าย-ขนสินค้า',  sub:'เที่ยวพิเศษ',                     target:'sec-transfer',    ready:true},
-  {id:'returns',    icon:'📦', label:'รับคืน',           sub:'รับสินค้าคืนจากลูกค้า',           target:null,              ready:false},
+  {id:'returns',    icon:'📦', label:'รับคืน',           sub:'รับสินค้าคืนจากลูกค้า',           target:'sec-returns',     ready:true},
   {id:'reports',    icon:'📊', label:'รายงาน',           sub:'สรุปยอด · ดาวน์โหลด',             target:null,              ready:false},
   {id:'customers',  icon:'🏪', label:'ข้อมูลร้านค้า',     sub:'ค้นหา · พิกัด · ผู้ดูแล',        target:null,              ready:false},
 ];
@@ -977,6 +995,220 @@ function renderHome(){
 }
 function showComingSoon(name){
   showToast(`"${name}" อยู่ระหว่างพัฒนา`,'info');
+}
+
+/* ========== รับคืนสินค้า (CN sheet) ========== */
+const RETURN_TYPES=['คืนเต็มบิล','คืนบางส่วน','ผิดพลาดจากรัตน'];
+const BILL_TYPES=['DS (ส่ง)','DC (ปลีก)'];
+const RETURN_REASONS=['ปิดร้าน','สินค้าชำรุด','สินค้าหมดอายุ','รับออเดอร์ผิด','ลูกค้าไม่รับ','อื่นๆ'];
+const ERROR_FROMS=['ร้านค้า','คลัง','คนขับ','เซลล์'];
+const UNITS=['ลัง','แพ็ค','ขวด','กระป๋อง','ถาด','ลูก','ชิ้น'];
+const returnState={
+  jobId:'', docNo:'', customerCode:'', customerName:'', warehouse:'',
+  returnType:'', billType:'', reason:'', errorFrom:'',
+  items:[{barcode:'',name:'',qty:'',unit:'ลัง',price:''}],
+  totalAmount:'', note:'', photo:'',
+};
+
+function renderReturn(){
+  const todayJobs=state.jobs.filter(j=>j.status==='available'||j.status==='in_progress');
+  const jobsForDD=todayJobs.map(j=>({v:j.id,l:j.id}));
+  $('returnFormBody').innerHTML=`
+    <div class="field">
+      <label>เลขที่ใบคุม</label>
+      ${buildDD('ddReturnJob',jobsForDD,jobsForDD.length?'-- เลือกชุดงาน --':'(ไม่มี)')}
+    </div>
+    <div class="field">
+      <label>เลขที่บิล (Doc_No)</label>
+      ${buildDD('ddReturnDoc',[],'-- เลือกบิล --')}
+    </div>
+    <div id="returnCustInfo"></div>
+    <div class="field">
+      <label>ประเภทคืน</label>
+      <div class="pills" id="returnTypePills">
+        ${RETURN_TYPES.map(t=>`<button type="button" class="pill ${t===returnState.returnType?'active gold':''}" data-v="${esc(t)}" onclick="pickReturnType(this)">${esc(t)}</button>`).join('')}
+      </div>
+    </div>
+    <div class="field">
+      <label>ประเภทบิล</label>
+      <div class="pills" id="billTypePills">
+        ${BILL_TYPES.map(t=>`<button type="button" class="pill ${t===returnState.billType?'active gold':''}" data-v="${esc(t)}" onclick="pickBillType(this)">${esc(t)}</button>`).join('')}
+      </div>
+    </div>
+    <div class="field">
+      <label>สาเหตุรับคืน</label>
+      <div class="pills" id="reasonPills">
+        ${RETURN_REASONS.map(r=>`<button type="button" class="pill ${r===returnState.reason?'active gold':''}" data-v="${esc(r)}" onclick="pickReasonReturn(this)">${esc(r)}</button>`).join('')}
+      </div>
+    </div>
+    <div class="field">
+      <label>ผิดพลาดจาก</label>
+      <div class="pills" id="errorPills">
+        ${ERROR_FROMS.map(e=>`<button type="button" class="pill ${e===returnState.errorFrom?'active gold':''}" data-v="${esc(e)}" onclick="pickErrorFrom(this)">${esc(e)}</button>`).join('')}
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <h3 class="mb-8">📋 รายการสินค้าคืน <span class="txt-sm txt-muted">(สูงสุด 5 รายการ)</span></h3>
+    <div id="returnItems"></div>
+    <button class="btn btn-outline btn-sm mt-8" id="btnAddItem" onclick="addReturnItem()">+ เพิ่มรายการ</button>
+
+    <div class="divider"></div>
+    <div class="field">
+      <label>ยอดเงินรวมรับคืน (บาท)</label>
+      <input class="input input-num" type="number" inputmode="decimal" step="any" min="0" id="returnTotalAmount" value="${esc(returnState.totalAmount)}" oninput="returnState.totalAmount=this.value" placeholder="0.00">
+    </div>
+    <div class="field">
+      <label>หมายเหตุ</label>
+      <textarea class="input" id="returnNote" placeholder="ระบุรายละเอียดเพิ่มเติม (ถ้ามี)" oninput="returnState.note=this.value">${esc(returnState.note)}</textarea>
+    </div>
+    <div class="field">
+      <label>รูปสินค้าคืน</label>
+      <div class="photo-controls">
+        <label class="btn btn-outline btn-sm" style="cursor:pointer">📷 กล้อง
+          <input type="file" accept="image/*" capture="environment" hidden onchange="handleReturnPhoto(event)">
+        </label>
+        <label class="btn btn-outline btn-sm" style="cursor:pointer">🖼 อัลบั้ม
+          <input type="file" accept="image/*" hidden onchange="handleReturnPhoto(event)">
+        </label>
+      </div>
+      <div class="photo-preview" id="returnPhotoPreview">${returnState.photo?renderReturnThumb():''}</div>
+    </div>
+  `;
+  if(returnState.jobId){ ddPick('ddReturnJob',returnState.jobId,returnState.jobId); fillReturnBills(); }
+  if(returnState.docNo){ ddPick('ddReturnDoc',returnState.docNo,returnState.docNo); }
+  renderReturnCustInfo();
+  renderReturnItems();
+  // bind jobId change
+  document.querySelectorAll('#ddReturnJob_list li').forEach(li=>{
+    li.addEventListener('click',()=>{ returnState.jobId=li.dataset.v; returnState.docNo=''; fillReturnBills(); renderReturnCustInfo(); },{once:false});
+  });
+}
+
+function fillReturnBills(){
+  const job=state.jobs.find(j=>j.id===returnState.jobId);
+  if(!job){ return; }
+  const list=$('ddReturnDoc_list'); if(!list) return;
+  list.innerHTML=job.bills.map(b=>`<li data-v="${esc(b.doc)}" onclick="ddPick('ddReturnDoc','${esc(b.doc)}','${esc(b.doc+' — '+b.name)}');returnState.docNo='${esc(b.doc)}';renderReturnCustInfo()">${esc(b.doc)} — ${esc(b.name)}</li>`).join('')
+    +`<li class="no-result" style="display:none">ไม่มีตัวเลือก</li>`;
+}
+
+function renderReturnCustInfo(){
+  const el=$('returnCustInfo'); if(!el) return;
+  const job=state.jobs.find(j=>j.id===returnState.jobId);
+  const bill=job?.bills.find(b=>b.doc===returnState.docNo);
+  if(!bill){ el.innerHTML=''; return; }
+  returnState.customerCode=bill.code; returnState.customerName=bill.name;
+  returnState.warehouse=job.warehouse||'W1';
+  el.innerHTML=`<div class="banner-gold">
+    🏪 <b>${esc(bill.name)}</b> · รหัส ${esc(bill.code)} · คลัง ${esc(job.warehouse||'-')}
+  </div>`;
+}
+
+function renderReturnItems(){
+  const el=$('returnItems'); if(!el) return;
+  el.innerHTML=returnState.items.map((it,i)=>`
+    <div class="card" style="margin-bottom:8px">
+      <div class="card-head" style="background:var(--row-alt)">
+        <span class="txt-bold">รายการ ${i+1}</span>
+        ${returnState.items.length>1?`<button class="btn btn-outline btn-sm txt-danger" onclick="removeReturnItem(${i})">× ลบ</button>`:''}
+      </div>
+      <div class="card-body">
+        <div class="grid-2">
+          <div class="field" style="margin-bottom:8px">
+            <label>บาร์โค้ด</label>
+            <input class="input" value="${esc(it.barcode)}" oninput="returnState.items[${i}].barcode=this.value" placeholder="8851234567890">
+          </div>
+          <div class="field" style="margin-bottom:8px">
+            <label>ราคา/หน่วย</label>
+            <input class="input input-num" type="number" inputmode="decimal" step="any" min="0" value="${esc(it.price)}" oninput="returnState.items[${i}].price=this.value" placeholder="0.00">
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:8px">
+          <label>ชื่อสินค้า</label>
+          <input class="input" value="${esc(it.name)}" oninput="returnState.items[${i}].name=this.value" placeholder="ชื่อสินค้า">
+        </div>
+        <div class="grid-2">
+          <div class="field" style="margin-bottom:0">
+            <label>จำนวน</label>
+            <input class="input input-num" type="number" inputmode="numeric" min="0" value="${esc(it.qty)}" oninput="returnState.items[${i}].qty=this.value" placeholder="0">
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label>หน่วย</label>
+            <select class="input" onchange="returnState.items[${i}].unit=this.value">
+              ${UNITS.map(u=>`<option value="${esc(u)}" ${u===it.unit?'selected':''}>${esc(u)}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+  $('btnAddItem').disabled=returnState.items.length>=5;
+}
+function addReturnItem(){
+  if(returnState.items.length>=5){ showToast('ใส่ได้สูงสุด 5 รายการ','warning'); return; }
+  returnState.items.push({barcode:'',name:'',qty:'',unit:'ลัง',price:''});
+  renderReturnItems();
+}
+function removeReturnItem(i){ returnState.items.splice(i,1); renderReturnItems(); }
+function pickReturnType(btn){ btn.parentElement.querySelectorAll('.pill').forEach(p=>{p.classList.remove('active','gold');}); btn.classList.add('active','gold'); returnState.returnType=btn.dataset.v; }
+function pickBillType(btn){ btn.parentElement.querySelectorAll('.pill').forEach(p=>{p.classList.remove('active','gold');}); btn.classList.add('active','gold'); returnState.billType=btn.dataset.v; }
+function pickReasonReturn(btn){ btn.parentElement.querySelectorAll('.pill').forEach(p=>{p.classList.remove('active','gold');}); btn.classList.add('active','gold'); returnState.reason=btn.dataset.v; }
+function pickErrorFrom(btn){ btn.parentElement.querySelectorAll('.pill').forEach(p=>{p.classList.remove('active','gold');}); btn.classList.add('active','gold'); returnState.errorFrom=btn.dataset.v; }
+function renderReturnThumb(){ return `<div class="photo-thumb"><img src="${returnState.photo}"><button class="photo-del" onclick="returnState.photo='';$('returnPhotoPreview').innerHTML=''">×</button></div>`; }
+function handleReturnPhoto(ev){
+  const f=ev.target.files[0]; if(!f) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const img=new Image();
+    img.onload=()=>{
+      const max=1280; let w=img.width,h=img.height;
+      if(w>max||h>max){ const r=Math.min(max/w,max/h); w*=r; h*=r; }
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      returnState.photo=c.toDataURL('image/jpeg',0.78);
+      $('returnPhotoPreview').innerHTML=renderReturnThumb();
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(f);
+}
+function resetReturnForm(){
+  Object.assign(returnState,{jobId:'',docNo:'',customerCode:'',customerName:'',warehouse:'',returnType:'',billType:'',reason:'',errorFrom:'',items:[{barcode:'',name:'',qty:'',unit:'ลัง',price:''}],totalAmount:'',note:'',photo:''});
+  renderReturn();
+  showToast('ล้างข้อมูลแล้ว','info');
+}
+async function confirmReturn(){
+  if(!returnState.jobId){ showToast('กรุณาเลือกเลขที่ใบคุม','warning'); return; }
+  if(!returnState.docNo){ showToast('กรุณาเลือกเลขที่บิล','warning'); return; }
+  if(!returnState.returnType){ showToast('กรุณาเลือกประเภทคืน','warning'); return; }
+  if(!returnState.reason){ showToast('กรุณาเลือกสาเหตุ','warning'); return; }
+  const payload={
+    action:'save_return',
+    jobId:returnState.jobId,
+    docNo:returnState.docNo,
+    customerCode:returnState.customerCode,
+    customerName:returnState.customerName,
+    warehouse:returnState.warehouse,
+    returnType:returnState.returnType,
+    billType:returnState.billType,
+    reason:returnState.reason,
+    errorFrom:returnState.errorFrom,
+    items:returnState.items.filter(it=>it.barcode||it.name).slice(0,5),
+    totalAmount:parseFloat(returnState.totalAmount)||0,
+    note:returnState.note,
+    photo:returnState.photo,
+    driver:state.user.displayName||state.user.nickname,
+    submittedAt:Date.now(),
+  };
+  const url=getAppsUrl();
+  if(url){
+    try{ await fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)}); }
+    catch(e){ console.warn('return sync failed',e); }
+  }
+  showToast(`บันทึกรับคืน ${returnState.docNo} ✓`,'success');
+  resetReturnForm();
+  switchTab('sec-home');
 }
 
 /* ========== TRANSFER (เที่ยวพิเศษ) ========== */
@@ -2041,9 +2273,22 @@ async function syncJobsFromSheet(){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-Delivery — Apps Script Backend v3.1 (บันทึกเที่ยวส่ง + บันทึกบิลและการชำระ) */
+const APPS_SCRIPT_CODE=`/* D-Delivery — Apps Script Backend v3.2 (เพิ่ม CN รับคืนสินค้า) */
 const SHEET_INPUT='บันทึกเที่ยวส่ง';
 const SHEET_CIN='บันทึกบิลและการชำระ';
+const SHEET_CN='CN';
+
+const HEADERS_CN=['วัน เวลา','วันที่คืน','ชื่อ-สกุล','รหัสใบคุม','คลัง','ชื่อร้าน','รหัสร้าน',
+  'ประเภทคืน','ประเภทบิล','xx','เลขที่บิล DS',
+  'บาร์1','บาร์2','บาร์3','บาร์4','บาร์5',
+  'สินค้า1','สินค้า2','สินค้า3','สินค้า4','สินค้า5',
+  'จำนวน1','จำนวน2','จำนวน3','จำนวน4','จำนวน5',
+  'ราคา1','ราคา2','ราคา3','ราคา4','ราคา5',
+  'สาเหตุรับคืน','ผิดพลาดจาก','ยอดเงิน',
+  'หน่วย1','หน่วย2','หน่วย3','หน่วย4','หน่วย5',
+  'หมายเหตุการคืน','รวมรับคืน','ภาพคืน','สถานะคืน','อนุมัติคืน','รายละเอียดบิล',
+  'ผู้อนุมัติ','วันอนุมัติ','วันที่เก็บ','x','หมายเหตุอนุมัติ',
+  'ชื่อเซลล์','ผู้ขับ','รูปลายเซ็น','picture'];
 
 const HEADERS_INPUT=['🔒 Row ID','วันเวลาปิดงาน','จำนวนพาเลทนำขึ้นรถ','ทะเบียน','ลังนำไป',
   'รหัสใบคุม','ชื่อคนขับ','ผู้ช่วย1','ผู้ช่วย2','ผู้ช่วย3','ผู้ช่วย4','ผู้ช่วย5','ผู้ช่วย6',
@@ -2072,6 +2317,58 @@ function doPost(e){
     const data=JSON.parse(e.postData.contents);
     const ss=SpreadsheetApp.getActiveSpreadsheet();
     const now=new Date();
+    // ===== รับคืนสินค้า → ชีท CN =====
+    if(data.action==='save_return'){
+      const cnSh=ensureSheet_(ss,SHEET_CN,HEADERS_CN);
+      const cnIdx=buildIndex_(cnSh,3,10); // col D=รหัสใบคุม, col K=เลขที่บิล DS
+      const items=Array.isArray(data.items)?data.items:[];
+      const pad=(arr,n)=>{const r=[...arr];while(r.length<n)r.push('');return r.slice(0,n);};
+      const barcodes=pad(items.map(it=>it.barcode||''),5);
+      const names=pad(items.map(it=>it.name||''),5);
+      const qtys=pad(items.map(it=>parseFloat(it.qty)||0),5);
+      const prices=pad(items.map(it=>parseFloat(it.price)||0),5);
+      const units=pad(items.map(it=>it.unit||''),5);
+      const cnRow=[
+        now,                                 // วัน เวลา
+        now,                                 // วันที่คืน
+        data.driver||'',                     // ชื่อ-สกุล
+        String(data.jobId||''),              // รหัสใบคุม
+        data.warehouse||'',                  // คลัง
+        data.customerName||'',               // ชื่อร้าน
+        String(data.customerCode||''),       // รหัสร้าน
+        data.returnType||'',                 // ประเภทคืน
+        data.billType||'',                   // ประเภทบิล
+        '',                                  // xx
+        String(data.docNo||''),              // เลขที่บิล DS
+        ...barcodes,                         // บาร์1-5
+        ...names,                            // สินค้า1-5
+        ...qtys,                             // จำนวน1-5
+        ...prices,                           // ราคา1-5
+        data.reason||'',                     // สาเหตุรับคืน
+        data.errorFrom||'',                  // ผิดพลาดจาก
+        data.totalAmount||0,                 // ยอดเงิน
+        ...units,                            // หน่วย1-5
+        data.note||'',                       // หมายเหตุการคืน
+        data.totalAmount||0,                 // รวมรับคืน
+        data.photo||'',                      // ภาพคืน (base64 หรือ URL)
+        'รออนุมัติ',                          // สถานะคืน
+        '',                                  // อนุมัติคืน
+        '',                                  // รายละเอียดบิล
+        '',                                  // ผู้อนุมัติ
+        '',                                  // วันอนุมัติ
+        '',                                  // วันที่เก็บ
+        '',                                  // x
+        '',                                  // หมายเหตุอนุมัติ
+        '',                                  // ชื่อเซลล์
+        data.driver||'',                     // ผู้ขับ
+        '',                                  // รูปลายเซ็น
+        ''                                   // picture
+      ];
+      upsert_(cnSh,cnIdx,String(data.jobId)+'|'+String(data.docNo),cnRow);
+      cnSh.getRange('D:D').setNumberFormat('@');
+      cnSh.getRange('K:K').setNumberFormat('@');
+      return ContentService.createTextOutput(JSON.stringify({ok:true})).setMimeType(ContentService.MimeType.JSON);
+    }
     const inSh=ensureSheet_(ss,SHEET_INPUT,HEADERS_INPUT);
     const cinSh=ensureSheet_(ss,SHEET_CIN,HEADERS_CIN);
     const team=data.team||{};
