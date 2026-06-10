@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.34</title>
+<title>Rattana D-Delivery v1.35</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -332,7 +332,7 @@ body.dark .banner-gold{color:var(--gold-light)}
          data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left"></div>
     <div id="loginError"></div>
-    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.34 — Powered by Rattana Group</div>
+    <div style="margin-top:18px;font-size:11px;color:rgba(255,255,255,.5)">v1.35 — Powered by Rattana Group</div>
   </div>
 </div>
 
@@ -340,7 +340,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div id="appScreen" class="page" style="display:none">
   <header>
     <div class="logo-text">D<span>-DELIVERY</span></div>
-    <span class="ver-tag" id="verTag">v1.34</span>
+    <span class="ver-tag" id="verTag">v1.35</span>
     <span id="liveDot" title="Live sync" style="width:7px;height:7px;border-radius:50%;background:#2ecc71;box-shadow:0 0 6px #2ecc71;display:inline-block;transition:all .25s"></span>
     <span class="role-tag" id="roleTag">-</span>
     <div class="spacer"></div>
@@ -354,6 +354,31 @@ body.dark .banner-gold{color:var(--gold-light)}
     <!-- HOME hub (5 launchpad cards) -->
     <div class="section" id="sec-home">
       <div class="home-grid" id="homeGrid"></div>
+    </div>
+
+    <!-- REPORTS: รายงาน -->
+    <div class="section" id="sec-reports">
+      <div class="card card-gold">
+        <div class="card-head">
+          <h3>📊 รายงานการเก็บเงิน</h3>
+          <div class="row gap-8">
+            <button class="btn btn-outline btn-sm" onclick="switchTab('sec-home')">↩ กลับหน้าหลัก</button>
+            <button class="btn btn-outline btn-sm" onclick="exportReportExcel()">📥 Excel</button>
+          </div>
+        </div>
+        <div class="card-body" id="reportsBody"></div>
+      </div>
+    </div>
+
+    <!-- CUSTOMERS: ข้อมูลร้านค้า -->
+    <div class="section" id="sec-customers">
+      <div class="card card-gold">
+        <div class="card-head">
+          <h3>🏪 ข้อมูลร้านค้า</h3>
+          <button class="btn btn-outline btn-sm" onclick="switchTab('sec-home')">↩ กลับหน้าหลัก</button>
+        </div>
+        <div class="card-body" id="customersBody"></div>
+      </div>
     </div>
 
     <!-- RETURN: รับคืน → CN sheet -->
@@ -576,7 +601,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.34';
+const APP_VERSION='1.35';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -733,7 +758,7 @@ function checkSession(){
   const s=loadStore();
   if(!s.user||!s.exp||Date.now()>s.exp) return false;
   state.user=s.user; state.role=s.role;
-  // backfill displayName สำหรับ session ที่บันทึกไว้ก่อน v1.34
+  // backfill displayName สำหรับ session ที่บันทึกไว้ก่อน v1.35
   if(!state.user.displayName){
     const n=state.user.name||'', nk=state.user.nickname||'';
     state.user.displayName=n&&nk?`${n} (${nk})`:(n||nk);
@@ -1040,6 +1065,8 @@ function renderCurrent(){
   if(id==='sec-home') renderHome();
   else if(id==='sec-transfer') renderTransfer();
   else if(id==='sec-returns') renderReturn();
+  else if(id==='sec-reports') renderReports();
+  else if(id==='sec-customers') renderCustomers();
   else if(id==='sec-driver-home') renderDriverHome();
   else if(id==='sec-driver-job') renderActiveJob();
   else if(id==='sec-bill-form') {/* handled by openBillForm */}
@@ -1055,8 +1082,8 @@ const HOME_MODULES=[
   {id:'pickup',     icon:'🚛', label:'บันทึกเที่ยวส่ง',  sub:'รับงาน · เก็บเงิน · ตีกลับ',     target:'sec-driver-home', ready:true},
   {id:'transfer',   icon:'🏬', label:'โอนย้าย-ขนสินค้า',  sub:'เที่ยวพิเศษ',                     target:'sec-transfer',    ready:true},
   {id:'returns',    icon:'📦', label:'รับคืน',           sub:'รับสินค้าคืนจากลูกค้า',           target:'sec-returns',     ready:true},
-  {id:'reports',    icon:'📊', label:'รายงาน',           sub:'สรุปยอด · ดาวน์โหลด',             target:null,              ready:false},
-  {id:'customers',  icon:'🏪', label:'ข้อมูลร้านค้า',     sub:'ค้นหา · พิกัด · ผู้ดูแล',        target:null,              ready:false},
+  {id:'reports',    icon:'📊', label:'รายงาน',           sub:'สรุปยอด · ดาวน์โหลด',             target:'sec-reports',     ready:true},
+  {id:'customers',  icon:'🏪', label:'ข้อมูลร้านค้า',     sub:'ค้นหา · พิกัด · ผู้ดูแล',        target:'sec-customers',   ready:true},
 ];
 function renderHome(){
   $('homeGrid').innerHTML=HOME_MODULES.map(m=>`
@@ -1071,6 +1098,192 @@ function renderHome(){
 }
 function showComingSoon(name){
   showToast(`"${name}" อยู่ระหว่างพัฒนา`,'info');
+}
+
+/* ========== REPORTS (รายงานการเก็บเงิน) ========== */
+const reportState={range:'today'};
+function renderReports(){
+  // collect all bills with payment data from state.jobs (synced from Cin)
+  const now=new Date(); now.setHours(0,0,0,0);
+  const ranges={
+    today:{label:'วันนี้',from:now.getTime()},
+    week:{label:'7 วันที่ผ่านมา',from:now.getTime()-6*86400000},
+    month:{label:'30 วันที่ผ่านมา',from:now.getTime()-29*86400000},
+    all:{label:'ทั้งหมด',from:0},
+  };
+  const cur=ranges[reportState.range]||ranges.today;
+  const allBills=[];
+  state.jobs.forEach(j=>{
+    j.bills.forEach(b=>{
+      if(!b.savedAt) return;
+      if(b.savedAt<cur.from) return;
+      const total=payTotal(b.payment);
+      if(total<=0&&b.status!=='cn'&&b.status!=='failed') return;
+      allBills.push({...b,jobId:j.id,team:j.team,total,diff:total-b.amount,jobStatus:j.status});
+    });
+  });
+  // stats
+  const sumCollected=allBills.reduce((s,b)=>s+b.total,0);
+  const sumTarget=allBills.reduce((s,b)=>s+b.amount,0);
+  const okCount=allBills.filter(b=>Math.abs(b.total-b.amount)<0.005&&b.status==='done').length;
+  const shortCount=allBills.filter(b=>b.total<b.amount-0.005&&b.status==='done').length;
+  const cnCount=allBills.filter(b=>b.status==='cn').length;
+
+  $('reportsBody').innerHTML=`
+    <div class="pills mb-12">
+      ${Object.entries(ranges).map(([k,v])=>`<button class="pill ${k===reportState.range?'active gold':''}" onclick="reportState.range='${k}';renderReports()">${esc(v.label)}</button>`).join('')}
+    </div>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="s-label">ยอดเก็บได้</div><div class="s-value txt-gold">${fmtInt(sumCollected)}</div><div class="s-sub">/ ${fmtInt(sumTarget)} บาท</div></div>
+      <div class="stat-card success"><div class="s-label">ครบ</div><div class="s-value">${okCount}</div><div class="s-sub">บิล</div></div>
+      <div class="stat-card danger"><div class="s-label">ขาด</div><div class="s-value">${shortCount}</div><div class="s-sub">บิล</div></div>
+      <div class="stat-card"><div class="s-label">CN/ยกเลิก</div><div class="s-value">${cnCount}</div><div class="s-sub">บิล</div></div>
+    </div>
+
+    ${allBills.length?`
+    <div class="tbl-wrap mt-12"><table class="tbl" style="font-size:12px">
+      <thead><tr>
+        <th>วัน เวลา</th><th>ใบคุม</th><th>Doc_No</th><th>ร้านค้า</th><th>คนขับ</th>
+        <th class="num">ยอดบิล</th><th class="num">ธนบัตร</th><th class="num">เหรียญ</th>
+        <th class="num">โอน1</th><th class="num">โอน2</th><th class="num">เช็ค</th><th class="num">ใบลดหนี้</th>
+        <th class="num">รวมเก็บ</th><th class="num">ขาด-เกิน</th><th>สถานะ</th>
+      </tr></thead>
+      <tbody>
+        ${allBills.sort((a,b)=>(b.savedAt||0)-(a.savedAt||0)).map(b=>{
+          const p=b.payment||{};
+          const stCls=b.status==='cn'?'badge-gold':b.status==='failed'?'badge-danger':Math.abs(b.diff)<0.005?'badge-ok':b.diff<0?'badge-warn':'badge-info';
+          const stText=b.status==='cn'?'CN':b.status==='failed'?'ไม่ส่ง':Math.abs(b.diff)<0.005?'ครบ':b.diff<0?'ขาด':'เกิน';
+          return `<tr>
+            <td>${formatThaiDateTime(b.savedAt)}</td>
+            <td class="code">${esc(b.jobId)}</td>
+            <td class="code">${esc(b.doc)}</td>
+            <td>${esc(b.name)}</td>
+            <td>${esc(b.team?.driver||'-')}</td>
+            <td class="num">${fmt(b.amount)}</td>
+            <td class="num">${p.banknotes?fmt(p.banknotes):'-'}</td>
+            <td class="num">${p.coins?fmt(p.coins):'-'}</td>
+            <td class="num">${p.transfer1?fmt(p.transfer1):'-'}</td>
+            <td class="num">${p.transfer2?fmt(p.transfer2):'-'}</td>
+            <td class="num">${p.cheque?fmt(p.cheque):'-'}</td>
+            <td class="num">${p.creditNote?fmt(p.creditNote):'-'}</td>
+            <td class="num txt-gold txt-bold">${fmt(b.total)}</td>
+            <td class="num ${b.diff<0?'txt-danger':b.diff>0?'txt-info':'txt-success'}">${b.diff>0?'+':''}${fmt(b.diff)}</td>
+            <td><span class="badge ${stCls}">${stText}</span></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table></div>
+    `:`<div class="txt-center txt-muted p-16">ไม่มีข้อมูลในช่วงเวลานี้</div>`}
+  `;
+}
+function formatThaiDateTime(ts){
+  if(!ts) return '-';
+  const d=new Date(ts);
+  const dd=String(d.getDate()).padStart(2,'0');
+  const mm=String(d.getMonth()+1).padStart(2,'0');
+  const yy=String((d.getFullYear()+543)%100).padStart(2,'0');
+  const hh=String(d.getHours()).padStart(2,'0');
+  const mn=String(d.getMinutes()).padStart(2,'0');
+  return `${dd}/${mm}/${yy} ${hh}.${mn}`;
+}
+function exportReportExcel(){
+  // ดึงข้อมูลแบบเดียวกับใน renderReports
+  const now=new Date(); now.setHours(0,0,0,0);
+  const ranges={today:now.getTime(),week:now.getTime()-6*86400000,month:now.getTime()-29*86400000,all:0};
+  const from=ranges[reportState.range];
+  const rows=[];
+  state.jobs.forEach(j=>{
+    j.bills.forEach(b=>{
+      if(!b.savedAt||b.savedAt<from) return;
+      const total=payTotal(b.payment);
+      if(total<=0&&b.status!=='cn'&&b.status!=='failed') return;
+      const p=b.payment||{};
+      rows.push([formatThaiDateTime(b.savedAt),j.id,b.doc,b.code,b.name,j.team?.driver||'',j.team?.plate||'',
+        b.amount,p.banknotes||0,p.coins||0,p.transfer1||0,p.transfer2||0,p.cheque||0,p.creditNote||0,total,total-b.amount,b.status]);
+    });
+  });
+  const headers=['วัน เวลา','เลขใบคุม','Doc_No','รหัสลูกค้า','ชื่อร้าน','คนขับ','ทะเบียน',
+    'ยอดบิล','ธนบัตร','เหรียญ','โอน1','โอน2','เช็ค','ใบลดหนี้','รวมเก็บ','ขาด-เกิน','สถานะ'];
+  // CSV format (Excel-friendly with BOM for Thai)
+  const escapeCsv=v=>{const s=String(v);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
+  const csv='﻿'+[headers,...rows].map(r=>r.map(escapeCsv).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`รายงานเก็บเงิน_${reportState.range}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast(`ดาวน์โหลด ${rows.length} แถว ✓`,'success');
+}
+
+/* ========== CUSTOMERS (ข้อมูลร้านค้า) ========== */
+const customerSearchState={q:'',selected:null};
+function renderCustomers(){
+  const q=customerSearchState.q.toLowerCase().trim();
+  const filtered=q?state.customers.filter(c=>
+    (c.name||'').toLowerCase().includes(q)||
+    (c.code||'').toLowerCase().includes(q)||
+    (c.phone||'').includes(q)||
+    (c.address||'').toLowerCase().includes(q)
+  ).slice(0,100):state.customers.slice(0,100);
+  $('customersBody').innerHTML=`
+    <div class="field">
+      <input class="input" id="custSearch" value="${esc(customerSearchState.q)}" oninput="customerSearchState.q=this.value;renderCustomers()" placeholder="🔍 ค้นหาชื่อร้าน / รหัส / เบอร์โทร / ที่อยู่..." autocomplete="off">
+      <small class="txt-muted mt-4">มีทั้งหมด ${fmtInt(state.customers.length)} ร้าน · แสดงสูงสุด 100 รายการ</small>
+    </div>
+    <div class="mt-12">
+      ${filtered.length?filtered.map(c=>`
+        <div class="bill-row" onclick="openCustomerInfo('${esc(c.code).replace(/'/g,"\\'")}')">
+          <div class="bill-info">
+            <div class="bill-name">${esc(c.name)}</div>
+            <div class="bill-doc" style="margin-top:4px">${esc(c.code)} ${c.warehouse?`· ${esc(c.warehouse)}`:''}</div>
+            <div class="txt-xs txt-muted mt-4">
+              ${c.salesman?`👤 ${esc(c.salesman)}`:''}
+              ${c.phone?` · ☎ ${esc(c.phone)}`:''}
+              ${c.address?` · 📍 ${esc(c.address.slice(0,40))}${c.address.length>40?'...':''}`:''}
+            </div>
+          </div>
+          ${c.lat&&c.lng?`<a class="btn btn-outline btn-sm" target="_blank" onclick="event.stopPropagation()" href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lng}">🗺</a>`:''}
+        </div>
+      `).join(''):`<div class="txt-center txt-muted p-16">ไม่พบร้านค้า</div>`}
+    </div>
+  `;
+}
+function openCustomerInfo(code){
+  const c=state.customers.find(x=>x.code===code); if(!c) return;
+  customerSearchState.selected=c;
+  // reuse customer modal — build a fake "bill" object with customer info
+  const fakeBill={
+    code:c.code, name:c.name, address:c.address, phone:c.phone,
+    salesman:c.salesman, creditDays:c.creditDays, creditLimit:c.creditLimit,
+    lat:c.lat, lng:c.lng, photoUrl:c.photoUrl,
+  };
+  $('customerBody').innerHTML=`
+    ${c.photoUrl?`<div class="cust-photo"><img src="${esc(c.photoUrl)}" onerror="this.parentElement.style.display='none'"></div>`:`<div class="map-box mb-12" id="custMapInfo"></div>`}
+    <div class="cust-row"><span class="lbl">รหัสลูกค้า</span><span class="val code">${esc(c.code)}</span></div>
+    <div class="cust-row"><span class="lbl">ชื่อ</span><span class="val txt-bold">${esc(c.name)}</span></div>
+    <div class="cust-row"><span class="lbl">ที่อยู่</span><span class="val">${esc(c.address||'-')}</span></div>
+    ${c.warehouse?`<div class="cust-row"><span class="lbl">คลัง</span><span class="val">${esc(c.warehouse)}</span></div>`:''}
+    <div class="cust-row"><span class="lbl">เซลล์ผู้ดูแล</span><span class="val">${esc(c.salesman||'-')}</span></div>
+    ${c.creditLimit?`<div class="cust-row"><span class="lbl">วงเงิน</span><span class="val num">${fmt(c.creditLimit)} ฿</span></div>`:''}
+    ${c.creditDays?`<div class="cust-row"><span class="lbl">เครดิต</span><span class="val"><span class="badge badge-gold">${c.creditDays} วัน</span></span></div>`:''}
+    ${c.phone?`<div class="cust-row"><span class="lbl">โทรศัพท์</span><span class="val"><a href="tel:${esc(c.phone)}" class="txt-gold txt-bold">${esc(c.phone)}</a></span></div>`:''}
+    ${c.lat?`<div class="cust-row"><span class="lbl">พิกัด</span><span class="val code">${c.lat.toFixed(5)},${c.lng.toFixed(5)}</span></div>`:''}
+    <div class="row mt-12">
+      ${c.lat?`<button class="btn btn-outline btn-sm" onclick="copy('${c.lat},${c.lng}')">📋 คัดลอกพิกัด</button>`:''}
+      ${c.lat?`<a class="btn btn-gold btn-sm" target="_blank" href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lng}">🗺 ไปที่ Maps</a>`:''}
+    </div>
+  `;
+  openModal('modalCustomer');
+  if(!c.photoUrl&&c.lat){
+    setTimeout(()=>{
+      const el=document.getElementById('custMapInfo');
+      if(!el) return;
+      const m=L.map('custMapInfo',{zoomControl:true,attributionControl:false}).setView([c.lat,c.lng],15);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18}).addTo(m);
+      L.marker([c.lat,c.lng]).addTo(m).bindPopup(esc(c.name));
+    },150);
+  }
 }
 
 /* ========== รับคืนสินค้า (CN sheet) — โครงตามแอป Glide เก่า ========== */
