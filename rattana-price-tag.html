@@ -2811,7 +2811,7 @@ function selectAll(on) {
 /* ============== TAG RENDERING ============== */
 function getTplType(p) { return tplOverrides[p.sku] || p.tagType || 'regular'; }
 
-function renderTag(p, idPrefix='tag') {
+function renderTag(p, idPrefix='tag', perPage) {
   const type = getTplType(p);
   const tagId = `${idPrefix}-${cssId(p.sku)}`;
   const qrId  = `qr-${idPrefix}-${cssId(p.sku)}`;
@@ -2820,6 +2820,18 @@ function renderTag(p, idPrefix='tag') {
   const imgHtml = p.image
     ? `<img src="${escapeAttr(p.image)}" onerror="this.style.display='none';this.parentElement.innerHTML='<div class=t-img-empty>📦</div>'" alt="" crossorigin="anonymous">`
     : `<div class="t-img-empty">📦</div>`;
+
+  // v3.0 — MINI LABEL (Layout 30): image + name + barcode only, no price/location/brand
+  if (perPage === 30) {
+    const html = `
+      <div class="tag tpl-mini" id="${tagId}">
+        <div class="t-img">${imgHtml}</div>
+        <div class="t-name">${escapeHtml(p.name)}</div>
+        <div class="t-mini-bc" id="${bcId}"></div>
+        <div class="t-mini-code">${escapeHtml(p.barcode||p.sku||'')}</div>
+      </div>`;
+    return { html, qrId, bcId };
+  }
 
   // v3.0 — Footer: SKU + Barcode + Location (matches any of the product's codes)
   const locText = p.location || lookupLocation(p);
