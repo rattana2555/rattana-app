@@ -93,6 +93,14 @@
     .wh-bar.need-pick .wh-bar-l{color:#a67700;font-weight:800}
     .wh-bar.need-pick select{border-color:#cf8400 !important;background:#fff}
     @keyframes pulse-pick{0%,100%{box-shadow:0 0 0 0 rgba(207,132,0,.35)}50%{box-shadow:0 0 0 6px rgba(207,132,0,0)}}
+    /* Lot management in edit modal */
+    .lot-row{background:var(--row-alt);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+    .lot-row-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+    .lot-badge{font-size:11px;font-weight:800;color:var(--navy);background:rgba(42,67,128,.12);padding:2px 8px;border-radius:8px;letter-spacing:.3px}
+    body.dark .lot-badge{color:var(--gold-light);background:rgba(255,195,0,.12)}
+    .lot-del{background:none;border:none;color:var(--danger);font-size:16px;cursor:pointer;padding:0 4px;line-height:1}
+    .lot-counts{display:flex;flex-direction:column;gap:6px;margin-bottom:6px}
+    .lot-unit-row{display:flex;align-items:center;gap:8px}
     .hist-chips{display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px 4px;border-bottom:1px solid var(--border)}
     .hist-chip{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:999px;border:1px solid var(--border);background:#fff;color:var(--navy);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
     .hist-chip:hover{border-color:var(--navy)}
@@ -638,7 +646,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v3.25';
+const APP_VERSION = 'v3.26';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -1762,9 +1770,25 @@ function confirmCount() {
       counts: { EA:0, PA:0, BP:0, CS:0 },
     };
   }
-  countSession.items[key].counts[u] += qty;
   const expEl = document.getElementById('expiryInput');
-  if (expEl) countSession.items[key].expiryDate = expEl.value || '';
+  const expVal = expEl ? (expEl.value || '') : '';
+  const item = countSession.items[key];
+  // Convert legacy single-counts to lots on first use
+  if (!item.lots) {
+    item.lots = [{ counts: { ...item.counts }, expiryDate: item.expiryDate || '' }];
+  }
+  // Find existing lot with same expiry date, or create new lot
+  const lotIdx = item.lots.findIndex(l => l.expiryDate === expVal);
+  if (lotIdx >= 0) {
+    item.lots[lotIdx].counts[u] = (item.lots[lotIdx].counts[u] || 0) + qty;
+  } else {
+    const newCounts = { EA:0, PA:0, BP:0, CS:0 };
+    newCounts[u] = qty;
+    item.lots.push({ counts: newCounts, expiryDate: expVal });
+  }
+  // Keep legacy counts in sync (sum of lots) for any code that still reads it
+  item.counts = lotsToTotalCounts(item.lots);
+  item.expiryDate = item.lots[0].expiryDate || '';
   saveCountSession();
   pendingScan = null;
   document.getElementById('countPending').innerHTML = '';
@@ -1773,9 +1797,24 @@ function confirmCount() {
   document.getElementById('countInput').focus();
 }
 
+// ── Lot helpers ──
+// Return lots array (always at least 1 element for backwards compat)
+function itemLots(item) {
+  if (item.lots && item.lots.length) return item.lots;
+  // Legacy: single counts+expiryDate → wrap as 1 lot
+  return [{ counts: item.counts, expiryDate: item.expiryDate || '' }];
+}
+// Sum all lots into total counts object
+function lotsToTotalCounts(lots) {
+  const t = { EA:0, PA:0, BP:0, CS:0 };
+  lots.forEach(l => { ['EA','PA','BP','CS'].forEach(u => { t[u] = (t[u]||0) + (l.counts[u]||0); }); });
+  return t;
+}
+
 // pieces helpers
 function countedPieces(item) {
-  return ['EA','PA','BP','CS'].reduce((s,u) => s + (item.counts[u]||0) * (item.factors[u]||1), 0);
+  const counts = item.lots ? lotsToTotalCounts(item.lots) : item.counts;
+  return ['EA','PA','BP','CS'].reduce((s,u) => s + (counts[u]||0) * (item.factors[u]||1), 0);
 }
 function breakdownText(item) {
   return ['CS','BP','PA','EA'].filter(u => item.counts[u] > 0)
@@ -1903,7 +1942,11 @@ function renderCountList() {
       </div>`).join('');
     const extras = `
       ${ibBadgeHtml(prod, countSession && countSession.warehouse)}
-      ${expiryBadgeHtml(it.expiryDate)}`;
+      ${(() => {
+        const lots = itemLots(it);
+        if (lots.length > 1) return `<span class="badge" style="background:rgba(42,67,128,.1);color:var(--navy);font-size:10.5px">${lots.length} Lots</span>`;
+        return expiryBadgeHtml(lots[0].expiryDate);
+      })()}`;
     return `
     <div class="lrow ${open?'open':''}">
       <div class="lrow-main" onclick="toggleLiveRow('${key}')">
@@ -1991,52 +2034,101 @@ function clearCount() {
 }
 
 // ── Edit item modal ──
+function lotRowHtml(lot, li, ib) {
+  const required = ib && ib.expired && !lot.expiryDate;
+  return `<div class="lot-row" data-li="${li}">
+    <div class="lot-row-head">
+      <span class="lot-badge">Lot ${li+1}</span>
+      <button class="lot-del" onclick="removeLotRow(${li})" title="ลบ lot นี้" type="button">✕</button>
+    </div>
+    <div class="lot-counts">
+      ${['CS','BP','PA','EA'].map(u => {
+        const f = (window._editItem && window._editItem.factors[u]) || 1;
+        return `<div class="lot-unit-row">
+          <span class="badge ${UNIT_CSS[u]||''}" style="width:36px;text-align:center;font-size:11px">${u}</span>
+          <span style="flex:1;font-size:11px;color:var(--muted)">×${f}</span>
+          <input type="number" min="0" class="input input-sm" style="width:80px;text-align:center"
+                 id="lot_${li}_${u}" value="${lot.counts[u]||0}">
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="margin-top:8px">
+      <label style="font-size:11px;font-weight:700;${required?'color:var(--danger)':'color:var(--muted)'};text-transform:uppercase;letter-spacing:.3px">
+        📅 วันหมดอายุ ${required?'<span style="color:var(--danger)">* จำเป็น</span>':''}
+      </label>
+      <input type="date" id="lot_${li}_exp" class="input" style="margin-top:4px;height:42px;${required?'border-color:var(--danger);background:rgba(224,72,58,.04)':''}"
+             value="${lot.expiryDate||''}">
+    </div>
+  </div>`;
+}
+function removeLotRow(li) {
+  const it = window._editItem;
+  if (!it || !it.lots || it.lots.length <= 1) { showToast('ต้องมีอย่างน้อย 1 Lot', 'warning'); return; }
+  it.lots.splice(li, 1);
+  renderLotRows();
+}
+function addLotRow() {
+  const it = window._editItem;
+  if (!it) return;
+  if (!it.lots) it.lots = [{ counts: { ...it.counts }, expiryDate: it.expiryDate||'' }];
+  it.lots.push({ counts: { EA:0, PA:0, BP:0, CS:0 }, expiryDate: '' });
+  renderLotRows();
+}
+function renderLotRows() {
+  const it = window._editItem;
+  if (!it) return;
+  const ib = ibInfo(productByKey[it.key], countSession && countSession.warehouse);
+  const lots = itemLots(it);
+  document.getElementById('lotList').innerHTML = lots.map((l,i) => lotRowHtml(l,i,ib)).join('');
+}
 function openEditItem(encKey) {
   const key = decodeURIComponent(encKey);
   const it = countSession.items[key];
   if (!it) return;
   editKey = key;
+  // Ensure lots exist
+  if (!it.lots) it.lots = [{ counts: { ...it.counts }, expiryDate: it.expiryDate||'' }];
+  window._editItem = it;
   document.getElementById('editBody').innerHTML = `
     <div style="font-size:14px;font-weight:700;margin-bottom:12px">${it.name}</div>
-    ${['CS','BP','PA','EA'].map(u => `
-      <div class="flex" style="align-items:center;gap:10px;margin-bottom:10px">
-        <span class="badge ${UNIT_CSS[u]||''}" style="width:38px;text-align:center">${u}</span>
-        <span style="flex:1;font-size:12px;color:var(--muted)">1 ${u} = ${it.factors[u]||1} ชิ้น</span>
-        <input type="number" min="0" class="input input-sm" style="width:90px;text-align:center"
-               id="edit_${u}" value="${it.counts[u]||0}">
-      </div>`).join('')}
-    ${(() => {
-      const ib = ibInfo(productByKey[it.key], countSession && countSession.warehouse);
-      const required = ib && ib.expired;
-      return `
-    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-      <label style="font-size:11px;font-weight:700;${required?'color:var(--danger)':'color:var(--muted)'};text-transform:uppercase;letter-spacing:.4px">
-        📅 วันหมดอายุ ${required ? '<span>* จำเป็น (สินค้าเกิน 90 วัน)</span>' : ''}
-      </label>
-      <input type="date" id="edit_expiryDate" class="input" style="margin-top:4px;height:44px;${required?'border-color:var(--danger);background:rgba(224,72,58,.04)':''}"
-             value="${it.expiryDate || ''}">
-    </div>`;
-    })()}`;
+    <div id="lotList"></div>
+    <button type="button" onclick="addLotRow()" class="btn btn-outline btn-sm btn-block" style="margin-top:8px">
+      + เพิ่ม Lot (วันหมดอายุต่างกัน)
+    </button>`;
+  renderLotRows();
   document.getElementById('editModal').classList.add('open');
 }
 function saveEditItem() {
-  const it = countSession.items[editKey];
+  const it = window._editItem || countSession.items[editKey];
   if (!it) return closeEditItem();
-  const newCounts = {};
-  ['CS','BP','PA','EA'].forEach(u => { newCounts[u] = Math.max(0, parseInt(document.getElementById('edit_'+u).value)||0); });
-  const expEl  = document.getElementById('edit_expiryDate');
-  const newExp = expEl ? (expEl.value || '') : (it.expiryDate || '');
-  // If the product is older than 90 days, expiry date is required
   const ib = ibInfo(productByKey[it.key], countSession && countSession.warehouse);
-  const hasAny = ['CS','BP','PA','EA'].some(u => newCounts[u] > 0);
-  if (hasAny && ib && ib.expired && !newExp) {
-    showToast('สินค้าเกิน 90 วัน — กรุณาใส่วันหมดอายุก่อนบันทึก', 'warning');
-    if (expEl) expEl.focus();
-    return;
+  const lots = itemLots(it);
+  // Read back values from DOM into lots array
+  const newLots = lots.map((l, li) => {
+    const counts = {};
+    ['CS','BP','PA','EA'].forEach(u => {
+      counts[u] = Math.max(0, parseInt(document.getElementById(`lot_${li}_${u}`)?.value)||0);
+    });
+    const expEl = document.getElementById(`lot_${li}_exp`);
+    return { counts, expiryDate: expEl ? (expEl.value||'') : (l.expiryDate||'') };
+  });
+  // Validate: each lot with qty > 0 must have expiry if product expired
+  for (let i = 0; i < newLots.length; i++) {
+    const hasQty = ['CS','BP','PA','EA'].some(u => newLots[i].counts[u] > 0);
+    if (hasQty && ib && ib.expired && !newLots[i].expiryDate) {
+      showToast(`Lot ${i+1}: สินค้าเกิน 90 วัน — กรุณาใส่วันหมดอายุ`, 'warning');
+      document.getElementById(`lot_${i}_exp`)?.focus();
+      return;
+    }
   }
-  Object.assign(it.counts, newCounts);
-  it.expiryDate = newExp;
-  if (!hasAny) delete countSession.items[editKey];
+  // Remove empty lots (all counts = 0)
+  const validLots = newLots.filter(l => ['CS','BP','PA','EA'].some(u => l.counts[u] > 0));
+  if (!validLots.length) { delete countSession.items[editKey]; closeEditItem(); saveCountSession(); renderCountList(); return; }
+  it.lots = validLots;
+  it.counts = lotsToTotalCounts(validLots);
+  it.expiryDate = validLots[0].expiryDate || '';
+  if (!countSession.items[editKey]) countSession.items[editKey] = it;
+  else Object.assign(countSession.items[editKey], it);
   saveCountSession();
   closeEditItem();
   renderCountList();
@@ -2115,18 +2207,26 @@ function renderSummary() {
 
 // ── Export / Save ──
 function summaryExportRows() {
-  return buildSummaryRows().map(r => ({
-    'รหัสสินค้า': r.key,
-    'ชื่อสินค้า': r.name,
-    'นับได้ CS': r.item.counts.CS, 'นับได้ BP': r.item.counts.BP,
-    'นับได้ PA': r.item.counts.PA, 'นับได้ EA': r.item.counts.EA,
-    'นับได้ (ชิ้น)': r.counted,
-    'สต็อกระบบ (CS.EA)': r.systemRaw,
-    'สต็อกระบบ (ชิ้น)': r.system,
-    'ต่าง (ชิ้น)': r.diff,
-    'สถานะ': r.status==='ok'?'ตรง':(r.status==='short'?'ขาด':'เกิน'),
-    'วันหมดอายุ': r.item.expiryDate || '',
-  }));
+  return buildSummaryRows().flatMap(r => {
+    const lots = itemLots(r.item);
+    return lots.map((lot, li) => {
+      const lc = lot.counts;
+      const lotPieces = ['EA','PA','BP','CS'].reduce((s,u)=>s+(lc[u]||0)*(r.item.factors[u]||1),0);
+      return {
+        'รหัสสินค้า': r.key,
+        'ชื่อสินค้า': r.name,
+        'Lot': li+1,
+        'นับได้ CS': lc.CS||0, 'นับได้ BP': lc.BP||0,
+        'นับได้ PA': lc.PA||0, 'นับได้ EA': lc.EA||0,
+        'นับได้ (ชิ้น)': lotPieces,
+        'สต็อกระบบ (CS.EA)': li===0 ? r.systemRaw : '',
+        'สต็อกระบบ (ชิ้น)': li===0 ? r.system : '',
+        'ต่าง (ชิ้น)': li===0 ? r.diff : '',
+        'สถานะ': li===0 ? (r.status==='ok'?'ตรง':(r.status==='short'?'ขาด':'เกิน')) : '',
+        'วันหมดอายุ': lot.expiryDate || '',
+      };
+    });
+  });
 }
 
 function exportCountExcel() {
@@ -2164,24 +2264,32 @@ async function saveCountToSheet() {
     empId: counterDisplayEmpId(),
     email: currentUser?.email || '',
     savedAt: new Date().toISOString(),
-    rows: rows.map(r => ({
-      key: r.key, name: r.name,
-      cs: r.item.counts.CS, bp: r.item.counts.BP, pa: r.item.counts.PA, ea: r.item.counts.EA,
-      countedPieces: r.counted, systemRaw: r.systemRaw, systemPieces: r.system,
-      diffPieces: r.diff,
-      diffCSEA: (() => {
-        // Numeric CS.EA: "{cs}.{ea}" — EA part is literal (no leading zero padding),
-        // matches the stock sheet convention. Sign mirrors diffPieces:
-        //   -1.2  = ขาด 1 CS 2 EA        +0.12 = เกิน 12 EA
+    rows: rows.flatMap(r => {
+      const lots = itemLots(r.item);
+      const diffCSEA = (() => {
         if (r.diff === 0) return '0';
         const sign = r.diff > 0 ? '+' : '-';
         const a = Math.abs(r.diff), f = r.factorCS > 0 ? r.factorCS : 1;
         const cs = Math.floor(a / f), ea = a - cs * f;
         return `${sign}${cs}.${ea}`;
-      })(),
-      status: r.status==='ok' ? 'ตรง' : r.status==='short' ? 'ขาด' : 'เกิน',
-      expiryDate: r.item.expiryDate || '',
-    })),
+      })();
+      const status = r.status==='ok' ? 'ตรง' : r.status==='short' ? 'ขาด' : 'เกิน';
+      return lots.map((lot, li) => {
+        const lc = lot.counts;
+        const lotPieces = ['EA','PA','BP','CS'].reduce((s,u)=>s+(lc[u]||0)*(r.item.factors[u]||1),0);
+        return {
+          key: r.key, name: r.name,
+          cs: lc.CS||0, bp: lc.BP||0, pa: lc.PA||0, ea: lc.EA||0,
+          countedPieces: lotPieces,
+          systemRaw: li===0 ? r.systemRaw : '',
+          systemPieces: li===0 ? r.system : 0,
+          diffPieces: li===0 ? r.diff : 0,
+          diffCSEA: li===0 ? diffCSEA : '',
+          status: li===0 ? status : '',
+          expiryDate: lot.expiryDate || '',
+        };
+      });
+    }),
   };
   showSpinner('กำลังบันทึกลง Google Sheet...');
   try {
