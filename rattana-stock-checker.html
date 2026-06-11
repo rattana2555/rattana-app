@@ -672,7 +672,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v3.35';
+const APP_VERSION = 'v3.36';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -2592,9 +2592,10 @@ function openHistDetail(idx) {
     if (it.status)       g.status = it.status;
     // Group by savedAt (each unique save time = one scan)
     const tKey = it.savedAt || '__none__';
-    if (!g.scanMap.has(tKey)) g.scanMap.set(tKey, { savedAt:it.savedAt, counted:0, lots:[] });
+    if (!g.scanMap.has(tKey)) g.scanMap.set(tKey, { savedAt:it.savedAt, counted:0, system:0, lots:[] });
     const sc = g.scanMap.get(tKey);
     sc.counted += it.countedPieces||0;
+    if (it.systemPieces) sc.system = it.systemPieces;
     sc.lots.push(it);
   });
 
@@ -2621,22 +2622,28 @@ function openHistDetail(idx) {
     const scanRows = scans.map((sc, si) => {
       const timeLabel = sc.savedAt ? formatThaiTime(sc.savedAt) : '—';
       const hasLots = sc.lots.length > 1 || sc.lots.some(l=>l.expiryDate);
+      const scDiff = sc.counted - sc.system;
+      const scDiffTxt = sc.system
+        ? (scDiff===0 ? '<span style="color:var(--ok);font-weight:700">ตรง</span>'
+          : `<span style="color:var(--${scDiff<0?'short':'over'});font-weight:700">${scDiff>0?'+':''}${piecesToCSEA(scDiff, p.factorCS)}</span>`)
+        : '';
       const lotRows = hasLots ? sc.lots.map(l => {
         const exp = l.expiryDate
           ? `<span class="exp-chip" style="font-size:11px">📅 ${formatThaiDate(l.expiryDate)}</span>`
-          : '<span style="color:var(--muted)">ไม่มีวันหมดอายุ</span>';
-        return `<div style="display:flex;align-items:center;gap:8px;padding:6px 14px 6px 32px;border-top:1px solid var(--border);font-size:12px">
+          : '<span style="color:var(--muted);font-size:11px">ไม่มีวันหมดอายุ</span>';
+        const csea = piecesToCSEA(l.countedPieces||0, p.factorCS);
+        return `<div style="display:flex;align-items:center;gap:8px;padding:7px 14px 7px 32px;border-top:1px solid var(--border);font-size:12px">
           <span style="flex:1">${exp}</span>
-          <span style="font-weight:600">${(l.countedPieces||0).toLocaleString()} ชิ้น</span>
+          <span style="font-weight:600">${csea}</span>
         </div>`;
       }).join('') : '';
 
       if (multiScan) {
-        // Each scan is its own expandable row inside the product card
         return `<div class="hd-scan-row${hasLots?' hd-has-lots':''}" onclick="event.stopPropagation();this.classList.toggle('open')">
           <div class="hd-scan-main">
             <span class="time-chip" style="font-size:12px">${timeLabel}</span>
-            <span style="flex:1;font-size:13px;font-weight:600">${sc.counted.toLocaleString()} ชิ้น</span>
+            <span style="font-size:12px;color:var(--muted)">นับ <b style="color:var(--text)">${piecesToCSEA(sc.counted,p.factorCS)}</b>${sc.system?` · ระบบ ${piecesToCSEA(sc.system,p.factorCS)}`:''}</span>
+            <span style="margin-left:auto">${scDiffTxt}</span>
             ${hasLots?`<span class="hd-chevron" style="font-size:14px">›</span>`:''}
           </div>
           ${hasLots?`<div class="hd-lots">${lotRows}</div>`:''}
@@ -2653,7 +2660,7 @@ function openHistDetail(idx) {
       <div class="hd-prod-main">
         <div class="hd-prod-info">
           <div style="font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:1px">นับ <b>${p.counted.toLocaleString()}</b> · ระบบ ${p.system.toLocaleString()} ชิ้น${multiScan?` · <b>${scans.length} ครั้ง</b>`:''}
+          <div style="font-size:12px;color:var(--muted);margin-top:1px">นับ <b>${piecesToCSEA(p.counted,p.factorCS)}</b> · ระบบ ${piecesToCSEA(p.system,p.factorCS)}${multiScan?` · <b>${scans.length} ครั้ง</b>`:''}
           </div>
         </div>
         <div class="hd-prod-right">
