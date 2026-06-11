@@ -646,7 +646,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v3.29';
+const APP_VERSION = 'v3.30';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -1705,16 +1705,21 @@ function renderPending() {
       ${(() => {
         const ib = ibInfo(p, countSession && countSession.warehouse);
         const required = ib && ib.expired;
-        // Don't pre-fill expiry — user may be scanning a different lot with a different date.
-        // Each scan should start blank so lots don't accidentally merge.
-        const cur = '';
+        // Quick-pick buttons from existing lots of this product
+        const existing = countSession.items[productKey(p)]
+          ? [...new Set(itemLots(countSession.items[productKey(p)]).map(l=>l.expiryDate).filter(Boolean))]
+          : [];
+        const quickPick = existing.length
+          ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${existing.map(d=>`<button type="button" onclick="document.getElementById('expiryInput').value='${d}'" style="background:var(--row-alt);border:1px solid var(--border);border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--navy);font-weight:600">${formatThaiDate(d)}</button>`).join('')}</div>`
+          : '';
         return `
       <div class="field" style="margin-top:12px">
         <label style="font-size:11px;font-weight:700;${required?'color:var(--danger)':'color:var(--muted)'};text-transform:uppercase;letter-spacing:.3px">
           📅 วันหมดอายุ ${required ? '<span>* จำเป็น</span>' : '(ไม่บังคับ)'}
         </label>
+        ${quickPick}
         <input type="date" id="expiryInput" class="input input-compact" style="margin-top:4px;${required?'border-color:var(--danger);background:rgba(224,72,58,.04)':''}"
-               value="${cur}" ${required ? 'required' : ''}>
+               value="" ${required ? 'required' : ''}>
       </div>`;
       })()}
       <div class="pb-row">
