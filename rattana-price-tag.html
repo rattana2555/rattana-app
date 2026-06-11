@@ -2636,6 +2636,13 @@ async function loadProducts(opts = {}) {
       return;
     }
     products = rows.map(r => normalizeProduct(r)).filter(p => p.name);
+    // v3.1: IB filter — keep only products that have an IB value in the chosen warehouse
+    if (SHEET_CONFIG.ibFilter) {
+      const wh = SHEET_CONFIG.warehouse;
+      const before = products.length;
+      products = products.filter(p => p.ib && p.ib[wh]);
+      if (!silent) showToast(`กรอง IB ${wh}: เหลือ ${products.length} จาก ${before} รายการ`, 'info');
+    }
     // Cache slimmed products (drops allCodes etc.) — safe against quota limits
     const saved = safeSetItem(STORAGE.cache, JSON.stringify({ products: products.map(slimProduct), ts: Date.now() }));
     if (!saved) showToast('ℹ️ ข้อมูลเยอะเกินกว่าจะ cache — จะโหลดใหม่ทุกครั้ง (ใช้งานได้ปกติ)', 'info');
