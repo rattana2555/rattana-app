@@ -3058,10 +3058,10 @@ function renderTag(p, idPrefix='tag', perPage) {
   return { html, qrId, bcId };
 }
 function attachCodes(p, qrId, bcId) {
-  // v3.3 — All barcodes rendered as CODE39 with the number shown below (industrial style)
+  // v3.4 — Compact bars (EAN13 / CODE128) + number shown below (the requested style)
   const bcEl = document.getElementById(bcId);
   if (!bcEl || !p.barcode) return;
-  const code = String(p.barcode).trim().toUpperCase();  // Code 39 uses uppercase
+  const code = String(p.barcode).trim();
   const isMini = !!bcEl.closest('.tpl-mini');
   const draw = (format) => {
     const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
@@ -3069,24 +3069,28 @@ function attachCodes(p, qrId, bcId) {
     bcEl.appendChild(svg);
     JsBarcode(svg, code, {
       format,
-      width: 1.1,
+      width: 1.6,                  // denser bars → shorter overall width than Code39
       height: 26,
-      displayValue: true,          // show the number under the bars
+      displayValue: true,          // keep the number under the bars (the style)
       fontSize: 13,
       textMargin: 1,
       font: "'Courier New',monospace",
       margin: 0,
       valid: (v) => { if (!v) throw new Error('invalid'); }
     });
-    svg.style.maxWidth = isMini ? '34mm' : '26mm';
+    svg.style.maxWidth = isMini ? '32mm' : '24mm';
     svg.style.height   = '10mm';
   };
-  // CODE39: digits + A-Z, any length, no checksum needed (matches the requested style)
+  // Compact: valid 13-digit → EAN13; otherwise CODE128 (both far shorter than Code39)
   try {
-    draw('CODE39');
+    if (/^\d{13}$/.test(code)) {
+      try { draw('EAN13'); }
+      catch { draw('CODE128'); }
+    } else {
+      draw('CODE128');
+    }
   } catch (e) {
-    try { draw('CODE128'); }        // fallback for chars Code39 can't encode
-    catch (e2) { bcEl.innerHTML = ''; console.warn('Barcode failed', code, e2); }
+    bcEl.innerHTML = ''; console.warn('Barcode failed', code, e);
   }
 }
 
