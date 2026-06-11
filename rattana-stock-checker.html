@@ -120,6 +120,21 @@
     body.dark .hc-ok{background:#1a3a25;color:#7be0a3}
     body.dark .hc-short{background:#3a1a17;color:#ff8a7e}
     body.dark .hc-over{background:#3a2e15;color:#e8c86a}
+    /* History detail — product rows */
+    .hd-prod-row{background:var(--card-bg);border:1.5px solid var(--border);border-radius:10px;overflow:hidden;cursor:pointer;transition:border-color .15s}
+    .hd-prod-row:hover{border-color:var(--gold)}
+    .hd-prod-main{display:flex;align-items:center;gap:10px;padding:12px 14px}
+    .hd-lots{display:none;background:var(--row-alt)}
+    .hd-prod-row.open .hd-lots{display:block}
+    .hd-prod-row.open > .hd-prod-main > div:last-child > span:last-child{transform:rotate(90deg);display:inline-block}
+    /* Summary result pills */
+    .srp{display:inline-flex;align-items:center;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap}
+    .srp-ok{background:#e8f7ee;color:#1e8449}
+    .srp-short{background:#ffd5d0;color:#c0392b}
+    .srp-over{background:#fff3d1;color:#a67700}
+    body.dark .srp-ok{background:#1a3a25;color:#7be0a3}
+    body.dark .srp-short{background:#3a1a17;color:#ff8a7e}
+    body.dark .srp-over{background:#3a2e15;color:#e8c86a}
     /* Quick qty preset pills */
     .qty-presets{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:8px 0 4px}
     .qty-preset{background:var(--row-alt);border:1.5px solid var(--border);color:var(--text);padding:8px 14px;border-radius:20px;font-weight:700;font-size:14px;cursor:pointer;min-width:48px}
@@ -646,7 +661,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v3.32';
+const APP_VERSION = 'v3.33';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -2539,55 +2554,83 @@ function openHistDetail(idx) {
   const sessions = (body && body._sessions) || window._histSessions || [];
   const s = sessions[idx];
   if (!s) { console.warn('openHistDetail: no session at idx', idx, 'of', sessions.length); return; }
-  const pill = st => st==='ตรง'?'hc-ok':st==='ขาด'?'hc-short':'hc-over';
+
   document.getElementById('histModalTitle').textContent =
-    `${formatThaiDate(s.savedAt)} · ${s.warehouse}`;
-  const tot = { c:0, sy:0, d:0 };
-  const rows = s.items.map(it => {
-    tot.c += it.countedPieces; tot.sy += it.systemPieces; tot.d += it.diffPieces;
-    const dsign = it.diffPieces>0?'+':'';
-    const timeCell = it.savedAt ? formatThaiTime(it.savedAt) : '—';
-    // Compute factorCS from product master, else infer from this row
-    const prod = productByKey[it.key];
-    let factorCS = prod ? unitFactor(prod, 'CS') : 1;
-    if ((!prod || factorCS === 1) && it.cs > 0 && it.countedPieces > 0) {
-      const inferred = Math.round((it.countedPieces - it.ea - (it.bp||0) - (it.pa||0)) / it.cs);
-      if (inferred > 1) factorCS = inferred;
+    `${formatThaiDate(s.savedAt)} · ${s.warehouse} · ${s.counterName||s.empId||'-'}`;
+
+  // Group items by product key — merge lots into product summary
+  const prodMap = new Map();
+  s.items.forEach(it => {
+    const k = it.key || it.name;
+    if (!prodMap.has(k)) {
+      const prod = productByKey[it.key];
+      let factorCS = prod ? unitFactor(prod, 'CS') : 1;
+      if ((!prod || factorCS===1) && it.cs>0 && it.countedPieces>0) {
+        const inf = Math.round((it.countedPieces - it.ea - (it.bp||0) - (it.pa||0)) / it.cs);
+        if (inf > 1) factorCS = inf;
+      }
+      prodMap.set(k, { name:it.name, key:it.key, factorCS, counted:0, system:it.systemPieces||0,
+                       diff:it.diffPieces||0, status:it.status, lots:[] });
     }
-    const diffCSEA  = it.diffPieces === 0 ? '' : piecesToCSEA(it.diffPieces, factorCS);
-    const diffClass = it.status==='ตรง'?'diff-ok':(it.status==='ขาด'?'diff-short':'diff-over');
-    const expChip   = it.expiryDate ? `<div class="exp-chip">📅 EXP ${formatThaiDate(it.expiryDate)}</div>` : '';
-    return `<tr>
-      <td><span class="time-chip">${timeCell}</span></td>
-      <td class="prod-cell">
-        <div class="prod-name">${it.name}</div>
-        ${expChip}
-      </td>
-      <td class="num">${it.countedPieces.toLocaleString()}</td>
-      <td class="num" style="color:var(--muted)">${it.systemPieces.toLocaleString()}</td>
-      <td class="num">
-        <div class="${diffClass}" style="font-weight:700">${dsign}${it.diffPieces.toLocaleString()}</div>
-        ${diffCSEA?`<div class="diff-csea">${diffCSEA}</div>`:''}
-      </td>
-      <td><span class="hc ${pill(it.status)}" style="font-size:12px;padding:4px 11px;border-radius:11px">${it.status}</span></td>
-    </tr>`;
+    const g = prodMap.get(k);
+    g.counted += it.countedPieces||0;
+    if (it.systemPieces) g.system = it.systemPieces;
+    if (it.diffPieces)   g.diff   = it.diffPieces;
+    if (it.status)       g.status = it.status;
+    if (it.countedPieces || it.expiryDate) g.lots.push(it);
+  });
+  const prods = [...prodMap.values()];
+  const nOk    = prods.filter(p=>p.status==='ตรง').length;
+  const nShort = prods.filter(p=>p.status==='ขาด').length;
+  const nOver  = prods.filter(p=>p.status==='เกิน').length;
+  const totC   = prods.reduce((s,p)=>s+p.counted,0);
+  const totSy  = prods.reduce((s,p)=>s+p.system,0);
+  const totD   = prods.reduce((s,p)=>s+(p.diff||0),0);
+
+  const pillCls = st => st==='ตรง'?'srp-ok':st==='ขาด'?'srp-short':'srp-over';
+  const pillTxt = (p) => {
+    if (p.status==='ตรง') return '<span class="srp srp-ok">✓ ตรง</span>';
+    const a=Math.abs(p.diff), f=p.factorCS||1, cs=Math.floor(a/f), ea=a-cs*f;
+    const csea = cs>0?`${cs} CS ${ea} EA`:`${ea} EA`;
+    return `<span class="srp srp-${p.status==='ขาด'?'short':'over'}">${p.status==='ขาด'?'ขาด':'เกิน'} ${csea}</span>`;
+  };
+
+  const prodRows = prods.map((p,pi) => {
+    const hasLots = p.lots.length > 1 || p.lots.some(l=>l.expiryDate);
+    const lotRows = hasLots ? p.lots.map(l=>{
+      const exp = l.expiryDate ? `<span class="exp-chip" style="font-size:11px">📅 ${formatThaiDate(l.expiryDate)}</span>` : '';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-top:1px solid var(--border);font-size:12px">
+        <span style="color:var(--muted);flex:1">${exp||'ไม่มีวันหมดอายุ'}</span>
+        <span style="font-weight:600">${(l.countedPieces||0).toLocaleString()} ชิ้น</span>
+      </div>`;
+    }).join('') : '';
+    return `
+    <div class="hd-prod-row" onclick="this.classList.toggle('open')">
+      <div class="hd-prod-main">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:1px">นับ <b>${p.counted.toLocaleString()}</b> · ระบบ ${p.system.toLocaleString()} ชิ้น</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          ${pillTxt(p)}
+          ${hasLots?`<span style="color:var(--muted);font-size:16px">›</span>`:''}
+        </div>
+      </div>
+      ${hasLots?`<div class="hd-lots">${lotRows}</div>`:''}
+    </div>`;
   }).join('');
+
   document.getElementById('histModalBody').innerHTML = `
-    <div style="font-size:13px;color:var(--muted);margin-bottom:10px">
-      ผู้นับ <b>${s.counterName||s.empId||'-'}</b> · เริ่มนับ ${formatThaiDateTime(s.sessionStart)} · ${s.items.length} รายการ
+    <div style="display:flex;gap:10px;margin-bottom:12px">
+      ${nOk?`<span class="hc hc-ok" style="padding:5px 12px;border-radius:10px;font-size:13px">✓ ตรง ${nOk}</span>`:''}
+      ${nShort?`<span class="hc hc-short" style="padding:5px 12px;border-radius:10px;font-size:13px">↓ ขาด ${nShort}</span>`:''}
+      ${nOver?`<span class="hc hc-over" style="padding:5px 12px;border-radius:10px;font-size:13px">↑ เกิน ${nOver}</span>`:''}
+      <span style="margin-left:auto;font-size:12px;color:var(--muted);align-self:center">${prods.length} รายการ</span>
     </div>
-    <div style="overflow-x:auto">
-      <table class="sum-tbl">
-        <thead><tr><th>เวลา</th><th>สินค้า</th><th>นับ</th><th>ระบบ</th><th>ต่าง</th><th>สถานะ</th></tr></thead>
-        <tbody>${rows}</tbody>
-        <tfoot><tr>
-          <td colspan="2" style="text-align:right;font-weight:700">รวม</td>
-          <td class="num" style="font-weight:700">${tot.c.toLocaleString()}</td>
-          <td class="num" style="font-weight:700;color:var(--muted)">${tot.sy.toLocaleString()}</td>
-          <td class="num" style="font-weight:700">${tot.d>0?'+':''}${tot.d.toLocaleString()}</td>
-          <td></td>
-        </tr></tfoot>
-      </table>
+    <div style="display:flex;flex-direction:column;gap:6px">${prodRows}</div>
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:13px;font-weight:700">
+      <span>รวม</span>
+      <span>นับ ${totC.toLocaleString()} · ระบบ ${totSy.toLocaleString()} · ต่าง ${totD>0?'+':''}${totD.toLocaleString()}</span>
     </div>`;
   document.getElementById('histModal').classList.add('open');
 }
