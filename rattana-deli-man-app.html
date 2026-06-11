@@ -598,7 +598,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.49';
+const APP_VERSION='1.50';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -1701,6 +1701,8 @@ function resetReturnForm(){
   showToast('ล้างข้อมูลแล้ว','info');
 }
 async function confirmReturn(){
+  // v1.50: กัน double-click — บล็อกการกดซ้ำขณะกำลังส่ง
+  if(returnState._submitting){ showToast('กำลังบันทึก... โปรดรอ','info'); return; }
   // ✅ ตรวจครบทุก field
   if(!returnState.photo){ showToast('กรุณาใส่รูปสินค้าคืน','warning'); return; }
   if(!returnState.returnType){ showToast('กรุณาเลือกประเภทการคืน','warning'); return; }
@@ -1754,14 +1756,24 @@ async function confirmReturn(){
     loader:returnState.loaderName||'',
     submittedAt:Date.now(),
   };
-  const url=getAppsUrl();
-  if(url){
-    try{ await fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)}); }
-    catch(e){ console.warn('return sync failed',e); }
+  returnState._submitting=true;
+  // ปิด btn บันทึก + เปิด spinner
+  const btn=document.querySelector('#sec-returns .btn-gold.btn-lg');
+  const origLabel=btn?btn.innerHTML:'';
+  if(btn){ btn.disabled=true; btn.innerHTML='⏳ กำลังบันทึก...'; }
+  try{
+    const url=getAppsUrl();
+    if(url){
+      try{ await fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)}); }
+      catch(e){ console.warn('return sync failed',e); }
+    }
+    showToast(`บันทึกรับคืน ${returnState.docNo} ✓`,'success');
+    resetReturnForm();
+    switchTab('sec-home');
+  } finally {
+    returnState._submitting=false;
+    if(btn){ btn.disabled=false; btn.innerHTML=origLabel; }
   }
-  showToast(`บันทึกรับคืน ${returnState.docNo} ✓`,'success');
-  resetReturnForm();
-  switchTab('sec-home');
 }
 
 /* ========== TRANSFER (เที่ยวพิเศษ) ========== */
@@ -3000,7 +3012,7 @@ async function syncJobsFromSheet(){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-Delivery — Apps Script Backend v3.4 (datetime columns preserve time) */
+const APPS_SCRIPT_CODE=`/* D-Delivery — Apps Script Backend v3.5 (LockService for save_return) */
 const SHEET_INPUT='บันทึกเที่ยวส่ง';
 const SHEET_CIN='บันทึกบิลและการชำระ';
 const SHEET_CN='CN';
@@ -3044,6 +3056,10 @@ function doPost(e){
     const now=new Date();
     // ===== รับคืนสินค้า → ชีท CN =====
     if(data.action==='save_return'){
+      // v3.5: ล็อคไม่ให้ doPost ทำงานคู่ขนาน — กันบันทึกซ้ำตอนผู้ใช้กดยืนยันรัวๆ
+      const lock=LockService.getScriptLock();
+      lock.waitLock(30000);
+      try{
       const cnSh=ensureSheet_(ss,SHEET_CN,HEADERS_CN);
       const items=Array.isArray(data.items)?data.items:[];
       const jobId=String(data.jobId||'');
@@ -3098,6 +3114,7 @@ function doPost(e){
       cnSh.getRange('J:J').setNumberFormat('@');
       cnSh.getRange('M:M').setNumberFormat('@');
       return ContentService.createTextOutput(JSON.stringify({ok:true,rows:items.length})).setMimeType(ContentService.MimeType.JSON);
+      } finally { lock.releaseLock(); }
     }
     const inSh=ensureSheet_(ss,SHEET_INPUT,HEADERS_INPUT);
     const cinSh=ensureSheet_(ss,SHEET_CIN,HEADERS_CIN);
