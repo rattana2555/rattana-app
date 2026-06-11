@@ -646,7 +646,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v3.28';
+const APP_VERSION = 'v3.29';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -1993,11 +1993,29 @@ function _liveSync(it, k) {
 function liveBump(encKey, unit, delta) {
   const k = decodeURIComponent(encKey);
   const it = countSession.items[k]; if (!it) return;
-  // For multi-lot items, bump Lot 1 only; single-lot items bump counts directly
   if (it.lots && it.lots.length > 1) {
-    it.lots[0].counts[unit] = Math.max(0, (it.lots[0].counts[unit]||0) + delta);
+    if (delta < 0) {
+      // Deduct from lots without expiry first, then from lots with expiry
+      const order = [
+        ...it.lots.map((l,i)=>i).filter(i => !it.lots[i].expiryDate),
+        ...it.lots.map((l,i)=>i).filter(i =>  it.lots[i].expiryDate),
+      ];
+      let rem = Math.abs(delta);
+      for (const i of order) {
+        const cur = it.lots[i].counts[unit] || 0;
+        const take = Math.min(cur, rem);
+        it.lots[i].counts[unit] = cur - take;
+        rem -= take;
+        if (!rem) break;
+      }
+      // Remove empty lots (all units = 0)
+      it.lots = it.lots.filter(l => ['CS','BP','PA','EA'].some(u => l.counts[u] > 0));
+      if (!it.lots.length) { delete countSession.items[k]; liveOpen.delete(k); saveCountSession(); renderCountList(); return; }
+    } else {
+      // Add to last lot (most recently added)
+      it.lots[it.lots.length-1].counts[unit] = (it.lots[it.lots.length-1].counts[unit]||0) + delta;
+    }
     it.counts = lotsToTotalCounts(it.lots);
-    if (!['EA','PA','BP','CS'].some(u => it.counts[u] > 0)) { delete countSession.items[k]; liveOpen.delete(k); }
   } else {
     it.counts[unit] = Math.max(0, (it.counts[unit]||0) + delta);
     _liveSync(it, k);
@@ -2061,14 +2079,24 @@ function clearCount() {
 // ── Edit item modal ──
 function lotRowHtml(lot, li, ib) {
   const required = ib && ib.expired && !lot.expiryDate;
+  const it = window._editItem;
+  const prod = it && productByKey[it.key];
+  // Only show units the product actually has (same filter as inline row)
+  const usedUnits = ['CS','BP','PA','EA'].filter(u => prod && String(prod[`CODE ${u}`]||'').length > 3);
+  const units = usedUnits.length ? usedUnits : ['CS','EA'];
+  // Collect existing expiry dates from other lots as quick-pick suggestions
+  const existingDates = it ? [...new Set(
+    itemLots(it).map(l => l.expiryDate).filter(d => d && d !== lot.expiryDate)
+  )] : [];
+  const datalistId = `lot_${li}_exp_list`;
   return `<div class="lot-row" data-li="${li}">
     <div class="lot-row-head">
       <span class="lot-badge">Lot ${li+1}</span>
       <button class="lot-del" onclick="removeLotRow(${li})" title="ลบ lot นี้" type="button">✕</button>
     </div>
     <div class="lot-counts">
-      ${['CS','BP','PA','EA'].map(u => {
-        const f = (window._editItem && window._editItem.factors[u]) || 1;
+      ${units.map(u => {
+        const f = (it && it.factors[u]) || 1;
         return `<div class="lot-unit-row">
           <span class="badge ${UNIT_CSS[u]||''}" style="width:36px;text-align:center;font-size:11px">${u}</span>
           <span style="flex:1;font-size:11px;color:var(--muted)">×${f}</span>
@@ -2080,6 +2108,7 @@ function lotRowHtml(lot, li, ib) {
     <div style="margin-top:8px">
       <label style="font-size:11px;font-weight:700;${required?'color:var(--danger)':'color:var(--muted)'};text-transform:uppercase;letter-spacing:.3px">
         📅 วันหมดอายุ ${required?'<span style="color:var(--danger)">* จำเป็น</span>':''}
+        ${existingDates.length ? `<span style="font-weight:400;text-transform:none;letter-spacing:0"> · วันอื่น: ${existingDates.map(d=>`<button type="button" onclick="document.getElementById('lot_${li}_exp').value='${d}'" style="background:var(--row-alt);border:1px solid var(--border);border-radius:6px;padding:1px 7px;font-size:11px;cursor:pointer;color:var(--navy);margin-left:4px">${formatThaiDate(d)}</button>`).join('')}</span>` : ''}
       </label>
       <input type="date" id="lot_${li}_exp" class="input" style="margin-top:4px;height:42px;${required?'border-color:var(--danger);background:rgba(224,72,58,.04)':''}"
              value="${lot.expiryDate||''}">
