@@ -646,7 +646,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v3.26';
+const APP_VERSION = 'v3.27';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -1975,13 +1975,30 @@ function toggleLiveRow(encKey) {
   else { liveOpen.clear(); liveOpen.add(k); }
   renderCountList();
 }
-function liveBump(encKey, unit, delta) {
-  const k = decodeURIComponent(encKey);
-  const it = countSession.items[k]; if (!it) return;
-  it.counts[unit] = Math.max(0, (it.counts[unit]||0) + delta);
+function _liveSync(it, k) {
+  // When item has lots, update lot 0 counts to match it.counts, then resync total
+  if (it.lots && it.lots.length) {
+    it.lots[0].counts = { ...it.counts };
+    it.counts = lotsToTotalCounts(it.lots);
+  }
   if (!['EA','PA','BP','CS'].some(u => it.counts[u] > 0)) {
     delete countSession.items[k];
     liveOpen.delete(k);
+    return false;
+  }
+  return true;
+}
+function liveBump(encKey, unit, delta) {
+  const k = decodeURIComponent(encKey);
+  const it = countSession.items[k]; if (!it) return;
+  // For multi-lot items, bump Lot 1 only; single-lot items bump counts directly
+  if (it.lots && it.lots.length > 1) {
+    it.lots[0].counts[unit] = Math.max(0, (it.lots[0].counts[unit]||0) + delta);
+    it.counts = lotsToTotalCounts(it.lots);
+    if (!['EA','PA','BP','CS'].some(u => it.counts[u] > 0)) { delete countSession.items[k]; liveOpen.delete(k); }
+  } else {
+    it.counts[unit] = Math.max(0, (it.counts[unit]||0) + delta);
+    _liveSync(it, k);
   }
   saveCountSession();
   renderCountList();
@@ -1989,7 +2006,13 @@ function liveBump(encKey, unit, delta) {
 function liveSet(encKey, unit, val) {
   const k = decodeURIComponent(encKey);
   const it = countSession.items[k]; if (!it) return;
-  it.counts[unit] = Math.max(0, parseInt(val)||0);
+  if (it.lots && it.lots.length > 1) {
+    it.lots[0].counts[unit] = Math.max(0, parseInt(val)||0);
+    it.counts = lotsToTotalCounts(it.lots);
+  } else {
+    it.counts[unit] = Math.max(0, parseInt(val)||0);
+    _liveSync(it, k);
+  }
   saveCountSession();
   renderCountList();
 }
