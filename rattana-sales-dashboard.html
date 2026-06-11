@@ -1,0 +1,1371 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Rattana Sales Dashboard v2.0</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --navy:#0d1b3e; --navy-mid:#1a2f5e; --navy-light:#243b73;
+  --gold:#c9a84c; --gold-light:#e8c86a;
+  --success:#2ecc71; --danger:#e74c3c; --warning:#f39c12; --info:#3498db;
+  --bg:#f4f6fb; --text:#0d1b3e; --card-bg:#ffffff; --border:#dde3f0; --muted:#6b7896; --row-alt:#fafbfd;
+  --radius-sm:6px; --radius-md:12px; --radius-lg:16px;
+  --shadow-sm:0 1px 4px rgba(0,0,0,.06); --shadow-md:0 2px 8px rgba(0,0,0,.08);
+  --shadow-lg:0 8px 24px rgba(13,27,62,.12); --shadow-gold:0 4px 12px rgba(201,168,76,.35);
+}
+body.dark {
+  --bg:#0a1020; --text:#e8eaf0; --card-bg:#111c35; --border:#243b73; --muted:#8a98b8; --row-alt:#0f1830;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;min-height:100dvh;overflow-x:hidden;background:var(--bg);color:var(--text);transition:background .25s,color .25s}
+button{font-family:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+input,select{font-family:inherit;font-size:16px}
+
+/* Header */
+header{background:var(--navy);color:#fff;padding:12px 16px;position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:10px;border-bottom:3px solid var(--gold)}
+.logo-text{font-weight:700;letter-spacing:1.2px;font-size:15px;color:#fff;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.logo-text span{color:var(--gold)}
+.icon-btn{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.2);width:36px;height:36px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:16px;transition:background .15s;flex-shrink:0}
+.icon-btn:hover{background:rgba(255,255,255,.12)}
+.version-tag{font-size:10px;color:rgba(255,255,255,.35);white-space:nowrap;flex-shrink:0}
+
+/* Tabs */
+.tab-nav{display:flex;background:var(--navy);border-bottom:3px solid var(--gold);padding:0 8px;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.tab-nav::-webkit-scrollbar{display:none}
+.tab-btn{background:transparent;border:none;color:rgba(255,255,255,.6);padding:11px 15px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;flex-shrink:0;transition:all .18s;margin-bottom:-3px;border-radius:var(--radius-sm) var(--radius-sm) 0 0}
+.tab-btn:hover{color:#fff;background:rgba(255,255,255,.06)}
+.tab-btn.active{color:var(--navy);background:var(--gold);border-bottom-color:var(--gold);font-weight:700}
+
+/* Content */
+.content{padding:12px;max-width:1200px;margin:0 auto}
+@media(min-width:640px){.content{padding:16px}}
+.tab-panel{display:none}.tab-panel.active{display:block;animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* Cards */
+.card{background:var(--card-bg);border-radius:var(--radius-md);border:1px solid var(--border);box-shadow:var(--shadow-md);margin-bottom:14px}
+.card-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);background:linear-gradient(to right,rgba(201,168,76,.07),transparent)}
+.card-head h3{font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
+.card-body{padding:16px}
+
+/* KPI */
+.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
+@media(min-width:640px){.stat-grid{grid-template-columns:repeat(4,1fr);gap:14px}}
+.stat-card{background:var(--card-bg);border-radius:var(--radius-md);padding:16px;border:1px solid var(--border);border-top:3px solid var(--gold);box-shadow:var(--shadow-sm)}
+.stat-card.danger{border-top-color:var(--danger)}.stat-card.success{border-top-color:var(--success)}
+.stat-card.info{border-top-color:var(--info)}.stat-card.warning{border-top-color:var(--warning)}
+.s-label{font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin-bottom:6px}
+.s-value{font-size:22px;font-weight:700;line-height:1.2}
+.s-sub{font-size:11px;color:var(--muted);margin-top:4px}
+.stat-card.danger .s-value{color:var(--danger)}.stat-card.success .s-value{color:var(--success)}
+.stat-card.warning .s-value{color:var(--warning)}
+@media(min-width:640px){.s-value{font-size:24px}}
+
+/* Table */
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tbl{width:100%;border-collapse:collapse;min-width:520px}
+.tbl thead{background:var(--navy);color:#fff;position:sticky;top:0;z-index:5}
+.tbl thead th{padding:10px 10px;text-align:left;font-size:12px;font-weight:600;white-space:nowrap;border-bottom:2px solid var(--gold);cursor:pointer;user-select:none}
+.tbl thead th:hover{background:var(--navy-mid)}
+.tbl tbody tr{border-bottom:1px solid var(--border);transition:background .12s}
+.tbl tbody tr:nth-child(even){background:var(--row-alt)}
+.tbl tbody tr:hover{background:rgba(201,168,76,.07)}
+.tbl td{padding:9px 10px;font-size:13px;vertical-align:middle}
+.tbl td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:500}
+.tbl .empty-row td{text-align:center;padding:48px 20px;color:var(--muted);font-size:14px}
+
+/* Badges */
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap}
+.badge-ok{background:#e8f7ee;color:#1e8449}
+.badge-warn{background:#fef3d7;color:#a87800}
+.badge-danger{background:#ffd5d0;color:#c0392b}
+.badge-info{background:#e3f0fd;color:#1a6fb8}
+.badge-gold{background:rgba(201,168,76,.18);color:var(--navy);border:1px solid rgba(201,168,76,.4)}
+body.dark .badge-ok{background:#1a3a25;color:#7be0a3}
+body.dark .badge-warn{background:#3a2e15;color:#e8c86a}
+body.dark .badge-danger{background:#3a1a17;color:#ff8a7e}
+
+/* Filter bar */
+.filter-bar{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.filter-bar .finput{height:38px;padding:0 12px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;font-family:'Sarabun',sans-serif;outline:none;transition:border-color .15s}
+.filter-bar .finput:focus{border-color:var(--gold)}
+.filter-bar select.finput{min-width:160px}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid transparent;min-height:38px;transition:opacity .15s,transform .1s}
+.btn:hover{opacity:.88}.btn:active{transform:scale(.97)}
+.btn-gold{background:var(--gold);color:var(--navy)}.btn-gold:hover{background:var(--gold-light)}
+.btn-sm{padding:5px 10px;font-size:12px;min-height:32px}
+
+/* Chart */
+.chart-wrap{position:relative;height:260px;width:100%}
+@media(min-width:640px){.chart-wrap{height:300px}}
+.chart-wrap-sm{position:relative;height:200px;width:100%}
+
+/* Progress bar */
+.prog-bar-wrap{height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:4px}
+.prog-bar{height:100%;border-radius:3px;transition:width .6s ease}
+
+/* Suggestion cards */
+.sugg-grid{display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:640px){.sugg-grid{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:1024px){.sugg-grid{grid-template-columns:repeat(3,1fr)}}
+.sugg-card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px;box-shadow:var(--shadow-sm);border-left:4px solid var(--gold);transition:transform .15s,box-shadow .15s}
+.sugg-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+.sugg-card .store-name{font-size:14px;font-weight:700;margin-bottom:4px}
+.sugg-card .store-meta{font-size:11px;color:var(--muted);margin-bottom:10px}
+.sugg-items{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.sugg-item{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--bg);border-radius:var(--radius-sm);font-size:12px}
+.sugg-item .prod-name{font-weight:600;flex:1}
+.sugg-item .prod-reason{font-size:11px;color:var(--muted);margin-top:2px}
+.priority-high{border-left:3px solid var(--danger)}
+.priority-mid{border-left:3px solid var(--warning)}
+.priority-low{border-left:3px solid var(--info)}
+
+/* Toast */
+.toast{position:fixed;bottom:max(24px,env(safe-area-inset-bottom));right:16px;padding:12px 20px;border-radius:var(--radius-md);color:#fff;z-index:9999;animation:slideIn .3s ease;font-weight:500;box-shadow:var(--shadow-lg);max-width:90vw;font-size:13px}
+.toast-success{background:var(--success)}.toast-error{background:var(--danger)}
+.toast-info{background:var(--navy-mid);border-left:3px solid var(--gold)}
+@keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* Spinner */
+#spinner{display:none;position:fixed;inset:0;background:rgba(13,27,62,.6);align-items:center;justify-content:center;z-index:99999;backdrop-filter:blur(3px)}
+#spinner.show{display:flex}
+.spin-box{background:var(--card-bg);border-radius:var(--radius-lg);padding:32px 40px;text-align:center;border-top:4px solid var(--gold);min-width:220px}
+.spin-ring{width:48px;height:48px;border:5px solid #dde3f0;border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px}
+
+/* Back to top */
+#backToTop{position:fixed;bottom:max(24px,calc(16px + env(safe-area-inset-bottom)));right:max(16px,calc(12px + env(safe-area-inset-right)));background:var(--gold);color:var(--navy);border:none;border-radius:50%;width:46px;height:46px;display:none;align-items:center;justify-content:center;box-shadow:var(--shadow-gold);z-index:90;font-size:18px;font-weight:700;cursor:pointer}
+#backToTop.show{display:flex}
+
+/* Loading bar */
+#loadingBar{position:fixed;top:0;left:0;height:3px;background:var(--gold);width:0;transition:width .4s;z-index:10000}
+
+/* Info banner */
+.info-banner{background:rgba(52,152,219,.1);border:1px solid rgba(52,152,219,.3);border-radius:var(--radius-sm);padding:8px 14px;font-size:12px;color:#1a6fb8;margin-bottom:10px}
+body.dark .info-banner{background:rgba(52,152,219,.07);color:#5dade2}
+
+/* ── SKU Product Cards ── */
+.pcard{background:var(--card-bg);border-radius:var(--radius-md);border:1px solid var(--border);box-shadow:var(--shadow-sm);overflow:hidden;transition:box-shadow .2s,transform .15s;border-left:4px solid var(--border);margin-bottom:8px}
+.pcard:hover{box-shadow:var(--shadow-md);transform:translateY(-1px)}
+.pcard.tier3{border-left-color:#ff6b35}.pcard.tier2{border-left-color:var(--gold)}.pcard.tier1{border-left-color:var(--info)}
+.pcard-body{display:flex;align-items:center;gap:10px;padding:12px 14px}
+.prank{font-size:18px;font-weight:800;width:28px;text-align:center;flex-shrink:0;color:var(--muted);line-height:1}
+.tier3 .prank{color:#ff6b35}.tier2 .prank{color:var(--gold)}.tier1 .prank{color:var(--info)}
+.pinfo{flex:1;min-width:0}
+.pname{font-size:14px;font-weight:600;color:var(--text);line-height:1.4;word-break:break-word}
+.pstars{font-size:13px;margin-top:2px}
+.phot{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:7px;background:#fff3e0;color:#e65100;border:1px solid #ffcc80;margin-left:5px;vertical-align:middle}
+body.dark .phot{background:#3a1e00;color:#ffb74d;border-color:#e65100}
+.pdetail{font-size:11px;color:var(--muted);margin-top:2px}
+.pmeta{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0}
+.pvol{font-size:13px;font-weight:700;color:var(--navy)}
+body.dark .pvol{color:var(--gold-light)}
+.psl{font-size:11px;color:var(--muted)}
+.pno{font-size:11px;color:var(--danger);font-style:italic;text-align:right}
+/* SKU dropdown */
+.sku-dd{position:relative;width:100%}
+.sku-dd-trigger{width:100%;min-height:38px;padding:7px 12px;background:var(--bg);border:1.5px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:inherit;font-size:14px;text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:border-color .15s}
+.sku-dd-trigger:hover{border-color:var(--gold)}
+.sku-dd-panel{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--card-bg);border:1.5px solid var(--border);border-radius:var(--radius-sm);z-index:200;box-shadow:var(--shadow-lg);max-height:240px;display:flex;flex-direction:column}
+.sku-dd-search{padding:8px 12px;font-size:14px;border:none;border-bottom:1px solid var(--border);background:transparent;color:var(--text);outline:none;font-family:inherit}
+.sku-dd-list{overflow-y:auto;list-style:none;padding:4px 0}
+.sku-dd-list li{padding:9px 12px;cursor:pointer;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:background .1s}
+.sku-dd-list li:hover{background:var(--navy-light);color:#fff}
+.sku-dd-list li.sku-sel{background:rgba(201,168,76,.15);font-weight:600}
+.sku-month{display:inline-flex;align-items:center;gap:6px;background:rgba(201,168,76,.15);border:1px solid rgba(201,168,76,.4);border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;color:var(--gold);margin:10px 12px 0;width:fit-content}
+.sku-legend{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 14px;margin:10px 0 4px}
+.sku-legend-title{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;margin-bottom:6px}
+.sku-legend-items{display:flex;flex-wrap:wrap;gap:10px}
+/* ── Login Screen ── */
+#loginScreen{position:fixed;inset:0;background:var(--navy);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px}
+#loginScreen.hidden{display:none}
+.login-card{background:var(--card-bg);border-radius:var(--radius-xl);padding:40px 36px;width:100%;max-width:380px;text-align:center;border-top:5px solid var(--gold);box-shadow:0 20px 60px rgba(0,0,0,.4)}
+.login-logo{font-size:32px;font-weight:800;letter-spacing:2px;color:var(--navy);margin-bottom:4px}
+.login-logo span{color:var(--gold)}
+.login-sub{font-size:13px;color:var(--muted);margin-bottom:28px}
+.login-label{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;text-align:left;display:block;margin-bottom:6px}
+.login-input{width:100%;height:52px;padding:0 16px;border-radius:var(--radius-md);border:2px solid var(--border);background:var(--bg);color:var(--text);font-size:20px;font-family:'Sarabun',sans-serif;font-weight:700;letter-spacing:4px;text-align:center;outline:none;transition:border-color .2s}
+.login-input:focus{border-color:var(--gold)}
+.login-btn{width:100%;height:52px;margin-top:16px;background:var(--gold);color:var(--navy);border:none;border-radius:var(--radius-md);font-size:16px;font-weight:700;font-family:'Sarabun',sans-serif;cursor:pointer;transition:background .15s,transform .1s;display:flex;align-items:center;justify-content:center;gap:8px}
+.login-btn:hover{background:var(--gold-light)}
+.login-btn:active{transform:scale(.97)}
+.login-btn:disabled{opacity:.55;cursor:not-allowed;transform:none}
+.login-error{background:#ffd5d0;color:#c0392b;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;font-weight:600;margin-top:12px;display:none}
+.login-error.show{display:block}
+.login-hint{font-size:11px;color:var(--muted);margin-top:20px;line-height:1.6}
+
+/* ── User chip in header ── */
+.user-chip{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:20px;padding:4px 10px 4px 6px;cursor:pointer;transition:background .15s;flex-shrink:0}
+.user-chip:hover{background:rgba(255,255,255,.18)}
+.user-avatar{width:26px;height:26px;border-radius:50%;background:var(--gold);color:var(--navy);font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.user-chip-name{font-size:12px;font-weight:600;color:#fff;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── Logout dropdown ── */
+.user-menu{position:absolute;top:calc(100% + 8px);right:0;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);min-width:200px;z-index:200;overflow:hidden;animation:slideUp .15s ease}
+.user-menu-head{padding:14px 16px;border-bottom:1px solid var(--border);background:linear-gradient(to right,rgba(201,168,76,.07),transparent)}
+.user-menu-head .name{font-size:14px;font-weight:700}
+.user-menu-head .role{font-size:11px;color:var(--muted);margin-top:2px}
+.user-menu-item{display:flex;align-items:center;gap:8px;padding:11px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:background .12s;color:var(--danger)}
+.user-menu-item:hover{background:rgba(231,76,60,.07)}
+@keyframes slideUp{from{transform:translateY(-6px);opacity:0}to{transform:translateY(0);opacity:1}}
+header{position:relative}
+</style>
+</head>
+<body>
+
+<!-- ── Login Screen ── -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">RATTANA <span>BPlus</span></div>
+    <div class="login-sub">Sales Dashboard · กรอกรหัสพนักงานเพื่อเข้าใช้งาน</div>
+    <label class="login-label" for="empIdInput">รหัสพนักงาน</label>
+    <input class="login-input" id="empIdInput" type="text" placeholder="เช่น 11002"
+      autocomplete="off" inputmode="text"
+      onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="login-btn" id="loginBtn" onclick="doLogin()">
+      <span id="loginBtnTxt">🔑 เข้าสู่ระบบ</span>
+    </button>
+    <div class="login-error" id="loginError"></div>
+    <div class="login-hint">ติดต่อผู้ดูแลระบบหากลืมรหัสพนักงาน<br>หรือบัญชีถูกระงับ</div>
+  </div>
+</div>
+
+<!-- ── App Screen ── -->
+<div id="appScreen" style="display:none">
+
+<div id="loadingBar"></div>
+<div id="spinner"><div class="spin-box"><div class="spin-ring"></div><p id="spinnerMsg">กำลังโหลด...</p></div></div>
+
+<!-- Header -->
+<header>
+  <div class="logo-text">Rattana <span>Sales Dashboard</span></div>
+  <button class="icon-btn" onclick="refreshData()" id="btnRefresh" title="รีเฟรช">↻</button>
+  <button class="icon-btn" onclick="toggleDark()" id="btnDark" title="Dark mode">🌙</button>
+  <div class="user-chip" onclick="toggleUserMenu()" id="userChip" style="display:none">
+    <div class="user-avatar" id="userAvatar">?</div>
+    <span class="user-chip-name" id="userChipName">-</span>
+  </div>
+  <div class="user-menu" id="userMenu" style="display:none">
+    <div class="user-menu-head">
+      <div class="name" id="menuName">-</div>
+      <div class="role" id="menuRole">-</div>
+    </div>
+    <div class="user-menu-item" onclick="logout()">🚪 ออกจากระบบ</div>
+  </div>
+  <span class="version-tag">v2.0 · 2026-06-11</span>
+</header>
+
+<!-- Tab Nav -->
+<nav class="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('summary',this)">📊 ยอดขายรวม</button>
+  <button class="tab-btn" onclick="switchTab('unsold',this)">📦 SKU ไม่ขาย</button>
+  <button class="tab-btn" onclick="switchTab('zero',this)">🏪 ร้าน &lt;2,500 ฿</button>
+  <button class="tab-btn" onclick="switchTab('suggest',this)">💡 สินค้า Suggestion</button>
+</nav>
+
+<!-- ── Scope Banner (shown across all tabs) ── -->
+<div id="scopeBanner" style="display:none;background:linear-gradient(90deg,var(--navy),var(--navy-mid));color:#fff;padding:8px 16px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:10px;border-bottom:2px solid var(--gold)">
+  <span style="font-size:16px">👤</span>
+  <span id="scopeText">กำลังโหลด...</span>
+  <span id="scopeBadge" class="badge" style="margin-left:auto;background:rgba(201,168,76,.25);color:var(--gold);border:1px solid rgba(201,168,76,.5)"></span>
+</div>
+
+<!-- ─────── TAB 1: ยอดขายรวม ─────── -->
+<div class="tab-panel active" id="tab-summary">
+<div class="content">
+  <div class="filter-bar">
+    <select class="finput" id="fSumBU" onchange="renderSummary()"><option value="all">ทุก Cat_BU</option></select>
+    <select class="finput" id="fSumSale" onchange="renderSummary()"><option value="all">ทุก Sale NO ROO</option></select>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-card success"><div class="s-label">ยอดขายรวม (EXVat)</div><div class="s-value" id="kpiTotal">...</div><div class="s-sub">บาท</div></div>
+    <div class="stat-card info"><div class="s-label">จำนวนบิล</div><div class="s-value" id="kpiBills">...</div><div class="s-sub">ใบสั่งซื้อ</div></div>
+    <div class="stat-card"><div class="s-label">ร้านค้าทั้งหมด</div><div class="s-value" id="kpiStores">...</div><div class="s-sub" id="kpiStoresSub">ร้าน (active)</div></div>
+    <div class="stat-card danger"><div class="s-label">ร้านค้า &lt;2,500 ฿</div><div class="s-value" id="kpiZero">...</div><div class="s-sub" id="kpiZeroSub">ยอดต่ำกว่า 2,500 ฿</div></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr;gap:14px">
+    <div class="card">
+      <div class="card-head"><h3>📈 ยอดขาย EXVat รายเดือน</h3></div>
+      <div class="card-body"><div class="chart-wrap"><canvas id="chartMonthly"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>🏷️ ยอดขายตาม Cat_BU</h3></div>
+      <div class="card-body"><div class="chart-wrap-sm"><canvas id="chartCat"></canvas></div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3>👤 Sale NO ROO ยอดขายสูงสุด</h3><span class="badge badge-gold" id="saleCount">-</span></div>
+    <div class="card-body" style="padding:0">
+      <div class="tbl-wrap">
+        <table class="tbl"><thead><tr>
+          <th style="width:36px">#</th>
+          <th>Sale NO ROO</th>
+          <th>จำนวนบิล</th>
+          <th>EXVat รวม (฿)</th>
+          <th>% ยอดรวม</th>
+        </tr></thead><tbody id="bodyTopSale"></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ─────── TAB 2: SKU ไม่ขาย ─────── -->
+<div class="tab-panel" id="tab-unsold">
+  <!-- Seller bar (role > 3) -->
+  <div id="skuSellerBar" style="display:none;background:var(--card-bg);border-bottom:1px solid var(--border);padding:10px 14px">
+    <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;margin-bottom:6px">👤 เลือกดูข้อมูลเซลล์</label>
+    <div class="sku-dd" id="skuDD">
+      <button class="sku-dd-trigger" onclick="toggleSkuDD()" type="button">
+        <span id="skuDDLabel">— ดูของฉัน —</span>
+        <span style="font-size:12px;color:var(--muted)">▾</span>
+      </button>
+      <div class="sku-dd-panel" id="skuDDPanel" style="display:none">
+        <input class="sku-dd-search" type="text" placeholder="🔍 ค้นหาชื่อเซลล์…" oninput="filterSkuDD(this)" autocomplete="off">
+        <ul class="sku-dd-list" id="skuDDList"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Month badge -->
+  <div class="sku-month" id="skuMonthBadge" style="display:none">📅 <span id="skuMonthLabel">-</span></div>
+
+  <div class="content" style="padding-top:10px">
+    <!-- Filter bar -->
+    <div class="filter-bar">
+      <input class="finput" type="text" id="fUnsoldSearch" placeholder="🔍 ค้นหาชื่อสินค้า…" style="flex:1;min-width:160px" oninput="renderUnsold()">
+      <select class="finput" id="fUnsoldBU" onchange="renderUnsold()"><option value="all">📦 ทุก Cat_BU</option></select>
+      <select class="finput" id="fUnsoldSort" onchange="renderUnsold()" style="min-width:150px">
+        <option value="pop">🏆 ยอดรวมทุกเซลล์</option>
+        <option value="sellers">👥 จำนวนเซลล์ที่ขาย</option>
+        <option value="name">🔤 ชื่อ ก-ฮ</option>
+      </select>
+      <span class="badge badge-danger" id="unsoldCount">0 รายการ</span>
+    </div>
+
+    <!-- Mini stats -->
+    <div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="stat-card"><div class="s-label">สินค้าในคลัง</div><div class="s-value" id="skuTotal">-</div><div class="s-sub">รายการ</div></div>
+      <div class="stat-card danger"><div class="s-label">ยังไม่ขาย</div><div class="s-value" id="skuUnsold">-</div><div class="s-sub">เดือนนี้</div></div>
+      <div class="stat-card success"><div class="s-label">ขายแล้ว</div><div class="s-value" id="skuSold">-</div><div class="s-sub">เดือนนี้</div></div>
+    </div>
+
+    <!-- Legend -->
+    <div class="sku-legend" id="skuLegend" style="display:none">
+      <div class="sku-legend-title">⭐ ความหมายของดาว (จากยอดรวมทุกเซลล์)</div>
+      <div class="sku-legend-items">
+        <div style="display:flex;align-items:center;gap:5px;font-size:12px"><div style="width:8px;height:8px;border-radius:50%;background:#ff6b35;flex-shrink:0"></div><span>🌟🌟🌟 Hot – Top 20%</span></div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:12px"><div style="width:8px;height:8px;border-radius:50%;background:var(--gold);flex-shrink:0"></div><span>🌟🌟 Good – Top 40%</span></div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:12px"><div style="width:8px;height:8px;border-radius:50%;background:var(--info);flex-shrink:0"></div><span>🌟 OK – Top 60%</span></div>
+      </div>
+    </div>
+
+    <!-- Product grid -->
+    <div id="skuGrid" style="padding-top:8px"></div>
+  </div>
+</div>
+
+<!-- ─────── TAB 3: ร้าน 0 บาท ─────── -->
+<div class="tab-panel" id="tab-zero">
+<div class="content">
+  <div class="filter-bar">
+    <input class="finput" type="text" id="fZeroSearch" placeholder="🔍 ค้นหาร้านค้า / รหัส / Sale..." style="flex:1;min-width:160px" oninput="renderZeroStores()">
+    <select class="finput" id="fZeroSale" onchange="renderZeroStores()"><option value="all">ทุก Sale NO ROO</option></select>
+  </div>
+
+  <div class="stat-grid" style="grid-template-columns:repeat(2,1fr)">
+    <div class="stat-card danger"><div class="s-label">ร้านค้า &lt;2,500 ฿</div><div class="s-value" id="zeroTotal">-</div><div class="s-sub">ยอด มิ.ย. 2026 ต่ำกว่า 2,500 ฿</div></div>
+    <div class="stat-card warning"><div class="s-label">% ของร้านทั้งหมด</div><div class="s-value" id="zeroPct">-</div><div class="s-sub">จาก <span id="zeroOfTotal">-</span> ร้าน</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3>🏪 ร้านค้ายอดขายต่ำกว่า 2,500 บาท (มิ.ย. 2026)</h3><span class="badge badge-danger" id="zeroCount">0 ร้าน</span></div>
+    <div class="card-body" style="padding:0">
+      <div class="tbl-wrap">
+        <table class="tbl"><thead><tr>
+          <th>รหัสร้าน</th>
+          <th>ชื่อร้าน</th>
+          <th id="thZeroSale" style="display:none">พนักงานขาย</th>
+          <th>รูทจด</th>
+          <th class="num">มิ.ย. 2026 (฿)</th>
+          <th class="num">เฉลี่ย 3 เดือน (฿)</th>
+        </tr></thead><tbody id="bodyZero"></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ─────── TAB 4: สินค้า Suggestion ─────── -->
+<div class="tab-panel" id="tab-suggest">
+<div class="content">
+  <div class="filter-bar">
+    <input class="finput" type="text" id="fSuggSearch" placeholder="🔍 ค้นหาร้านค้า / Sale NO ROO..." style="flex:1;min-width:160px" oninput="renderSuggestions()">
+    <select class="finput" id="fSuggSale" onchange="renderSuggestions()"><option value="all">ทุก Sale NO ROO</option></select>
+    <select class="finput" id="fSuggPriority" onchange="renderSuggestions()">
+      <option value="all">ทุก Priority</option>
+      <option value="HIGH">🔴 สูง (>90 วัน)</option>
+      <option value="MID">🟡 กลาง (31-90 วัน)</option>
+      <option value="LOW">🔵 ต่ำ (≤30 วัน)</option>
+    </select>
+  </div>
+  <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;font-size:12px;color:var(--muted)">
+    <span>🔴 สูง = ไม่ซื้อ >90 วัน</span>
+    <span>🟡 กลาง = ไม่ซื้อ 31-90 วัน</span>
+    <span>🔵 ต่ำ = ไม่ซื้อ ≤30 วัน</span>
+    <span style="margin-left:auto">แนะนำ BU ยอดขายสูงสุดที่ร้านยังไม่ซื้อเดือนนี้</span>
+  </div>
+  <div class="sugg-grid" id="suggGrid"><div style="text-align:center;color:var(--muted);padding:60px;grid-column:1/-1">กำลังโหลด...</div></div>
+</div>
+</div>
+
+<button id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+</div><!-- /#appScreen -->
+
+<script>
+// ═══════════════════════════════════════
+//  AUTH — Employee ID Login
+// ═══════════════════════════════════════
+const USERS_SHEET_ID   = '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ';
+const USERS_SHEET_NAME = 'Rattana Users for apps';
+const SESSION_KEY      = 'rattanaDashUser';
+const SESSION_TTL      = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+let currentUser = null;
+
+// RFC-4180 CSV parser (handles quoted cells, BOM, NBSP)
+function parseCsv(text) {
+  if (!text) return [];
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const rows = []; let row = [], cell = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQ) {
+      if (ch === '"') { if (text[i+1]==='"'){cell+='"';i++;}else inQ=false; }
+      else cell += ch;
+    } else {
+      if (ch==='"') inQ=true;
+      else if (ch===',') { row.push(cell); cell=''; }
+      else if (ch==='\r') { /* skip */ }
+      else if (ch==='\n') { row.push(cell); rows.push(row); row=[]; cell=''; }
+      else cell += ch;
+    }
+  }
+  if (cell.length||row.length) { row.push(cell); rows.push(row); }
+  if (!rows.length) return [];
+  const clean = s => String(s||'').replace(/[​‌‍﻿]/g,'').replace(/ /g,' ').trim();
+  const headers = rows[0].map(clean);
+  return rows.slice(1).filter(r=>r.some(c=>clean(c))).map(r=>Object.fromEntries(headers.map((k,i)=>[k,clean(r[i])])));
+}
+
+async function fetchUsersSheet() {
+  const url = `https://docs.google.com/spreadsheets/d/${USERS_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(USERS_SHEET_NAME)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('ดึง Users Sheet ไม่ได้');
+  return parseCsv(await res.text());
+}
+
+async function doLogin() {
+  const inp = document.getElementById('empIdInput');
+  const btn = document.getElementById('loginBtn');
+  const errEl = document.getElementById('loginError');
+  const empId = inp.value.trim();
+
+  if (!empId) { showLoginError('กรุณากรอกรหัสพนักงาน'); inp.focus(); return; }
+
+  btn.disabled = true;
+  document.getElementById('loginBtnTxt').textContent = '⏳ กำลังตรวจสอบ...';
+  errEl.classList.remove('show');
+
+  try {
+    const users = await fetchUsersSheet();
+    // รหัสพนักงาน = column "รหัสพนักงาน" (col C, index 2)
+    const user = users.find(u => String(u['รหัสพนักงาน']||'').trim() === empId);
+
+    if (!user) {
+      showLoginError('ไม่พบรหัสพนักงาน "' + empId + '" ในระบบ');
+      return;
+    }
+    if (String(user['Status']||'').trim().toLowerCase() !== 'active') {
+      showLoginError('บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ');
+      return;
+    }
+
+    // Build session
+    const fullName = user['ชื่อ - สกุล'] || '';
+    currentUser = {
+      empId:      String(user['รหัสพนักงาน']||'').trim(),
+      name:       fullName,
+      nickname:   user['ชื่อเล่น'] || '',
+      role:       parseInt(user['User Role']||'1') || 1,
+      dept:       user['แผนก'] || '',
+      wh:         user['W'] || '',
+      company:    user['บริษัท'] || '',
+      saleNoRoo:  fullName ? 'คุณ ' + fullName : '',
+      saleCode:   user['รหัสเซลล์'] || '',
+    };
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ data: currentUser, exp: Date.now() + SESSION_TTL }));
+    showApp();
+
+  } catch (e) {
+    showLoginError('เกิดข้อผิดพลาด: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    document.getElementById('loginBtnTxt').textContent = '🔑 เข้าสู่ระบบ';
+  }
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('loginError');
+  el.textContent = msg; el.classList.add('show');
+}
+
+function checkSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return false;
+    const { data, exp } = JSON.parse(raw);
+    if (Date.now() > exp) { localStorage.removeItem(SESSION_KEY); return false; }
+    currentUser = data;
+    // backfill saleNoRoo for old sessions that didn't save it
+    if (!currentUser.saleNoRoo && currentUser.name)
+      currentUser.saleNoRoo = 'คุณ ' + currentUser.name;
+    if (currentUser.saleCode === undefined) currentUser.saleCode = '';
+    return true;
+  } catch { localStorage.removeItem(SESSION_KEY); return false; }
+}
+
+// Role >= 7 = Admin/Super User → see all data; others → own Sale NO ROO only
+function canSeeAll() { return (currentUser?.role || 1) >= 7; }
+
+function getSaleWhere() {
+  if (canSeeAll()) return '';
+  const s = currentUser?.saleNoRoo || '';
+  if (!s) return '';
+  return `AND AF = '${s.replace(/'/g, "\\'")}'`;
+}
+
+function showApp() {
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('appScreen').style.display = 'block';
+
+  // Header user chip
+  const nick = currentUser.nickname || currentUser.name.split(' ')[0] || currentUser.empId;
+  document.getElementById('userAvatar').textContent = nick.charAt(0) || '?';
+  document.getElementById('userChipName').textContent = nick;
+  document.getElementById('userChip').style.display = 'flex';
+  document.getElementById('menuName').textContent = currentUser.name || currentUser.empId;
+  document.getElementById('menuRole').textContent =
+    `รหัส ${currentUser.empId} · Role ${currentUser.role}` + (currentUser.wh ? ` · ${currentUser.wh}` : '');
+
+  // Scope banner
+  const banner  = document.getElementById('scopeBanner');
+  const scopeTxt = document.getElementById('scopeText');
+  const scopeBdg = document.getElementById('scopeBadge');
+  banner.style.display = 'flex';
+  if (canSeeAll()) {
+    scopeTxt.textContent = 'แสดงข้อมูลทั้งหมด (ทุก Sale NO ROO)';
+    scopeBdg.textContent = `Admin · Role ${currentUser.role}`;
+  } else {
+    scopeTxt.textContent = `แสดงยอดขายของ: ${currentUser.saleNoRoo || currentUser.name}`;
+    scopeBdg.textContent = `Role ${currentUser.role}`;
+  }
+
+  loadAllData();
+}
+
+function logout() {
+  localStorage.removeItem(SESSION_KEY);
+  currentUser = null;
+  document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('loginScreen').classList.remove('hidden');
+  document.getElementById('empIdInput').value = '';
+  document.getElementById('loginError').classList.remove('show');
+  document.getElementById('userMenu').style.display = 'none';
+}
+
+function toggleUserMenu() {
+  const m = document.getElementById('userMenu');
+  m.style.display = m.style.display === 'none' ? 'block' : 'none';
+}
+// Close menu on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('#userChip') && !e.target.closest('#userMenu')) {
+    document.getElementById('userMenu').style.display = 'none';
+  }
+});
+
+// ═══════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════
+const SHEET_ID   = '1NxFkxiQev0xxGir93-qt0flNfzHz848-KuE7jDRSxQE';
+const SHEET_NAME = 'BP';
+const REPORT_SHEET_ID   = '1aYjHjiOo0nnabfQGgxZsfUOHwVllp-c0JRGpOpTxSAY';
+const REPORT_SHEET_NAME = 'Report';
+const PDDT_SHEET_ID     = '16mYDqAqqJma-_0vCIAajy6bcjdOZ7F6VagxkdkqAB2I';
+const PDDT_SHEET_NAME   = 'PDDT';
+
+// ═══════════════════════════════════════
+//  DATA STORE
+// ═══════════════════════════════════════
+let DATA = {
+  monthly:    [],
+  byBU:       [],
+  bySale:     [],
+  customers:  [],
+  slowSkus:   [],
+  zeroReport: [],
+};
+
+// SKU tab state (separate from DATA — needs all-seller data)
+let SKU = {
+  salesByProd:   {},   // prodName → {totalBaht, sellers:Set, bu:Set}
+  myProds:       new Set(),
+  warehouseProds: new Set(),
+  allSellers:    [],   // sorted list with "คุณ " prefix
+  selectedSeller: null, // null = current user; string = "คุณ ชื่อ"
+  pddt:          [],   // PDDT rows for warehouse filtering
+};
+let latestMonthYear = null;  // {year, month} of most recent data
+
+// ═══════════════════════════════════════
+//  GVIZ ENGINE
+// ═══════════════════════════════════════
+async function gviz(tq) {
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)}&tq=${encodeURIComponent(tq)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const txt = await res.text();
+  const json = JSON.parse(txt.replace(/^[^\(]*\(/, '').replace(/\);\s*$/, ''));
+  if (json.status === 'error') throw new Error(json.errors?.[0]?.message || 'GViz error');
+  return (json.table?.rows || []).map(r => r.c.map(c => c?.v ?? null));
+}
+
+async function gvizReport(tq) {
+  const url = `https://docs.google.com/spreadsheets/d/${REPORT_SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(REPORT_SHEET_NAME)}&tq=${encodeURIComponent(tq)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const txt = await res.text();
+  const json = JSON.parse(txt.replace(/^[^\(]*\(/, '').replace(/\);\s*$/, ''));
+  if (json.status === 'error') throw new Error(json.errors?.[0]?.message || 'GViz error');
+  return (json.table?.rows || []).map(r => r.c.map(c => c?.v ?? null));
+}
+
+// Report sheet columns: A=รหัสร้านค้า B=ชื่อร้านค้า C=รหัสเซลล์ D=พนักงานขาย E=WH G=รูทจด H=ชื่อสายจด L=06/2026 N=เฉลี่ย3เดือน
+const DAY_ORDER = { 'จันทร์':1, 'อังคาร':2, 'พุธ':3, 'พฤหัสบดี':4, 'ศุกร์':5, 'เสาร์':6 };
+
+async function loadZeroReport() {
+  const sc = currentUser?.saleCode || '';
+  let whereClause = 'WHERE L < 2500';
+  if (!canSeeAll()) {
+    if (!sc) { DATA.zeroReport = []; return; }
+    whereClause = `WHERE L < 2500 AND C = '${sc.replace(/'/g, "\\'")}'`;
+  }
+  const rows = await gvizReport(`SELECT A, B, C, D, E, G, H, L, N ${whereClause} ORDER BY G, B`);
+  DATA.zeroReport = rows.map(r => ({
+    code:      r[0] != null ? String(r[0]) : '-',
+    name:      r[1] || '-',
+    saleCode:  r[2] || '',
+    sale:      r[3] || '',
+    wh:        r[4] || '',
+    routeDay:  r[5] || '',
+    routeName: r[6] || '',
+    jun:       r[7] ?? 0,
+    avg3:      r[8] ?? 0,
+  })).sort((a, b) => {
+    const dayDiff = (DAY_ORDER[a.routeDay] || 9) - (DAY_ORDER[b.routeDay] || 9);
+    if (dayDiff !== 0) return dayDiff;
+    return b.avg3 - a.avg3;
+  });
+}
+
+// ═══════════════════════════════════════
+//  SKU TAB — product card logic
+// ═══════════════════════════════════════
+function stripKhun(s) { return (s||'').replace(/^คุณ[\s]+/, '').trim(); }
+function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtBaht(n) {
+  n = Number(n||0);
+  if (n >= 1000000) return '฿' + (n/1000000).toFixed(1).replace(/\.0$/,'') + 'M';
+  if (n >= 1000)    return '฿' + Math.round(n/1000) + 'K';
+  return '฿' + Math.round(n).toLocaleString('th-TH');
+}
+
+async function loadPddt() {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${PDDT_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(PDDT_SHEET_NAME)}`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    return parseCsv(await res.text());
+  } catch { return []; }
+}
+
+function isInWarehouse(row, wh) {
+  const w = (wh||'').toUpperCase().trim();
+  if (!w) return true;
+  if (w==='W1') return !!(row['IB W1']||'').trim();
+  if (w==='W2') return !!(row['IB W2']||'').trim();
+  if (w==='W3') return !!(row['IB W3']||'').trim();
+  if (w==='W4') return !!(row['IB W4']||'').trim() || !!(row['IB C4']||'').trim();
+  if (w==='C4') return !!(row['IB C4']||'').trim();
+  return true;
+}
+
+function computeSkuWarehouseProds(wh) {
+  SKU.warehouseProds = new Set();
+  if (!SKU.pddt.length) {
+    // fallback: use all products from sales data
+    Object.keys(SKU.salesByProd).forEach(p => SKU.warehouseProds.add(p));
+    return;
+  }
+  const headers = Object.keys(SKU.pddt[0]||{});
+  const nameCol = headers.find(h => /product.?name/i.test(h) || /ชื่อสินค้า/.test(h)) || headers[0] || '';
+  for (const row of SKU.pddt) {
+    const prod = (row[nameCol]||'').trim();
+    if (!prod) continue;
+    if (isInWarehouse(row, wh)) SKU.warehouseProds.add(prod);
+  }
+}
+
+function computeSkuMyProds() {
+  const seller = SKU.selectedSeller ?? currentUser?.saleNoRoo ?? '';
+  SKU.myProds = new Set();
+  for (const [prod, d] of Object.entries(SKU.salesByProd)) {
+    if (d.sellers.has(seller)) SKU.myProds.add(prod);
+  }
+  const wh = currentUser?.wh || '';
+  computeSkuWarehouseProds(wh);
+  updateSkuStats();
+}
+
+function updateSkuStats() {
+  const useWh = SKU.warehouseProds.size > 0;
+  const total  = useWh ? SKU.warehouseProds.size : Object.keys(SKU.salesByProd).length;
+  const whArr  = useWh ? [...SKU.warehouseProds] : Object.keys(SKU.salesByProd);
+  const sold   = whArr.filter(p => SKU.myProds.has(p)).length;
+  const unsold = total - sold;
+  document.getElementById('skuTotal')?.textContent  !== undefined && (document.getElementById('skuTotal').textContent  = fmt(total));
+  document.getElementById('skuUnsold')?.textContent !== undefined && (document.getElementById('skuUnsold').textContent = fmt(unsold));
+  document.getElementById('skuSold')?.textContent   !== undefined && (document.getElementById('skuSold').textContent   = fmt(sold));
+}
+
+async function loadSkuData() {
+  if (!latestMonthYear) return;
+  const { year: y, month: m } = latestMonthYear; // m = GViz 0-indexed
+
+  // Load PDDT and sales query in parallel
+  const [pddt, rows] = await Promise.all([
+    loadPddt(),
+    gviz(`SELECT G, R, AF, sum(N) WHERE N>0 AND year(A)=${y} AND month(A)=${m} AND G!='' GROUP BY G, R, AF ORDER BY sum(N) DESC`),
+  ]);
+
+  SKU.pddt = pddt;
+
+  // Build salesByProd from all sellers
+  SKU.salesByProd = {};
+  for (const r of rows) {
+    const prod   = (r[0]||'').trim();
+    const bu     = (r[1]||'').trim();
+    const seller = (r[2]||'').trim();
+    const baht   = r[3] || 0;
+    if (!prod) continue;
+    if (!SKU.salesByProd[prod]) SKU.salesByProd[prod] = { totalBaht:0, sellers:new Set(), bu:new Set() };
+    SKU.salesByProd[prod].totalBaht += baht;
+    if (seller) SKU.salesByProd[prod].sellers.add(seller);
+    if (bu)     SKU.salesByProd[prod].bu.add(bu);
+  }
+
+  SKU.isSelfView = false;
+
+  // All unique sellers sorted
+  const selSet = new Set();
+  Object.values(SKU.salesByProd).forEach(d => d.sellers.forEach(s => { if(s) selSet.add(s); }));
+  SKU.allSellers = [...selSet].sort((a,b) => a.localeCompare(b,'th'));
+
+  // Month label
+  const monthLabel = MONTH_TH[m] ? `${MONTH_TH[m]} ${y + 543}` : `${m+1}/${y}`;
+  const badge = document.getElementById('skuMonthBadge');
+  const lbl   = document.getElementById('skuMonthLabel');
+  if (badge) badge.style.display = 'flex';
+  if (lbl)   lbl.textContent = 'ข้อมูลเดือน ' + monthLabel;
+
+  // Build Cat_BU dropdown
+  const buSet = new Set();
+  Object.values(SKU.salesByProd).forEach(d => d.bu.forEach(b => buSet.add(b)));
+  const buEl = document.getElementById('fUnsoldBU');
+  if (buEl) {
+    buEl.innerHTML = '<option value="all">📦 ทุก Cat_BU</option>' +
+      [...buSet].filter(Boolean).sort().map(b => `<option value="${escHtml(b)}">${escHtml(b)}</option>`).join('');
+  }
+
+  // Seller dropdown
+  buildSkuSellerDropdown();
+  computeSkuMyProds();
+  renderUnsold();
+}
+
+function buildSkuSellerDropdown() {
+  const bar = document.getElementById('skuSellerBar');
+  if (bar) bar.style.display = 'none'; // always show own data only
+  const list = document.getElementById('skuDDList');
+  if (!list) return;
+  list.innerHTML = '';
+  const myLabel = `— ดูของฉัน (${stripKhun(currentUser.saleNoRoo||currentUser.name)}) —`;
+  addSkuSellerOpt(list, null, myLabel, SKU.selectedSeller === null);
+  SKU.allSellers.forEach(name => addSkuSellerOpt(list, name, stripKhun(name), SKU.selectedSeller === name));
+}
+
+function addSkuSellerOpt(list, value, label, isSelected) {
+  const li = document.createElement('li');
+  li.textContent = label;
+  if (isSelected) li.classList.add('sku-sel');
+  li.onclick = () => {
+    SKU.selectedSeller = value;
+    document.getElementById('skuDDLabel').textContent = label;
+    document.getElementById('skuDDPanel').style.display = 'none';
+    list.querySelectorAll('li').forEach(el => el.classList.remove('sku-sel'));
+    li.classList.add('sku-sel');
+    computeSkuMyProds();
+    renderUnsold();
+  };
+  list.appendChild(li);
+}
+
+function toggleSkuDD() {
+  const p = document.getElementById('skuDDPanel');
+  if (p) p.style.display = p.style.display==='none' ? 'flex' : 'none';
+}
+
+function filterSkuDD(inp) {
+  const q = inp.value.toLowerCase();
+  document.getElementById('skuDDList')?.querySelectorAll('li').forEach(li => {
+    li.style.display = li.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+function getSkuStarTier(totalBaht, sortedDesc) {
+  if (!sortedDesc.length) return 0;
+  const idx = sortedDesc.indexOf(totalBaht);
+  if (idx < 0) return 0;
+  const pct = (idx+1) / sortedDesc.length;
+  if (pct <= 0.20) return 3;
+  if (pct <= 0.40) return 2;
+  if (pct <= 0.60) return 1;
+  return 0;
+}
+
+// Parse GViz date value → JS Date
+// GViz sends dates as: Date(2026,5,1) string (month is 0-indexed) or as actual Date object
+function gDate(v) {
+  if (!v) return null;
+  if (v instanceof Date) return v;
+  const m = String(v).match(/Date\((\d+),(\d+),(\d+)\)/);
+  if (m) return new Date(+m[1], +m[2], +m[3]);
+  const d = new Date(v);
+  return isNaN(d) ? null : d;
+}
+
+// ═══════════════════════════════════════
+//  UTILITIES
+// ═══════════════════════════════════════
+const MONTH_TH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+function fmt(n)  { return Number(n||0).toLocaleString('th-TH',{maximumFractionDigits:0}); }
+function fmtB(n) { return fmt(n)+' ฿'; }
+
+function thaiDate(v) {
+  const d = gDate(v);
+  if (!d) return '-';
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()+543}`;
+}
+
+function daysSince(v) {
+  const d = gDate(v);
+  if (!d) return null;
+  return Math.floor((Date.now() - d.getTime()) / 86400000);
+}
+
+function showToast(msg, type='info') {
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`; t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
+}
+function showSpinner(m='กำลังโหลด...') {
+  document.getElementById('spinnerMsg').textContent = m;
+  document.getElementById('spinner').classList.add('show');
+  document.getElementById('loadingBar').style.width = '60%';
+}
+function hideSpinner() {
+  document.getElementById('spinner').classList.remove('show');
+  document.getElementById('loadingBar').style.width = '100%';
+  setTimeout(() => document.getElementById('loadingBar').style.width = '0', 400);
+}
+
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+function toggleDark() {
+  document.body.classList.toggle('dark');
+  document.getElementById('btnDark').textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
+  renderCharts();
+}
+window.addEventListener('scroll', () => {
+  document.getElementById('backToTop').classList.toggle('show', window.scrollY > 300);
+});
+
+// ═══════════════════════════════════════
+//  LOAD DATA — 5 parallel GViz queries
+// ═══════════════════════════════════════
+async function loadAllData() {
+  showSpinner('กำลังดึงข้อมูลจาก Sheet BP...');
+  try {
+    // Column map (BP sheet):
+    // A=Doc_Date  B=Doc_No  C=Customer_Code  D=Customer_Name
+    // J=Sales_CS  N=EXVat   R=Cat_BU         V=Cat_Brand
+    // AF=Sale NO ROO   G=Product_Name
+    const sw = getSaleWhere(); // e.g. "AND AF = 'คุณ สุภาพร รอดสังวาลย์'" or ''
+
+    const [rMonthly, rBU, rSale, rCustomers, rSkus] = await Promise.all([
+      // 1. Monthly aggregation
+      gviz(`SELECT year(A), month(A), sum(N), count(B) WHERE N>0 ${sw} GROUP BY year(A), month(A) ORDER BY year(A), month(A)`),
+      // 2. Cat_BU breakdown
+      gviz(`SELECT R, sum(N) WHERE N>0 AND R!='' ${sw} GROUP BY R ORDER BY sum(N) DESC`),
+      // 3. Sale NO ROO breakdown (only relevant when canSeeAll; for own view shows 1 row)
+      gviz(`SELECT AF, sum(N), count(B) WHERE N>0 AND AF!='' ${sw} GROUP BY AF ORDER BY sum(N) DESC LIMIT 20`),
+      // 4. Per-customer: code, name, Sale NO ROO, last buy date, sum EXVat
+      gviz(`SELECT C, D, AF, max(A), sum(N) WHERE N>0 ${sw} GROUP BY C, D, AF ORDER BY max(A) ASC`),
+      // 5. Slow SKUs: product name, BU, brand, last sale date (oldest first, own sales)
+      gviz(`SELECT G, R, V, max(A) WHERE N>0 ${sw} GROUP BY G, R, V ORDER BY max(A) ASC LIMIT 150`),
+    ]);
+
+    // Parse monthly
+    DATA.monthly = rMonthly.map(r => ({
+      year: r[0], month: r[1], // month is 0-indexed from GViz
+      total: r[2] || 0, bills: r[3] || 0,
+    }));
+    // Latest month = last entry
+    if (DATA.monthly.length) {
+      const last = DATA.monthly[DATA.monthly.length - 1];
+      latestMonthYear = { year: last.year, month: last.month };
+    }
+
+    // Parse Cat_BU
+    DATA.byBU = rBU.map(r => ({ bu: r[0] || '', total: r[1] || 0 })).filter(r => r.bu);
+
+    // Parse Sale NO ROO
+    DATA.bySale = rSale.map(r => ({ sale: r[0] || '', total: r[1] || 0, bills: r[2] || 0 })).filter(r => r.sale);
+
+    // Parse customers
+    DATA.customers = rCustomers.map(r => ({
+      code: String(r[0] || ''),
+      name: r[1] || '',
+      sale: r[2] || '',
+      lastDate: gDate(r[3]),
+      total: r[4] || 0,
+    })).filter(r => r.code);
+
+    // Parse slow SKUs — flag anything not sold in latest month
+    const today = Date.now();
+    DATA.slowSkus = rSkus.map(r => {
+      const d = gDate(r[3]);
+      const days = d ? Math.floor((today - d.getTime()) / 86400000) : 9999;
+      return { name: r[0] || '', bu: r[1] || '', brand: r[2] || '', lastDate: d, days };
+    }).filter(r => r.name && r.days > 0).sort((a, b) => b.days - a.days);
+
+    // Load zero stores + SKU data in parallel (both need latestMonthYear)
+    await Promise.all([loadZeroReport(), loadSkuData()]);
+
+    // Populate filter dropdowns from actual data
+    populateFilters();
+
+    // Render all tabs
+    renderSummary();
+    renderUnsold();
+    renderZeroStores();
+    renderSuggestions();
+
+    showToast(`โหลดข้อมูลสำเร็จ — ${fmt(DATA.customers.length)} ร้าน`, 'success');
+
+  } catch (e) {
+    console.error(e);
+    showToast('โหลดข้อมูลไม่สำเร็จ: ' + e.message, 'error');
+    // Show empty state
+    renderSummary(); renderUnsold(); renderZeroStores(); renderSuggestions();
+  } finally {
+    hideSpinner();
+  }
+}
+
+function populateFilters() {
+  // Sale NO ROO filter for BP-based tabs (Summary, Suggest) — admin only
+  const sales = [...new Set(DATA.customers.map(c => c.sale).filter(Boolean))].sort();
+  ['fSumSale','fSuggSale'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!canSeeAll()) {
+      el.closest('.filter-bar') && (el.style.display = 'none');
+    } else {
+      el.style.display = '';
+      el.innerHTML = '<option value="all">ทุก Sale NO ROO</option>' +
+        sales.map(s => `<option value="${s}">${s}</option>`).join('');
+    }
+  });
+
+  // Zero stores tab: filter by รหัสเซลล์ — admin only
+  const zeroSaleEl = document.getElementById('fZeroSale');
+  if (zeroSaleEl) {
+    if (!canSeeAll()) {
+      zeroSaleEl.style.display = 'none';
+    } else {
+      const codes = [...new Set(DATA.zeroReport.map(r => r.saleCode).filter(Boolean))].sort();
+      zeroSaleEl.style.display = '';
+      zeroSaleEl.innerHTML = '<option value="all">ทุก รหัสเซลล์</option>' +
+        codes.map(c => `<option value="${c}">${c}</option>`).join('');
+    }
+  }
+
+  // Cat_BU list (Summary tab only — SKU tab builds its own from loadSkuData)
+  const bus = DATA.byBU.map(r => r.bu).filter(Boolean);
+  const buEl = document.getElementById('fSumBU');
+  if (buEl) {
+    buEl.innerHTML = '<option value="all">ทุก Cat_BU</option>' +
+      bus.map(b => `<option value="${b}">${b}</option>`).join('');
+  }
+}
+
+// ═══════════════════════════════════════
+//  ZERO STORES helper
+// ═══════════════════════════════════════
+function getZeroStores() {
+  if (!latestMonthYear) return [];
+  const { year: cy, month: cm } = latestMonthYear;
+  return DATA.customers.filter(c => {
+    if (!c.lastDate) return true;
+    // Not in latest month = zero store
+    return !(c.lastDate.getFullYear() === cy && c.lastDate.getMonth() === cm);
+  });
+}
+
+// ═══════════════════════════════════════
+//  TAB 1 — SUMMARY
+// ═══════════════════════════════════════
+let chartMonthly = null, chartCat = null;
+
+function renderSummary() {
+  const buFilter   = document.getElementById('fSumBU')?.value   || 'all';
+  const saleFilter = document.getElementById('fSumSale')?.value || 'all';
+
+  // Filter monthly data by BU/Sale if needed (monthly doesn't have BU breakdown — use byBU)
+  const totalSales   = DATA.monthly.reduce((s, r) => s + r.total, 0);
+  const totalBills   = DATA.monthly.reduce((s, r) => s + r.bills, 0);
+  const activeStores = DATA.customers.length;
+  const zeroStores   = DATA.zeroReport.length;
+
+  document.getElementById('kpiTotal').textContent   = fmt(totalSales);
+  document.getElementById('kpiBills').textContent   = fmt(totalBills);
+  document.getElementById('kpiStores').textContent  = fmt(activeStores);
+  document.getElementById('kpiStoresSub').textContent = 'ร้าน (มีประวัติซื้อ)';
+  document.getElementById('kpiZero').textContent    = zeroStores;
+  document.getElementById('kpiZeroSub').textContent = 'ยอดขาย <2,500 ฿ ใน มิ.ย. 2026';
+
+  document.getElementById('saleCount').textContent = `${DATA.bySale.length} Sale`;
+  renderCharts();
+  renderTopSale();
+}
+
+function renderCharts() {
+  const isDark    = document.body.classList.contains('dark');
+  const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
+  const lblColor  = isDark ? '#8a98b8' : '#6b7896';
+
+  // Monthly bar + line chart
+  const mCtx = document.getElementById('chartMonthly').getContext('2d');
+  if (chartMonthly) chartMonthly.destroy();
+  chartMonthly = new Chart(mCtx, {
+    type: 'bar',
+    data: {
+      labels: DATA.monthly.map(r => `${MONTH_TH[r.month]} ${r.year}`),
+      datasets: [{
+        label: 'EXVat (฿)',
+        data: DATA.monthly.map(r => r.total),
+        backgroundColor: 'rgba(201,168,76,0.75)', borderColor: '#c9a84c',
+        borderWidth: 2, borderRadius: 6,
+      }, {
+        label: 'บิล',
+        data: DATA.monthly.map(r => r.bills),
+        type: 'line', borderColor: '#3498db',
+        backgroundColor: 'rgba(52,152,219,0.08)',
+        borderWidth: 2, pointBackgroundColor: '#3498db', pointRadius: 4,
+        tension: 0.4, yAxisID: 'y1',
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: lblColor, font: { family: 'Sarabun' } } }, tooltip: { mode: 'index' } },
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { color: lblColor, font: { family: 'Sarabun' } } },
+        y: { grid: { color: gridColor }, ticks: { color: lblColor, font: { family: 'Sarabun' },
+          callback: v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(0)+'K' : v
+        }, title: { display: true, text: 'EXVat (฿)', color: lblColor } },
+        y1: { position: 'right', grid: { display: false }, ticks: { color: '#3498db', font: { family: 'Sarabun' } },
+          title: { display: true, text: 'บิล', color: '#3498db' } },
+      }
+    }
+  });
+
+  // Cat_BU doughnut
+  const cCtx = document.getElementById('chartCat').getContext('2d');
+  if (chartCat) chartCat.destroy();
+  const COLORS = ['#c9a84c','#3498db','#2ecc71','#e74c3c','#9b59b6','#1abc9c','#e67e22','#34495e','#f39c12','#16a085'];
+  const grand = DATA.byBU.reduce((s, r) => s + r.total, 0);
+  chartCat = new Chart(cCtx, {
+    type: 'doughnut',
+    data: {
+      labels: DATA.byBU.map(r => r.bu),
+      datasets: [{ data: DATA.byBU.map(r => r.total), backgroundColor: COLORS,
+        borderWidth: 2, borderColor: isDark ? '#111c35' : '#fff' }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '60%',
+      plugins: {
+        legend: { position: 'right', labels: { color: lblColor, font: { family: 'Sarabun' }, boxWidth: 12, padding: 8 } },
+        tooltip: { callbacks: { label: c => `${c.label}: ${fmt(c.raw)} ฿ (${grand ? ((c.raw/grand)*100).toFixed(1) : 0}%)` } }
+      }
+    }
+  });
+}
+
+function renderTopSale() {
+  const grand = DATA.bySale.reduce((s, r) => s + r.total, 0);
+  const body  = document.getElementById('bodyTopSale');
+  if (!DATA.bySale.length) { body.innerHTML = '<tr class="empty-row"><td colspan="5">ยังไม่มีข้อมูล</td></tr>'; return; }
+
+  body.innerHTML = DATA.bySale.map((r, i) => `
+    <tr>
+      <td><span class="badge ${i < 3 ? 'badge-gold' : 'badge-info'}">${i+1}</span></td>
+      <td>${r.sale}</td>
+      <td class="num">${fmt(r.bills)}</td>
+      <td class="num">${fmtB(r.total)}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="num" style="min-width:38px">${grand ? ((r.total/grand)*100).toFixed(1) : 0}%</span>
+          <div class="prog-bar-wrap" style="flex:1">
+            <div class="prog-bar" style="width:${DATA.bySale[0]?.total ? (r.total/DATA.bySale[0].total*100) : 0}%;background:var(--gold)"></div>
+          </div>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+// ═══════════════════════════════════════
+//  TAB 2 — SKU ไม่ขาย (product cards)
+// ═══════════════════════════════════════
+function renderUnsold() {
+  const q       = (document.getElementById('fUnsoldSearch')?.value || '').toLowerCase().trim();
+  const buVal   = document.getElementById('fUnsoldBU')?.value || 'all';
+  const sortVal = document.getElementById('fUnsoldSort')?.value || 'pop';
+  const useWh   = SKU.warehouseProds.size > 0;
+
+  // Products: in warehouse + NOT sold by current seller + pass filters
+  let prods = Object.keys(SKU.salesByProd).filter(prod => {
+    if (useWh && !SKU.warehouseProds.has(prod)) return false;
+    if (SKU.myProds.has(prod)) return false;
+    const d = SKU.salesByProd[prod];
+    if (buVal !== 'all' && ![...d.bu].includes(buVal)) return false;
+    if (q && !prod.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  if (sortVal === 'pop')     prods.sort((a,b) => (SKU.salesByProd[b]?.totalBaht||0) - (SKU.salesByProd[a]?.totalBaht||0));
+  else if (sortVal==='sellers') prods.sort((a,b) => (SKU.salesByProd[b]?.sellers?.size||0) - (SKU.salesByProd[a]?.sellers?.size||0));
+  else prods.sort((a,b) => a.localeCompare(b,'th'));
+
+  document.getElementById('unsoldCount').textContent = `${prods.length} รายการ`;
+  document.getElementById('skuLegend').style.display = prods.length > 0 ? 'block' : 'none';
+  updateSkuStats();
+
+  const allBahtDesc = prods.map(p => SKU.salesByProd[p]?.totalBaht||0).sort((a,b) => b-a);
+  const grid = document.getElementById('skuGrid');
+
+  if (!prods.length) {
+    grid.innerHTML = `<div style="text-align:center;padding:48px 20px;color:var(--muted)">
+      <div style="font-size:48px;margin-bottom:10px">🎉</div>
+      <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:6px">ยอดเยี่ยม!</div>
+      <div style="font-size:13px;line-height:1.7">${q ? `ไม่พบสินค้าที่ค้นหา "${q}"` : 'ไม่มีสินค้าที่เพื่อนขายแต่คุณยังไม่ขาย'}</div>
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = prods.map((prod, i) => {
+    const d     = SKU.salesByProd[prod] || { totalBaht:0, sellers:new Set(), bu:new Set() };
+    const tier  = getSkuStarTier(d.totalBaht, allBahtDesc);
+    const stars = '🌟'.repeat(tier);
+    const tc    = ['','tier1','tier2','tier3'][tier]||'';
+    const buStr = [...d.bu].slice(0,2).join(', ') || '-';
+    const metaLine = `👥 ${d.sellers.size} เซลล์ขาย · ${escHtml(buStr)}`;
+    const volLabel = 'ยอดรวมทุกเซลล์';
+    return `<div class="pcard ${tc}">
+      <div class="pcard-body">
+        <div class="prank">${i+1}</div>
+        <div class="pinfo">
+          <div class="pname">${escHtml(prod)}</div>
+          <div class="pstars">${stars||'—'}${tier===3?'<span class="phot">HOT</span>':''}</div>
+          <div class="pdetail">${metaLine}</div>
+        </div>
+        <div class="pmeta">
+          <div class="pvol">${fmtBaht(d.totalBaht)}</div>
+          <div class="psl">${volLabel}</div>
+          <div class="pno">ยังไม่ขาย</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════
+//  TAB 3 — ZERO STORES
+// ═══════════════════════════════════════
+function renderZeroStores() {
+  const q    = document.getElementById('fZeroSearch').value.toLowerCase();
+  const sale = document.getElementById('fZeroSale').value;
+  const isAdmin = canSeeAll();
+
+  // Show/hide the sale column header
+  const thSale = document.getElementById('thZeroSale');
+  if (thSale) thSale.style.display = isAdmin ? '' : 'none';
+
+  let rows = DATA.zeroReport.filter(r => {
+    if (sale !== 'all' && r.saleCode !== sale) return false;
+    if (q && !r.code.toLowerCase().includes(q) && !r.name.toLowerCase().includes(q) && !r.sale.toLowerCase().includes(q) && !r.saleCode.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  const total = DATA.zeroReport.length;
+  document.getElementById('zeroTotal').textContent   = rows.length;
+  document.getElementById('zeroPct').textContent     = total ? ((rows.length/total)*100).toFixed(1)+'%' : '-';
+  document.getElementById('zeroOfTotal').textContent = total;
+  document.getElementById('zeroCount').textContent   = `${rows.length} ร้าน`;
+
+  const body = document.getElementById('bodyZero');
+  if (!rows.length) {
+    const msg = !currentUser?.saleCode && !isAdmin
+      ? 'ไม่พบรหัสเซลล์สำหรับบัญชีนี้ กรุณาติดต่อผู้ดูแลระบบ'
+      : 'ทุกร้านมียอดขายมากกว่า 2,500 บาท ใน มิ.ย. 2026 🎉';
+    body.innerHTML = `<tr class="empty-row"><td colspan="6">${msg}</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = rows.map(r => {
+    const saleCol = isAdmin ? `<td style="font-size:12px">${r.sale||'-'}<br><span style="color:var(--muted);font-size:11px">${r.saleCode}</span></td>` : '';
+    return `<tr>
+      <td style="font-family:monospace;font-size:12px;font-weight:600">${r.code}</td>
+      <td>${r.name}</td>
+      ${saleCol}
+      <td><span class="badge" style="font-size:11px;color:#000;background:${{จันทร์:'#FFD700',อังคาร:'#FF9EC4',พุธ:'#5BC85B',พฤหัสบดี:'#FFA500',ศุกร์:'#5BA3E0',เสาร์:'#C97FE0'}[r.routeDay]||'#ccc'}">${r.routeDay||'-'}</span></td>
+      <td class="num" style="color:${r.jun >= 1500 ? 'var(--success)' : 'var(--danger)'};font-weight:700">${r.jun ? fmtB(r.jun) : '0'}</td>
+      <td class="num" style="color:var(--gold);font-weight:600">${r.avg3 ? fmtB(r.avg3) : '-'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════
+//  TAB 4 — SUGGESTIONS (rule-based)
+// ═══════════════════════════════════════
+function renderSuggestions() {
+  const q    = document.getElementById('fSuggSearch').value.toLowerCase();
+  const sale = document.getElementById('fSuggSale')?.value || 'all';
+  const pri  = document.getElementById('fSuggPriority').value;
+
+  // Rule: zero stores get suggestions based on top BU in their sale territory
+  // Build sale→BU map from all customers in that sale
+  const saleBUMap = {};
+  DATA.bySale.forEach(s => {
+    // Find top BU for this sale from overall BU data (simplified)
+    saleBUMap[s.sale] = DATA.byBU.slice(0, 4).map(b => b.bu);
+  });
+
+  const priFor = days => !days || days > 90 ? 'HIGH' : days > 30 ? 'MID' : 'LOW';
+
+  let stores = DATA.zeroReport.filter(r => {
+    if (sale !== 'all' && r.saleCode !== sale) return false;
+    if (q && !r.name.toLowerCase().includes(q) && !r.sale.toLowerCase().includes(q) && !r.saleCode.toLowerCase().includes(q)) return false;
+    return true;
+  }).slice(0, 18);
+
+  const grid = document.getElementById('suggGrid');
+  if (!stores.length) {
+    grid.innerHTML = '<div style="text-align:center;color:var(--muted);padding:60px;grid-column:1/-1">ไม่พบร้านที่ต้องแนะนำสินค้า</div>';
+    return;
+  }
+
+  const priBadge = {
+    HIGH: '<span class="badge badge-danger">🔴 สูง</span>',
+    MID:  '<span class="badge badge-warn">🟡 กลาง</span>',
+    LOW:  '<span class="badge badge-info">🔵 ต่ำ</span>',
+  };
+  const priCls = { HIGH:'priority-high', MID:'priority-mid', LOW:'priority-low' };
+
+  grid.innerHTML = stores.map(store => {
+    const days = daysSince(store.lastDate);
+    const p    = priFor(days);
+    // Top 3 BUs to suggest (from overall sales data)
+    const topBUs = DATA.byBU.slice(0, 3);
+    const items  = topBUs.map((bu, i) => {
+      const ip = i === 0 ? 'HIGH' : i === 1 ? 'MID' : 'LOW';
+      return `<div class="sugg-item ${priCls[ip]}">
+        <div style="flex:1">
+          <div class="prod-name">📦 ${bu.bu}</div>
+          <div class="prod-reason">💬 BU อันดับ ${i+1} — ยอดรวม ${fmt(bu.total)} ฿</div>
+        </div>
+        ${priBadge[ip]}
+      </div>`;
+    }).join('');
+
+    return `<div class="sugg-card">
+      <div class="store-name">${store.name}
+        <span class="badge badge-gold" style="font-size:10px;margin-left:4px">${store.code}</span>
+      </div>
+      <div class="store-meta">👤 ${store.sale||'-'} · ${store.saleCode||''} · เฉลี่ย ${fmtB(store.avg3)}/เดือน</div>
+      ${priBadge['HIGH']} <span style="font-size:11px;color:var(--muted);margin-left:6px">ไม่ซื้อ มิ.ย. 2026</span>
+      <div class="sugg-items">${items}</div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════
+//  REFRESH
+// ═══════════════════════════════════════
+async function refreshData() {
+  const b = document.getElementById('btnRefresh');
+  b.disabled = true; b.style.transform = 'rotate(360deg)'; b.style.transition = 'transform .6s';
+  await loadAllData();
+  b.disabled = false;
+  setTimeout(() => { b.style.transform = ''; b.style.transition = ''; }, 600);
+}
+
+// ═══════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════
+window.onload = () => {
+  if (checkSession()) {
+    showApp();
+  }
+  // else: loginScreen is visible by default
+};
+</script>
+</body>
+</html>
