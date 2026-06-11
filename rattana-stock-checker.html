@@ -129,7 +129,14 @@
     .hd-lots{display:none;background:var(--row-alt)}
     .hd-prod-row.open .hd-lots{display:block}
     .hd-chevron{display:inline-block;transition:transform .2s;color:var(--muted);font-size:16px;line-height:1}
-    .hd-prod-row.open .hd-chevron{transform:rotate(90deg)}
+    .hd-prod-row.open > .hd-prod-main .hd-chevron{transform:rotate(90deg)}
+    /* Scan-time sub-rows inside product card */
+    .hd-scan-row{border-top:1px solid var(--border);background:var(--row-alt)}
+    .hd-scan-row.hd-has-lots{cursor:pointer}
+    .hd-scan-row.hd-has-lots:hover{background:rgba(42,67,128,.08)}
+    .hd-scan-main{display:flex;align-items:center;gap:10px;padding:9px 14px}
+    .hd-scan-row.open > .hd-scan-main .hd-chevron{transform:rotate(90deg)}
+    .hd-scan-row .hd-lots{background:var(--card-bg)}
     /* Summary result pills */
     .srp{display:inline-flex;align-items:center;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
     .srp-ok{background:#e8f7ee;color:#1e8449}
@@ -2561,7 +2568,8 @@ function openHistDetail(idx) {
   document.getElementById('histModalTitle').textContent =
     `${formatThaiDate(s.savedAt)} · ${s.warehouse} · ${s.counterName||s.empId||'-'}`;
 
-  // Group items by product key — merge lots into product summary
+  // Level 1: group by product key
+  // Level 2: within each product, group by savedAt (exact timestamp = one scan entry)
   const prodMap = new Map();
   s.items.forEach(it => {
     const k = it.key || it.name;
@@ -2572,16 +2580,23 @@ function openHistDetail(idx) {
         const inf = Math.round((it.countedPieces - it.ea - (it.bp||0) - (it.pa||0)) / it.cs);
         if (inf > 1) factorCS = inf;
       }
-      prodMap.set(k, { name:it.name, key:it.key, factorCS, counted:0, system:it.systemPieces||0,
-                       diff:it.diffPieces||0, status:it.status, lots:[] });
+      prodMap.set(k, { name:it.name, key:it.key, factorCS, counted:0,
+                       system:it.systemPieces||0, diff:it.diffPieces||0, status:it.status,
+                       scanMap: new Map() });
     }
     const g = prodMap.get(k);
     g.counted += it.countedPieces||0;
     if (it.systemPieces) g.system = it.systemPieces;
     if (it.diffPieces)   g.diff   = it.diffPieces;
     if (it.status)       g.status = it.status;
-    if (it.countedPieces || it.expiryDate) g.lots.push(it);
+    // Group by savedAt (each unique save time = one scan)
+    const tKey = it.savedAt || '__none__';
+    if (!g.scanMap.has(tKey)) g.scanMap.set(tKey, { savedAt:it.savedAt, counted:0, lots:[] });
+    const sc = g.scanMap.get(tKey);
+    sc.counted += it.countedPieces||0;
+    sc.lots.push(it);
   });
+
   const prods = [...prodMap.values()];
   const nOk    = prods.filter(p=>p.status==='ตรง').length;
   const nShort = prods.filter(p=>p.status==='ขาด').length;
@@ -2590,41 +2605,67 @@ function openHistDetail(idx) {
   const totSy  = prods.reduce((s,p)=>s+p.system,0);
   const totD   = prods.reduce((s,p)=>s+(p.diff||0),0);
 
-  const pillCls = st => st==='ตรง'?'srp-ok':st==='ขาด'?'srp-short':'srp-over';
   const pillTxt = (p) => {
     if (p.status==='ตรง') return '<span class="srp srp-ok">✓ ตรง</span>';
     const a=Math.abs(p.diff), f=p.factorCS||1, cs=Math.floor(a/f), ea=a-cs*f;
-    const csea = cs>0?`${cs} CS ${ea} EA`:`${ea} EA`;
-    return `<span class="srp srp-${p.status==='ขาด'?'short':'over'}">${p.status==='ขาด'?'ขาด':'เกิน'} ${csea}</span>`;
+    const csea = cs>0?`${cs}cs ${ea}ea`:`${ea}ea`;
+    return `<span class="srp srp-${p.status==='ขาด'?'short':'over'}">${p.status==='ขาด'?'↓':'↑'} ${csea}</span>`;
   };
 
-  const prodRows = prods.map((p,pi) => {
-    const hasLots = p.lots.length > 1 || p.lots.some(l=>l.expiryDate);
-    const lotRows = hasLots ? p.lots.map(l=>{
-      const exp = l.expiryDate ? `<span class="exp-chip" style="font-size:11px">📅 ${formatThaiDate(l.expiryDate)}</span>` : '';
-      return `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-top:1px solid var(--border);font-size:12px">
-        <span style="color:var(--muted);flex:1">${exp||'ไม่มีวันหมดอายุ'}</span>
-        <span style="font-weight:600">${(l.countedPieces||0).toLocaleString()} ชิ้น</span>
-      </div>`;
-    }).join('') : '';
+  const prodRows = prods.map(p => {
+    const scans = [...p.scanMap.values()].sort((a,b)=>(a.savedAt||'') < (b.savedAt||'') ? -1 : 1);
+    const multiScan = scans.length > 1;
+
+    // Render scan-time sub-rows
+    const scanRows = scans.map((sc, si) => {
+      const timeLabel = sc.savedAt ? formatThaiTime(sc.savedAt) : '—';
+      const hasLots = sc.lots.length > 1 || sc.lots.some(l=>l.expiryDate);
+      const lotRows = hasLots ? sc.lots.map(l => {
+        const exp = l.expiryDate
+          ? `<span class="exp-chip" style="font-size:11px">📅 ${formatThaiDate(l.expiryDate)}</span>`
+          : '<span style="color:var(--muted)">ไม่มีวันหมดอายุ</span>';
+        return `<div style="display:flex;align-items:center;gap:8px;padding:6px 14px 6px 32px;border-top:1px solid var(--border);font-size:12px">
+          <span style="flex:1">${exp}</span>
+          <span style="font-weight:600">${(l.countedPieces||0).toLocaleString()} ชิ้น</span>
+        </div>`;
+      }).join('') : '';
+
+      if (multiScan) {
+        // Each scan is its own expandable row inside the product card
+        return `<div class="hd-scan-row${hasLots?' hd-has-lots':''}" onclick="event.stopPropagation();this.classList.toggle('open')">
+          <div class="hd-scan-main">
+            <span class="time-chip" style="font-size:12px">${timeLabel}</span>
+            <span style="flex:1;font-size:13px;font-weight:600">${sc.counted.toLocaleString()} ชิ้น</span>
+            ${hasLots?`<span class="hd-chevron" style="font-size:14px">›</span>`:''}
+          </div>
+          ${hasLots?`<div class="hd-lots">${lotRows}</div>`:''}
+        </div>`;
+      } else {
+        // Single scan — only show lots inside product card if has lots
+        return hasLots ? lotRows : '';
+      }
+    }).join('');
+
+    const hasDrill = multiScan || scans.some(sc => sc.lots.length>1 || sc.lots.some(l=>l.expiryDate));
     return `
-    <div class="hd-prod-row" onclick="this.classList.toggle('open')">
+    <div class="hd-prod-row${hasDrill?' hd-has-lots':''}" onclick="this.classList.toggle('open')">
       <div class="hd-prod-main">
         <div class="hd-prod-info">
           <div style="font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:1px">นับ <b>${p.counted.toLocaleString()}</b> · ระบบ ${p.system.toLocaleString()} ชิ้น</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:1px">นับ <b>${p.counted.toLocaleString()}</b> · ระบบ ${p.system.toLocaleString()} ชิ้น${multiScan?` · <b>${scans.length} ครั้ง</b>`:''}
+          </div>
         </div>
         <div class="hd-prod-right">
           ${pillTxt(p)}
-          ${hasLots?`<span class="hd-chevron">›</span>`:''}
+          ${hasDrill?`<span class="hd-chevron">›</span>`:''}
         </div>
       </div>
-      ${hasLots?`<div class="hd-lots">${lotRows}</div>`:''}
+      ${hasDrill?`<div class="hd-lots">${scanRows}</div>`:''}
     </div>`;
   }).join('');
 
   document.getElementById('histModalBody').innerHTML = `
-    <div style="display:flex;gap:10px;margin-bottom:12px">
+    <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
       ${nOk?`<span class="hc hc-ok" style="padding:5px 12px;border-radius:10px;font-size:13px">✓ ตรง ${nOk}</span>`:''}
       ${nShort?`<span class="hc hc-short" style="padding:5px 12px;border-radius:10px;font-size:13px">↓ ขาด ${nShort}</span>`:''}
       ${nOver?`<span class="hc hc-over" style="padding:5px 12px;border-radius:10px;font-size:13px">↑ เกิน ${nOver}</span>`:''}
