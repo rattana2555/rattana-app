@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0A1B3E">
-<title>Rattana D-Delivery v1.42</title>
+<title>Rattana D-Delivery</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -585,7 +585,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.47';
+const APP_VERSION='1.48';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -2070,6 +2070,9 @@ function renderMyJobsList(){
     const stCls=j.status==='in_progress'?'badge-info':j.status==='rejected'?'badge-danger':j.status==='pending_approval'?'badge-warn':'badge-ok';
     const stLbl=j.status==='in_progress'?'กำลังส่ง':j.status==='rejected'?'↩️ ตีกลับ':j.status==='pending_approval'?'⏳ รออนุมัติ':j.status==='approved'?'✓ อนุมัติแล้ว':j.status;
     const done=(j.bills||[]).filter(b=>b.status!=='pending').length;
+    // v1.48: timestamp ตามสถานะ
+    const ts=j.status==='approved'?j.approvedAt:j.status==='rejected'?j.rejectedAt:j.status==='pending_approval'?j.submittedAt:j.startedAt;
+    const tsLbl=j.status==='approved'?'อนุมัติ':j.status==='rejected'?'ตีกลับ':j.status==='pending_approval'?'ส่ง':'เริ่ม';
     return `<div class="job-card" onclick="openMyJob('${esc(j.id)}')" style="cursor:pointer">
       <div class="job-head">
         <div>
@@ -2086,6 +2089,7 @@ function renderMyJobsList(){
         </div>
       </div>
       ${j.team?`<div class="txt-xs txt-muted mt-8">🚗 ${esc(j.team.plate||'-')} ${j.team.helper?'• 👥 '+esc(j.team.helper):''}</div>`:''}
+      ${ts?`<div class="txt-xs txt-muted mt-4">⏱ ${tsLbl} ${formatThaiDateTime(ts)}</div>`:''}
     </div>`;
   };
   $('activeJobContent').innerHTML=`
@@ -2164,6 +2168,11 @@ function renderActiveJob(){
         <div class="grid-2">
           <div><div class="txt-xs txt-muted">บิลทั้งหมด</div><div class="txt-lg num">${done}/${j.bills.length}</div></div>
           <div><div class="txt-xs txt-muted">ยอดเก็บได้</div><div class="txt-lg num txt-gold">${fmt(collected)} / ${fmt(total)}</div></div>
+        </div>
+        <div class="txt-xs txt-muted mt-8">
+          ${j.startedAt?`⏱ เริ่มงาน ${formatThaiDateTime(j.startedAt)}<br>`:''}
+          ${j.submittedAt?`📤 ส่งหัวหน้า ${formatThaiDateTime(j.submittedAt)}<br>`:''}
+          ${j.rejectedAt?`↩️ ตีกลับ ${formatThaiDateTime(j.rejectedAt)} โดย ${esc(j.rejectedBy||'-')}`:''}
         </div>
         ${j.status==='in_progress'?`<div class="row mt-12" style="justify-content:flex-end">
           <button class="btn btn-outline btn-sm txt-danger" onclick="cancelPickup()">🗑 ยกเลิกการรับงานนี้</button>
@@ -2690,6 +2699,12 @@ function openReview(id){
           <span class="badge badge-info">🚗 ${esc(j.team?.plate||'-')}</span>
           <span class="badge badge-info">📦 ${esc(j.team?.pattern||'-')}</span>
         </div>
+        <div class="txt-xs txt-muted mb-12">
+          ${j.startedAt?`⏱ เริ่มงาน ${formatThaiDateTime(j.startedAt)}<br>`:''}
+          ${j.submittedAt?`📤 ส่งหัวหน้า ${formatThaiDateTime(j.submittedAt)}<br>`:''}
+          ${j.approvedAt?`✅ อนุมัติ ${formatThaiDateTime(j.approvedAt)} โดย ${esc(j.approvedBy||'-')}<br>`:''}
+          ${j.rejectedAt?`↩️ ตีกลับ ${formatThaiDateTime(j.rejectedAt)} โดย ${esc(j.rejectedBy||'-')}`:''}
+        </div>
         <div class="grid-2 mb-12">
           <div class="stat-card"><div class="s-label">เก็บได้</div><div class="s-value txt-gold">${fmt(collected)}</div></div>
           <div class="stat-card"><div class="s-label">ยอดบิล</div><div class="s-value">${fmt(total)}</div></div>
@@ -2769,6 +2784,9 @@ function renderHistRow(j){
   const total=j.bills.reduce((s,b)=>s+payTotal(b.payment),0);
   const stMap={in_progress:['กำลังส่ง','badge-info'],pending_approval:['รออนุมัติ','badge-warn'],approved:['อนุมัติ','badge-ok'],rejected:['ตีกลับ','badge-danger']};
   const [stLbl,stCls]=stMap[j.status]||[j.status,'badge-info'];
+  // v1.48: timestamp ตามสถานะ — อนุมัติ→approvedAt, ตีกลับ→rejectedAt, รออนุมัติ→submittedAt
+  const ts=j.status==='approved'?j.approvedAt:j.status==='rejected'?j.rejectedAt:j.submittedAt;
+  const tsLbl=j.status==='approved'?'อนุมัติเมื่อ':j.status==='rejected'?'ตีกลับเมื่อ':j.status==='pending_approval'?'ส่งเมื่อ':'';
   return `<div class="job-card" onclick="${j.status==='pending_approval'?`openReview('${j.id}')`:`viewHistJob('${j.id}')`}">
     <div class="job-head">
       <div>
@@ -2777,6 +2795,7 @@ function renderHistRow(j){
           <span>👤 ${esc(j.team?.driver||'-')}</span>
           <span>🚗 ${esc(j.team?.plate||'-')}</span>
         </div>
+        ${ts?`<div class="txt-xs txt-muted mt-4">⏱ ${tsLbl} ${formatThaiDateTime(ts)}</div>`:''}
       </div>
       <div class="txt-right">
         <div class="job-amount">${fmt(total)} ฿</div>
@@ -2968,7 +2987,7 @@ async function syncJobsFromSheet(){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-Delivery — Apps Script Backend v3.3 (CN: 1 row per item) */
+const APPS_SCRIPT_CODE=`/* D-Delivery — Apps Script Backend v3.4 (datetime columns preserve time) */
 const SHEET_INPUT='บันทึกเที่ยวส่ง';
 const SHEET_CIN='บันทึกบิลและการชำระ';
 const SHEET_CN='CN';
@@ -3109,6 +3128,11 @@ function doPost(e){
     upsert_(inSh,inIdx,String(data.jobId),inRow);
     inSh.getRange('A:A').setNumberFormat('@');
     inSh.getRange('F:F').setNumberFormat('@');
+    // v1.48: บังคับ format datetime columns ให้รวมเวลา (ไม่งั้น gviz CSV จะดึงแค่วัน)
+    const DT='yyyy-mm-dd hh:mm:ss';
+    inSh.getRange('B:B').setNumberFormat(DT);   // วันเวลาปิดงาน
+    inSh.getRange('AB:AB').setNumberFormat(DT); // วันเวลาอนุมัติ
+    inSh.getRange('AD:AD').setNumberFormat(DT); // วันเวลาส่งงาน
 
     // ===== Cin — 1 แถวต่อ 1 บิล =====
     if(Array.isArray(data.bills)){
