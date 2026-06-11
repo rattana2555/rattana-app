@@ -646,7 +646,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v3.31';
+const APP_VERSION = 'v3.32';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -2264,9 +2264,19 @@ function renderSummary() {
 }
 
 // ── Export / Save ──
+function mergeLotsByExpiry(lots) {
+  const map = new Map();
+  lots.forEach(lot => {
+    const k = lot.expiryDate || '';
+    if (!map.has(k)) map.set(k, { counts:{EA:0,PA:0,BP:0,CS:0}, expiryDate:k });
+    const m = map.get(k);
+    ['EA','PA','BP','CS'].forEach(u => { m.counts[u] = (m.counts[u]||0)+(lot.counts[u]||0); });
+  });
+  return [...map.values()];
+}
 function summaryExportRows() {
   return buildSummaryRows().flatMap(r => {
-    const lots = itemLots(r.item);
+    const lots = mergeLotsByExpiry(itemLots(r.item));
     return lots.map((lot, li) => {
       const lc = lot.counts;
       const lotPieces = ['EA','PA','BP','CS'].reduce((s,u)=>s+(lc[u]||0)*(r.item.factors[u]||1),0);
@@ -2332,7 +2342,15 @@ async function saveCountToSheet() {
         return `${sign}${cs}.${ea}`;
       })();
       const status = r.status==='ok' ? 'ตรง' : r.status==='short' ? 'ขาด' : 'เกิน';
-      return lots.map((lot, li) => {
+      // Merge lots with the same expiry date (including both-blank = no-date lots)
+      const merged = new Map();
+      lots.forEach(lot => {
+        const key = lot.expiryDate || '';
+        if (!merged.has(key)) merged.set(key, { counts: {EA:0,PA:0,BP:0,CS:0}, expiryDate: key });
+        const m = merged.get(key);
+        ['EA','PA','BP','CS'].forEach(u => { m.counts[u] = (m.counts[u]||0) + (lot.counts[u]||0); });
+      });
+      return [...merged.values()].map((lot, li) => {
         const lc = lot.counts;
         const lotPieces = ['EA','PA','BP','CS'].reduce((s,u)=>s+(lc[u]||0)*(r.item.factors[u]||1),0);
         return {
