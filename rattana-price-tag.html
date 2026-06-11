@@ -3060,29 +3060,35 @@ function renderTag(p, idPrefix='tag', perPage) {
   return { html, qrId, bcId };
 }
 function attachCodes(p, qrId, bcId) {
-  // v3.2 — Barcode with EAN13→CODE128 fallback (invalid EAN13 checksum no longer hides the bars)
+  // v3.3 — All barcodes rendered as CODE39 with the number shown below (industrial style)
   const bcEl = document.getElementById(bcId);
   if (!bcEl || !p.barcode) return;
-  const code = String(p.barcode).trim();
-  const opts = { width: 1.2, height: 28, displayValue: false, margin: 0 };
+  const code = String(p.barcode).trim().toUpperCase();  // Code 39 uses uppercase
+  const isMini = !!bcEl.closest('.tpl-mini');
   const draw = (format) => {
     const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
     bcEl.innerHTML = '';
     bcEl.appendChild(svg);
-    JsBarcode(svg, code, { ...opts, format, valid: (v) => { if (!v) throw new Error('invalid'); } });
-    svg.style.maxWidth = '24mm'; svg.style.height = '8mm';
+    JsBarcode(svg, code, {
+      format,
+      width: 1.1,
+      height: 26,
+      displayValue: true,          // show the number under the bars
+      fontSize: 13,
+      textMargin: 1,
+      font: "'Courier New',monospace",
+      margin: 0,
+      valid: (v) => { if (!v) throw new Error('invalid'); }
+    });
+    svg.style.maxWidth = isMini ? '34mm' : '26mm';
+    svg.style.height   = '10mm';
   };
-  // Try EAN13 only for valid 13-digit codes; fall back to CODE128 (encodes any string)
+  // CODE39: digits + A-Z, any length, no checksum needed (matches the requested style)
   try {
-    if (/^\d{13}$/.test(code)) {
-      try { draw('EAN13'); }       // valid checksum → proper EAN13
-      catch { draw('CODE128'); }   // bad checksum → still show the bars via CODE128
-    } else {
-      draw('CODE128');
-    }
+    draw('CODE39');
   } catch (e) {
-    console.warn('Barcode render failed for', code, e);
-    bcEl.innerHTML = '';  // leave empty rather than broken
+    try { draw('CODE128'); }        // fallback for chars Code39 can't encode
+    catch (e2) { bcEl.innerHTML = ''; console.warn('Barcode failed', code, e2); }
   }
 }
 
