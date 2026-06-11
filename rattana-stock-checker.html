@@ -218,6 +218,12 @@
     .spinner-ring{width:48px;height:48px;border:5px solid #dde3f0;border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px}
 
     #loadingBar{position:fixed;top:0;left:0;height:3px;background:var(--gold);width:0;transition:width .4s;z-index:10001}
+    /* Status dot — LED-style connection indicator */
+    .status-dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex-shrink:0;transition:background .3s,box-shadow .3s}
+    .status-dot.ok{background:#2ecc71;box-shadow:0 0 6px #2ecc71}
+    .status-dot.syncing{background:#f39c12;animation:dotPulse 1s ease-in-out infinite}
+    .status-dot.error{background:#e74c3c;box-shadow:0 0 6px #e74c3c}
+    @keyframes dotPulse{0%,100%{opacity:1;box-shadow:0 0 4px #f39c12}50%{opacity:.35;box-shadow:none}}
     #resultSection{display:none}
     #resultSection.show{display:block;animation:fadeIn .3s ease}
     #backToTop{position:fixed;bottom:max(24px,env(safe-area-inset-bottom));right:max(16px,env(safe-area-inset-right));background:var(--gold);color:#fff;border:none;border-radius:50%;width:46px;height:46px;display:none;align-items:center;justify-content:center;box-shadow:var(--shadow-gold);z-index:90;font-size:20px;font-weight:700;cursor:pointer}
@@ -475,7 +481,8 @@
     <div class="hd-title" id="hdTitle">นับสต็อก <span class="hd-ver" id="hdVer"></span></div>
     <div class="hd-sub" id="hdSub">—</div>
   </div>
-  <div class="hd-actions">
+  <div class="hd-actions" style="display:flex;align-items:center;gap:6px">
+    <span id="statusDot" class="status-dot syncing" title="สถานะข้อมูล"></span>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">↻</button>
     <button class="icon-btn" onclick="toggleDark()" title="Dark Mode">🌙</button>
     <button class="icon-btn" onclick="logout()" title="ออกจากระบบ">⎋</button>
@@ -672,7 +679,7 @@ const AUTH_CONFIG = {
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const APP_VERSION = 'v3.38';
+const APP_VERSION = 'v3.39';
 const ALL_WAREHOUSE_ROLE = 4; // role >= 4 sees all warehouses
 
 // Apps Script Web App URL for saving count results (paste after deploying — see setup note)
@@ -975,6 +982,7 @@ function enterApp() {
   document.getElementById('appScreen').classList.add('show');
 
   loadData();
+  startDataPoll();
   setMode('count');   // start in count mode (lookup tab removed)
   renderCounterPicker();
 }
@@ -1026,8 +1034,9 @@ async function loadData(force=false) {
       return;
     }
   }
-  // No cache → fetch in the background, show a thin loading bar instead of blocking spinner
-  document.getElementById('dataStatus').textContent = '⏳ กำลังโหลดข้อมูล...';
+  // No cache → fetch, show thin loading bar instead of blocking spinner
+  document.getElementById('dataStatus').textContent = 'กำลังโหลดข้อมูล...';
+  setStatusDot('syncing');
   setLoadingBar(true);
   try {
     const data = await fetchSheet();
@@ -1036,20 +1045,34 @@ async function loadData(force=false) {
       buildIndex(data);
       setStatusOk(data.length);
     } else {
-      document.getElementById('dataStatus').textContent = '❌ โหลดไม่ได้ — กรุณา Refresh';
+      document.getElementById('dataStatus').textContent = 'โหลดไม่ได้ — กรุณา Refresh';
+      setStatusDot('error');
       showToast('โหลดข้อมูลไม่ได้', 'error');
     }
   } catch (e) {
-    document.getElementById('dataStatus').textContent = '❌ โหลดไม่ได้ — กรุณา Refresh';
+    document.getElementById('dataStatus').textContent = 'โหลดไม่ได้ — กรุณา Refresh';
+    setStatusDot('error');
   } finally {
     setLoadingBar(false);
   }
 }
 
 async function fetchAndUpdate() {
+  setStatusDot('syncing');
   const data = await fetchSheet().catch(()=>null);
   if (data && data.length) { setCache(CACHE_KEY, data); buildIndex(data); setStatusOk(data.length); }
+  else setStatusDot('error');
 }
+
+// Auto-refresh product data every 60s while app is open
+let dataPollTimer = null;
+function startDataPoll() {
+  stopDataPoll();
+  dataPollTimer = setInterval(() => {
+    if (!document.hidden && navigator.onLine !== false) fetchAndUpdate();
+  }, 60000);
+}
+function stopDataPoll() { if (dataPollTimer) { clearInterval(dataPollTimer); dataPollTimer = null; } }
 
 // Fetch ONLY the columns we use (≈15 of ~120) — cuts payload ~85%.
 // Column letters: A=PRODUCT NAME, B-I=CODE/UNIT pairs, J-M=UNIT names, N-Q=QTY,
@@ -1157,8 +1180,15 @@ function expiryBadgeHtml(yyyymmdd) {
   return `<span class="badge" style="background:var(--row-alt);color:var(--muted);border:1px solid var(--border)">EXP ${dateStr} · อีก ${days} วัน</span>`;
 }
 
+function setStatusDot(state) { // 'ok' | 'syncing' | 'error'
+  const el = document.getElementById('statusDot');
+  if (!el) return;
+  el.className = 'status-dot ' + state;
+  el.title = state === 'ok' ? 'ข้อมูลอัปเดตแล้ว' : state === 'syncing' ? 'กำลังซิงก์...' : 'ไม่สามารถเชื่อมต่อได้';
+}
 function setStatusOk(count) {
-  document.getElementById('dataStatus').textContent = `✅ สินค้า ${count.toLocaleString()} รายการ`;
+  document.getElementById('dataStatus').textContent = `สินค้า ${count.toLocaleString()} รายการ`;
+  setStatusDot('ok');
 }
 
 // ── LOOKUP ───────────────────────────────────────────────
