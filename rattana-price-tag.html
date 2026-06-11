@@ -3060,20 +3060,29 @@ function renderTag(p, idPrefix='tag', perPage) {
   return { html, qrId, bcId };
 }
 function attachCodes(p, qrId, bcId) {
-  // v3.1 — QR removed, replaced with location text in renderTag footer
-  // Barcode
+  // v3.2 — Barcode with EAN13→CODE128 fallback (invalid EAN13 checksum no longer hides the bars)
   const bcEl = document.getElementById(bcId);
-  if (bcEl && p.barcode) {
-    try {
-      const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
-      bcEl.innerHTML = '';
-      bcEl.appendChild(svg);
-      JsBarcode(svg, String(p.barcode), {
-        format: /^\d{13}$/.test(p.barcode) ? 'EAN13' : 'CODE128',
-        width: 1.2, height: 28, displayValue: false, margin: 0
-      });
-      svg.style.maxWidth = '24mm'; svg.style.height = '8mm';
-    } catch (e) { console.warn('BC err', e); }
+  if (!bcEl || !p.barcode) return;
+  const code = String(p.barcode).trim();
+  const opts = { width: 1.2, height: 28, displayValue: false, margin: 0 };
+  const draw = (format) => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    bcEl.innerHTML = '';
+    bcEl.appendChild(svg);
+    JsBarcode(svg, code, { ...opts, format, valid: (v) => { if (!v) throw new Error('invalid'); } });
+    svg.style.maxWidth = '24mm'; svg.style.height = '8mm';
+  };
+  // Try EAN13 only for valid 13-digit codes; fall back to CODE128 (encodes any string)
+  try {
+    if (/^\d{13}$/.test(code)) {
+      try { draw('EAN13'); }       // valid checksum → proper EAN13
+      catch { draw('CODE128'); }   // bad checksum → still show the bars via CODE128
+    } else {
+      draw('CODE128');
+    }
+  } catch (e) {
+    console.warn('Barcode render failed for', code, e);
+    bcEl.innerHTML = '';  // leave empty rather than broken
   }
 }
 
