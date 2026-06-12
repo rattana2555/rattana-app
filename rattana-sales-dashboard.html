@@ -4,9 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Sales Dashboard v2.0</title>
+<title>Rattana Sales Dashboard v2.3</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="bq_store.js"></script>
+<script src="bq_sugg.js"></script>
 <style>
 :root {
   --navy:#0d1b3e; --navy-mid:#1a2f5e; --navy-light:#243b73;
@@ -259,7 +261,7 @@ header{position:relative}
     </div>
     <div class="user-menu-item" onclick="logout()">🚪 ออกจากระบบ</div>
   </div>
-  <span class="version-tag">v2.0 · 2026-06-11</span>
+  <span class="version-tag">v2.3 · 2026-06-12</span>
 </header>
 
 <!-- Tab Nav -->
@@ -409,23 +411,27 @@ header{position:relative}
 <!-- ─────── TAB 4: สินค้า Suggestion ─────── -->
 <div class="tab-panel" id="tab-suggest">
 <div class="content">
+  <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:12px">
+    <div class="stat-card"><div class="s-label">ตำบล</div><div class="s-value" id="sStatSub">-</div><div class="s-sub">พื้นที่ในฐานข้อมูล</div></div>
+    <div class="stat-card info"><div class="s-label">Channel</div><div class="s-value" id="sStatCh">-</div><div class="s-sub">ช่องทาง</div></div>
+    <div class="stat-card warning"><div class="s-label">ประเภทร้าน</div><div class="s-value" id="sStatSt">-</div><div class="s-sub">Shop Type</div></div>
+  </div>
+
   <div class="filter-bar">
-    <input class="finput" type="text" id="fSuggSearch" placeholder="🔍 ค้นหาร้านค้า / Sale NO ROO..." style="flex:1;min-width:160px" oninput="renderSuggestions()">
-    <select class="finput" id="fSuggSale" onchange="renderSuggestions()"><option value="all">ทุก Sale NO ROO</option></select>
-    <select class="finput" id="fSuggPriority" onchange="renderSuggestions()">
-      <option value="all">ทุก Priority</option>
-      <option value="HIGH">🔴 สูง (>90 วัน)</option>
-      <option value="MID">🟡 กลาง (31-90 วัน)</option>
-      <option value="LOW">🔵 ต่ำ (≤30 วัน)</option>
-    </select>
+    <input class="finput" type="text" id="fSuggSub" placeholder="🔍 ค้นหาตำบล..." style="flex:1;min-width:160px" oninput="renderSuggestions()">
+    <select class="finput" id="fSuggChannel" onchange="renderSuggestions()"><option value="all">ทุก Channel</option></select>
+    <select class="finput" id="fSuggShopType" onchange="renderSuggestions()"><option value="all">ทุก Shop Type</option></select>
+    <span class="badge badge-gold" id="suggMatchCount">0 กลุ่ม</span>
   </div>
-  <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;font-size:12px;color:var(--muted)">
-    <span>🔴 สูง = ไม่ซื้อ >90 วัน</span>
-    <span>🟡 กลาง = ไม่ซื้อ 31-90 วัน</span>
-    <span>🔵 ต่ำ = ไม่ซื้อ ≤30 วัน</span>
-    <span style="margin-left:auto">แนะนำ BU ยอดขายสูงสุดที่ร้านยังไม่ซื้อเดือนนี้</span>
+
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:11px;color:var(--muted)">
+    <span>📊 ข้อมูลย้อนหลัง 3 เดือน · เรียงตาม AVG Sales_CS สูงสุด</span>
+    <span style="margin-left:auto;color:var(--gold);font-weight:600" id="suggDataDate">-</span>
   </div>
-  <div class="sugg-grid" id="suggGrid"><div style="text-align:center;color:var(--muted);padding:60px;grid-column:1/-1">กำลังโหลด...</div></div>
+
+  <div class="sugg-grid" id="suggGrid">
+    <div style="text-align:center;color:var(--muted);padding:60px;grid-column:1/-1">กำลังโหลด...</div>
+  </div>
 </div>
 </div>
 
@@ -993,6 +999,7 @@ async function loadAllData() {
     populateFilters();
 
     // Render all tabs
+    buildSuggEntries();
     renderSummary();
     renderUnsold();
     renderZeroStores();
@@ -1013,7 +1020,7 @@ async function loadAllData() {
 function populateFilters() {
   // Sale NO ROO filter for BP-based tabs (Summary, Suggest) — admin only
   const sales = [...new Set(DATA.customers.map(c => c.sale).filter(Boolean))].sort();
-  ['fSumSale','fSuggSale'].forEach(id => {
+  ['fSumSale'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     if (!canSeeAll()) {
@@ -1283,66 +1290,114 @@ function renderZeroStores() {
 }
 
 // ═══════════════════════════════════════
-//  TAB 4 — SUGGESTIONS (rule-based)
+//  TAB 4 — SUGGESTIONS (ตำบล × Channel × Shop Type)
 // ═══════════════════════════════════════
-function renderSuggestions() {
-  const q    = document.getElementById('fSuggSearch').value.toLowerCase();
-  const sale = document.getElementById('fSuggSale')?.value || 'all';
-  const pri  = document.getElementById('fSuggPriority').value;
+let _suggEntries = [];
 
-  // Rule: zero stores get suggestions based on top BU in their sale territory
-  // Build sale→BU map from all customers in that sale
-  const saleBUMap = {};
-  DATA.bySale.forEach(s => {
-    // Find top BU for this sale from overall BU data (simplified)
-    saleBUMap[s.sale] = DATA.byBU.slice(0, 4).map(b => b.bu);
+function buildSuggEntries() {
+  if (typeof BQ_SUGG === 'undefined') { _suggEntries = []; return; }
+  _suggEntries = Object.entries(BQ_SUGG).map(([key, prods]) => {
+    const [sub, channel, shopType] = key.split('|');
+    return { sub: sub||'-', channel: channel||'-', shopType: shopType||'-', products: prods||[], key };
+  }).filter(e => e.products.length > 0)
+    .sort((a, b) => (b.products[0]?.[1]||0) - (a.products[0]?.[1]||0));
+}
+
+function populateSuggFilters() {
+  if (typeof BQ_SUGG === 'undefined') return;
+  const channels = new Set(), shopTypes = new Set(), subs = new Set();
+  _suggEntries.forEach(e => {
+    if (e.channel !== '-') channels.add(e.channel);
+    if (e.shopType !== '-') shopTypes.add(e.shopType);
+    if (e.sub !== '-') subs.add(e.sub);
   });
+  const chSel = document.getElementById('fSuggChannel');
+  const stSel = document.getElementById('fSuggShopType');
+  if (chSel && chSel.options.length <= 1)
+    [...channels].sort().forEach(c => chSel.add(new Option(c, c)));
+  if (stSel && stSel.options.length <= 1)
+    [...shopTypes].sort().forEach(t => stSel.add(new Option(t, t)));
+  const el = id => document.getElementById(id);
+  if (el('sStatSub')) el('sStatSub').textContent = subs.size;
+  if (el('sStatCh'))  el('sStatCh').textContent  = channels.size;
+  if (el('sStatSt'))  el('sStatSt').textContent  = shopTypes.size;
+}
 
-  const priFor = days => !days || days > 90 ? 'HIGH' : days > 30 ? 'MID' : 'LOW';
+const RANK_ICON   = ['🥇','🥈','🥉','4️⃣','5️⃣'];
+const RANK_COLORS = ['var(--gold)','#9ea3ab','#cd7f32','var(--muted)','var(--muted)'];
 
-  let stores = DATA.zeroReport.filter(r => {
-    if (sale !== 'all' && r.saleCode !== sale) return false;
-    if (q && !r.name.toLowerCase().includes(q) && !r.sale.toLowerCase().includes(q) && !r.saleCode.toLowerCase().includes(q)) return false;
-    return true;
-  }).slice(0, 18);
-
+function renderSuggestions() {
+  if (!_suggEntries.length && typeof BQ_SUGG !== 'undefined') buildSuggEntries();
   const grid = document.getElementById('suggGrid');
-  if (!stores.length) {
-    grid.innerHTML = '<div style="text-align:center;color:var(--muted);padding:60px;grid-column:1/-1">ไม่พบร้านที่ต้องแนะนำสินค้า</div>';
+  if (typeof BQ_SUGG === 'undefined') {
+    grid.innerHTML = '<div style="text-align:center;color:var(--muted);padding:60px;grid-column:1/-1">⚠️ ไม่พบไฟล์ bq_sugg.js — กรุณาตรวจสอบ</div>';
     return;
   }
 
-  const priBadge = {
-    HIGH: '<span class="badge badge-danger">🔴 สูง</span>',
-    MID:  '<span class="badge badge-warn">🟡 กลาง</span>',
-    LOW:  '<span class="badge badge-info">🔵 ต่ำ</span>',
-  };
-  const priCls = { HIGH:'priority-high', MID:'priority-mid', LOW:'priority-low' };
+  populateSuggFilters();
 
-  grid.innerHTML = stores.map(store => {
-    const days = daysSince(store.lastDate);
-    const p    = priFor(days);
-    // Top 3 BUs to suggest (from overall sales data)
-    const topBUs = DATA.byBU.slice(0, 3);
-    const items  = topBUs.map((bu, i) => {
-      const ip = i === 0 ? 'HIGH' : i === 1 ? 'MID' : 'LOW';
-      return `<div class="sugg-item ${priCls[ip]}">
-        <div style="flex:1">
-          <div class="prod-name">📦 ${bu.bu}</div>
-          <div class="prod-reason">💬 BU อันดับ ${i+1} — ยอดรวม ${fmt(bu.total)} ฿</div>
-        </div>
-        ${priBadge[ip]}
-      </div>`;
+  // Date range label (3 months back from latest month)
+  if (latestMonthYear) {
+    const { year: y, month: m } = latestMonthYear;
+    let fm = m - 2, fy = y;
+    if (fm < 0) { fm += 12; fy--; }
+    document.getElementById('suggDataDate').textContent =
+      `${MONTH_TH[fm]} ${fy+543} – ${MONTH_TH[m]} ${y+543}`;
+  }
+
+  const q  = (document.getElementById('fSuggSub')?.value || '').toLowerCase().trim();
+  const ch = document.getElementById('fSuggChannel')?.value  || 'all';
+  const st = document.getElementById('fSuggShopType')?.value || 'all';
+
+  const entries = _suggEntries.filter(e => {
+    if (q  && !e.sub.toLowerCase().includes(q)) return false;
+    if (ch !== 'all' && e.channel !== ch) return false;
+    if (st !== 'all' && e.shopType !== st) return false;
+    return true;
+  });
+
+  document.getElementById('suggMatchCount').textContent = `${entries.length} กลุ่ม`;
+
+  if (!entries.length) {
+    grid.innerHTML = '<div style="text-align:center;color:var(--muted);padding:60px;grid-column:1/-1">ไม่พบข้อมูลที่ค้นหา</div>';
+    return;
+  }
+
+  grid.innerHTML = entries.map(e => {
+    const topCS = e.products[0]?.[1] || 0;
+    const rows  = e.products.slice(0, 5).map(([prod, avgCs, cnt], i) => {
+      const pct = topCS > 0 ? (avgCs / topCS * 100) : 0;
+      return `
+        <div style="padding:8px 0;${i < Math.min(e.products.length,5)-1?'border-bottom:1px solid var(--border)':''}">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+            <span style="font-size:15px;flex-shrink:0;width:22px">${RANK_ICON[i]}</span>
+            <span style="font-size:13px;font-weight:${i===0?'700':'500'};flex:1;line-height:1.4;color:var(--text)">${escHtml(prod)}</span>
+            <span style="font-size:13px;font-weight:700;color:${RANK_COLORS[i]};white-space:nowrap">${Number(avgCs).toFixed(1)} ลัง</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding-left:30px">
+            <div style="flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+              <div style="height:100%;width:${pct.toFixed(0)}%;background:${i===0?'var(--gold)':i===1?'var(--info)':'var(--muted)'};border-radius:2px"></div>
+            </div>
+            <span style="font-size:11px;color:var(--muted);white-space:nowrap;min-width:42px;text-align:right">${cnt} ร้าน</span>
+          </div>
+        </div>`;
     }).join('');
 
-    return `<div class="sugg-card">
-      <div class="store-name">${store.name}
-        <span class="badge badge-gold" style="font-size:10px;margin-left:4px">${store.code}</span>
-      </div>
-      <div class="store-meta">👤 ${store.sale||'-'} · ${store.saleCode||''} · เฉลี่ย ${fmtB(store.avg3)}/เดือน</div>
-      ${priBadge['HIGH']} <span style="font-size:11px;color:var(--muted);margin-left:6px">ไม่ซื้อ มิ.ย. 2026</span>
-      <div class="sugg-items">${items}</div>
-    </div>`;
+    return `
+      <div class="sugg-card" style="border-left:none;border-top:3px solid var(--gold);padding:0;overflow:hidden">
+        <div style="padding:12px 14px;background:linear-gradient(to right,rgba(201,168,76,.08),transparent);border-bottom:1px solid var(--border)">
+          <div style="font-size:15px;font-weight:700;margin-bottom:7px">📍 ${escHtml(e.sub)}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <span class="badge badge-info" style="font-size:11px">${escHtml(e.channel)}</span>
+            <span class="badge badge-gold" style="font-size:11px">${escHtml(e.shopType)}</span>
+            <span style="margin-left:auto;font-size:11px;color:var(--muted)">${e.products.length} สินค้า</span>
+          </div>
+        </div>
+        <div style="padding:4px 14px 10px">${rows}</div>
+        <div style="padding:7px 14px;background:var(--row-alt);border-top:1px solid var(--border);font-size:10px;color:var(--muted)">
+          📊 AVG Sales_CS · ย้อนหลัง 3 เดือน
+        </div>
+      </div>`;
   }).join('');
 }
 
