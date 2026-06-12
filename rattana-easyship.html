@@ -1012,20 +1012,66 @@ function stopCam(){
 
 function imgErr(el){el.style.display='none';}
 // ═══ CHECK PRODUCTS ════════════════════════════════════════
-function _ckKey(){
+var CTAB='เช็คสินค้า';
+
+function _ckDate(){
   var d=new Date();
-  return 're_check_'+d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
-function _loadCheck(){
+function _ckKey(){return 're_check_'+_ckDate();}
+
+function _loadCheckLocal(){
   try{_checkCounts=JSON.parse(localStorage.getItem(_ckKey())||'{}');}
   catch(e){_checkCounts={};}
 }
-function _saveCheck(){
+function _saveCheckLocal(){
   try{localStorage.setItem(_ckKey(),JSON.stringify(_checkCounts));}catch(e){}
 }
 
+// โหลดจาก Sheet (sync ข้ามเครื่อง) แล้ว fallback localStorage
+function _loadCheckRemote(cb){
+  var today=_ckDate();
+  var url='https://docs.google.com/spreadsheets/d/'+SHEET+'/gviz/tq?tqx=out:json&sheet='+encodeURIComponent(CTAB)+'&t='+Date.now();
+  var called=false;
+  function done(){if(called)return;called=true;if(cb)cb();}
+  var tmr=setTimeout(done,4000);
+  fetch(url).then(function(r){return r.text();}).then(function(txt){
+    clearTimeout(tmr);
+    try{
+      var s=txt.indexOf('{'),e=txt.lastIndexOf('}');
+      if(s>=0){
+        var j=JSON.parse(txt.substring(s,e+1));
+        var rows=(j.table||{}).rows||[];
+        var remote={};
+        rows.forEach(function(row){
+          var c=row.c||[];
+          var dt=c[0]&&c[0].v?String(c[0].f||c[0].v).trim():'';
+          var bc=c[1]&&c[1].v!=null?String(c[1].v).trim():'';
+          var ct=c[2]&&c[2].v!=null?(typeof c[2].v==='number'?c[2].v:parseInt(c[2].v)):0;
+          // gviz may return date as "Date(yyyy,m,d)"
+          var m=dt.match(/Date\((\d+),(\d+),(\d+)/);
+          if(m)dt=m[1]+'-'+String(parseInt(m[2])+1).padStart(2,'0')+'-'+String(m[3]).padStart(2,'0');
+          if(dt===today&&bc)remote[bc]=ct;
+        });
+        _checkCounts=remote;
+        _saveCheckLocal();
+      }
+    }catch(e){}
+    done();
+  }).catch(function(){clearTimeout(tmr);done();});
+}
+
+// บันทึกขึ้น Sheet ผ่าน GAS (no-cors)
+function _saveCheckRemote(bc,count){
+  if(!GAS)return;
+  fetch(GAS,{
+    method:'POST',mode:'no-cors',
+    body:JSON.stringify({action:'saveCheck',date:_ckDate(),bc:bc,count:count})
+  }).catch(function(){});
+}
+
 function openCheck(){
-  _loadCheck();
+  _loadCheckLocal();    // show last known immediately
   show('s-check');
   var d=new Date();
   var dy=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
@@ -1033,6 +1079,8 @@ function openCheck(){
   TXT('chk-h',dy[d.getDay()]+' '+d.getDate()+' '+mo[d.getMonth()]+' '+(d.getFullYear()+543));
   TXT('chk-s','สแกนเพื่อเช็คสินค้าทั้งหมดของวัน');
   renderCheck();
+  // sync จาก Sheet เพื่อดูข้อมูลจากเครื่องอื่น
+  _loadCheckRemote(function(){renderCheck();});
 }
 
 function _buildProds(){
@@ -1094,11 +1142,12 @@ function renderCheck(){
 }
 
 function hdCheck(bc){
-  _loadCheck();
+  _loadCheckLocal();
   var prods=_buildProds();
   if(!prods[bc]){toast('ไม่พบสินค้านี้ในออเดอร์วันนี้: '+bc,'err');playE();vibr([100,50,100]);return;}
   _checkCounts[bc]=(_checkCounts[bc]||0)+1;
-  _saveCheck();
+  _saveCheckLocal();
+  _saveCheckRemote(bc,_checkCounts[bc]);  // sync ไปทุกเครื่อง
   var p=prods[bc],sc=_checkCounts[bc];
   if(sc===p.qty){toast('✓ '+p.name+' ครบ ('+sc+'/'+p.qty+')','ok');playOk();vibr([100]);}
   else if(sc>p.qty){toast('⚠ '+p.name+' เกิน ('+sc+'/'+p.qty+')','err');playE();vibr([100,50,200]);}
@@ -1107,8 +1156,13 @@ function hdCheck(bc){
 }
 
 function resetCheck(){
-  if(!confirm('รีเซ็ตการเช็คทั้งหมดของวันนี้?'))return;
-  _checkCounts={};_saveCheck();renderCheck();
+  if(!confirm('รีเซ็ตการเช็คทั้งหมดของวันนี้ (ทุกเครื่อง)?'))return;
+  _checkCounts={};_saveCheckLocal();
+  // รีเซ็ตบน Sheet ด้วย (ทุกเครื่องจะ sync)
+  if(GAS){
+    fetch(GAS,{method:'POST',mode:'no-cors',body:JSON.stringify({action:'resetCheck',date:_ckDate()})}).catch(function(){});
+  }
+  renderCheck();
   toast('รีเซ็ตเรียบร้อย','ok');
 }
 
