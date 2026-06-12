@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Sales Dashboard v3.8</title>
+<title>Rattana Sales Dashboard v3.11</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="bq_store.js"></script>
@@ -304,7 +304,7 @@ header{position:relative}
     </div>
     <div class="user-menu-item" onclick="logout()">🚪 ออกจากระบบ</div>
   </div>
-  <span class="version-tag">v3.8 · 2026-06-12</span>
+  <span class="version-tag">v3.11 · 2026-06-12</span>
 </header>
 
 <!-- Tab Nav -->
@@ -313,7 +313,8 @@ header{position:relative}
   <button class="tab-btn" onclick="switchTab('unsold',this)">📦 SKU ไม่ขาย</button>
   <button class="tab-btn" onclick="switchTab('zero',this)">🏪 ร้าน &lt;2,500 ฿</button>
   <button class="tab-btn" onclick="switchTab('suggestion',this);sgInit()">💡 สินค้า Suggestion</button>
-  <button class="tab-btn" onclick="switchTab('bpsales',this);bpInit()">🛒 สินค้าที่ขาย</button>
+  <button class="tab-btn" onclick="switchTab('bpsales',this);bpInit()" style="display:none">🛒 สินค้าที่ขาย</button>
+  <button class="tab-btn" onclick="switchTab('bphist',this);bphistInit()">📋 สินค้าที่เคยขาย</button>
 </nav>
 
 <!-- ── Scope Banner (shown across all tabs) ── -->
@@ -473,6 +474,19 @@ header{position:relative}
     <div class="tp-empty">
       <div style="font-size:48px;margin-bottom:12px">🛒</div>
       <div style="font-size:16px;font-weight:700;margin-bottom:6px">สินค้าที่ขายได้</div>
+      <div style="font-size:13px">กำลังโหลด...</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ─────── TAB: สินค้าที่เคยขาย ─────── -->
+<div class="tab-panel" id="tab-bphist">
+<div class="content">
+  <div id="bphistContent">
+    <div class="tp-empty">
+      <div style="font-size:48px;margin-bottom:12px">📋</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">สินค้าที่เคยขาย</div>
       <div style="font-size:13px">กำลังโหลด...</div>
     </div>
   </div>
@@ -1738,13 +1752,28 @@ function sgRender(){
 
   // Build BQ_SUGG lookup once — iterate keys to avoid Unicode property-access issues
   const _sgKeys=window.BQ_SUGG?Object.keys(BQ_SUGG):[];
+  // exact match: sub|channel|shopType
   const _sgFind=(s,st,ch)=>{
     const ts=s.trim(), tst=st.trim(), tch=(ch||'').trim();
     const found=_sgKeys.find(k=>{
       const p=k.split('|');
       return p[0].trim()===ts && p[1].trim()===tch && p[2].trim()===tst;
     });
-    return found?BQ_SUGG[found]:null;
+    return found?{data:BQ_SUGG[found],matchedType:tst}:null;
+  };
+  // fuzzy match: find shopType in BQ_SUGG that shares the longest common prefix with st
+  const _sgFindFuzzy=(s,st,ch)=>{
+    const ts=s.trim(), tst=st.trim(), tch=(ch||'').trim();
+    let best=null, bestLen=0;
+    _sgKeys.forEach(k=>{
+      const p=k.split('|');
+      if(p[0].trim()!==ts||p[1].trim()!==tch) return;
+      const kt=p[2].trim();
+      // find common prefix length
+      let len=0; while(len<kt.length&&len<tst.length&&kt[len]===tst[len]) len++;
+      if(len>bestLen){bestLen=len;best={data:BQ_SUGG[k],matchedType:kt};}
+    });
+    return bestLen>=4?best:null; // require at least 4 chars common prefix
   };
   const _sgFindMerged=(s,ch)=>{
     const ts=s.trim(), tch=(ch||'').trim();
@@ -1755,7 +1784,7 @@ function sgRender(){
         BQ_SUGG[k].forEach(([pn,qty])=>{if(!merged[pn])merged[pn]=0;merged[pn]+=qty;});
       }
     });
-    return Object.entries(merged).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([pn,qty])=>[pn,{cs:qty}]);
+    return {data:Object.entries(merged).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([pn,qty])=>[pn,{cs:qty}]),matchedType:null};
   };
 
   let html=`<div class="fade-in">
@@ -1781,19 +1810,27 @@ function sgRender(){
       const st=(shopType||'').trim();
       const ch=channel||'Unknown';
       const chanArg=ch==='Unknown'?null:ch;
-      let top5,usedShopType=false;
+      let top5=[],matchedShopType=null;
       if(window.BQ_SUGG){
         const exact=_sgFind(s,st,chanArg);
-        if(exact&&exact.length){
-          top5=exact.map(([pn,qty])=>[pn,{cs:qty}]);
-          usedShopType=true;
+        if(exact&&exact.data&&exact.data.length){
+          top5=exact.data.map(([pn,qty])=>[pn,{cs:qty}]);
+          matchedShopType=exact.matchedType;
         } else {
-          top5=_sgFindMerged(s,chanArg);
+          const fuzzy=_sgFindFuzzy(s,st,chanArg);
+          if(fuzzy&&fuzzy.data&&fuzzy.data.length){
+            top5=fuzzy.data.map(([pn,qty])=>[pn,{cs:qty}]);
+            matchedShopType=fuzzy.matchedType;
+          } else {
+            const merged=_sgFindMerged(s,chanArg);
+            top5=merged.data;
+            matchedShopType=null;
+          }
         }
       } else {
         const r=tpGetTop5(s,st,chanArg);
         top5=r.length?r:tpGetTop5ByChan(s,chanArg);
-        usedShopType=r.length>0;
+        matchedShopType=r.length>0?st:null;
       }
       const cc=chanColor(ch),cb=chanBg(ch),cl=chanLabel(ch);
 
@@ -1811,9 +1848,8 @@ function sgRender(){
 
       const storeSales=(window.BP2_SELLERS&&myCode&&bpCode)?(window.BP2_SELLERS[myCode]?.[bpCode]?.p||{}):{};
       if(top5.length){
-        const scopeLabel=usedShopType?shopType:cl;
         html+=`<div style="background:var(--row-alt);border-radius:var(--radius-sm);padding:8px 10px">
-          <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:8px;letter-spacing:.3px">🏆 Top 5 สินค้าขายดี · ${sub} · <span style="color:${cc}">${scopeLabel}</span>${!usedShopType?' <span style="font-weight:400">(รวมทุกประเภทร้าน)</span>':''}</div>`;
+          <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:8px;letter-spacing:.3px">🏆 Top 5 สินค้าขายดี · ${sub} · <span style="color:${cc}">${st||cl}</span></div>`;
         top5.forEach(([pn,d],i)=>{
           const soldCs=storeSales[pn];
           const hasSold=soldCs!==undefined&&soldCs>0;
@@ -1972,6 +2008,131 @@ function bpToggle(bpCode){
 function bpFilterSearch(q){
   q=q.toLowerCase().trim();
   document.querySelectorAll('.bp-store-card').forEach(card=>{
+    if(!q){card.style.display='';return;}
+    const match=card.dataset.bp.includes(q)||card.dataset.name.includes(q)||card.dataset.prods.includes(q);
+    card.style.display=match?'':'none';
+  });
+}
+
+// ─── สินค้าที่เคยขาย ───
+let _bphistInited=false;
+function bphistInit(){
+  const el=document.getElementById('bphistContent');
+  bpLoad(()=>{_bphistInited=true;bphistRender();},el);
+}
+
+function bphistRender(){
+  const el=document.getElementById('bphistContent');
+  if(!el)return;
+  const myCode=(currentUser&&currentUser.saleCode)||'';
+  const myName=(currentUser&&(currentUser.name||currentUser.saleNoRoo))||'';
+  const myStores=myCode&&window.BP2_SELLERS?window.BP2_SELLERS[myCode]:null;
+
+  if(!myStores||!Object.keys(myStores).length){
+    el.innerHTML=`<div class="tp-empty"><div style="font-size:48px;margin-bottom:12px">📋</div><div style="font-size:16px;font-weight:700;margin-bottom:6px">ไม่พบข้อมูล</div><div style="font-size:13px;color:var(--muted)">รหัสเซลล์: ${myCode||'(ไม่ทราบ)'}</div></div>`;
+    return;
+  }
+
+  // จับ CUSTS2 เพื่อดึง sub / shopType ของแต่ละร้าน
+  const custMap={};
+  (window.CUSTS2||[]).filter(c=>c[5]===myCode).forEach(c=>{
+    custMap[c[1]]={sub:c[2]||'(ไม่ระบุตำบล)',shopType:c[3]||''};
+  });
+
+  // stats รวม
+  const storeList=Object.entries(myStores);
+  const totalStores=storeList.length;
+  const totalSKU=storeList.reduce((s,[,v])=>s+Object.keys(v.p).length,0);
+  const totalCS=storeList.reduce((s,[,v])=>s+Object.values(v.p).reduce((a,b)=>a+b,0),0);
+
+  let html=`<div class="fade-in">
+  <div class="tp-stat-grid">
+    <div class="tp-stat-card"><div class="s-label">ร้านค้าของฉัน</div><div class="s-value">${totalStores}</div><div class="s-sub">${myName||myCode}</div></div>
+    <div class="tp-stat-card" style="border-top-color:var(--gold)"><div class="s-label">SKU ที่เคยขาย</div><div class="s-value" style="color:var(--navy)">${totalSKU.toLocaleString()}</div><div class="s-sub">รายการ (3 เดือน)</div></div>
+    <div class="tp-stat-card" style="border-top-color:#2ecc71"><div class="s-label">AVG รวม/เดือน</div><div class="s-value" style="color:#1e8449">${(totalCS/3).toLocaleString(undefined,{maximumFractionDigits:0})}</div><div class="s-sub">ลัง</div></div>
+  </div>
+  <div style="margin-bottom:12px">
+    <input class="finput" type="text" id="bphistSearch" placeholder="🔍 ค้นหาร้านค้า / รหัส / สินค้า..." style="width:100%;box-sizing:border-box" oninput="bphistFilter(this.value)">
+  </div>
+  <div id="bphistList">`;
+
+  // จัดกลุ่มตามตำบล
+  const subMap={};
+  storeList.forEach(([bpCode,store])=>{
+    const info=custMap[bpCode]||{sub:'(ไม่ระบุตำบล)',shopType:''};
+    if(!subMap[info.sub])subMap[info.sub]=[];
+    subMap[info.sub].push({bpCode,store,shopType:info.shopType});
+  });
+
+  Object.entries(subMap).sort((a,b)=>a[0].localeCompare(b[0],'th')).forEach(([sub,stores])=>{
+    const subCS=stores.reduce((s,{store})=>s+Object.values(store.p).reduce((a,b)=>a+b,0),0);
+    html+=`<div class="card" style="margin-bottom:16px">
+      <div class="card-head">
+        <h3>📍 ${sub}</h3>
+        <span class="badge" style="background:rgba(0,0,0,.07);color:var(--navy)">${stores.length} ร้าน · ${(subCS/3).toLocaleString(undefined,{maximumFractionDigits:0})} ลัง/เดือน</span>
+      </div>`;
+
+    stores.sort((a,b)=>a.store.n.localeCompare(b.store.n,'th')).forEach(({bpCode,store,shopType})=>{
+      const top15=Object.entries(store.p).sort((a,b)=>b[1]-a[1]).slice(0,15);
+      const storeCS=Object.values(store.p).reduce((a,b)=>a+b,0);
+      const avgPerMonth=storeCS/3;
+      html+=`<div class="bphist-store" data-bp="${bpCode}" data-name="${store.n.toLowerCase()}" data-prods="${top15.map(([p])=>p.toLowerCase()).join('|')}" style="border-top:1px solid var(--border)">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;gap:8px" onclick="bphistToggle('${bpCode}')">
+          <div style="min-width:0">
+            <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${store.n}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap">
+              <span style="font-family:monospace">${bpCode}</span>
+              ${shopType?`<span>${shopType}</span>`:''}
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+            <div style="text-align:right">
+              <div style="font-weight:700;font-size:13px;color:var(--navy)">${(avgPerMonth).toLocaleString(undefined,{maximumFractionDigits:1})} ลัง<span style="font-size:10px;opacity:.7">/เดือน</span></div>
+              <div style="font-size:10px;color:var(--muted)">${top15.length} SKU</div>
+            </div>
+            <span id="bphistArrow_${bpCode}" style="font-size:16px;transition:.2s;color:var(--muted)">▼</span>
+          </div>
+        </div>
+        <div id="bphistDet_${bpCode}" style="display:none;padding:0 0 8px">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead><tr style="background:var(--row-alt)">
+              <th style="padding:6px 16px;text-align:left;font-weight:600;color:var(--muted);font-size:11px">#</th>
+              <th style="padding:6px 8px;text-align:left;font-weight:600;color:var(--muted);font-size:11px">สินค้า</th>
+              <th style="padding:6px 16px;text-align:right;font-weight:600;color:var(--muted);font-size:11px">AVG/เดือน</th>
+              <th style="padding:6px 12px;text-align:right;font-weight:600;color:var(--muted);font-size:11px">รวม 3 เดือน</th>
+            </tr></thead>
+            <tbody>`;
+      top15.forEach(([pn,cs],i)=>{
+        const avg=cs/3;
+        html+=`<tr style="border-top:1px solid var(--border)${i%2===0?'':';background:var(--row-alt)'}">
+          <td style="padding:6px 16px;color:var(--muted);font-size:11px">${i+1}</td>
+          <td style="padding:6px 8px">${tpProdImg(pn,true)} <span style="vertical-align:middle">${pn}</span></td>
+          <td style="padding:6px 16px;text-align:right;font-weight:700;color:var(--navy)">${avg.toLocaleString(undefined,{maximumFractionDigits:2})} ลัง</td>
+          <td style="padding:6px 12px;text-align:right;color:var(--muted);font-size:12px">${cs.toLocaleString(undefined,{maximumFractionDigits:1})}</td>
+        </tr>`;
+      });
+      html+=`</tbody></table></div></div>`;
+    });
+    html+=`</div>`;
+  });
+
+  html+=`</div></div>`;
+  el.innerHTML=html;
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function bphistToggle(bpCode){
+  const det=document.getElementById('bphistDet_'+bpCode);
+  const arr=document.getElementById('bphistArrow_'+bpCode);
+  if(!det)return;
+  const open=det.style.display==='none';
+  det.style.display=open?'':'none';
+  if(arr)arr.textContent=open?'▲':'▼';
+}
+
+function bphistFilter(q){
+  q=(q||'').toLowerCase().trim();
+  document.querySelectorAll('.bphist-store').forEach(card=>{
     if(!q){card.style.display='';return;}
     const match=card.dataset.bp.includes(q)||card.dataset.name.includes(q)||card.dataset.prods.includes(q);
     card.style.display=match?'':'none';
