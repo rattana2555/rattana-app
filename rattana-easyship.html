@@ -180,6 +180,20 @@ html,body{height:100%;overflow:hidden;font-family:'Sarabun',system-ui,sans-serif
 .ver{font-size:9px;color:rgba(255,255,255,.12);text-align:right;padding:2px 14px 4px;flex-shrink:0}
 .scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
 input[type=file]{display:none}
+
+/* Check screen */
+.chk-pcard{background:#fff;border-radius:13px;padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:11px;border:1px solid var(--g1);border-bottom:2.5px solid var(--g2)}
+.chk-pcard.ok{background:#f0fdf6;border-color:#a7f3d0;border-bottom-color:#6ee7b7}
+.chk-pcard.over{background:#fff7ed;border-color:#fdba74}
+.chk-bar{height:4px;background:var(--g1);border-radius:2px;overflow:hidden;margin-top:5px}
+.chk-bf{height:100%;border-radius:2px;background:var(--gd);transition:width .3s}
+.chk-bf.ok{background:var(--gr)}.chk-bf.over{background:#fb923c}
+.chk-status{font-size:11px;font-weight:600;margin-top:2px}
+.chk-st-pend{color:var(--g4)}.chk-st-ok{color:#047857}.chk-st-over{color:#c2410c}
+.chk-ico{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+.chk-ico.pend{background:var(--g1);color:var(--g4)}
+.chk-ico.ok{background:#d1fae5;color:#065f46}
+.chk-ico.over{background:#ffedd5;color:#9a3412}
 </style>
 </head>
 <body>
@@ -208,6 +222,10 @@ input[type=file]{display:none}
   <div class="cta" onclick="openScan('order')">
     <div class="cta-ic">📷</div>
     <div><div class="cta-t">สแกนบาร์โคดออเดอร์</div><div class="cta-s">กดเพื่อเปิดกล้อง</div></div>
+  </div>
+  <div class="cta" style="background:var(--bl);box-shadow:0 3px 0 #000a1f;margin-top:-4px" onclick="openCheck()">
+    <div class="cta-ic" style="background:var(--gd)">✓</div>
+    <div><div class="cta-t" style="color:var(--gd)">เช็คสินค้าออกจากคลัง</div><div class="cta-s" style="color:rgba(255,255,255,.4)">ยิงบาร์เช็คก่อนแพ็ค</div></div>
   </div>
   <div class="scroll" style="padding:0 14px 8px" id="d-sum">
     <div class="empty"><div class="spin" style="width:28px;height:28px;margin:0 auto 10px"></div><div class="empty-t" style="color:var(--g6)">กำลังโหลด...</div></div>
@@ -329,6 +347,34 @@ input[type=file]{display:none}
   </div>
 </div>
 
+<!-- CHECK PRODUCTS -->
+<div id="s-check" class="screen">
+  <div class="hdr">
+    <div class="hdr-r">
+      <div style="display:flex;align-items:center;gap:9px">
+        <button class="bk" onclick="goHome()" style="background:rgba(249,166,2,.12)">←</button>
+        <div><div class="brand">เช็คสินค้าออกจากคลัง</div><div class="brand-s" id="chk-sub">วันนี้</div></div>
+      </div>
+      <button class="rbtn" onclick="resetCheck()">↺ รีเซ็ต</button>
+    </div>
+    <div class="gbar"></div>
+    <div class="ht" id="chk-h">-</div>
+    <div class="hs" id="chk-s">-</div>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="stat-n" id="chk-done" style="color:var(--gr)">0</div><div class="stat-l">ครบแล้ว</div></div>
+    <div class="stat"><div class="stat-n" id="chk-pend" style="color:var(--gd)">0</div><div class="stat-l">ยังขาด</div></div>
+    <div class="stat"><div class="stat-n" id="chk-over" style="color:var(--or)">0</div><div class="stat-l">เกิน</div></div>
+  </div>
+  <div class="cta" onclick="openScan('check')">
+    <div class="cta-ic">📷</div>
+    <div><div class="cta-t">ยิงบาร์โค้ดสินค้า</div><div class="cta-s">กดเพื่อเริ่มเช็ค</div></div>
+  </div>
+  <div class="scroll" style="padding:0 14px 16px" id="chk-list">
+    <div class="empty"><div class="empty-ic">📦</div><div class="empty-t">ไม่มีสินค้าให้เช็ค</div></div>
+  </div>
+</div>
+
 <!-- ORDERS TAB -->
 <div id="s-orders" class="screen">
   <div class="hdr" style="padding-bottom:14px">
@@ -378,7 +424,8 @@ var DB={}, CUR=null, TSTART=null, SMODE='order';
 var CR=null, SS=null, SA=false, DT=null, ID=false, SC=null;
 var LCODE='', LMS=0, LSCANNED=null, OCRVAL=null, TTM=null;
 var PHS=null; // photo camera stream
-var _pcBcs=[], _moBcs=[]; // index arrays for card clicks
+var _pcBcs=[], _moBcs=[];
+var _checkCounts={};  // {bc: scannedCount} // index arrays for card clicks
 
 // ═══ UTILS ════════════════════════════════════════════════
 function $(i){return document.getElementById(i);}
@@ -394,6 +441,7 @@ function goHome(){CUR=null;TSTART=null;show('s-dash');doRefresh();}
 function goBack(){
   stopCam();
   if(SMODE==='product'){SMODE='order';show('s-order');}
+  else if(SMODE==='check'){SMODE='order';show('s-check');renderCheck();}
   else show('s-dash');
 }
 function closeOrder(){CUR=null;TSTART=null;show('s-dash');}
@@ -401,8 +449,9 @@ function goOrders(){renderOList();renderOStats();show('s-orders');}
 
 function openScan(m){
   SMODE=m;
-  TXT('sc-t',m==='product'?'สแกนสินค้า':'สแกนออเดอร์');
-  TXT('m-lbl',m==='product'?'ป้อนบาร์โคดสินค้า':'ป้อนหมายเลขออเดอร์');
+  var t='สแกนออเดอร์';if(m==='product')t='สแกนสินค้า';else if(m==='check')t='เช็คสินค้าออก';
+  var l='ป้อนหมายเลขออเดอร์';if(m==='product')l='ป้อนบาร์โคดสินค้า';else if(m==='check')l='ป้อนบาร์โคดสินค้า (เช็ค)';
+  TXT('sc-t',t); TXT('m-lbl',l);
   show('s-scan'); setMode('bc');
   // Auto-focus input สำหรับ hardware scanner (handheld)
   setTimeout(function(){var mi=$('minp');if(mi){mi.focus();mi.value='';}},250);
@@ -725,7 +774,9 @@ function setMode(m){
 var LLC='',LLT=0;
 function onScan(t){
   var now=Date.now();if(t===LLC&&now-LLT<1400)return;LLC=t;LLT=now;
-  if(SMODE==='order')hdOrder(t);else hdProd(t);
+  if(SMODE==='order')hdOrder(t);
+  else if(SMODE==='check')hdCheck(t);
+  else hdProd(t);
 }
 function hdOrder(t){
   if(/^(TH|SF|EF|JT|KERRY|EMS|CJ|NIM|BEST|DHL)\d/i.test(t)){
@@ -751,6 +802,7 @@ function useLast(){if(LSCANNED){stopCam();openOrder(LSCANNED);}}
 function doManual(){
   var v=$('minp').value.trim();if(!v)return;$('minp').value='';
   if(SMODE==='product')hdProd(v);
+  else if(SMODE==='check')hdCheck(v);
   else{hdOrder(v);if(LSCANNED)setTimeout(useLast,300);}
   // re-focus เพื่อพร้อมรับการยิงครั้งถัดไปจาก hardware scanner
   setTimeout(function(){var mi=$('minp');if(mi&&$('s-scan').classList.contains('on'))mi.focus();},150);
@@ -959,6 +1011,107 @@ function stopCam(){
 }
 
 function imgErr(el){el.style.display='none';}
+// ═══ CHECK PRODUCTS ════════════════════════════════════════
+function _ckKey(){
+  var d=new Date();
+  return 're_check_'+d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
+}
+function _loadCheck(){
+  try{_checkCounts=JSON.parse(localStorage.getItem(_ckKey())||'{}');}
+  catch(e){_checkCounts={};}
+}
+function _saveCheck(){
+  try{localStorage.setItem(_ckKey(),JSON.stringify(_checkCounts));}catch(e){}
+}
+
+function openCheck(){
+  _loadCheck();
+  show('s-check');
+  var d=new Date();
+  var dy=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+  var mo=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  TXT('chk-h',dy[d.getDay()]+' '+d.getDate()+' '+mo[d.getMonth()]+' '+(d.getFullYear()+543));
+  TXT('chk-s','สแกนเพื่อเช็คสินค้าทั้งหมดของวัน');
+  renderCheck();
+}
+
+function _buildProds(){
+  // คำนวณยอดรวมสินค้าทั้งหมดของวัน (จากทุกออเดอร์)
+  var prods={};
+  Object.values(DB).forEach(function(o){
+    o.items.forEach(function(item){
+      if(!prods[item.bc])prods[item.bc]={name:item.name,unit:item.unit||'ลัง',ucode:item.ucode||'',qty:0,pieces:0,pcs:item.pcs||1,img1:item.img1,img2:item.img2};
+      prods[item.bc].qty+=item.qty;
+      prods[item.bc].pieces+=item.pieces||(item.qty*(item.pcs||1));
+    });
+  });
+  return prods;
+}
+
+function _ckRank(c){
+  var x=String(c||'').toUpperCase();
+  if(x==='CS')return 0;if(x==='PA')return 1;if(x==='BP')return 2;if(x==='EA')return 3;return 4;
+}
+
+function renderCheck(){
+  var prods=_buildProds();
+  var keys=Object.keys(prods);
+  if(!keys.length){
+    $('chk-list').innerHTML='<div class="empty"><div class="empty-ic">📦</div><div class="empty-t">ยังไม่มีออเดอร์</div></div>';
+    TXT('chk-done',0);TXT('chk-pend',0);TXT('chk-over',0);
+    return;
+  }
+  keys.sort(function(a,b){
+    var ra=_ckRank(prods[a].ucode),rb=_ckRank(prods[b].ucode);
+    if(ra!==rb)return ra-rb;
+    return prods[b].qty-prods[a].qty;
+  });
+  var nDone=0,nPend=0,nOver=0;
+  var h='';
+  keys.forEach(function(bc){
+    var p=prods[bc],sc=_checkCounts[bc]||0;
+    var pct=p.qty>0?Math.min(100,Math.round(sc/p.qty*100)):0;
+    var st='pend',ic='○',cls='chk-st-pend',stxt='ยังขาด '+(p.qty-sc);
+    if(sc>=p.qty&&sc<=p.qty){st='ok';ic='✓';cls='chk-st-ok';stxt='✓ ครบ';nDone++;}
+    else if(sc>p.qty){st='over';ic='!';cls='chk-st-over';stxt='⚠ เกิน '+(sc-p.qty);nOver++;}
+    else nPend++;
+    var iu=dimg(p.img1)||dimg(p.img2);
+    var ih=iu?('<img src="'+iu+'" onerror=imgErr(this) style="width:100%;height:100%;object-fit:contain">'):'📦';
+    h+='<div class="chk-pcard '+st+'">'
+      +'<div class="pcard-img">'+ih+'</div>'
+      +'<div class="pcard-info">'
+      +'<div class="pcard-name">'+p.name+'</div>'
+      +'<div class="pcard-qty">'+sc+'/'+p.qty+' '+p.unit+'</div>'
+      +'<div class="chk-status '+cls+'">'+stxt+'</div>'
+      +'<div class="chk-bar"><div class="chk-bf '+st+'" style="width:'+pct+'%"></div></div>'
+      +'</div>'
+      +'<div class="chk-ico '+st+'">'+ic+'</div>'
+      +'</div>';
+  });
+  $('chk-list').innerHTML=h;
+  TXT('chk-done',nDone);TXT('chk-pend',nPend);TXT('chk-over',nOver);
+  TXT('chk-s','สินค้า '+keys.length+' รายการ · ครบ '+nDone+'/'+keys.length);
+}
+
+function hdCheck(bc){
+  _loadCheck();
+  var prods=_buildProds();
+  if(!prods[bc]){toast('ไม่พบสินค้านี้ในออเดอร์วันนี้: '+bc,'err');playE();vibr([100,50,100]);return;}
+  _checkCounts[bc]=(_checkCounts[bc]||0)+1;
+  _saveCheck();
+  var p=prods[bc],sc=_checkCounts[bc];
+  if(sc===p.qty){toast('✓ '+p.name+' ครบ ('+sc+'/'+p.qty+')','ok');playOk();vibr([100]);}
+  else if(sc>p.qty){toast('⚠ '+p.name+' เกิน ('+sc+'/'+p.qty+')','err');playE();vibr([100,50,200]);}
+  else{toast(p.name+': '+sc+'/'+p.qty,'ok');playB();vibr([50]);}
+  stopCam();show('s-check');renderCheck();
+}
+
+function resetCheck(){
+  if(!confirm('รีเซ็ตการเช็คทั้งหมดของวันนี้?'))return;
+  _checkCounts={};_saveCheck();renderCheck();
+  toast('รีเซ็ตเรียบร้อย','ok');
+}
+
 // ═══ HELPERS ═════════════════════════════════════════════════
 function dimg(url){
   if(!url)return'';
