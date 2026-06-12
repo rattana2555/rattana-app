@@ -4,11 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Sales Dashboard v2.5</title>
+<title>Rattana Sales Dashboard v3.3</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="bq_store.js"></script>
 <script src="bq_sugg.js"></script>
+<script src="bq_custs2.js"></script>
+<script src="bq_pddt_imgmap.js"></script>
+<script src="bq_bp_sales.js"></script>
+<script src="bq_bp2.js"></script>
 <style>
 :root {
   --navy:#0d1b3e; --navy-mid:#1a2f5e; --navy-light:#243b73;
@@ -300,7 +304,7 @@ header{position:relative}
     </div>
     <div class="user-menu-item" onclick="logout()">🚪 ออกจากระบบ</div>
   </div>
-  <span class="version-tag">v2.5 · 2026-06-12</span>
+  <span class="version-tag">v3.3 · 2026-06-12</span>
 </header>
 
 <!-- Tab Nav -->
@@ -308,7 +312,8 @@ header{position:relative}
   <button class="tab-btn active" onclick="switchTab('summary',this)">📊 ยอดขายรวม</button>
   <button class="tab-btn" onclick="switchTab('unsold',this)">📦 SKU ไม่ขาย</button>
   <button class="tab-btn" onclick="switchTab('zero',this)">🏪 ร้าน &lt;2,500 ฿</button>
-  <button class="tab-btn" onclick="switchTab('topProd',this);tpInitProvince()">📍 Top ตำบล</button>
+  <button class="tab-btn" onclick="switchTab('suggestion',this);sgInit()">💡 สินค้า Suggestion</button>
+  <button class="tab-btn" onclick="switchTab('bpsales',this);bpInit()">🛒 สินค้าที่ขาย</button>
 </nav>
 
 <!-- ── Scope Banner (shown across all tabs) ── -->
@@ -448,35 +453,27 @@ header{position:relative}
 </div>
 
 
-<!-- ─────── TAB: Top Products ตำบล ─────── -->
-<div class="tab-panel" id="tab-topProd">
+<!-- ─────── TAB: สินค้า Suggestion ─────── -->
+<div class="tab-panel" id="tab-suggestion">
 <div class="content">
-  <div class="tp-sel-panel">
-    <div class="tp-sel-row">
-      <div class="tp-sel-group">
-        <div class="tp-sel-label">จังหวัด</div>
-        <input class="tp-sel-input" id="tpInputProv" placeholder="พิมพ์หรือเลือกจังหวัด..." autocomplete="off"
-          oninput="tpFilterDD('Prov')" onfocus="tpOpenDD('Prov')" onblur="tpCloseDD('Prov')">
-        <div class="dd-list" id="tpDdProv"></div>
-      </div>
-      <div class="tp-sel-group" id="tpGroupSub" style="display:none">
-        <div class="tp-sel-label">ตำบล</div>
-        <input class="tp-sel-input" id="tpInputSub" placeholder="พิมพ์หรือเลือกตำบล..." autocomplete="off"
-          oninput="tpFilterDD('Sub')" onfocus="tpOpenDD('Sub')" onblur="tpCloseDD('Sub')">
-        <div class="dd-list" id="tpDdSub"></div>
-      </div>
+  <div id="sgContent">
+    <div class="tp-empty">
+      <div style="font-size:48px;margin-bottom:12px">💡</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">สินค้า Suggestion</div>
+      <div style="font-size:13px">กำลังโหลด...</div>
     </div>
   </div>
-  <div class="tp-tab-row" id="tpTabRow" style="display:none">
-    <span class="tp-tab-chip active" id="tpChipTab1" onclick="tpSwitchTab('tab1')">🏆 สินค้าขายดี</span>
-    <span class="tp-tab-chip" id="tpChipTab2" onclick="tpSwitchTab('tab2')">🏪 รายร้านค้า</span>
-    <span class="tp-tab-chip" id="tpChipTab3" onclick="tpSwitchTab('tab3')">📦 SKU ร้านค้า</span>
-  </div>
-  <div id="tpMainContent">
+</div>
+</div>
+
+<!-- ─────── TAB: สินค้าที่ขาย ─────── -->
+<div class="tab-panel" id="tab-bpsales">
+<div class="content">
+  <div id="bpContent">
     <div class="tp-empty">
-      <div style="font-size:48px;margin-bottom:12px">📍</div>
-      <div style="font-size:16px;font-weight:700;margin-bottom:6px">เลือกจังหวัดและตำบล</div>
-      <div style="font-size:13px">เพื่อดูสินค้าขายดีและข้อมูลร้านค้าในพื้นที่</div>
+      <div style="font-size:48px;margin-bottom:12px">🛒</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">สินค้าที่ขายได้</div>
+      <div style="font-size:13px">กำลังโหลด...</div>
     </div>
   </div>
 </div>
@@ -1376,24 +1373,19 @@ function tpFmtCS(n){
 }
 function toggleDark(){document.body.classList.toggle('dark')}
 
-let _tpInited=false;function tpInitProvince(){if(_tpInited)return;_tpInited=true;
-  const s=new Set();
-  ROWS.forEach(r=>{const p=PROVS[r[1]];if(p)s.add(p.trim())});
-  tpProvList=[...s].sort((a,b)=>a.localeCompare(b,'th'));
-  tpRenderDD('Prov',tpProvList);
-}
+let _tpInited=false;function tpInitProvince(){if(_tpInited)return;_tpInited=true;tpRender();}
 
 let _tpDdT={};
-function tpOpenDD(k){clearTimeout(_tpDdT[k]);document.getElementById('dd'+k).classList.add('open')}
-function tpCloseDD(k){_tpDdT[k]=setTimeout(()=>document.getElementById('dd'+k).classList.remove('open'),200)}
+function tpOpenDD(k){clearTimeout(_tpDdT[k]);document.getElementById('tpDd'+k).classList.add('open')}
+function tpCloseDD(k){_tpDdT[k]=setTimeout(()=>document.getElementById('tpDd'+k).classList.remove('open'),200)}
 function tpFilterDD(k){
-  const q=document.getElementById('input'+k).value.trim().toLowerCase();
+  const q=document.getElementById('tpInput'+k).value.trim().toLowerCase();
   tpRenderDD(k,(k==='Prov'?tpProvList:tpSubList).filter(x=>x.toLowerCase().includes(q)));
   tpOpenDD(k);
 }
 function tpRenderDD(k,items){
   const sel=k==='Prov'?tpSelProv:tpSelSub;
-  document.getElementById('dd'+k).innerHTML=items.map(v=>
+  document.getElementById('tpDd'+k).innerHTML=items.map(v=>
     `<div class="dd-item${v===sel?' active':''}" onmousedown="tpPick('${k}','${v.replace(/'/g,"\\'")}')">${v}</div>`
   ).join('');
 }
@@ -1433,14 +1425,20 @@ function tpRender(){
 function tpSwitchTab(tab){
   tpCurrentTab=tab;
   ['tab1','tab2','tab3'].forEach(t=>{
-    document.getElementById('navTab'+t.slice(-1)).classList.toggle('active',t===tab);
-    document.getElementById('chipTab'+t.slice(-1)).classList.toggle('active',t===tab);
+    document.getElementById('tpChipTab'+t.slice(-1)).classList.toggle('active',t===tab);
   });
-  if(tpSelSub)tpRender();
+  tpRender();
 }
 
 function tpGetTop5(sub,shopType,chan){
   const m=ROWS.filter(r=>SUBS[r[0]].trim()===sub&&SHOPS[r[2]]===shopType&&(!chan||CHANS[r[3]]===chan));
+  const p={};
+  m.forEach(r=>{const pn=PRODS[r[4]];if(!p[pn])p[pn]={cs:0};p[pn].cs+=r[6]});
+  return Object.entries(p).sort((a,b)=>b[1].cs-a[1].cs).slice(0,5);
+}
+// Lookup by sub + channel only (used with CUSTS2 where shopType differs from ROWS SHOPS)
+function tpGetTop5ByChan(sub,chan){
+  const m=ROWS.filter(r=>SUBS[r[0]].trim()===sub&&(!chan||CHANS[r[3]]===chan));
   const p={};
   m.forEach(r=>{const pn=PRODS[r[4]];if(!p[pn])p[pn]={cs:0};p[pn].cs+=r[6]});
   return Object.entries(p).sort((a,b)=>b[1].cs-a[1].cs).slice(0,5);
@@ -1458,68 +1456,96 @@ function tpProdImg(name,sm){
 
 // ── Tab 1 ──
 function tpRenderSubDistrict(){
-  if(!tpSelSub)return;
-  const subRows=ROWS.filter(r=>SUBS[r[0]].trim()===tpSelSub);
-  if(!subRows.length){document.getElementById('tpMainContent').innerHTML='<div class="tp-empty">ไม่พบข้อมูลใน BQ สำหรับตำบล '+tpSelSub+'</div>';return}
-  const shopTotals={};
-  subRows.forEach(r=>{const sh=SHOPS[r[2]];shopTotals[sh]=(shopTotals[sh]||0)+r[6]});
-  const shops=Object.entries(shopTotals).sort((a,b)=>b[1]-a[1]);
+  // Build subMap: {sub: {prov, rows[]}}
+  const subMap={};
+  const srcRows=tpSelChan?ROWS.filter(r=>CHANS[r[3]]===tpSelChan):ROWS;
+  srcRows.forEach(r=>{
+    const sub=SUBS[r[0]].trim();
+    const prov=(PROVS[r[1]]||'').trim();
+    if(!subMap[sub])subMap[sub]={prov,rows:[]};
+    subMap[sub].rows.push(r);
+  });
+  if(!Object.keys(subMap).length){document.getElementById('tpMainContent').innerHTML='<div class="tp-empty">ไม่พบข้อมูล</div>';return}
+
+  // Channel filter chips (use all ROWS for counts)
   const chanTotals={};
-  subRows.forEach(r=>{const ch=CHANS[r[3]];chanTotals[ch]=(chanTotals[ch]||0)+r[6]});
-  const totalCS=subRows.reduce((s,r)=>s+r[6],0);
-  const custCount=new Set(subRows.map(r=>r[7])).size;
-  let html=`<div class="fade-in"><div class="tp-stat-grid">
-    <div class="tp-stat-card"><div class="s-label">ยอดรวม</div><div class="s-value">${tpFmtCS(totalCS)}</div><div class="s-sub">ลัง (3 เดือน)</div></div>
-    <div class="tp-stat-card" style="border-top-color:var(--gold)"><div class="s-label">ประเภทร้าน</div><div class="s-value">${shops.length}</div><div class="s-sub">ประเภทในตำบล</div></div>
-    <div class="tp-stat-card" style="border-top-color:#3498db"><div class="s-label">ร้านค้า</div><div class="s-value">${custCount}</div><div class="s-sub">ร้านทั้งหมด</div></div>
-    <div class="tp-stat-card" style="border-top-color:#2ecc71"><div class="s-label">ช่องทาง</div><div class="s-value">${Object.keys(chanTotals).length}</div><div class="s-sub">ประเภทเซลล์</div></div>
-  </div>`;
-  html+=`<div class="tp-chip-row"><span class="tp-chip tp-all-chip ${!tpSelChan?'active':''}" onclick="tpFilterCustChan(null)">ทั้งหมด</span>`;
+  ROWS.forEach(r=>{const ch=CHANS[r[3]];chanTotals[ch]=(chanTotals[ch]||0)+r[6]});
+  let html=`<div class="fade-in"><div class="tp-chip-row">
+    <span class="tp-chip tp-all-chip ${!tpSelChan?'active':''}" onclick="tpFilterChan(null)">ทั้งหมด</span>`;
   Object.entries(chanTotals).sort((a,b)=>b[1]-a[1]).forEach(([ch,cs])=>{
-    html+=`<span class="tp-chip ${tpSelChan===ch?'active':''}" onclick="tpFilterChan('${ch}')">${ch==='Wholesales'?'🔵':'🟢'} ${ch} (${tpFmtCS(cs)} ลัง)</span>`;
+    html+=`<span class="tp-chip ${tpSelChan===ch?'active':''}" onclick="tpFilterChan('${ch}')">${ch==='Wholesales'?'🔵':'🟢'} ${ch}</span>`;
   });
   html+=`</div>`;
+
+  // Group by province
+  const provMap={};
+  Object.entries(subMap).forEach(([sub,d])=>{
+    if(!provMap[d.prov])provMap[d.prov]=[];
+    provMap[d.prov].push([sub,d.rows]);
+  });
   const medals=['🥇','🥈','🥉','4️⃣','5️⃣'];
-  shops.forEach(([shopType])=>{
-    const shopRows=subRows.filter(r=>SHOPS[r[2]]===shopType&&(!tpSelChan||CHANS[r[3]]===tpSelChan));
-    if(!shopRows.length)return;
-    const top5=tpGetTop5(tpSelSub,shopType,tpSelChan);
-    if(!top5.length)return;
-    const actTotal=shopRows.reduce((s,r)=>s+r[6],0);
-    const pct=totalCS>0?(actTotal/totalCS*100).toFixed(1):'0.0';
-    html+=`<div class="tp-card tp-card-navy"><div class="tp-card-head">
-      <span style="font-weight:800;font-size:14px">${shopType}</span>
-      <span class="tp-badge">${tpFmtCS(actTotal)} ลัง (${pct}%)</span>
-    </div><div style="padding:10px 14px">
-    <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.3px">Top 5 สินค้าขายดี (ลัง)</div>`;
-    top5.forEach(([pn,d],i)=>{
-      const pct2=actTotal>0?(d.cs/actTotal*100).toFixed(1):'0.0';
-      html+=`<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">
-        <span style="width:22px;text-align:center;flex-shrink:0;font-size:16px">${medals[i]}</span>
-        ${tpProdImg(pn,false)}
-        <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${pn}</span>
-        <div style="text-align:right;flex-shrink:0">
-          <div style="font-weight:700;color:var(--navy);font-size:13px">${tpFmtCS(d.cs)} ลัง</div>
-          <div style="font-size:10px;color:var(--muted)">${pct2}%</div>
-        </div>
-      </div>`;
+  Object.entries(provMap).sort((a,b)=>a[0].localeCompare(b[0],'th')).forEach(([prov,subs])=>{
+    html+=`<div style="font-size:12px;font-weight:700;color:var(--muted);padding:10px 4px 4px;border-bottom:2px solid var(--border);margin-bottom:8px;letter-spacing:.5px">📍 ${prov}</div>`;
+    subs.sort((a,b)=>a[0].localeCompare(b[0],'th')).forEach(([sub,rows])=>{
+      const shopMap={};
+      rows.forEach(r=>{const sh=SHOPS[r[2]];if(!shopMap[sh])shopMap[sh]=[];shopMap[sh].push(r)});
+      const totalCS=rows.reduce((s,r)=>s+r[6],0);
+      html+=`<div class="tp-card tp-card-navy" style="margin-bottom:10px">
+        <div class="tp-card-head">
+          <span style="font-weight:800;font-size:14px">🏘 ${sub}</span>
+          <span class="tp-badge">${tpFmtCS(totalCS)} ลัง</span>
+        </div>`;
+      Object.entries(shopMap).sort((a,b)=>b[1].reduce((s,r)=>s+r[6],0)-a[1].reduce((s,r)=>s+r[6],0)).forEach(([shopType,sRows])=>{
+        const p={};sRows.forEach(r=>{const pn=PRODS[r[4]];if(!p[pn])p[pn]={cs:0};p[pn].cs+=r[6]});
+        const top5=Object.entries(p).sort((a,b)=>b[1].cs-a[1].cs).slice(0,5);
+        if(!top5.length)return;
+        const shopCS=sRows.reduce((s,r)=>s+r[6],0);
+        const pct=totalCS>0?(shopCS/totalCS*100).toFixed(0):'0';
+        html+=`<div style="padding:8px 14px;border-top:1px solid var(--border)">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase">${shopType} · ${tpFmtCS(shopCS)} ลัง (${pct}%)</div>`;
+        top5.forEach(([pn,d],i)=>{
+          html+=`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)">
+            <span style="width:20px;text-align:center;font-size:14px;flex-shrink:0">${medals[i]}</span>
+            ${tpProdImg(pn,true)}
+            <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${pn}</span>
+            <span style="font-size:11px;color:var(--muted);white-space:nowrap;flex-shrink:0">${tpFmtCS(d.cs)} ลัง</span>
+          </div>`;
+        });
+        html+=`</div>`;
+      });
+      // ── ร้านค้าในตำบลจาก CUSTS2 ──
+      const tpC=window.CUSTS2||CUSTS;
+      const subCusts=tpC.filter(c=>c[2]===sub&&(!tpSelChan||(tpSelChan==='Wholesales'?c[6]==='Wholesales':c[6]==='Mom&Pop')));
+      if(subCusts.length){
+        const byC={'Wholesales':[],'Mom&Pop':[],'Unknown':[]};
+        subCusts.forEach(c=>{ const k=c[6]||'Unknown'; if(byC[k])byC[k].push(c); else byC['Unknown'].push(c) });
+        html+=`<div style="padding:8px 14px;border-top:2px solid var(--gold);background:rgba(201,168,76,.05)">
+          <div style="font-size:11px;font-weight:700;color:var(--gold);margin-bottom:6px">🏪 ร้านค้าในตำบล (${subCusts.length} ร้าน)</div>`;
+        [['Wholesales','🔵'],['Mom&Pop','🟢'],['Unknown','⚪']].forEach(([ch,ic])=>{
+          const st=byC[ch]; if(!st.length)return;
+          html+=`<div style="margin-bottom:4px"><span style="font-size:11px;font-weight:600;color:var(--muted)">${ic} ${ch==='Unknown'?'อื่นๆ':ch} (${st.length}): </span>`;
+          html+=st.map(s=>`<span style="font-size:11px;background:var(--row-alt);padding:2px 7px;border-radius:8px;margin:1px 2px 1px 0;display:inline-block">${s[0]}</span>`).join('');
+          html+=`</div>`;
+        });
+        html+=`</div>`;
+      }
+      html+=`</div>`;
     });
-    html+=`</div></div>`;
   });
   html+=`</div>`;
   document.getElementById('tpMainContent').innerHTML=html;
-  window.scrollTo({top:0,behavior:'smooth'});
 }
 function tpFilterChan(chan){tpSelChan=chan;tpRender()}
 
 // ── Tab 2 ──
 function tpRenderCustomerTab(){
-  const custs=CUSTS.filter(c=>c[2]===tpSelSub);
-  if(!custs.length){document.getElementById('tpMainContent').innerHTML='<div class="tp-empty">ไม่พบร้านค้าในตำบล '+tpSelSub+'</div>';return}
+  const tpC=window.CUSTS2||CUSTS;
+  const custs=tpSelSub?tpC.filter(c=>c[2]===tpSelSub):tpC;
+  if(!custs.length){document.getElementById('tpMainContent').innerHTML='<div class="tp-empty">ไม่พบร้านค้า</div>';return}
   const hCount=custs.filter(c=>c[6]==='Wholesales').length;
   const pCount=custs.filter(c=>c[6]==='Mom&Pop').length;
   let html=`<div class="fade-in"><div class="tp-stat-grid">
-    <div class="tp-stat-card"><div class="s-label">ร้านค้าทั้งหมด</div><div class="s-value">${custs.length}</div><div class="s-sub">ตำบล ${tpSelSub}</div></div>
+    <div class="tp-stat-card"><div class="s-label">ร้านค้าทั้งหมด</div><div class="s-value">${custs.length}</div><div class="s-sub">${tpSelSub||'ทุกตำบล'}</div></div>
     <div class="tp-stat-card" style="border-top-color:#3498db"><div class="s-label">เซลล์ส่ง (H)</div><div class="s-value" style="color:#1a6fb8">${hCount}</div><div class="s-sub">Wholesales</div></div>
     <div class="tp-stat-card" style="border-top-color:#2ecc71"><div class="s-label">เซลล์ปลีก (P)</div><div class="s-value" style="color:#1e8449">${pCount}</div><div class="s-sub">Mom&Pop</div></div>
     <div class="tp-stat-card" style="border-top-color:var(--gold)"><div class="s-label">ประเภทร้าน</div><div class="s-value">${new Set(custs.map(c=>c[3])).size}</div><div class="s-sub">ประเภทที่พบ</div></div>
@@ -1532,16 +1558,26 @@ function tpRenderCustomerTab(){
   const filtered=tpSelChan?custs.filter(c=>c[6]===tpSelChan):custs;
   const medals=['🥇','🥈','🥉','4️⃣','5️⃣'];
   html+=`<div class="card card-gold"><div class="tp-card-head"><span style="font-weight:700;font-size:14px">📋 รายร้านค้า + สินค้าแนะนำ Top 5</span><span class="tp-badge">${filtered.length} ร้าน</span></div>`;
+  const usingCusts2=!!window.CUSTS2;
   filtered.forEach(c=>{
     const [shopName,bpCode,sub,shopType,salesName,sellerCode,channel]=c;
-    const top5=tpGetTop5(sub,shopType,channel==='Unknown'?null:channel);
+    // When using CUSTS2 shopType doesn't match ROWS SHOPS — lookup by sub+channel only
+    const top5=usingCusts2
+      ? tpGetTop5ByChan(sub,channel==='Unknown'?null:channel)
+      : tpGetTop5(sub,shopType,channel==='Unknown'?null:channel);
     const chanColor=channel==='Wholesales'?'#1a6fb8':channel==='Mom&Pop'?'#1e8449':'#888';
     const chanBg=channel==='Wholesales'?'rgba(52,152,219,.1)':channel==='Mom&Pop'?'rgba(46,204,113,.1)':'rgba(0,0,0,.05)';
-    const chanLabel=channel==='Wholesales'?'🔵 เซลล์ส่ง':channel==='Mom&Pop'?'🟢 เซลล์ปลีก':'❓ ไม่ทราบ';
+    const chanLabel=channel==='Wholesales'?'🔵 Wholesales':channel==='Mom&Pop'?'🟢 Mom&Pop':'❓ ไม่ทราบ';
     html+=`<div style="border-bottom:1px solid var(--border);padding:12px 16px">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap">
-        <div><div style="font-weight:700;font-size:14px">${shopName}</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:2px">${shopType||'-'}${bpCode?` · <span style="font-family:monospace">${bpCode}</span>`:''}</div></div>
+        <div>
+          <div style="font-weight:700;font-size:14px">${shopName}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap">
+            <span style="background:var(--navy);color:#fff;padding:1px 8px;border-radius:8px;font-weight:700">📍 ${sub||'-'}</span>
+            <span>${shopType||'-'}</span>
+            ${bpCode?`<span style="font-family:monospace">${bpCode}</span>`:''}
+          </div>
+        </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
           <span style="background:${chanBg};color:${chanColor};padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700;border:1px solid ${chanColor}40">${chanLabel}</span>
           <span style="font-size:11px;color:var(--muted)">${salesName||'-'} · ${sellerCode||'-'}</span>
@@ -1549,7 +1585,9 @@ function tpRenderCustomerTab(){
       </div>`;
     if(top5.length){
       html+=`<div style="background:var(--row-alt);border-radius:var(--radius-sm);padding:8px 10px">
-        <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.3px">สินค้าแนะนำ Top 5 (${shopType} · ${channel})</div>`;
+        <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:8px;letter-spacing:.3px">
+          🏆 สินค้าแนะนำ Top 5 · <span style="color:var(--navy)">📍 ${sub}</span> · <span style="color:${chanColor}">${chanLabel}</span>
+        </div>`;
       top5.forEach(([pn,d],i)=>{
         html+=`<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)">
           <span style="width:20px;text-align:center;flex-shrink:0;font-size:15px">${medals[i]}</span>
@@ -1560,7 +1598,7 @@ function tpRenderCustomerTab(){
       });
       html+=`</div>`;
     }else{
-      html+=`<div style="font-size:12px;color:var(--muted);padding:4px 0">ไม่มีข้อมูลสินค้าใน BQ สำหรับ ${shopType}</div>`;
+      html+=`<div style="font-size:12px;color:var(--muted);padding:4px 0">ไม่พบข้อมูลสินค้าใน BQ สำหรับตำบล <b>${sub}</b></div>`;
     }
     html+=`</div>`;
   });
@@ -1571,14 +1609,15 @@ function tpRenderCustomerTab(){
 
 // ── Tab 3: SKU ──
 function tpRenderSkuTab(){
-  const custs=CUSTS.filter(c=>c[2]===tpSelSub);
-  if(!custs.length){document.getElementById('tpMainContent').innerHTML='<div class="tp-empty">ไม่พบร้านค้าในตำบล '+tpSelSub+'</div>';return}
+  const tpC=window.CUSTS2||CUSTS;
+  const custs=tpSelSub?tpC.filter(c=>c[2]===tpSelSub):tpC;
+  if(!custs.length){document.getElementById('tpMainContent').innerHTML='<div class="tp-empty">ไม่พบร้านค้า</div>';return}
   const hasBP=custs.filter(c=>c[1]&&BP_SKU[c[1]]);
   const totalSkus=hasBP.reduce((s,c)=>{const sk=BP_SKU[c[1]];return s+(sk?sk.length:0)},0);
   const hCount=custs.filter(c=>c[6]==='Wholesales').length;
   const pCount=custs.filter(c=>c[6]==='Mom&Pop').length;
   let html=`<div class="fade-in"><div class="tp-stat-grid">
-    <div class="tp-stat-card" style="border-top-color:#16a085"><div class="s-label">ร้านค้าทั้งหมด</div><div class="s-value">${custs.length}</div><div class="s-sub">ตำบล ${tpSelSub}</div></div>
+    <div class="tp-stat-card" style="border-top-color:#16a085"><div class="s-label">ร้านค้าทั้งหมด</div><div class="s-value">${custs.length}</div><div class="s-sub">${tpSelSub||'ทุกตำบล'}</div></div>
     <div class="tp-stat-card" style="border-top-color:#16a085"><div class="s-label">มีข้อมูล SKU</div><div class="s-value" style="color:#16a085">${hasBP.length}</div><div class="s-sub">ร้านที่มียอดขาย</div></div>
     <div class="tp-stat-card" style="border-top-color:#e67e22"><div class="s-label">SKU ทั้งหมด</div><div class="s-value" style="color:#e67e22">${totalSkus}</div><div class="s-sub">รายการสินค้า</div></div>
     <div class="tp-stat-card" style="border-top-color:#8e44ad"><div class="s-label">SKU เฉลี่ย</div><div class="s-value" style="color:#8e44ad">${hasBP.length?Math.round(totalSkus/hasBP.length):0}</div><div class="s-sub">รายการต่อร้าน</div></div>
@@ -1656,6 +1695,229 @@ function tpFilterSkuSearch(idx){
 function tpFilterSkuChan(chan){tpSelChan=chan;tpRenderSkuTab()}
 
 function tpFilterCustChan(chan){tpSelChan=chan;tpCurrentTab==='tab2'?tpRenderCustomerTab():tpRenderSubDistrict()}
+
+// ═══════════════════════════════════════
+//  SUGGESTION TAB
+// ═══════════════════════════════════════
+let _sgInited=false;
+function sgInit(){if(!_sgInited){_sgInited=true;}sgRender();}
+
+function sgRender(){
+  const el=document.getElementById('sgContent');
+  if(!el)return;
+  const tpC=window.CUSTS2||CUSTS;
+  const myCode=(currentUser&&currentUser.saleCode)||'';
+  const myName=(currentUser&&(currentUser.name||currentUser.saleNoRoo))||'';
+
+  const myCusts=myCode?tpC.filter(c=>c[5]===myCode):[];
+
+  if(!myCusts.length){
+    el.innerHTML=`<div class="tp-empty">
+      <div style="font-size:48px;margin-bottom:12px">💡</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">ไม่พบร้านค้าของคุณ</div>
+      <div style="font-size:13px;color:var(--muted)">รหัสเซลล์: ${myCode||'(ไม่ทราบ)'}</div>
+    </div>`;
+    return;
+  }
+
+  // Group by sub-district
+  const subMap={};
+  myCusts.forEach(c=>{
+    const sub=c[2]||'(ไม่ระบุตำบล)';
+    if(!subMap[sub])subMap[sub]=[];
+    subMap[sub].push(c);
+  });
+
+  const medals=['🥇','🥈','🥉','4️⃣','5️⃣'];
+  const chanColor=ch=>ch==='Wholesales'?'#1a6fb8':ch==='Mom&Pop'?'#1e8449':'#888';
+  const chanBg=ch=>ch==='Wholesales'?'rgba(52,152,219,.1)':ch==='Mom&Pop'?'rgba(46,204,113,.1)':'rgba(0,0,0,.05)';
+  const chanLabel=ch=>ch==='Wholesales'?'🔵 Wholesales':ch==='Mom&Pop'?'🟢 Mom&Pop':'❓ ไม่ทราบ';
+
+  let html=`<div class="fade-in">
+  <div class="tp-stat-grid">
+    <div class="tp-stat-card"><div class="s-label">ร้านค้าของฉัน</div><div class="s-value">${myCusts.length}</div><div class="s-sub">${myName||myCode}</div></div>
+    <div class="tp-stat-card" style="border-top-color:#3498db"><div class="s-label">Wholesales (H)</div><div class="s-value" style="color:#1a6fb8">${myCusts.filter(c=>c[6]==='Wholesales').length}</div><div class="s-sub">ร้าน</div></div>
+    <div class="tp-stat-card" style="border-top-color:#2ecc71"><div class="s-label">Mom&amp;Pop (P)</div><div class="s-value" style="color:#1e8449">${myCusts.filter(c=>c[6]==='Mom&Pop').length}</div><div class="s-sub">ร้าน</div></div>
+    <div class="tp-stat-card" style="border-top-color:var(--gold)"><div class="s-label">ตำบลที่ดูแล</div><div class="s-value">${Object.keys(subMap).length}</div><div class="s-sub">ตำบล</div></div>
+  </div>`;
+
+  // Render each sub-district
+  Object.entries(subMap).sort((a,b)=>a[0].localeCompare(b[0],'th')).forEach(([sub,stores])=>{
+    html+=`<div class="card" style="margin-bottom:16px">
+      <div class="card-head">
+        <h3>📍 ${sub}</h3>
+        <span class="badge" style="background:rgba(0,0,0,.07);color:var(--navy)">${stores.length} ร้าน</span>
+      </div>`;
+
+    // Each store gets its own card with Top 5
+    stores.forEach(c=>{
+      const [shopName,bpCode,_sub,shopType,salesName,sellerCode,channel]=c;
+      const ch=channel||'Unknown';
+      const chanArg=ch==='Unknown'?null:ch;
+      // Use BQ_SUGG directly (same naming as BP_SALES)
+      // Try exact sub|channel|shopType key first, fallback to sub|channel with any shopType
+      function sgGetTop5(sub,shopType,chan){
+        if(window.BQ_SUGG){
+          const exact=BQ_SUGG[sub+'|'+(chan||'')+  '|'+shopType];
+          if(exact&&exact.length) return exact.map(([pn,qty])=>[pn,{cs:qty}]);
+          // fallback: merge all shopTypes for this sub+channel
+          const prefix=sub+'|'+(chan||'');
+          const merged={};
+          Object.entries(BQ_SUGG).forEach(([k,v])=>{
+            if(k.startsWith(prefix+'|')){v.forEach(([pn,qty])=>{if(!merged[pn])merged[pn]={cs:0};merged[pn].cs+=qty});}
+          });
+          const res=Object.entries(merged).sort((a,b)=>b[1].cs-a[1].cs).slice(0,5);
+          return res;
+        }
+        // fallback to ROWS-based functions
+        const r=tpGetTop5(sub,shopType,chan);
+        return r.length?r:tpGetTop5ByChan(sub,chan);
+      }
+      const top5raw=sgGetTop5(sub,shopType,chanArg);
+      const top5=top5raw;
+      const usedShopType=!!(window.BQ_SUGG&&BQ_SUGG[sub+'|'+(chanArg||'')+'|'+shopType]&&BQ_SUGG[sub+'|'+(chanArg||'')+'|'+shopType].length);
+      const cc=chanColor(ch),cb=chanBg(ch),cl=chanLabel(ch);
+
+      html+=`<div style="border-top:1px solid var(--border);padding:14px 16px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+          <div>
+            <div style="font-weight:700;font-size:14px">${shopName}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px;display:flex;gap:6px;flex-wrap:wrap">
+              <span>${shopType||'-'}</span>
+              ${bpCode?`<span style="font-family:monospace">${bpCode}</span>`:''}
+            </div>
+          </div>
+          <span style="background:${cb};color:${cc};padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700;border:1px solid ${cc}40;white-space:nowrap;flex-shrink:0">${cl}</span>
+        </div>`;
+
+      const storeSales=(window.BP_SALES&&bpCode)?window.BP_SALES[bpCode]||{}:{};
+      if(top5.length){
+        const scopeLabel=usedShopType?shopType:cl;
+        html+=`<div style="background:var(--row-alt);border-radius:var(--radius-sm);padding:8px 10px">
+          <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:8px;letter-spacing:.3px">🏆 Top 5 สินค้าขายดี · ${sub} · <span style="color:${cc}">${scopeLabel}</span>${!usedShopType?' <span style="font-weight:400">(รวมทุกประเภทร้าน)</span>':''}</div>`;
+        top5.forEach(([pn,d],i)=>{
+          const soldCs=storeSales[pn];
+          const hasSold=soldCs!==undefined&&soldCs>0;
+          const statusHtml=hasSold
+            ? `<span style="background:#e8f8f0;color:#1e8449;border:1px solid #a9dfbf;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0">✅ ขายแล้ว ${tpFmtCS(soldCs)} ลัง</span>`
+            : `<span style="background:#fdf3f0;color:#c0392b;border:1px solid #f5b7b1;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0">❌ ยังไม่ขาย</span>`;
+          html+=`<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)">
+            <span style="width:22px;text-align:center;flex-shrink:0;font-size:15px">${medals[i]}</span>
+            ${tpProdImg(pn,false)}
+            <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${pn}</span>
+            <span style="font-size:12px;color:var(--muted);white-space:nowrap;font-weight:500;flex-shrink:0;margin-right:4px">${tpFmtCS(d.cs)} ลัง</span>
+            ${statusHtml}
+          </div>`;
+        });
+        html+=`</div>`;
+      }else{
+        html+=`<div style="font-size:12px;color:var(--muted);padding:4px 0">ไม่พบข้อมูลสินค้าใน BQ สำหรับตำบล <b>${sub}</b></div>`;
+      }
+
+      html+=`</div>`;
+    });
+
+    html+=`</div>`;
+  });
+
+  html+=`</div>`;
+  el.innerHTML=html;
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// ═══════════════════════════════════════
+//  BP SALES TAB  —  สินค้าที่ขายได้
+// ═══════════════════════════════════════
+function bpInit(){ bpRender(); }
+
+function bpRender(){
+  const el=document.getElementById('bpContent');
+  if(!el)return;
+  if(!window.BP2_SELLERS){
+    el.innerHTML=`<div class="tp-empty"><div style="font-size:48px;margin-bottom:12px">⚠️</div><div style="font-size:15px;font-weight:700">ไม่พบข้อมูล</div><div style="font-size:13px;color:var(--muted)">กรุณารัน export_bp2.ps1 ก่อน</div></div>`;
+    return;
+  }
+  const myCode=(currentUser&&currentUser.saleCode)||'';
+  const myName=(currentUser&&(currentUser.name||''))||'';
+  const myStores=myCode?window.BP2_SELLERS[myCode]:null;
+
+  if(!myStores||!Object.keys(myStores).length){
+    el.innerHTML=`<div class="tp-empty"><div style="font-size:48px;margin-bottom:12px">🛒</div><div style="font-size:16px;font-weight:700;margin-bottom:6px">ไม่พบร้านค้าของคุณ</div><div style="font-size:13px;color:var(--muted)">รหัสเซลล์: ${myCode||'(ไม่ทราบ)'}</div></div>`;
+    return;
+  }
+
+  const storeList=Object.entries(myStores);
+  const totalProds=storeList.reduce((s,[,v])=>s+Object.keys(v.p).length,0);
+  const totalCS=storeList.reduce((s,[,v])=>s+Object.values(v.p).reduce((a,b)=>a+b,0),0);
+
+  let html=`<div class="fade-in">
+  <div class="tp-stat-grid">
+    <div class="tp-stat-card"><div class="s-label">ร้านค้าของฉัน</div><div class="s-value">${storeList.length}</div><div class="s-sub">${myName||myCode}</div></div>
+    <div class="tp-stat-card" style="border-top-color:var(--gold)"><div class="s-label">SKU ที่ขายได้</div><div class="s-value" style="color:var(--navy)">${totalProds.toLocaleString()}</div><div class="s-sub">รายการสินค้า</div></div>
+    <div class="tp-stat-card" style="border-top-color:#2ecc71"><div class="s-label">รวมลัง</div><div class="s-value" style="color:#1e8449">${totalCS.toLocaleString(undefined,{maximumFractionDigits:0})}</div><div class="s-sub">ลัง (CS)</div></div>
+  </div>`;
+
+  // Search bar
+  html+=`<div style="margin-bottom:12px">
+    <input class="finput" type="text" id="bpSearch" placeholder="🔍 ค้นหาร้านค้า / รหัส / สินค้า..." style="width:100%;box-sizing:border-box" oninput="bpFilterSearch(this.value)">
+  </div>
+  <div id="bpStoreList">`;
+
+  storeList.sort((a,b)=>a[1].n.localeCompare(b[1].n,'th')).forEach(([bpCode,store])=>{
+    const prods=Object.entries(store.p).sort((a,b)=>b[1]-a[1]);
+    const storeCS=prods.reduce((s,[,v])=>s+v,0);
+    html+=`<div class="card bp-store-card" data-bp="${bpCode}" data-name="${store.n.toLowerCase()}" data-prods="${prods.map(([p])=>p.toLowerCase()).join('|')}" style="margin-bottom:12px">
+      <div class="card-head" style="cursor:pointer" onclick="bpToggle('${bpCode}')">
+        <div>
+          <h3 style="margin:0;font-size:14px">${store.n}</h3>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;font-family:monospace">${bpCode}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          <span class="badge" style="background:rgba(0,0,0,.07);color:var(--navy)">${prods.length} SKU · ${storeCS.toLocaleString(undefined,{maximumFractionDigits:1})} ลัง</span>
+          <span id="bpArrow_${bpCode}" style="font-size:16px;transition:.2s">▼</span>
+        </div>
+      </div>
+      <div id="bpDetail_${bpCode}" style="display:none">
+        <div style="padding:0 0 8px">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead><tr style="background:var(--row-alt)">
+              <th style="padding:7px 16px;text-align:left;font-weight:600;color:var(--muted);font-size:11px">#</th>
+              <th style="padding:7px 8px;text-align:left;font-weight:600;color:var(--muted);font-size:11px">สินค้า</th>
+              <th style="padding:7px 16px;text-align:right;font-weight:600;color:var(--muted);font-size:11px">ลัง (CS)</th>
+            </tr></thead>
+            <tbody>`;
+    prods.forEach(([pn,cs],i)=>{
+      html+=`<tr style="border-top:1px solid var(--border)${i%2===0?'':';background:var(--row-alt)'}">
+        <td style="padding:7px 16px;color:var(--muted);font-size:11px">${i+1}</td>
+        <td style="padding:7px 8px">${tpProdImg(pn,true)} <span style="vertical-align:middle">${pn}</span></td>
+        <td style="padding:7px 16px;text-align:right;font-weight:600;color:var(--navy)">${cs.toLocaleString(undefined,{maximumFractionDigits:1})}</td>
+      </tr>`;
+    });
+    html+=`</tbody></table></div></div></div>`;
+  });
+
+  html+=`</div></div>`;
+  el.innerHTML=html;
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function bpToggle(bpCode){
+  const det=document.getElementById('bpDetail_'+bpCode);
+  const arr=document.getElementById('bpArrow_'+bpCode);
+  if(!det)return;
+  const open=det.style.display==='none';
+  det.style.display=open?'block':'none';
+  if(arr)arr.textContent=open?'▲':'▼';
+}
+
+function bpFilterSearch(q){
+  q=q.toLowerCase().trim();
+  document.querySelectorAll('.bp-store-card').forEach(card=>{
+    if(!q){card.style.display='';return;}
+    const match=card.dataset.bp.includes(q)||card.dataset.name.includes(q)||card.dataset.prods.includes(q);
+    card.style.display=match?'':'none';
+  });
+}
 
 </script>
 </body>
