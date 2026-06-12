@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Sales Dashboard v3.3</title>
+<title>Rattana Sales Dashboard v3.8</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="bq_store.js"></script>
@@ -304,7 +304,7 @@ header{position:relative}
     </div>
     <div class="user-menu-item" onclick="logout()">🚪 ออกจากระบบ</div>
   </div>
-  <span class="version-tag">v3.3 · 2026-06-12</span>
+  <span class="version-tag">v3.8 · 2026-06-12</span>
 </header>
 
 <!-- Tab Nav -->
@@ -1700,7 +1700,10 @@ function tpFilterCustChan(chan){tpSelChan=chan;tpCurrentTab==='tab2'?tpRenderCus
 //  SUGGESTION TAB
 // ═══════════════════════════════════════
 let _sgInited=false;
-function sgInit(){if(!_sgInited){_sgInited=true;}sgRender();}
+function sgInit(){
+  const el=document.getElementById('sgContent');
+  bpLoad(()=>{_sgInited=true;sgRender();},el);
+}
 
 function sgRender(){
   const el=document.getElementById('sgContent');
@@ -1733,6 +1736,28 @@ function sgRender(){
   const chanBg=ch=>ch==='Wholesales'?'rgba(52,152,219,.1)':ch==='Mom&Pop'?'rgba(46,204,113,.1)':'rgba(0,0,0,.05)';
   const chanLabel=ch=>ch==='Wholesales'?'🔵 Wholesales':ch==='Mom&Pop'?'🟢 Mom&Pop':'❓ ไม่ทราบ';
 
+  // Build BQ_SUGG lookup once — iterate keys to avoid Unicode property-access issues
+  const _sgKeys=window.BQ_SUGG?Object.keys(BQ_SUGG):[];
+  const _sgFind=(s,st,ch)=>{
+    const ts=s.trim(), tst=st.trim(), tch=(ch||'').trim();
+    const found=_sgKeys.find(k=>{
+      const p=k.split('|');
+      return p[0].trim()===ts && p[1].trim()===tch && p[2].trim()===tst;
+    });
+    return found?BQ_SUGG[found]:null;
+  };
+  const _sgFindMerged=(s,ch)=>{
+    const ts=s.trim(), tch=(ch||'').trim();
+    const merged={};
+    _sgKeys.forEach(k=>{
+      const p=k.split('|');
+      if(p[0].trim()===ts&&p[1].trim()===tch){
+        BQ_SUGG[k].forEach(([pn,qty])=>{if(!merged[pn])merged[pn]=0;merged[pn]+=qty;});
+      }
+    });
+    return Object.entries(merged).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([pn,qty])=>[pn,{cs:qty}]);
+  };
+
   let html=`<div class="fade-in">
   <div class="tp-stat-grid">
     <div class="tp-stat-card"><div class="s-label">ร้านค้าของฉัน</div><div class="s-value">${myCusts.length}</div><div class="s-sub">${myName||myCode}</div></div>
@@ -1751,31 +1776,25 @@ function sgRender(){
 
     // Each store gets its own card with Top 5
     stores.forEach(c=>{
-      const [shopName,bpCode,_sub,shopType,salesName,sellerCode,channel]=c;
+      const [shopName,bpCode,storeSub,shopType,salesName,sellerCode,channel]=c;
+      const s=(storeSub||sub).trim();
+      const st=(shopType||'').trim();
       const ch=channel||'Unknown';
       const chanArg=ch==='Unknown'?null:ch;
-      // Use BQ_SUGG directly (same naming as BP_SALES)
-      // Try exact sub|channel|shopType key first, fallback to sub|channel with any shopType
-      function sgGetTop5(sub,shopType,chan){
-        if(window.BQ_SUGG){
-          const exact=BQ_SUGG[sub+'|'+(chan||'')+  '|'+shopType];
-          if(exact&&exact.length) return exact.map(([pn,qty])=>[pn,{cs:qty}]);
-          // fallback: merge all shopTypes for this sub+channel
-          const prefix=sub+'|'+(chan||'');
-          const merged={};
-          Object.entries(BQ_SUGG).forEach(([k,v])=>{
-            if(k.startsWith(prefix+'|')){v.forEach(([pn,qty])=>{if(!merged[pn])merged[pn]={cs:0};merged[pn].cs+=qty});}
-          });
-          const res=Object.entries(merged).sort((a,b)=>b[1].cs-a[1].cs).slice(0,5);
-          return res;
+      let top5,usedShopType=false;
+      if(window.BQ_SUGG){
+        const exact=_sgFind(s,st,chanArg);
+        if(exact&&exact.length){
+          top5=exact.map(([pn,qty])=>[pn,{cs:qty}]);
+          usedShopType=true;
+        } else {
+          top5=_sgFindMerged(s,chanArg);
         }
-        // fallback to ROWS-based functions
-        const r=tpGetTop5(sub,shopType,chan);
-        return r.length?r:tpGetTop5ByChan(sub,chan);
+      } else {
+        const r=tpGetTop5(s,st,chanArg);
+        top5=r.length?r:tpGetTop5ByChan(s,chanArg);
+        usedShopType=r.length>0;
       }
-      const top5raw=sgGetTop5(sub,shopType,chanArg);
-      const top5=top5raw;
-      const usedShopType=!!(window.BQ_SUGG&&BQ_SUGG[sub+'|'+(chanArg||'')+'|'+shopType]&&BQ_SUGG[sub+'|'+(chanArg||'')+'|'+shopType].length);
       const cc=chanColor(ch),cb=chanBg(ch),cl=chanLabel(ch);
 
       html+=`<div style="border-top:1px solid var(--border);padding:14px 16px">
@@ -1790,7 +1809,7 @@ function sgRender(){
           <span style="background:${cb};color:${cc};padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700;border:1px solid ${cc}40;white-space:nowrap;flex-shrink:0">${cl}</span>
         </div>`;
 
-      const storeSales=(window.BP_SALES&&bpCode)?window.BP_SALES[bpCode]||{}:{};
+      const storeSales=(window.BP2_SELLERS&&myCode&&bpCode)?(window.BP2_SELLERS[myCode]?.[bpCode]?.p||{}):{};
       if(top5.length){
         const scopeLabel=usedShopType?shopType:cl;
         html+=`<div style="background:var(--row-alt);border-radius:var(--radius-sm);padding:8px 10px">
@@ -1805,7 +1824,7 @@ function sgRender(){
             <span style="width:22px;text-align:center;flex-shrink:0;font-size:15px">${medals[i]}</span>
             ${tpProdImg(pn,false)}
             <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${pn}</span>
-            <span style="font-size:12px;color:var(--muted);white-space:nowrap;font-weight:500;flex-shrink:0;margin-right:4px">${tpFmtCS(d.cs)} ลัง</span>
+            <span style="font-size:12px;color:var(--muted);white-space:nowrap;font-weight:500;flex-shrink:0;margin-right:4px">${tpFmtCS(d.cs)} ลัง<span style="font-size:10px;opacity:.7">/เดือน</span></span>
             ${statusHtml}
           </div>`;
         });
@@ -1828,15 +1847,55 @@ function sgRender(){
 // ═══════════════════════════════════════
 //  BP SALES TAB  —  สินค้าที่ขายได้
 // ═══════════════════════════════════════
-function bpInit(){ bpRender(); }
+const BP_SHEET_URL='https://docs.google.com/spreadsheets/d/1NxFkxiQev0xxGir93-qt0flNfzHz848-KuE7jDRSxQE/gviz/tq?tqx=out:csv&sheet=BP';
+let _bpLoaded=false;
+
+function bpParseCSV(txt){
+  if(txt.charCodeAt(0)===0xFEFF)txt=txt.slice(1);
+  const rows=[];let row=[],cell='',inQ=false;
+  for(let i=0;i<txt.length;i++){
+    const c=txt[i];
+    if(inQ){if(c==='"'&&txt[i+1]==='"'){cell+='"';i++;}else if(c==='"')inQ=false;else cell+=c;}
+    else if(c==='"')inQ=true;
+    else if(c===','){row.push(cell);cell='';}
+    else if(c==='\n'||c==='\r'){if(cell||row.length){row.push(cell);rows.push(row);}row=[];cell='';if(c==='\r'&&txt[i+1]==='\n')i++;}
+    else cell+=c;
+  }
+  if(cell||row.length){row.push(cell);rows.push(row);}
+  return rows;
+}
+
+function bpLoad(cb,errEl){
+  if(_bpLoaded){cb();return;}
+  if(errEl)errEl.innerHTML=`<div class="tp-empty"><div style="font-size:40px;margin-bottom:12px">⏳</div><div style="font-size:15px;font-weight:700">กำลังโหลดข้อมูล...</div></div>`;
+  fetch(BP_SHEET_URL)
+    .then(r=>r.text())
+    .then(csv=>{
+      const rows=bpParseCSV(csv);
+      const sellers={};
+      for(let i=1;i<rows.length;i++){
+        const r=rows[i];if(r.length<10)continue;
+        const saleCode=r[4].trim(),bpCode=r[2].trim(),storeName=r[3].trim(),prodName=r[6].trim();
+        const cs=parseFloat(r[9])||0;
+        if(!saleCode||!bpCode||!prodName||cs<=0)continue;
+        if(!sellers[saleCode])sellers[saleCode]={};
+        if(!sellers[saleCode][bpCode])sellers[saleCode][bpCode]={n:storeName,p:{}};
+        sellers[saleCode][bpCode].p[prodName]=(sellers[saleCode][bpCode].p[prodName]||0)+cs;
+      }
+      window.BP2_SELLERS=sellers;_bpLoaded=true;cb();
+    })
+    .catch(e=>{if(errEl)errEl.innerHTML=`<div class="tp-empty"><div style="font-size:48px;margin-bottom:12px">⚠️</div><div style="font-size:15px;font-weight:700">โหลดข้อมูลไม่สำเร็จ</div><div style="font-size:13px;color:var(--muted)">${e.message}</div></div>`;});
+}
+
+function bpInit(){
+  const el=document.getElementById('bpContent');
+  if(!el)return;
+  bpLoad(()=>bpRender(),el);
+}
 
 function bpRender(){
   const el=document.getElementById('bpContent');
   if(!el)return;
-  if(!window.BP2_SELLERS){
-    el.innerHTML=`<div class="tp-empty"><div style="font-size:48px;margin-bottom:12px">⚠️</div><div style="font-size:15px;font-weight:700">ไม่พบข้อมูล</div><div style="font-size:13px;color:var(--muted)">กรุณารัน export_bp2.ps1 ก่อน</div></div>`;
-    return;
-  }
   const myCode=(currentUser&&currentUser.saleCode)||'';
   const myName=(currentUser&&(currentUser.name||''))||'';
   const myStores=myCode?window.BP2_SELLERS[myCode]:null;
