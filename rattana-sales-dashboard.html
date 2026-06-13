@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Sales Dashboard v3.20</title>
+<title>Rattana Sales Dashboard v3.21</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="bq_store.js"></script>
@@ -352,7 +352,7 @@ header{position:relative}
   <div class="logo-text">Rattana <span>Sales Dashboard</span></div>
   <button class="icon-btn" onclick="refreshData()" id="btnRefresh" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" id="btnDark" title="Dark mode">🌙</button>
-  <span class="version-tag">v3.20 · 2026-06-13</span>
+  <span class="version-tag">v3.21 · 2026-06-13</span>
 </header>
 
 <!-- App Body -->
@@ -2210,7 +2210,7 @@ function bpFilterSearch(q){
   });
 }
 
-// ─── ประวัติการซื้อสินค้า ───
+// ─── ประวัติการซื้อสินค้า (ร้าน <2,500 ฿) ───
 let _purchhistInited=false;
 function purchhistInit(){
   const el=document.getElementById('purchhistContent');
@@ -2223,28 +2223,32 @@ function purchhistRender(){
   if(!el)return;
   const myCode=(currentUser&&currentUser.saleCode)||'';
   const myName=(currentUser&&(currentUser.name||currentUser.saleNoRoo))||'';
-  const myStores=myCode&&window.BP2_SELLERS?window.BP2_SELLERS[myCode]:null;
 
-  if(!myStores||!Object.keys(myStores).length){
-    el.innerHTML=`<div class="tp-empty"><div style="font-size:48px;margin-bottom:12px">🛍️</div><div style="font-size:16px;font-weight:700;margin-bottom:6px">ไม่พบข้อมูล</div><div style="font-size:13px;color:var(--muted)">รหัสเซลล์: ${myCode||'(ไม่ทราบ)'}</div></div>`;
+  // ดึงร้าน <2,500 ของเซลล์คนนี้
+  const zeroList=(DATA.zeroReport||[]).filter(r=>!myCode||r.saleCode===myCode);
+
+  if(!zeroList.length){
+    el.innerHTML=`<div class="tp-empty"><div style="font-size:48px;margin-bottom:12px">🎉</div><div style="font-size:16px;font-weight:700;margin-bottom:6px">ไม่มีร้านค้าที่ยอดต่ำกว่า 2,500 ฿</div><div style="font-size:13px;color:var(--muted)">ทุกร้านมียอดขายผ่านเกณฑ์แล้ว</div></div>`;
     return;
   }
 
-  const custMap={};
-  (window.CUSTS2||[]).filter(c=>c[5]===myCode).forEach(c=>{
-    custMap[c[1]]={sub:c[2]||'(ไม่ระบุตำบล)',shopType:c[3]||''};
+  const myBP=window.BP2_SELLERS&&myCode?window.BP2_SELLERS[myCode]:null;
+
+  // แมทข้อมูล: เพิ่ม prods จาก BP2_SELLERS
+  const matched=zeroList.map(r=>{
+    const hist=myBP?myBP[r.code]:null;
+    return {...r, prods:hist?Object.entries(hist.p).sort((a,b)=>b[1]-a[1]):[]};
   });
 
-  const storeList=Object.entries(myStores);
-  const totalStores=storeList.length;
-  const totalSKU=storeList.reduce((s,[,v])=>s+Object.keys(v.p).length,0);
-  const totalCS=storeList.reduce((s,[,v])=>s+Object.values(v.p).reduce((a,b)=>a+b,0),0);
+  const hasHist=matched.filter(r=>r.prods.length>0);
+  const noHist=matched.filter(r=>r.prods.length===0);
+  const totalSKU=hasHist.reduce((s,r)=>s+r.prods.length,0);
 
   let html=`<div class="fade-in">
   <div class="tp-stat-grid" style="margin-bottom:14px">
-    <div class="tp-stat-card"><div class="s-label">ร้านค้าของฉัน</div><div class="s-value">${totalStores}</div><div class="s-sub">${myName||myCode}</div></div>
-    <div class="tp-stat-card" style="border-top-color:var(--gold)"><div class="s-label">SKU ที่ซื้อ (3 เดือน)</div><div class="s-value" style="color:var(--navy)">${totalSKU.toLocaleString()}</div><div class="s-sub">รายการสินค้า</div></div>
-    <div class="tp-stat-card" style="border-top-color:#2ecc71"><div class="s-label">เฉลี่ย/เดือน</div><div class="s-value" style="color:#1e8449">${(totalCS/3).toLocaleString(undefined,{maximumFractionDigits:0})}</div><div class="s-sub">ลัง (CS)</div></div>
+    <div class="tp-stat-card" style="border-top-color:var(--danger)"><div class="s-label">ร้านค้า &lt;2,500 ฿</div><div class="s-value" style="color:var(--danger)">${zeroList.length}</div><div class="s-sub">${myName||myCode}</div></div>
+    <div class="tp-stat-card" style="border-top-color:var(--gold)"><div class="s-label">มีประวัติซื้อ (3 เดือน)</div><div class="s-value" style="color:var(--navy)">${hasHist.length}</div><div class="s-sub">${noHist.length} ร้านไม่มีข้อมูลใน BP</div></div>
+    <div class="tp-stat-card" style="border-top-color:#3498db"><div class="s-label">รวม SKU ที่ซื้อ</div><div class="s-value" style="color:#1a6fb8">${totalSKU.toLocaleString()}</div><div class="s-sub">รายการสินค้า (3 เดือน)</div></div>
   </div>
   <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin-bottom:14px">
     <input class="finput" type="text" id="purchSearch" placeholder="🔍 ค้นหาร้านค้า / รหัส / สินค้า..." style="width:100%;box-sizing:border-box" oninput="purchhistFilter(this.value)">
@@ -2252,61 +2256,72 @@ function purchhistRender(){
   </div>
   <div id="purchhistList">`;
 
-  // จัดกลุ่มตามตำบล
-  const subMap={};
-  storeList.forEach(([bpCode,store])=>{
-    const info=custMap[bpCode]||{sub:'(ไม่ระบุตำบล)',shopType:''};
-    if(!subMap[info.sub])subMap[info.sub]=[];
-    subMap[info.sub].push({bpCode,store,shopType:info.shopType});
+  // จัดกลุ่มตามวันส่ง (routeDay) แล้วเรียงตาม jun asc (น้อยสุดขึ้นก่อน)
+  const dayMap={};
+  matched.sort((a,b)=>a.jun-b.jun).forEach(r=>{
+    const day=r.routeDay||'(ไม่ระบุวัน)';
+    if(!dayMap[day])dayMap[day]=[];
+    dayMap[day].push(r);
   });
 
-  Object.entries(subMap).sort((a,b)=>a[0].localeCompare(b[0],'th')).forEach(([sub,stores])=>{
-    const subCS=stores.reduce((s,{store})=>s+Object.values(store.p).reduce((a,b)=>a+b,0),0);
+  const DAY_ORD={จันทร์:1,อังคาร:2,พุธ:3,พฤหัสบดี:4,ศุกร์:5,เสาร์:6,'(ไม่ระบุวัน)':9};
+  const dayColors={จันทร์:'#FFD700',อังคาร:'#FF9EC4',พุธ:'#5BC85B',พฤหัสบดี:'#FFA500',ศุกร์:'#5BA3E0',เสาร์:'#C97FE0'};
+
+  Object.entries(dayMap).sort((a,b)=>(DAY_ORD[a[0]]||9)-(DAY_ORD[b[0]]||9)).forEach(([day,stores])=>{
+    const dc=dayColors[day]||'#ccc';
     html+=`<div class="card ph-sub-card" style="margin-bottom:16px">
       <div class="card-head">
-        <h3>📍 ${sub}</h3>
-        <span class="badge" style="background:rgba(0,0,0,.07);color:var(--navy)">${stores.length} ร้าน · ${(subCS/3).toLocaleString(undefined,{maximumFractionDigits:0})} ลัง/เดือน</span>
+        <h3><span style="display:inline-block;padding:2px 10px;border-radius:12px;background:${dc};color:#000;font-size:12px;margin-right:6px">${day}</span> ${stores.length} ร้าน</h3>
+        <span class="badge badge-danger">${stores.filter(r=>r.prods.length>0).length} มีประวัติซื้อ</span>
       </div>`;
 
-    stores.sort((a,b)=>a.store.n.localeCompare(b.store.n,'th')).forEach(({bpCode,store,shopType})=>{
-      const prods=Object.entries(store.p).sort((a,b)=>b[1]-a[1]);
-      const storeCS=Object.values(store.p).reduce((a,b)=>a+b,0);
-      html+=`<div class="ph-store-card" data-store="${store.n.toLowerCase()}" data-bp="${bpCode.toLowerCase()}" data-prods="${prods.map(([p])=>p.toLowerCase()).join('|')}" style="border-top:1px solid var(--border);padding:14px 16px">
+    stores.forEach(r=>{
+      const prods=r.prods;
+      const storeCS=prods.reduce((s,[,v])=>s+v,0);
+      const junFmt=r.jun?`฿${r.jun.toLocaleString(undefined,{maximumFractionDigits:0})}`:'฿0';
+      const avg3Fmt=r.avg3?`฿${r.avg3.toLocaleString(undefined,{maximumFractionDigits:0})}`:'-';
+      const junColor=r.jun>=1500?'var(--success)':'var(--danger)';
+
+      html+=`<div class="ph-store-card" data-store="${r.name.toLowerCase()}" data-bp="${r.code.toLowerCase()}" data-prods="${prods.map(([p])=>p.toLowerCase()).join('|')}" style="border-top:1px solid var(--border);padding:14px 16px">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap">
           <div>
-            <div style="font-weight:700;font-size:14px">${store.n}</div>
+            <div style="font-weight:700;font-size:14px">${r.name}</div>
             <div style="font-size:11px;color:var(--muted);margin-top:3px;display:flex;gap:8px;flex-wrap:wrap">
-              ${bpCode?`<span style="font-family:monospace">${bpCode}</span>`:''}
-              ${shopType?`<span>${shopType}</span>`:''}
+              <span style="font-family:monospace">${r.code}</span>
+              ${r.routeName?`<span>${r.routeName}</span>`:''}
             </div>
           </div>
-          <div style="text-align:right;flex-shrink:0">
-            <div style="font-size:13px;font-weight:700;color:var(--navy)">${(storeCS/3).toLocaleString(undefined,{maximumFractionDigits:1})} ลัง/เดือน</div>
-            <div style="font-size:11px;color:var(--muted)">${prods.length} SKU · 3 เดือนรวม ${storeCS.toLocaleString(undefined,{maximumFractionDigits:0})} ลัง</div>
-          </div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:5px">`;
-
-      prods.forEach(([pn,cs],i)=>{
-        const avgMo=(cs/3).toFixed(1);
-        const pct=storeCS>0?Math.round(cs/storeCS*100):0;
-        const bar=Math.min(100,pct);
-        const rankColor=i===0?'#c9a84c':i===1?'#8a98b8':i===2?'#b87333':'var(--border)';
-        html+=`<div style="display:flex;align-items:center;gap:8px;font-size:12.5px" class="ph-prod-row">
-          <div style="width:20px;text-align:center;font-weight:700;color:${rankColor};flex-shrink:0">${i+1}</div>
-          <div style="flex:1;min-width:0">
-            <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">${pn}</div>
-            <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden">
-              <div style="height:100%;width:${bar}%;background:${i<3?'var(--gold)':'var(--info)'};border-radius:2px"></div>
-            </div>
-          </div>
-          <div style="text-align:right;flex-shrink:0;min-width:70px">
-            <span style="font-weight:600;color:var(--navy)">${avgMo} ลัง/เดือน</span>
+          <div style="text-align:right;flex-shrink:0;display:flex;flex-direction:column;gap:2px">
+            <span style="font-size:13px;font-weight:700;color:${junColor}">ยอดเดือนนี้: ${junFmt}</span>
+            <span style="font-size:11px;color:var(--muted)">AVG 3 เดือน: ${avg3Fmt}</span>
           </div>
         </div>`;
-      });
 
-      html+=`</div></div>`;
+      if(prods.length){
+        html+=`<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px">📦 สินค้าที่เคยซื้อ (3 เดือน) — ${prods.length} SKU · เฉลี่ย ${(storeCS/3).toFixed(1)} ลัง/เดือน</div>`;
+        html+=`<div style="display:flex;flex-direction:column;gap:5px">`;
+        prods.forEach(([pn,cs],i)=>{
+          const avgMo=(cs/3).toFixed(1);
+          const pct=storeCS>0?Math.round(cs/storeCS*100):0;
+          const bar=Math.min(100,pct);
+          const rankColor=i===0?'#c9a84c':i===1?'#8a98b8':i===2?'#b87333':'var(--muted)';
+          html+=`<div style="display:flex;align-items:center;gap:8px;font-size:12.5px">
+            <div style="width:20px;text-align:center;font-weight:700;color:${rankColor};flex-shrink:0">${i+1}</div>
+            <div style="flex:1;min-width:0">
+              <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">${pn}</div>
+              <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+                <div style="height:100%;width:${bar}%;background:${i<3?'var(--gold)':'#3498db'};border-radius:2px"></div>
+              </div>
+            </div>
+            <div style="text-align:right;flex-shrink:0;min-width:72px;font-weight:600;color:var(--navy)">${avgMo} ลัง/เดือน</div>
+          </div>`;
+        });
+        html+=`</div>`;
+      } else {
+        html+=`<div style="font-size:12px;color:var(--muted);padding:8px 0;font-style:italic">⚠️ ไม่มีข้อมูลการซื้อใน BP (3 เดือน)</div>`;
+      }
+
+      html+=`</div>`;
     });
 
     html+=`</div>`;
