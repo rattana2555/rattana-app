@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Sales Dashboard v3.22</title>
+<title>Rattana Sales Dashboard v3.23</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="bq_store.js"></script>
@@ -352,7 +352,7 @@ header{position:relative}
   <div class="logo-text">Rattana <span>Sales Dashboard</span></div>
   <button class="icon-btn" onclick="refreshData()" id="btnRefresh" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" id="btnDark" title="Dark mode">🌙</button>
-  <span class="version-tag">v3.22 · 2026-06-13</span>
+  <span class="version-tag">v3.23 · 2026-06-13</span>
 </header>
 
 <!-- App Body -->
@@ -1531,19 +1531,19 @@ async function _loadZeroBQHistory() {
   const dateFilter = months.join(' OR ');
   const sw = getSaleWhere(); // AND AF='ชื่อเซลล์' หรือ '' ถ้า admin
 
-  // Query BQ: รหัสร้าน, ชื่อร้าน, สินค้า, จำนวน CS รวม 3 เดือน
-  const tq = `SELECT C, D, R, sum(N) WHERE N>0 ${sw} AND (${dateFilter}) AND C!='' AND R!='' GROUP BY C, D, R ORDER BY C, sum(N) DESC`;
+  // Query BQ: รหัสร้าน, ชื่อร้าน, ชื่อสินค้า (G), ยอดขาย ฿ (N) รวม 3 เดือน
+  const tq = `SELECT C, D, G, sum(N) WHERE N>0 ${sw} AND (${dateFilter}) AND C!='' AND G!='' GROUP BY C, D, G ORDER BY C, sum(N) DESC`;
   const rawRows = await gviz(tq);
 
-  // สร้าง map: bpCode → { prodName: totalCS }
+  // สร้าง map: bpCode → { prodName: totalBaht }
   const map = {};
   rawRows.forEach(r => {
     const code = r[0] ? String(r[0]).trim() : '';
     const prod = r[2] ? String(r[2]).trim() : '';
-    const cs   = parseFloat(r[3]) || 0;
-    if (!code || !prod || cs <= 0) return;
+    const baht = parseFloat(r[3]) || 0;
+    if (!code || !prod || baht <= 0) return;
     if (!map[code]) map[code] = {};
-    map[code][prod] = (map[code][prod] || 0) + cs;
+    map[code][prod] = (map[code][prod] || 0) + baht;
   });
   return map;
 }
@@ -1565,12 +1565,12 @@ function _renderZeroCards(rows, bqMap, isAdmin) {
       prodsHtml = `
         <div style="margin-top:10px;border-top:1px dashed var(--border);padding-top:10px">
           <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">
-            📦 ประวัติการซื้อจาก BQ (3 เดือน) — ${prods.length} SKU · รวม ${storeCS.toFixed(0)} ลัง
+            📦 ประวัติการซื้อจาก BQ (3 เดือน) — ${prods.length} SKU · รวม ${storeCS.toLocaleString('th-TH',{maximumFractionDigits:0})} ฿
           </div>
           <div style="display:flex;flex-direction:column;gap:5px">
-            ${prods.map(([pn,cs],i) => {
-              const avgMo = (cs/3).toFixed(1);
-              const pct   = storeCS > 0 ? Math.round(cs/storeCS*100) : 0;
+            ${prods.map(([pn,baht],i) => {
+              const avgMo = (baht/3).toLocaleString('th-TH',{maximumFractionDigits:0});
+              const pct   = storeCS > 0 ? Math.round(baht/storeCS*100) : 0;
               const rankColor = i===0?'#c9a84c':i===1?'#8a98b8':i===2?'#b87333':'var(--muted)';
               return `<div style="display:flex;align-items:center;gap:8px;font-size:12.5px">
                 <div style="width:20px;text-align:center;font-weight:700;color:${rankColor};flex-shrink:0">${i+1}</div>
@@ -1580,7 +1580,7 @@ function _renderZeroCards(rows, bqMap, isAdmin) {
                     <div style="height:100%;width:${Math.min(100,pct)}%;background:${i<3?'var(--gold)':'#3498db'};border-radius:2px"></div>
                   </div>
                 </div>
-                <div style="text-align:right;flex-shrink:0;min-width:80px;font-weight:600;color:var(--navy)">${avgMo} ลัง/เดือน</div>
+                <div style="text-align:right;flex-shrink:0;min-width:80px;font-weight:600;color:var(--navy)">${avgMo} ฿/เดือน</div>
               </div>`;
             }).join('')}
           </div>
