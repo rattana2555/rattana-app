@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Sales Dashboard v3.20</title>
+<title>Rattana Sales Dashboard v3.21</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="bq_store.js"></script>
@@ -352,7 +352,7 @@ header{position:relative}
   <div class="logo-text">Rattana <span>Sales Dashboard</span></div>
   <button class="icon-btn" onclick="refreshData()" id="btnRefresh" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" id="btnDark" title="Dark mode">🌙</button>
-  <span class="version-tag">v3.20 · 2026-06-13</span>
+  <span class="version-tag">v3.21 · 2026-06-13</span>
 </header>
 
 <!-- App Body -->
@@ -466,21 +466,11 @@ header{position:relative}
     <div class="stat-card warning"><div class="s-label">% ของร้านทั้งหมด</div><div class="s-value" id="zeroPct">-</div><div class="s-sub">จาก <span id="zeroOfTotal">-</span> ร้าน</div></div>
   </div>
 
-  <div class="card">
-    <div class="card-head"><h3>🏪 ร้านค้ายอดขายต่ำกว่า 2,500 บาท (มิ.ย. 2026)</h3><span class="badge badge-danger" id="zeroCount">0 ร้าน</span></div>
-    <div class="card-body" style="padding:0">
-      <div class="tbl-wrap">
-        <table class="tbl"><thead><tr>
-          <th>รหัสร้าน</th>
-          <th>ชื่อร้าน</th>
-          <th id="thZeroSale" style="display:none">พนักงานขาย</th>
-          <th>รูทจด</th>
-          <th class="num">มิ.ย. 2026 (฿)</th>
-          <th class="num">เฉลี่ย 3 เดือน (฿)</th>
-        </tr></thead><tbody id="bodyZero"></tbody></table>
-      </div>
-    </div>
+  <div class="card-head" style="background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+    <h3 style="font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px">🏪 ร้านค้ายอดขายต่ำกว่า 2,500 บาท (มิ.ย. 2026)</h3>
+    <span class="badge badge-danger" id="zeroCount">0 ร้าน</span>
   </div>
+  <div id="bodyZero"></div>
 </div>
 </div>
 
@@ -1480,52 +1470,101 @@ function renderUnsold() {
 //  TAB 3 — ZERO STORES
 // ═══════════════════════════════════════
 function renderZeroStores() {
-  const q    = document.getElementById('fZeroSearch').value.toLowerCase();
-  const sale = document.getElementById('fZeroSale').value;
-  const isAdmin = canSeeAll();
+  const body = document.getElementById('bodyZero');
+  body.innerHTML = `<div class="tp-empty"><div style="font-size:32px;margin-bottom:8px">⏳</div><div>กำลังโหลดข้อมูล BP...</div></div>`;
+  bpLoad(() => _renderZeroStoresInner(), body);
+}
 
-  // Show/hide the sale column header
-  const thSale = document.getElementById('thZeroSale');
-  if (thSale) thSale.style.display = isAdmin ? '' : 'none';
+function _renderZeroStoresInner() {
+  const q      = document.getElementById('fZeroSearch').value.toLowerCase();
+  const sale   = document.getElementById('fZeroSale').value;
+  const isAdmin = canSeeAll();
+  const sc     = (currentUser && currentUser.saleCode) || '';
 
   let rows = DATA.zeroReport.filter(r => {
     if (sale !== 'all' && r.saleCode !== sale) return false;
-    if (q && !r.code.toLowerCase().includes(q) && !r.name.toLowerCase().includes(q) && !r.sale.toLowerCase().includes(q) && !r.saleCode.toLowerCase().includes(q)) return false;
+    if (q && !r.code.toLowerCase().includes(q) && !r.name.toLowerCase().includes(q)
+         && !r.sale.toLowerCase().includes(q) && !r.saleCode.toLowerCase().includes(q)) return false;
     return true;
   });
 
-  const sc = (currentUser && currentUser.saleCode) || '';
   const _tpC = window.CUSTS2 || (typeof CUSTS !== 'undefined' ? CUSTS : null);
   const custs2Total = (_tpC && _tpC.length && sc)
     ? _tpC.filter(c => c[5] === sc).length
     : DATA.customers.length;
-  const total = DATA.zeroReport.length;
   document.getElementById('zeroCustTotal').textContent = custs2Total || '-';
   document.getElementById('zeroCustSub').textContent   = `ร้านใน Customer Sheet`;
   document.getElementById('zeroTotal').textContent     = rows.length;
   document.getElementById('zeroPct').textContent       = custs2Total ? ((rows.length/custs2Total)*100).toFixed(1)+'%' : '-';
-  document.getElementById('zeroOfTotal').textContent   = custs2Total || total;
-  document.getElementById('zeroCount').textContent   = `${rows.length} ร้าน`;
+  document.getElementById('zeroOfTotal').textContent   = custs2Total || DATA.zeroReport.length;
+  document.getElementById('zeroCount').textContent     = `${rows.length} ร้าน`;
 
   const body = document.getElementById('bodyZero');
   if (!rows.length) {
     const msg = !currentUser?.saleCode && !isAdmin
       ? 'ไม่พบรหัสเซลล์สำหรับบัญชีนี้ กรุณาติดต่อผู้ดูแลระบบ'
       : 'ทุกร้านมียอดขายมากกว่า 2,500 บาท ใน มิ.ย. 2026 🎉';
-    body.innerHTML = `<tr class="empty-row"><td colspan="6">${msg}</td></tr>`;
+    body.innerHTML = `<div class="tp-empty">${msg}</div>`;
     return;
   }
 
+  const dayColors = {จันทร์:'#FFD700',อังคาร:'#FF9EC4',พุธ:'#5BC85B',พฤหัสบดี:'#FFA500',ศุกร์:'#5BA3E0',เสาร์:'#C97FE0'};
+  const myBP = window.BP2_SELLERS && sc ? window.BP2_SELLERS[sc] : null;
+
   body.innerHTML = rows.map(r => {
-    const saleCol = isAdmin ? `<td style="font-size:12px">${r.sale||'-'}<br><span style="color:var(--muted);font-size:11px">${r.saleCode}</span></td>` : '';
-    return `<tr>
-      <td style="font-family:monospace;font-size:12px;font-weight:600">${r.code}</td>
-      <td>${r.name}</td>
-      ${saleCol}
-      <td><span class="badge" style="font-size:11px;color:#000;background:${{จันทร์:'#FFD700',อังคาร:'#FF9EC4',พุธ:'#5BC85B',พฤหัสบดี:'#FFA500',ศุกร์:'#5BA3E0',เสาร์:'#C97FE0'}[r.routeDay]||'#ccc'}">${r.routeDay||'-'}</span></td>
-      <td class="num" style="color:${r.jun >= 1500 ? 'var(--success)' : 'var(--danger)'};font-weight:700">${r.jun ? fmtB(r.jun) : '0'}</td>
-      <td class="num" style="color:var(--gold);font-weight:600">${r.avg3 ? fmtB(r.avg3) : '-'}</td>
-    </tr>`;
+    const hist   = myBP ? myBP[r.code] : null;
+    const prods  = hist ? Object.entries(hist.p).sort((a,b) => b[1]-a[1]) : [];
+    const storeCS = prods.reduce((s,[,v]) => s+v, 0);
+    const junColor = r.jun >= 1500 ? 'var(--success)' : 'var(--danger)';
+    const dc = dayColors[r.routeDay] || '#ccc';
+    const saleInfo = isAdmin ? `<span style="font-size:11px;color:var(--muted)"> · ${r.sale||r.saleCode}</span>` : '';
+
+    let prodsHtml = '';
+    if (prods.length) {
+      prodsHtml = `
+        <div style="margin-top:10px;border-top:1px dashed var(--border);padding-top:10px">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">
+            📦 สินค้าที่เคยซื้อ (3 เดือน) — ${prods.length} SKU · เฉลี่ย ${(storeCS/3).toFixed(1)} ลัง/เดือน
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px">
+            ${prods.map(([pn,cs],i) => {
+              const avgMo = (cs/3).toFixed(1);
+              const pct   = storeCS > 0 ? Math.round(cs/storeCS*100) : 0;
+              const rankColor = i===0?'#c9a84c':i===1?'#8a98b8':i===2?'#b87333':'var(--muted)';
+              return `<div style="display:flex;align-items:center;gap:8px;font-size:12.5px">
+                <div style="width:20px;text-align:center;font-weight:700;color:${rankColor};flex-shrink:0">${i+1}</div>
+                <div style="flex:1;min-width:0">
+                  <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">${pn}</div>
+                  <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+                    <div style="height:100%;width:${Math.min(100,pct)}%;background:${i<3?'var(--gold)':'#3498db'};border-radius:2px"></div>
+                  </div>
+                </div>
+                <div style="text-align:right;flex-shrink:0;min-width:80px;font-weight:600;color:var(--navy)">${avgMo} ลัง/เดือน</div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+    } else {
+      prodsHtml = `<div style="margin-top:8px;font-size:12px;color:var(--muted);font-style:italic">⚠️ ไม่มีข้อมูลการซื้อใน BP (3 เดือน)</div>`;
+    }
+
+    return `<div class="card" style="margin-bottom:12px;padding:14px 16px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:700;font-size:14px">${r.name}${saleInfo}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <span style="font-family:monospace">${r.code}</span>
+            ${r.routeDay?`<span style="padding:1px 8px;border-radius:10px;background:${dc};color:#000;font-size:11px">${r.routeDay}</span>`:''}
+            ${r.routeName?`<span>${r.routeName}</span>`:''}
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:14px;font-weight:700;color:${junColor}">มิ.ย. 2026: ${r.jun ? fmtB(r.jun) : '฿0'}</div>
+          <div style="font-size:11px;color:var(--muted)">AVG 3 เดือน: ${r.avg3 ? fmtB(r.avg3) : '-'}</div>
+        </div>
+      </div>
+      ${prodsHtml}
+    </div>`;
   }).join('');
 }
 
