@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Sales Dashboard v3.21</title>
+<title>Rattana Sales Dashboard v3.22</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="bq_store.js"></script>
@@ -336,6 +336,7 @@ header{position:relative}
     <button class="tab-btn active" onclick="switchTab('summary',this);closeSidebar()">📊 ยอดขายรวม</button>
     <button class="tab-btn" onclick="switchTab('unsold',this);closeSidebar()">📦 SKU ไม่ขาย</button>
     <button class="tab-btn" onclick="switchTab('zero',this);closeSidebar()">🏪 ร้าน &lt;2,500 ฿</button>
+    <button class="tab-btn" onclick="switchTab('stores',this);storesInit();closeSidebar()">🗂️ ร้านค้า</button>
     <button class="tab-btn" onclick="switchTab('suggestion',this);sgInit();closeSidebar()">💡 สินค้า Suggestion</button>
     <button class="tab-btn" id="btnBpSales" onclick="switchTab('bpsales',this);bpInit();closeSidebar()" style="display:none">🛒 สินค้าที่ขาย</button>
     <button class="tab-btn" id="btnBpHist" onclick="switchTab('bphist',this);bphistInit();closeSidebar()" style="display:none">📋 สินค้าที่เคยขาย</button>
@@ -351,7 +352,7 @@ header{position:relative}
   <div class="logo-text">Rattana <span>Sales Dashboard</span></div>
   <button class="icon-btn" onclick="refreshData()" id="btnRefresh" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" id="btnDark" title="Dark mode">🌙</button>
-  <span class="version-tag">v3.21 · 2026-06-13</span>
+  <span class="version-tag">v3.22 · 2026-06-13</span>
 </header>
 
 <!-- App Body -->
@@ -510,6 +511,18 @@ header{position:relative}
 </div>
 </div>
 
+
+<!-- ─────── TAB: ร้านค้า ─────── -->
+<div class="tab-panel" id="tab-stores">
+<div class="content">
+  <div id="storesContent">
+    <div class="tp-empty">
+      <div style="font-size:36px;margin-bottom:10px">⏳</div>
+      <div style="font-size:14px;font-weight:600">กำลังโหลด...</div>
+    </div>
+  </div>
+</div>
+</div>
 
 <!-- ─────── TAB: สินค้าที่เคยขาย ─────── -->
 <div class="tab-panel" id="tab-bphist">
@@ -2194,6 +2207,118 @@ function bpFilterSearch(q){
     if(!q){card.style.display='';return;}
     const match=card.dataset.bp.includes(q)||card.dataset.name.includes(q)||card.dataset.prods.includes(q);
     card.style.display=match?'':'none';
+  });
+}
+
+// ─── ร้านค้า ───
+let _storesCache = null;
+function storesInit() {
+  const el = document.getElementById('storesContent');
+  if (!el) return;
+  if (_storesCache) { _storesRender(_storesCache); return; }
+  el.innerHTML = `<div class="tp-empty"><div style="font-size:36px;margin-bottom:10px">⏳</div><div style="font-size:14px;font-weight:600">กำลังโหลดข้อมูลร้านค้า...</div></div>`;
+  _storesLoad().then(data => { _storesCache = data; _storesRender(data); })
+    .catch(() => { el.innerHTML = `<div class="tp-empty">❌ โหลดข้อมูลไม่สำเร็จ</div>`; });
+}
+
+async function _storesLoad() {
+  const sc = (currentUser && currentUser.saleCode) || '';
+  let where = '';
+  if (!canSeeAll()) {
+    if (!sc) return [];
+    where = `WHERE C = '${sc.replace(/'/g, "\\'")}'`;
+  }
+  const rows = await gvizReport(`SELECT A, B, G, H ${where} ORDER BY G, B`);
+  return rows.map(r => ({
+    code:      r[0] != null ? String(r[0]).trim() : '-',
+    name:      (r[1] || '-').trim(),
+    routeDay:  (r[2] || '').trim(),
+    routeName: (r[3] || '').trim(),
+  }));
+}
+
+const DAY_COLORS_ST = { จันทร์:'#FFD700', อังคาร:'#FF9EC4', พุธ:'#5BC85B', พฤหัสบดี:'#FFA500', ศุกร์:'#5BA3E0', เสาร์:'#C97FE0' };
+
+function _storesRender(stores) {
+  const el = document.getElementById('storesContent');
+  if (!el) return;
+  const myName = (currentUser && (currentUser.name || currentUser.saleNoRoo)) || '';
+
+  if (!stores.length) {
+    el.innerHTML = `<div class="tp-empty"><div style="font-size:48px;margin-bottom:12px">🗂️</div><div style="font-size:16px;font-weight:700">ไม่พบร้านค้า</div></div>`;
+    return;
+  }
+
+  // สถิติ
+  const totalStores = stores.length;
+  const days = [...new Set(stores.map(s => s.routeDay).filter(Boolean))];
+  const routes = [...new Set(stores.map(s => s.routeName).filter(Boolean))];
+
+  let html = `<div class="fade-in">
+  <div class="tp-stat-grid" style="margin-bottom:14px">
+    <div class="tp-stat-card"><div class="s-label">ร้านค้าทั้งหมด</div><div class="s-value">${totalStores}</div><div class="s-sub">${myName}</div></div>
+    <div class="tp-stat-card" style="border-top-color:var(--gold)"><div class="s-label">วันจด</div><div class="s-value" style="color:var(--navy)">${days.length}</div><div class="s-sub">วัน</div></div>
+    <div class="tp-stat-card" style="border-top-color:#2ecc71"><div class="s-label">สาย</div><div class="s-value" style="color:#1e8449">${routes.length}</div><div class="s-sub">สายจด</div></div>
+  </div>
+  <input class="finput" type="text" id="storesSearch" placeholder="🔍 ค้นหารหัส / ชื่อร้าน / วันจด / สาย..." style="width:100%;box-sizing:border-box;margin-bottom:14px" oninput="storesFilter(this.value)">
+  <div id="storesList">`;
+
+  // จัดกลุ่มตามวันจด
+  const DAY_ORDER_ST = { จันทร์:1, อังคาร:2, พุธ:3, พฤหัสบดี:4, ศุกร์:5, เสาร์:6 };
+  const grouped = {};
+  stores.forEach(s => {
+    const key = s.routeDay || '(ไม่ระบุวัน)';
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(s);
+  });
+  Object.entries(grouped)
+    .sort((a, b) => (DAY_ORDER_ST[a[0]] || 9) - (DAY_ORDER_ST[b[0]] || 9))
+    .forEach(([day, list]) => {
+      const dc = DAY_COLORS_ST[day] || '#ccc';
+      const routeNames = [...new Set(list.map(s => s.routeName).filter(Boolean))].join(', ');
+      html += `<div class="card st-day-group" style="margin-bottom:12px">
+        <div class="card-head" style="padding:10px 16px;border-bottom:1px solid var(--border)">
+          <h3 style="display:flex;align-items:center;gap:8px">
+            <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${dc};flex-shrink:0"></span>
+            ${day}
+            ${routeNames ? `<span style="font-size:11px;font-weight:400;color:var(--muted)">${routeNames}</span>` : ''}
+          </h3>
+          <span class="badge" style="background:rgba(0,0,0,.07);color:var(--navy)">${list.length} ร้าน</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="background:var(--bg);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px">
+              <th style="padding:7px 16px;text-align:left;font-weight:600">รหัสบีพลัส</th>
+              <th style="padding:7px 8px;text-align:left;font-weight:600">ชื่อร้านค้า</th>
+              <th style="padding:7px 16px;text-align:left;font-weight:600">สายจด</th>
+            </tr>
+          </thead>
+          <tbody>`;
+      list.forEach((s, i) => {
+        const bg = i % 2 === 0 ? '' : 'background:rgba(0,0,0,.02)';
+        html += `<tr class="st-store-row" data-code="${s.code.toLowerCase()}" data-name="${s.name.toLowerCase()}" data-day="${day.toLowerCase()}" data-route="${s.routeName.toLowerCase()}" style="${bg}">
+          <td style="padding:8px 16px;font-family:monospace;color:var(--muted);white-space:nowrap">${s.code}</td>
+          <td style="padding:8px 8px;font-weight:600">${s.name}</td>
+          <td style="padding:8px 16px;font-size:12px;color:var(--muted)">${s.routeName || '-'}</td>
+        </tr>`;
+      });
+      html += `</tbody></table></div>`;
+    });
+
+  html += `</div></div>`;
+  el.innerHTML = html;
+}
+
+function storesFilter(q) {
+  q = q.toLowerCase().trim();
+  document.querySelectorAll('#storesList .st-day-group').forEach(group => {
+    let any = false;
+    group.querySelectorAll('.st-store-row').forEach(row => {
+      const match = !q || row.dataset.code.includes(q) || row.dataset.name.includes(q) || row.dataset.day.includes(q) || row.dataset.route.includes(q);
+      row.style.display = match ? '' : 'none';
+      if (match) any = true;
+    });
+    group.style.display = any ? '' : 'none';
   });
 }
 
