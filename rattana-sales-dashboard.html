@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Sales Dashboard v3.13</title>
+<title>Rattana Sales Dashboard v3.16</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="bq_store.js"></script>
@@ -91,6 +91,16 @@ header{background:var(--navy);color:#fff;padding:12px 16px;position:sticky;top:0
 .pbtn:hover{background:var(--border)}
 .pbtn.active{background:var(--gold);color:#000;border-color:var(--gold);font-weight:700}
 .bu-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:10px}
+.podium-wrap{display:flex;align-items:flex-end;justify-content:center;gap:12px;padding:16px 8px 0;min-height:180px}
+.podium-col{display:flex;flex-direction:column;align-items:center;flex:1;max-width:180px}
+.podium-name{font-size:12px;font-weight:700;text-align:center;margin-bottom:6px;word-break:break-all;color:var(--text)}
+.podium-bar{width:100%;border-radius:10px 10px 0 0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:10px 6px 8px;position:relative}
+.podium-bar.r1{background:linear-gradient(160deg,#c9a84c,#f0d080);min-height:140px}
+.podium-bar.r2{background:linear-gradient(160deg,#8a98b8,#b0bcce);min-height:100px}
+.podium-bar.r3{background:linear-gradient(160deg,#b87333,#d4956a);min-height:75px}
+.podium-medal{font-size:28px;line-height:1;margin-bottom:4px}
+.podium-val{font-size:13px;font-weight:800;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.4);text-align:center}
+.podium-sub{font-size:11px;color:rgba(255,255,255,.85);margin-top:2px;text-align:center}
 .bu-card{background:var(--card-bg);border:1px solid var(--border);border-top:3px solid var(--gold);border-radius:var(--radius-md);padding:10px 12px;min-width:0;box-shadow:var(--shadow-sm)}
 .bu-card .bu-name{font-size:11px;color:var(--muted);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bu-card .bu-val{font-size:16px;font-weight:700;color:var(--gold);white-space:nowrap}
@@ -313,7 +323,7 @@ header{position:relative}
     </div>
     <div class="user-menu-item" onclick="logout()">🚪 ออกจากระบบ</div>
   </div>
-  <span class="version-tag">v3.13 · 2026-06-12</span>
+  <span class="version-tag">v3.16 · 2026-06-13</span>
 </header>
 
 <!-- Tab Nav -->
@@ -353,6 +363,13 @@ header{position:relative}
   </div>
 
   <div id="buSummaryCards" class="bu-cards-grid"></div>
+
+  <div class="card" style="margin-top:14px">
+    <div class="card-head"><h3>🏆 Top 3 ร้านค้า EXVat สูงสุด</h3></div>
+    <div class="card-body">
+      <div id="podiumWrap" class="podium-wrap"></div>
+    </div>
+  </div>
 
 </div>
 </div>
@@ -420,7 +437,8 @@ header{position:relative}
     <select class="finput" id="fZeroSale" onchange="renderZeroStores()"><option value="all">ทุก Sale NO ROO</option></select>
   </div>
 
-  <div class="stat-grid" style="grid-template-columns:repeat(2,1fr)">
+  <div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">
+    <div class="stat-card"><div class="s-label">ร้านค้าทั้งหมด (Customer)</div><div class="s-value" id="zeroCustTotal">-</div><div class="s-sub" id="zeroCustSub">ร้านค้าที่ดูแล</div></div>
     <div class="stat-card danger"><div class="s-label">ร้านค้า &lt;2,500 ฿</div><div class="s-value" id="zeroTotal">-</div><div class="s-sub">ยอด มิ.ย. 2026 ต่ำกว่า 2,500 ฿</div></div>
     <div class="stat-card warning"><div class="s-label">% ของร้านทั้งหมด</div><div class="s-value" id="zeroPct">-</div><div class="s-sub">จาก <span id="zeroOfTotal">-</span> ร้าน</div></div>
   </div>
@@ -1046,13 +1064,14 @@ async function loadAllData() {
     // Populate filter dropdowns from actual data
     populateFilters();
 
-    // Unique bills — รวมใน load เลย (query ใช้งานได้แล้ว)
-    try {
-      const rUniq = await gviz(`SELECT B, count(B) WHERE N>0 ${sw} GROUP BY B`);
-      DATA.totalBills = rUniq ? rUniq.length : DATA.monthly.reduce((s,r)=>s+r.bills,0);
-    } catch(e) {
-      DATA.totalBills = DATA.monthly.reduce((s,r)=>s+r.bills,0);
-    }
+    // Unique bills + Top3 monthly — parallel
+    const { year: ly, month: lm } = latestMonthYear || {};
+    const [rUniq, rTop3] = await Promise.all([
+      gviz(`SELECT B, count(B) WHERE N>0 ${sw} GROUP BY B`).catch(()=>null),
+      ly != null ? gviz(`SELECT C, D, sum(N) WHERE N>0 AND year(A)=${ly} AND month(A)=${lm} ${sw} GROUP BY C, D ORDER BY sum(N) DESC LIMIT 3`).catch(()=>null) : Promise.resolve(null),
+    ]);
+    DATA.totalBills   = rUniq ? rUniq.length : DATA.monthly.reduce((s,r)=>s+r.bills,0);
+    DATA.top3Monthly  = (rTop3||[]).map(r=>({code:String(r[0]||''),name:r[1]||'',total:r[2]||0}));
 
     // Render all tabs
     renderSummary();
@@ -1137,7 +1156,9 @@ async function renderSummary() {
   const saleFilter = document.getElementById('fSumSale')?.value || 'all';
   const period     = document.querySelector('#fSumPeriod .pbtn.active')?.dataset.val || 'all';
 
-  const activeStores = DATA.customers.length;
+  const _sc = (currentUser && currentUser.saleCode) || '';
+  const _tc = window.CUSTS2 || (typeof CUSTS !== 'undefined' ? CUSTS : null);
+  const activeStores = (_tc && _tc.length && _sc) ? _tc.filter(c=>c[5]===_sc).length : DATA.customers.length;
   const zeroStores   = DATA.zeroReport.length;
 
   let totalSales, totalBills, periodLabel;
@@ -1186,9 +1207,9 @@ async function renderSummary() {
   document.getElementById('kpiTotal').textContent   = fmt(totalSales);
   document.getElementById('kpiBills').textContent   = fmt(totalBills);
   document.getElementById('kpiStores').textContent  = fmt(activeStores);
-  document.getElementById('kpiStoresSub').textContent = 'ร้าน (มีประวัติซื้อ)';
+  document.getElementById('kpiStoresSub').textContent = '';
   document.getElementById('kpiZero').textContent    = zeroStores;
-  document.getElementById('kpiZeroSub').textContent = 'ยอดขาย <2,500 ฿ ใน มิ.ย. 2026';
+  document.getElementById('kpiZeroSub').textContent = '';
 
   const totalEl = document.querySelector('.stat-card.success .s-label');
   const billEl  = document.querySelector('.stat-card.info .s-label');
@@ -1230,9 +1251,39 @@ async function renderSummary() {
     buEl.innerHTML = '';
   }
 
-  document.getElementById('saleCount').textContent = `${DATA.bySale.length} Sale`;
+  renderPodium();
+  document.getElementById('saleCount')&&(document.getElementById('saleCount').textContent=`${DATA.bySale.length} Sale`);
   renderCharts();
   renderTopSale();
+}
+
+function renderPodium() {
+  const el = document.getElementById('podiumWrap');
+  if (!el) return;
+  const top3 = DATA.top3Monthly || [];
+  if (!top3.length) { el.innerHTML='<div style="color:var(--muted);text-align:center;padding:24px">ไม่มีข้อมูล</div>'; return; }
+  const medals = ['🥇','🥈','🥉'];
+  const ranks  = ['r1','r2','r3'];
+  // month label
+  const {year:ly, month:lm} = latestMonthYear || {};
+  const monthLabel = ly!=null ? `${MONTH_TH[lm]} ${ly}` : '';
+  // update card title
+  const h3 = el.closest('.card')?.querySelector('h3');
+  if (h3) h3.textContent = `🏆 Top 3 ร้านค้า EXVat สูงสุด${monthLabel?' — '+monthLabel:''}`;
+  // order: 2nd, 1st, 3rd
+  const ordered = [top3[1], top3[0], top3[2]];
+  const rankOf  = c => c===top3[0]?0:c===top3[1]?1:2;
+  el.innerHTML = ordered.filter(Boolean).map(c => {
+    const rank = rankOf(c);
+    const valStr = fmt(Math.round(c.total));
+    return `<div class="podium-col">
+      <div class="podium-name">${c.name||c.code}</div>
+      <div class="podium-bar ${ranks[rank]}">
+        <div class="podium-medal">${medals[rank]}</div>
+        <div class="podium-val">${valStr}</div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function renderCharts() {
@@ -1402,10 +1453,17 @@ function renderZeroStores() {
     return true;
   });
 
+  const sc = (currentUser && currentUser.saleCode) || '';
+  const _tpC = window.CUSTS2 || (typeof CUSTS !== 'undefined' ? CUSTS : null);
+  const custs2Total = (_tpC && _tpC.length && sc)
+    ? _tpC.filter(c => c[5] === sc).length
+    : DATA.customers.length;
   const total = DATA.zeroReport.length;
-  document.getElementById('zeroTotal').textContent   = rows.length;
-  document.getElementById('zeroPct').textContent     = total ? ((rows.length/total)*100).toFixed(1)+'%' : '-';
-  document.getElementById('zeroOfTotal').textContent = total;
+  document.getElementById('zeroCustTotal').textContent = custs2Total || '-';
+  document.getElementById('zeroCustSub').textContent   = `ร้านใน Customer Sheet`;
+  document.getElementById('zeroTotal').textContent     = rows.length;
+  document.getElementById('zeroPct').textContent       = custs2Total ? ((rows.length/custs2Total)*100).toFixed(1)+'%' : '-';
+  document.getElementById('zeroOfTotal').textContent   = custs2Total || total;
   document.getElementById('zeroCount').textContent   = `${rows.length} ร้าน`;
 
   const body = document.getElementById('bodyZero');
@@ -1875,9 +1933,6 @@ function sgRender(){
   let html=`<div class="fade-in">
   <div class="tp-stat-grid">
     <div class="tp-stat-card"><div class="s-label">ร้านค้าของฉัน</div><div class="s-value">${myCusts.length}</div><div class="s-sub">${myName||myCode}</div></div>
-    <div class="tp-stat-card" style="border-top-color:#3498db"><div class="s-label">Wholesales (H)</div><div class="s-value" style="color:#1a6fb8">${myCusts.filter(c=>c[6]==='Wholesales').length}</div><div class="s-sub">ร้าน</div></div>
-    <div class="tp-stat-card" style="border-top-color:#2ecc71"><div class="s-label">Mom&amp;Pop (P)</div><div class="s-value" style="color:#1e8449">${myCusts.filter(c=>c[6]==='Mom&Pop').length}</div><div class="s-sub">ร้าน</div></div>
-    <div class="tp-stat-card" style="border-top-color:var(--gold)"><div class="s-label">ตำบลที่ดูแล</div><div class="s-value">${Object.keys(subMap).length}</div><div class="s-sub">ตำบล</div></div>
   </div>`;
 
   // Render each sub-district
