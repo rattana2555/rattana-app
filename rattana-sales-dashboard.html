@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Sales Dashboard v3.21</title>
+<title>Rattana Sales Dashboard v3.22</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="bq_store.js"></script>
@@ -352,7 +352,7 @@ header{position:relative}
   <div class="logo-text">Rattana <span>Sales Dashboard</span></div>
   <button class="icon-btn" onclick="refreshData()" id="btnRefresh" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" id="btnDark" title="Dark mode">🌙</button>
-  <span class="version-tag">v3.21 · 2026-06-13</span>
+  <span class="version-tag">v3.22 · 2026-06-13</span>
 </header>
 
 <!-- App Body -->
@@ -2226,17 +2226,24 @@ function purchhistInit(){
 }
 
 async function _purchhistLoadBQ(){
-  // GViz month() คืน 0-indexed: ม.ค.=0, มิ.ย.=5
   // BP sheet columns: A=date, C=bpCode, D=storeName, G=productName, N=EXVat(฿), AF=saleNoRoo
-  const now=new Date();
+  // GViz month() คืน 0-indexed: ม.ค.=0, มิ.ย.=5
+  const sw=getSaleWhere();
+
+  // หา max date จาก BQ จริง แล้ว filter 3 เดือนย้อนหลังจากวันนั้น
+  const maxRows=await gviz(`SELECT max(A) WHERE N>0 ${sw}`);
+  let refDate=new Date();
+  if(maxRows&&maxRows[0]&&maxRows[0][0]){
+    const d=new Date(maxRows[0][0]);
+    if(!isNaN(d))refDate=d;
+  }
   const months=[];
   for(let i=0;i<3;i++){
-    let m=now.getMonth()-i, y=now.getFullYear();
+    let m=refDate.getMonth()-i, y=refDate.getFullYear();
     if(m<0){m+=12;y--;}
     months.push(`(year(A)=${y} AND month(A)=${m})`);
   }
   const dateFilter=months.join(' OR ');
-  const sw=getSaleWhere();
   const tq=`SELECT C, D, G, sum(N) WHERE N>0 ${sw} AND (${dateFilter}) AND C!='' AND G!='' GROUP BY C, D, G ORDER BY C, sum(N) DESC`;
   const rawRows=await gviz(tq);
   const map={};
