@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Sales Dashboard v3.25</title>
+<title>Rattana Sales Dashboard v3.26</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="bq_store.js"></script>
@@ -351,7 +351,7 @@ header{position:relative}
   <div class="logo-text">Rattana <span>Sales Dashboard</span></div>
   <button class="icon-btn" onclick="refreshData()" id="btnRefresh" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" id="btnDark" title="Dark mode">🌙</button>
-  <span class="version-tag">v3.25 · 2026-06-13</span>
+  <span class="version-tag">v3.26 · 2026-06-13</span>
 </header>
 
 <!-- App Body -->
@@ -1468,6 +1468,42 @@ function renderUnsold() {
 // ═══════════════════════════════════════
 //  TAB 3 — ZERO STORES
 // ═══════════════════════════════════════
+let _zeroBQCache = null;
+
+async function _loadZeroBQHistory() {
+  const sw = getSaleWhere();
+  // หา max date จริงใน BQ
+  const maxRows = await gviz(`SELECT max(A) WHERE N>0 ${sw}`);
+  let refDate = new Date();
+  if (maxRows && maxRows[0] && maxRows[0][0]) {
+    const d = new Date(maxRows[0][0]);
+    if (!isNaN(d)) refDate = d;
+  }
+  // สร้าง date filter 3 เดือน (GViz month() = 0-indexed)
+  const months = [];
+  for (let i = 0; i < 3; i++) {
+    let m = refDate.getMonth() - i, y = refDate.getFullYear();
+    if (m < 0) { m += 12; y--; }
+    months.push(`(year(A)=${y} AND month(A)=${m})`);
+  }
+  const dateFilter = months.join(' OR ');
+  // Query: รหัสร้าน, ชื่อสินค้า, ยอดรวม
+  const rows = await gviz(
+    `SELECT C, G, sum(N) WHERE N>0 ${sw} AND (${dateFilter}) AND C!='' AND G!='' GROUP BY C, G ORDER BY C, sum(N) DESC`
+  );
+  // build map: bpCode → [{ prod, baht }] เรียงมากไปน้อย
+  const map = {};
+  rows.forEach(r => {
+    const code = r[0] ? String(r[0]).trim() : '';
+    const prod = r[1] ? String(r[1]).trim() : '';
+    const baht = parseFloat(r[2]) || 0;
+    if (!code || !prod || baht <= 0) return;
+    if (!map[code]) map[code] = [];
+    map[code].push({ prod, baht });
+  });
+  return map;
+}
+
 function renderZeroStores() {
   const q    = document.getElementById('fZeroSearch').value.toLowerCase();
   const sale = document.getElementById('fZeroSale').value;
@@ -1505,17 +1541,49 @@ function renderZeroStores() {
     return;
   }
 
-  body.innerHTML = rows.map(r => {
-    const saleCol = isAdmin ? `<td style="font-size:12px">${r.sale||'-'}<br><span style="color:var(--muted);font-size:11px">${r.saleCode}</span></td>` : '';
-    return `<tr>
-      <td style="font-family:monospace;font-size:12px;font-weight:600">${r.code}</td>
-      <td>${r.name}</td>
-      ${saleCol}
-      <td><span class="badge" style="font-size:11px;color:#000;background:${{จันทร์:'#FFD700',อังคาร:'#FF9EC4',พุธ:'#5BC85B',พฤหัสบดี:'#FFA500',ศุกร์:'#5BA3E0',เสาร์:'#C97FE0'}[r.routeDay]||'#ccc'}">${r.routeDay||'-'}</span></td>
-      <td class="num" style="color:${r.jun >= 1500 ? 'var(--success)' : 'var(--danger)'};font-weight:700">${r.jun ? fmtB(r.jun) : '0'}</td>
-      <td class="num" style="color:var(--gold);font-weight:600">${r.avg3 ? fmtB(r.avg3) : '-'}</td>
-    </tr>`;
-  }).join('');
+  const renderRows = (bqMap) => {
+    body.innerHTML = rows.map(r => {
+      const saleCol = isAdmin ? `<td style="font-size:12px">${r.sale||'-'}<br><span style="color:var(--muted);font-size:11px">${r.saleCode}</span></td>` : '';
+      const prods = bqMap ? (bqMap[r.code] || []) : null;
+      let prodHtml = '';
+      if (prods === null) {
+        prodHtml = `<div style="margin-top:5px;font-size:11px;color:var(--muted)">⏳ กำลังโหลดสินค้า...</div>`;
+      } else if (prods.length === 0) {
+        prodHtml = `<div style="margin-top:5px;font-size:11px;color:var(--muted);font-style:italic">ไม่พบประวัติสินค้า 3 เดือน</div>`;
+      } else {
+        const top = prods.slice(0, 5);
+        prodHtml = `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">` +
+          top.map((p, i) => {
+            const c = i === 0 ? '#c9a84c' : i === 1 ? '#8a98b8' : i === 2 ? '#b87333' : 'var(--muted)';
+            return `<span style="font-size:10.5px;background:rgba(0,0,0,.06);border-radius:20px;padding:2px 8px;color:${c};font-weight:${i<3?'700':'400'}">${p.prod}</span>`;
+          }).join('') +
+          (prods.length > 5 ? `<span style="font-size:10.5px;color:var(--muted);padding:2px 4px">+${prods.length-5}</span>` : '') +
+          `</div>`;
+      }
+      return `<tr>
+        <td style="font-family:monospace;font-size:12px;font-weight:600">${r.code}</td>
+        <td><div style="font-weight:600">${r.name}</div>${prodHtml}</td>
+        ${saleCol}
+        <td><span class="badge" style="font-size:11px;color:#000;background:${{จันทร์:'#FFD700',อังคาร:'#FF9EC4',พุธ:'#5BC85B',พฤหัสบดี:'#FFA500',ศุกร์:'#5BA3E0',เสาร์:'#C97FE0'}[r.routeDay]||'#ccc'}">${r.routeDay||'-'}</span></td>
+        <td class="num" style="color:${r.jun >= 1500 ? 'var(--success)' : 'var(--danger)'};font-weight:700">${r.jun ? fmtB(r.jun) : '0'}</td>
+        <td class="num" style="color:var(--gold);font-weight:600">${r.avg3 ? fmtB(r.avg3) : '-'}</td>
+      </tr>`;
+    }).join('');
+  };
+
+  // แสดงก่อนด้วย loading state แล้ว load BQ
+  if (_zeroBQCache) {
+    renderRows(_zeroBQCache);
+  } else {
+    renderRows(null); // แสดง loading
+    _loadZeroBQHistory().then(bqMap => {
+      _zeroBQCache = bqMap;
+      renderRows(bqMap);
+    }).catch(() => {
+      _zeroBQCache = {};
+      renderRows({});
+    });
+  }
 }
 
 
