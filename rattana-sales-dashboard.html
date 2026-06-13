@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Sales Dashboard v3.23</title>
+<title>Rattana Sales Dashboard v3.24</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="bq_store.js"></script>
@@ -338,6 +338,7 @@ header{position:relative}
     <button class="tab-btn" onclick="switchTab('zero',this);closeSidebar()">🏪 ร้าน &lt;2,500 ฿</button>
     <button class="tab-btn" onclick="switchTab('suggestion',this);sgInit();closeSidebar()">💡 สินค้า Suggestion</button>
     <button class="tab-btn" id="btnBpSales" onclick="switchTab('bpsales',this);bpInit();closeSidebar()">🛒 สินค้าที่ขาย</button>
+    <button class="tab-btn" id="btnCst" onclick="switchTab('cst',this);cstInit();closeSidebar()">🏪 ร้านค้าของฉัน</button>
   </div>
   <div class="sidebar-footer">
     <button class="tab-btn" onclick="logout();closeSidebar()" style="color:rgba(255,100,100,.8)">🚪 ออกจากระบบ</button>
@@ -350,7 +351,7 @@ header{position:relative}
   <div class="logo-text">Rattana <span>Sales Dashboard</span></div>
   <button class="icon-btn" onclick="refreshData()" id="btnRefresh" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" id="btnDark" title="Dark mode">🌙</button>
-  <span class="version-tag">v3.23 · 2026-06-13</span>
+  <span class="version-tag">v3.24 · 2026-06-13</span>
 </header>
 
 <!-- App Body -->
@@ -511,6 +512,19 @@ header{position:relative}
 
 
 <!-- ─────── TAB: สินค้าที่เคยขาย ─────── -->
+<!-- ─────── TAB: ร้านค้าของฉัน ─────── -->
+<div class="tab-panel" id="tab-cst">
+<div class="content">
+  <div id="cstContent">
+    <div class="tp-empty">
+      <div style="font-size:48px;margin-bottom:12px">🏪</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">ร้านค้าของฉัน</div>
+      <div style="font-size:13px">กำลังโหลด...</div>
+    </div>
+  </div>
+</div>
+</div>
+
 <button id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
 
 </div><!-- /.main-content -->
@@ -2186,6 +2200,91 @@ function bpFilterSearch(q){
 
 
 </script>
+
+// ─── ร้านค้าของฉัน (cst) ───
+let _cstInited=false;
+function cstInit(){
+  if(_cstInited)return;
+  _cstInited=true;
+  cstRender();
+}
+function cstRender(){
+  const el=document.getElementById('cstContent');
+  if(!el)return;
+  const myCode=(currentUser&&currentUser.saleCode)||'';
+  const myName=(currentUser&&currentUser.name)||myCode;
+  const myStores=(window.BP2_SELLERS&&myCode)?window.BP2_SELLERS[myCode]:null;
+  const custs=(window.CUSTS2||[]).filter(c=>c[5]===myCode);
+  if(!myStores&&!custs.length){
+    el.innerHTML=`<div class="tp-empty"><div style="font-size:48px;margin-bottom:12px">🏪</div><div style="font-size:16px;font-weight:700;margin-bottom:6px">ไม่พบร้านค้า</div><div style="font-size:13px;color:var(--muted)">รหัสเซลล์: ${myCode||'(ไม่ทราบ)'}</div></div>`;
+    return;
+  }
+  // merge store list from CUSTS2 + BP2_SELLERS
+  const storeMap={};
+  custs.forEach(c=>{
+    const code=c[1];
+    if(!storeMap[code])storeMap[code]={code,name:c[0],sub:c[2],type:c[3],chan:c[6],prods:{}};
+  });
+  if(myStores){
+    Object.entries(myStores).forEach(([code,s])=>{
+      if(!storeMap[code])storeMap[code]={code,name:s.n,sub:'',type:'',chan:'',prods:{}};
+      storeMap[code].prods=s.p||{};
+    });
+  }
+  const stores=Object.values(storeMap).sort((a,b)=>a.name.localeCompare(b.name,'th'));
+  const totalSkus=stores.reduce((s,st)=>s+Object.keys(st.prods).length,0);
+  let html=`
+  <div class="stat-grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:14px">
+    <div class="stat-card"><div class="s-label">ร้านค้าของฉัน</div><div class="s-value">${stores.length}</div><div class="s-sub">${myName}</div></div>
+    <div class="stat-card"><div class="s-label">SKU ที่เคยซื้อ</div><div class="s-value">${totalSkus.toLocaleString()}</div><div class="s-sub">รวมทุกร้าน</div></div>
+  </div>
+  <input class="finput" type="text" id="cstSearch" placeholder="🔍 ค้นหาร้านค้า / รหัส / สินค้า..." style="width:100%;box-sizing:border-box;margin-bottom:12px" oninput="cstFilter(this.value)">
+  <div id="cstList">`;
+  stores.forEach(st=>{
+    const prodEntries=Object.entries(st.prods).sort((a,b)=>b[1]-a[1]);
+    const avgTotal=(prodEntries.reduce((s,[,v])=>s+v,0)/3);
+    const prodStr=prodEntries.map(([p])=>p.toLowerCase()).join('|');
+    html+=`<div class="cst-card" data-code="${st.code}" data-name="${st.name.toLowerCase()}" data-prods="${prodStr}" style="border-top:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;gap:8px" onclick="cstToggle('${st.code}')">
+        <div style="min-width:0">
+          <div style="font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(st.name)}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap">
+            <span>${st.code}</span>${st.sub?`<span>📍 ${escHtml(st.sub)}</span>`:''}${st.type?`<span>🏷 ${escHtml(st.type)}</span>`:''}${st.chan?`<span>📦 ${escHtml(st.chan)}</span>`:''}
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-weight:700;color:var(--gold);font-size:13px">${prodEntries.length} SKU</div>
+          <div style="font-size:12px;color:var(--muted)">${avgTotal.toFixed(1)} ลัง/เดือน</div>
+          <span id="cstArrow_${st.code}" style="font-size:16px;transition:.2s;color:var(--muted)">▼</span>
+        </div>
+      </div>
+      <div id="cstDet_${st.code}" style="display:none;padding:0 16px 12px">
+        ${prodEntries.length?`<table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:4px 0;color:var(--muted);font-weight:600">สินค้า</th><th style="text-align:right;padding:4px 0;color:var(--muted);font-weight:600">AVG/เดือน</th><th style="text-align:right;padding:4px 0;color:var(--muted);font-weight:600">รวม 3 เดือน</th></tr></thead>
+          <tbody>${prodEntries.map(([p,v],i)=>`<tr style="border-bottom:1px solid var(--border);background:${i%2?'transparent':'rgba(0,0,0,.02)'}"><td style="padding:5px 0">${escHtml(p)}</td><td style="text-align:right;font-weight:600">${(v/3).toFixed(2)} ลัง</td><td style="text-align:right;color:var(--muted)">${v}</td></tr>`).join('')}</tbody>
+        </table>`:'<div style="color:var(--muted);font-size:13px">ไม่มีข้อมูลสินค้า</div>'}
+      </div>
+    </div>`;
+  });
+  html+=`</div>`;
+  el.innerHTML=html;
+}
+function cstToggle(code){
+  const det=document.getElementById('cstDet_'+code);
+  const arr=document.getElementById('cstArrow_'+code);
+  if(!det)return;
+  const open=det.style.display==='none';
+  det.style.display=open?'block':'none';
+  if(arr)arr.style.transform=open?'rotate(180deg)':'';
+}
+function cstFilter(q){
+  q=(q||'').toLowerCase().trim();
+  document.querySelectorAll('.cst-card').forEach(card=>{
+    if(!q){card.style.display='';return;}
+    const match=card.dataset.code.includes(q)||card.dataset.name.includes(q)||card.dataset.prods.includes(q);
+    card.style.display=match?'':'none';
+  });
+}
 
 </body>
 </html>
