@@ -337,7 +337,6 @@ header{position:relative}
     <button class="tab-btn" onclick="switchTab('unsold',this);closeSidebar()">📦 SKU ไม่ขาย</button>
     <button class="tab-btn" onclick="switchTab('zero',this);closeSidebar()">🏪 ร้าน &lt;2,500 ฿</button>
     <button class="tab-btn" onclick="switchTab('suggestion',this);sgInit();closeSidebar()">💡 สินค้า Suggestion</button>
-    <button class="tab-btn" onclick="switchTab('bqsold',this);bqSoldInit();closeSidebar()">📦 สินค้าที่เคยขาย</button>
     <button class="tab-btn" id="btnBpSales" onclick="switchTab('bpsales',this);bpInit();closeSidebar()" style="display:none">🛒 สินค้าที่ขาย</button>
     <button class="tab-btn" id="btnBpHist" onclick="switchTab('bphist',this);bphistInit();closeSidebar()" style="display:none">📋 สินค้าที่เคยขาย</button>
   </div>
@@ -514,16 +513,6 @@ header{position:relative}
 
 <!-- ─────── TAB: ร้านค้า ─────── -->
 
-<!-- ─────── TAB: สินค้าที่เคยขาย (BQ) ─────── -->
-<div class="tab-panel" id="tab-bqsold">
-<div class="content">
-  <div id="bqSoldContent">
-    <div class="tp-empty">
-      <div style="font-size:36px;margin-bottom:10px">⏳</div>
-      <div style="font-size:14px;font-weight:600">กำลังโหลด...</div>
-    </div>
-  </div>
-</div>
 </div>
 
 <!-- ─────── TAB: สินค้าที่เคยขาย ─────── -->
@@ -2277,128 +2266,6 @@ function bpFilterSearch(q){
     if(!q){card.style.display='';return;}
     const match=card.dataset.bp.includes(q)||card.dataset.name.includes(q)||card.dataset.prods.includes(q);
     card.style.display=match?'':'none';
-  });
-}
-
-// ─── สินค้าที่เคยขาย (BQ) ───
-let _bqSoldCache = null;
-
-function bqSoldInit() {
-  const el = document.getElementById('bqSoldContent');
-  if (!el) return;
-  if (_bqSoldCache) { _bqSoldRender(_bqSoldCache); return; }
-  el.innerHTML = `<div class="tp-empty"><div style="font-size:36px;margin-bottom:10px">⏳</div><div style="font-size:14px;font-weight:600">กำลังโหลดจาก BQ...</div></div>`;
-  _bqSoldLoad().then(d => { _bqSoldCache = d; _bqSoldRender(d); })
-    .catch(() => { el.innerHTML = `<div class="tp-empty">❌ โหลดข้อมูลไม่สำเร็จ</div>`; });
-}
-
-async function _bqSoldLoad() {
-  const sw = getSaleWhere();
-  // หา max date จริงใน BQ
-  const maxRows = await gviz(`SELECT max(A) WHERE J>0 ${sw}`);
-  let refDate = new Date();
-  if (maxRows && maxRows[0] && maxRows[0][0]) {
-    const d = new Date(maxRows[0][0]);
-    if (!isNaN(d)) refDate = d;
-  }
-  // date filter 3 เดือน (GViz month() = 0-indexed)
-  const months = [];
-  for (let i = 0; i < 3; i++) {
-    let m = refDate.getMonth() - i, y = refDate.getFullYear();
-    if (m < 0) { m += 12; y--; }
-    months.push(`(year(A)=${y} AND month(A)=${m})`);
-  }
-  const dateFilter = months.join(' OR ');
-  const MONTH_TH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-  window._bqSoldMonthLabel = `${MONTH_TH[refDate.getMonth()]} – ${MONTH_TH[(refDate.getMonth()-2+12)%12]} ${refDate.getFullYear()+543}`;
-
-  // Query: Customer_Code(C), Customer_Name(D), Product_Name(G), sum Sales_CS(J)
-  const rows = await gviz(
-    `SELECT C, D, G, sum(J) WHERE J>0 ${sw} AND (${dateFilter}) AND C!='' AND G!='' GROUP BY C, D, G ORDER BY C, sum(J) DESC`
-  );
-
-  // build: [ { code, name, prods:[{prod,cs}] } ]
-  const storeMap = {};
-  rows.forEach(r => {
-    const code = r[0] ? String(r[0]).trim() : '';
-    const name = r[1] ? String(r[1]).trim() : '';
-    const prod = r[2] ? String(r[2]).trim() : '';
-    const cs   = parseFloat(r[3]) || 0;
-    if (!code || !prod || cs <= 0) return;
-    if (!storeMap[code]) storeMap[code] = { code, name, prods: [] };
-    storeMap[code].prods.push({ prod, cs });
-  });
-  return Object.values(storeMap).sort((a, b) => a.name.localeCompare(b.name, 'th'));
-}
-
-function _bqSoldRender(stores) {
-  const el = document.getElementById('bqSoldContent');
-  if (!el) return;
-  const myName = (currentUser && (currentUser.name || currentUser.saleNoRoo)) || '';
-  const monthLabel = window._bqSoldMonthLabel || '3 เดือน';
-
-  if (!stores.length) {
-    el.innerHTML = `<div class="tp-empty"><div style="font-size:48px;margin-bottom:12px">📦</div><div style="font-size:16px;font-weight:700">ไม่พบข้อมูลใน BQ</div><div style="font-size:13px;color:var(--muted)">${monthLabel}</div></div>`;
-    return;
-  }
-
-  const totalStores = stores.length;
-  const totalSKU   = stores.reduce((s, x) => s + x.prods.length, 0);
-  const totalCS    = stores.reduce((s, x) => s + x.prods.reduce((a, p) => a + p.cs, 0), 0);
-
-  let html = `<div class="fade-in">
-  <div class="tp-stat-grid" style="margin-bottom:14px">
-    <div class="tp-stat-card"><div class="s-label">ร้านค้า</div><div class="s-value">${totalStores}</div><div class="s-sub">${myName}</div></div>
-    <div class="tp-stat-card" style="border-top-color:var(--gold)"><div class="s-label">SKU ที่ขาย</div><div class="s-value" style="color:var(--navy)">${totalSKU.toLocaleString()}</div><div class="s-sub">รายการสินค้า</div></div>
-    <div class="tp-stat-card" style="border-top-color:#2ecc71"><div class="s-label">CS รวม</div><div class="s-value" style="color:#1e8449">${totalCS.toLocaleString('th-TH',{maximumFractionDigits:0})}</div><div class="s-sub">ลัง · ${monthLabel}</div></div>
-  </div>
-  <input class="finput" type="text" id="bqSoldSearch" placeholder="🔍 ค้นหารหัส / ชื่อร้าน / สินค้า..." style="width:100%;box-sizing:border-box;margin-bottom:14px" oninput="bqSoldFilter(this.value)">
-  <div id="bqSoldList">`;
-
-  stores.forEach(store => {
-    const storeCS = store.prods.reduce((a, p) => a + p.cs, 0);
-    const avgMo   = (storeCS / 3).toLocaleString('th-TH', { maximumFractionDigits: 1 });
-    html += `<div class="card bqs-store-card" data-code="${store.code.toLowerCase()}" data-name="${store.name.toLowerCase()}" data-prods="${store.prods.map(p=>p.prod.toLowerCase()).join('|')}" style="margin-bottom:12px;padding:14px 16px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-        <div>
-          <div style="font-weight:700;font-size:14px">${store.name}</div>
-          <div style="font-size:11px;color:var(--muted);font-family:monospace;margin-top:2px">${store.code}</div>
-        </div>
-        <div style="text-align:right;flex-shrink:0">
-          <div style="font-size:13px;font-weight:700;color:var(--navy)">${avgMo} ลัง/เดือน</div>
-          <div style="font-size:11px;color:var(--muted)">${store.prods.length} SKU · รวม ${storeCS.toLocaleString('th-TH',{maximumFractionDigits:0})} ลัง</div>
-        </div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:5px">`;
-
-    store.prods.forEach((p, i) => {
-      const pct = storeCS > 0 ? Math.round(p.cs / storeCS * 100) : 0;
-      const avgP = (p.cs / 3).toLocaleString('th-TH', { maximumFractionDigits: 1 });
-      const rankColor = i===0?'#c9a84c':i===1?'#8a98b8':i===2?'#b87333':'var(--border)';
-      html += `<div style="display:flex;align-items:center;gap:8px;font-size:12.5px">
-        <div style="width:20px;text-align:center;font-weight:700;color:${rankColor};flex-shrink:0">${i+1}</div>
-        <div style="flex:1;min-width:0">
-          <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">${p.prod}</div>
-          <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden">
-            <div style="height:100%;width:${Math.min(100,pct)}%;background:${i<3?'var(--gold)':'var(--info)'};border-radius:2px"></div>
-          </div>
-        </div>
-        <div style="text-align:right;flex-shrink:0;min-width:80px;font-weight:600;color:var(--navy)">${avgP} ลัง/เดือน</div>
-      </div>`;
-    });
-
-    html += `</div></div>`;
-  });
-
-  html += `</div></div>`;
-  el.innerHTML = html;
-}
-
-function bqSoldFilter(q) {
-  q = q.toLowerCase().trim();
-  document.querySelectorAll('#bqSoldList .bqs-store-card').forEach(card => {
-    const match = !q || card.dataset.code.includes(q) || card.dataset.name.includes(q) || card.dataset.prods.includes(q);
-    card.style.display = match ? '' : 'none';
   });
 }
 
