@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Sales Dashboard v3.22</title>
+<title>Rattana Sales Dashboard v3.23</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="bq_store.js"></script>
@@ -352,7 +352,7 @@ header{position:relative}
   <div class="logo-text">Rattana <span>Sales Dashboard</span></div>
   <button class="icon-btn" onclick="refreshData()" id="btnRefresh" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" id="btnDark" title="Dark mode">🌙</button>
-  <span class="version-tag">v3.22 · 2026-06-13</span>
+  <span class="version-tag">v3.23 · 2026-06-13</span>
 </header>
 
 <!-- App Body -->
@@ -2228,13 +2228,48 @@ async function _storesLoad() {
     if (!sc) return [];
     where = `WHERE C = '${sc.replace(/'/g, "\\'")}'`;
   }
-  const rows = await gvizReport(`SELECT A, B, G, H ${where} ORDER BY G, B`);
-  return rows.map(r => ({
-    code:      r[0] != null ? String(r[0]).trim() : '-',
-    name:      (r[1] || '-').trim(),
-    routeDay:  (r[2] || '').trim(),
-    routeName: (r[3] || '').trim(),
-  }));
+
+  // โหลดรายชื่อร้านค้าจาก Report sheet และยอดขายเดือนล่าสุดจาก BP sheet พร้อมกัน
+  const sw = getSaleWhere(); // AND AF='...' or ''
+  const [reportRows, maxRows] = await Promise.all([
+    gvizReport(`SELECT A, B, G, H ${where} ORDER BY G, B`),
+    gviz(`SELECT max(A) WHERE N>0 ${sw}`),
+  ]);
+
+  // หาเดือนล่าสุดที่มีข้อมูลใน BQ
+  let refDate = new Date();
+  if (maxRows && maxRows[0] && maxRows[0][0]) {
+    const d = new Date(maxRows[0][0]);
+    if (!isNaN(d)) refDate = d;
+  }
+  const curY = refDate.getFullYear();
+  const curM = refDate.getMonth(); // 0-indexed (GViz month() = 0-indexed)
+
+  // ดึงยอดขายเดือนล่าสุด: sum(AD)=EXVat+CN*2, จัดกลุ่มตามรหัสและชื่อร้าน
+  const salesRows = await gviz(
+    `SELECT C, D, sum(AD) WHERE AD!=0 ${sw} AND year(A)=${curY} AND month(A)=${curM} AND C!='' GROUP BY C, D`
+  );
+
+  // map by bpCode และ by ชื่อร้าน (fallback)
+  const salesByCode = {}, salesByName = {};
+  salesRows.forEach(r => {
+    const code = r[0] ? String(r[0]).trim() : '';
+    const name = r[1] ? String(r[1]).trim().toLowerCase() : '';
+    const baht = parseFloat(r[2]) || 0;
+    if (code) salesByCode[code] = (salesByCode[code] || 0) + baht;
+    if (name) salesByName[name] = (salesByName[name] || 0) + baht;
+  });
+
+  // เดือนที่ใช้แสดงผล
+  const MONTH_LABEL = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  window._storesSalesMonth = `${MONTH_LABEL[curM]} ${curY + 543}`;
+
+  return reportRows.map(r => {
+    const code = r[0] != null ? String(r[0]).trim() : '-';
+    const name = (r[1] || '-').trim();
+    const sales = salesByCode[code] ?? salesByName[name.toLowerCase()] ?? 0;
+    return { code, name, routeDay: (r[2]||'').trim(), routeName: (r[3]||'').trim(), sales };
+  });
 }
 
 const DAY_COLORS_ST = { จันทร์:'#FFD700', อังคาร:'#FF9EC4', พุธ:'#5BC85B', พฤหัสบดี:'#FFA500', ศุกร์:'#5BA3E0', เสาร์:'#C97FE0' };
@@ -2251,6 +2286,8 @@ function _storesRender(stores) {
 
   // สถิติ
   const totalStores = stores.length;
+  const totalSales = stores.reduce((s, x) => s + x.sales, 0);
+  const salesMonth = window._storesSalesMonth || '';
   const days = [...new Set(stores.map(s => s.routeDay).filter(Boolean))];
   const routes = [...new Set(stores.map(s => s.routeName).filter(Boolean))];
 
@@ -2258,7 +2295,7 @@ function _storesRender(stores) {
   <div class="tp-stat-grid" style="margin-bottom:14px">
     <div class="tp-stat-card"><div class="s-label">ร้านค้าทั้งหมด</div><div class="s-value">${totalStores}</div><div class="s-sub">${myName}</div></div>
     <div class="tp-stat-card" style="border-top-color:var(--gold)"><div class="s-label">วันจด</div><div class="s-value" style="color:var(--navy)">${days.length}</div><div class="s-sub">วัน</div></div>
-    <div class="tp-stat-card" style="border-top-color:#2ecc71"><div class="s-label">สาย</div><div class="s-value" style="color:#1e8449">${routes.length}</div><div class="s-sub">สายจด</div></div>
+    <div class="tp-stat-card" style="border-top-color:#2ecc71"><div class="s-label">ยอดขาย ${salesMonth}</div><div class="s-value" style="color:#1e8449;font-size:18px">${totalSales.toLocaleString('th-TH',{maximumFractionDigits:0})}</div><div class="s-sub">฿ (EXVat+CN×2)</div></div>
   </div>
   <input class="finput" type="text" id="storesSearch" placeholder="🔍 ค้นหารหัส / ชื่อร้าน / วันจด / สาย..." style="width:100%;box-sizing:border-box;margin-bottom:14px" oninput="storesFilter(this.value)">
   <div id="storesList">`;
@@ -2290,16 +2327,21 @@ function _storesRender(stores) {
             <tr style="background:var(--bg);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px">
               <th style="padding:7px 16px;text-align:left;font-weight:600">รหัสบีพลัส</th>
               <th style="padding:7px 8px;text-align:left;font-weight:600">ชื่อร้านค้า</th>
-              <th style="padding:7px 16px;text-align:left;font-weight:600">สายจด</th>
+              <th style="padding:7px 8px;text-align:left;font-weight:600">สายจด</th>
+              <th style="padding:7px 16px;text-align:right;font-weight:600">ยอดขาย ${salesMonth}</th>
             </tr>
           </thead>
           <tbody>`;
       list.forEach((s, i) => {
         const bg = i % 2 === 0 ? '' : 'background:rgba(0,0,0,.02)';
+        const salesTxt = s.sales > 0
+          ? `<span style="font-weight:600;color:var(--navy)">${s.sales.toLocaleString('th-TH',{maximumFractionDigits:0})}</span>`
+          : `<span style="color:var(--muted);font-size:11px">-</span>`;
         html += `<tr class="st-store-row" data-code="${s.code.toLowerCase()}" data-name="${s.name.toLowerCase()}" data-day="${day.toLowerCase()}" data-route="${s.routeName.toLowerCase()}" style="${bg}">
           <td style="padding:8px 16px;font-family:monospace;color:var(--muted);white-space:nowrap">${s.code}</td>
           <td style="padding:8px 8px;font-weight:600">${s.name}</td>
-          <td style="padding:8px 16px;font-size:12px;color:var(--muted)">${s.routeName || '-'}</td>
+          <td style="padding:8px 8px;font-size:12px;color:var(--muted)">${s.routeName || '-'}</td>
+          <td style="padding:8px 16px;text-align:right;white-space:nowrap">${salesTxt}</td>
         </tr>`;
       });
       html += `</tbody></table></div>`;
