@@ -337,6 +337,7 @@ header{position:relative}
     <button class="tab-btn" onclick="switchTab('unsold',this);closeSidebar()">📦 SKU ไม่ขาย</button>
     <button class="tab-btn" onclick="switchTab('zero',this);closeSidebar()">🏪 ร้าน &lt;2,500 ฿</button>
     <button class="tab-btn" onclick="switchTab('suggestion',this);sgInit();closeSidebar()">💡 สินค้า Suggestion</button>
+    <button class="tab-btn" onclick="switchTab('history',this);histInit();closeSidebar()">📋 ประวัติการซื้อ 3 เดือน</button>
     <button class="tab-btn" id="btnBpSales" onclick="switchTab('bpsales',this);bpInit();closeSidebar()" style="display:none">🛒 สินค้าที่ขาย</button>
   </div>
   <div class="sidebar-footer">
@@ -514,6 +515,19 @@ header{position:relative}
 
 </div>
 
+</div>
+
+<!-- ─────── TAB: ประวัติการซื้อสินค้าย้อนหลัง 3 เดือน ─────── -->
+<div class="tab-panel" id="tab-history">
+<div class="content">
+  <div id="histContent">
+    <div class="tp-empty">
+      <div style="font-size:48px;margin-bottom:12px">📋</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">ประวัติการซื้อ 3 เดือน</div>
+      <div style="font-size:13px">กำลังโหลด...</div>
+    </div>
+  </div>
+</div>
 </div>
 
 <button id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
@@ -2254,6 +2268,159 @@ function bpFilterSearch(q){
     if(!q){card.style.display='';return;}
     const match=card.dataset.bp.includes(q)||card.dataset.name.includes(q)||card.dataset.prods.includes(q);
     card.style.display=match?'':'none';
+  });
+}
+
+// ─── ประวัติการซื้อสินค้าย้อนหลัง 3 เดือน ───
+let _histCache = null;
+
+function histInit() {
+  const el = document.getElementById('histContent');
+  if (!el) return;
+  if (_histCache) { _histRender(_histCache); return; }
+  el.innerHTML = `<div class="tp-empty"><div style="font-size:40px;margin-bottom:12px">⏳</div><div style="font-size:15px;font-weight:700">กำลังโหลด...</div></div>`;
+  _histLoad().then(d => { _histCache = d; _histRender(d); })
+    .catch(e => { el.innerHTML = `<div class="tp-empty"><div style="font-size:48px;margin-bottom:12px">⚠️</div><div style="font-size:15px;font-weight:700">โหลดข้อมูลไม่สำเร็จ</div><div style="font-size:13px;color:var(--muted)">${e.message}</div></div>`; });
+}
+
+async function _histLoad() {
+  const sw = getSaleWhere();
+  // หา max date ใน sheet
+  const maxRows = await gviz(`SELECT max(A) WHERE N>0 ${sw}`);
+  let refDate = new Date();
+  if (maxRows && maxRows[0] && maxRows[0][0]) {
+    const d = gDate(maxRows[0][0]);
+    if (d) refDate = d;
+  }
+  // สร้าง filter 3 เดือนล่าสุด
+  const months = [];
+  for (let i = 0; i < 3; i++) {
+    let m = refDate.getMonth() - i, y = refDate.getFullYear();
+    if (m < 0) { m += 12; y--; }
+    months.push({ y, m, label: `${MONTH_TH[m]} ${y + 543}` });
+  }
+  const dateFilter = months.map(({ y, m }) => `(year(A)=${y} AND month(A)=${m})`).join(' OR ');
+  window._histMonths = months.reverse(); // เรียงเก่า→ใหม่
+
+  // Query: code, name, product, year, month, EXVat, CS
+  const rows = await gviz(
+    `SELECT C, D, G, year(A), month(A), sum(N), sum(J) WHERE N>0 ${sw} AND (${dateFilter}) AND C!='' AND G!='' GROUP BY C, D, G, year(A), month(A) ORDER BY C, G, year(A), month(A)`
+  );
+
+  // Build: storeMap[code] = { name, prods: { prodName: { mo_key: {exvat, cs} } } }
+  const storeMap = {};
+  rows.forEach(r => {
+    const code = r[0] != null ? String(r[0]).trim() : '';
+    const name = r[1] ? String(r[1]).trim() : '';
+    const prod = r[2] ? String(r[2]).trim() : '';
+    const yr   = r[3]; const mo = r[4];
+    const exv  = r[5] || 0;
+    const cs   = r[6] || 0;
+    if (!code || !prod) return;
+    if (!storeMap[code]) storeMap[code] = { name, prods: {} };
+    if (!storeMap[code].prods[prod]) storeMap[code].prods[prod] = {};
+    storeMap[code].prods[prod][`${yr}_${mo}`] = { exv, cs };
+  });
+
+  return Object.entries(storeMap)
+    .map(([code, d]) => ({ code, name: d.name, prods: d.prods }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'th'));
+}
+
+function _histRender(stores) {
+  const el = document.getElementById('histContent');
+  if (!el) return;
+  const months = window._histMonths || [];
+
+  if (!stores.length) {
+    el.innerHTML = `<div class="tp-empty"><div style="font-size:48px;margin-bottom:12px">📋</div><div style="font-size:16px;font-weight:700">ไม่พบข้อมูลใน 3 เดือนนี้</div></div>`;
+    return;
+  }
+
+  const totalStores = stores.length;
+  const totalSKU = stores.reduce((s, x) => s + Object.keys(x.prods).length, 0);
+  const totalExv = stores.reduce((s, x) =>
+    s + Object.values(x.prods).reduce((a, mv) =>
+      a + Object.values(mv).reduce((b, v) => b + v.exv, 0), 0), 0);
+  const moLabels = months.map(m => m.label);
+  const moKeys   = months.map(m => `${m.y}_${m.m}`);
+
+  let html = `<div class="fade-in">
+  <div class="tp-stat-grid" style="margin-bottom:14px">
+    <div class="tp-stat-card"><div class="s-label">ร้านค้า</div><div class="s-value">${fmt(totalStores)}</div><div class="s-sub">${moLabels.join(' – ')}</div></div>
+    <div class="tp-stat-card" style="border-top-color:var(--gold)"><div class="s-label">SKU รวม</div><div class="s-value" style="color:var(--navy)">${fmt(totalSKU)}</div><div class="s-sub">รายการสินค้า</div></div>
+    <div class="tp-stat-card" style="border-top-color:#2ecc71"><div class="s-label">EXVat รวม</div><div class="s-value" style="color:#1e8449">${fmtBaht(totalExv)}</div><div class="s-sub">3 เดือน</div></div>
+  </div>
+  <input class="finput" type="text" id="histSearch" placeholder="🔍 ค้นหาร้าน / รหัส / สินค้า..." style="width:100%;box-sizing:border-box;margin-bottom:14px" oninput="_histFilter(this.value)">
+  <div id="histList">`;
+
+  stores.forEach(store => {
+    const prodList = Object.entries(store.prods).sort((a, b) => {
+      const totA = Object.values(a[1]).reduce((s, v) => s + v.exv, 0);
+      const totB = Object.values(b[1]).reduce((s, v) => s + v.exv, 0);
+      return totB - totA;
+    });
+    const storeExv = prodList.reduce((s, [, mv]) => s + Object.values(mv).reduce((a, v) => a + v.exv, 0), 0);
+    const skuCount = prodList.length;
+
+    html += `<div class="card hist-store-card" data-code="${store.code.toLowerCase()}" data-name="${store.name.toLowerCase()}" data-prods="${prodList.map(([p])=>p.toLowerCase()).join('|')}" style="margin-bottom:12px">
+      <div class="card-head" style="cursor:pointer" onclick="_histToggle('${store.code}')">
+        <div style="flex:1;min-width:0">
+          <h3 style="margin:0;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(store.name)}</h3>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;font-family:monospace">${escHtml(store.code)}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          <span class="badge" style="background:rgba(201,168,76,.15);color:var(--gold);border:1px solid rgba(201,168,76,.3)">${fmtBaht(storeExv)}</span>
+          <span class="badge" style="background:rgba(0,0,0,.07);color:var(--navy)">${skuCount} SKU</span>
+          <span id="histArrow_${store.code}" style="font-size:14px;transition:.2s;color:var(--muted)">▼</span>
+        </div>
+      </div>
+      <div id="histDet_${store.code}" style="display:none;overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:360px">
+          <thead>
+            <tr style="background:var(--row-alt)">
+              <th style="padding:7px 12px;text-align:left;font-weight:600;color:var(--muted);font-size:11px;min-width:160px">สินค้า</th>
+              ${moLabels.map(l => `<th style="padding:7px 10px;text-align:right;font-weight:600;color:var(--muted);font-size:11px;white-space:nowrap">${l}</th>`).join('')}
+              <th style="padding:7px 12px;text-align:right;font-weight:700;color:var(--navy);font-size:11px">รวม</th>
+            </tr>
+          </thead>
+          <tbody>`;
+
+    prodList.forEach(([pname, mv], i) => {
+      const rowTotal = Object.values(mv).reduce((s, v) => s + v.exv, 0);
+      html += `<tr style="border-top:1px solid var(--border)${i % 2 !== 0 ? ';background:var(--row-alt)' : ''}">
+        <td style="padding:7px 12px">${escHtml(pname)}</td>
+        ${moKeys.map(k => {
+          const v = mv[k];
+          return `<td style="padding:7px 10px;text-align:right;color:${v ? 'var(--navy)' : 'var(--muted)'};font-weight:${v ? '600' : '400'}">${v ? fmtBaht(v.exv) : '—'}</td>`;
+        }).join('')}
+        <td style="padding:7px 12px;text-align:right;font-weight:700;color:var(--gold)">${fmtBaht(rowTotal)}</td>
+      </tr>`;
+    });
+
+    html += `</tbody></table></div></div>`;
+  });
+
+  html += `</div></div>`;
+  el.innerHTML = html;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function _histToggle(code) {
+  const det = document.getElementById('histDet_' + code);
+  const arr = document.getElementById('histArrow_' + code);
+  if (!det) return;
+  const open = det.style.display === 'none';
+  det.style.display = open ? 'block' : 'none';
+  if (arr) arr.textContent = open ? '▲' : '▼';
+}
+
+function _histFilter(q) {
+  q = (q || '').toLowerCase().trim();
+  document.querySelectorAll('.hist-store-card').forEach(card => {
+    if (!q) { card.style.display = ''; return; }
+    const match = card.dataset.code.includes(q) || card.dataset.name.includes(q) || card.dataset.prods.includes(q);
+    card.style.display = match ? '' : 'none';
   });
 }
 
