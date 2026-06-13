@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Sales Dashboard v3.20</title>
+<title>Rattana Sales Dashboard v3.19</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="bq_store.js"></script>
@@ -328,16 +328,16 @@ header{position:relative}
 <!-- Drawer Sidebar -->
 <nav class="sidebar-drawer" id="sidebarDrawer">
   <div class="sidebar-profile">
-    <div id="sidebarAvatar" style="display:none"></div>
+    <div class="sidebar-avatar" id="sidebarAvatar">?</div>
     <div class="sidebar-uname" id="sidebarName">-</div>
     <div class="sidebar-uemail" id="sidebarRole">-</div>
+    <button class="sidebar-close-btn" onclick="closeSidebar()">‹</button>
   </div>
   <div class="sidebar-nav">
     <button class="tab-btn active" onclick="switchTab('summary',this);closeSidebar()">📊 ยอดขายรวม</button>
     <button class="tab-btn" onclick="switchTab('unsold',this);closeSidebar()">📦 SKU ไม่ขาย</button>
     <button class="tab-btn" onclick="switchTab('zero',this);closeSidebar()">🏪 ร้าน &lt;2,500 ฿</button>
     <button class="tab-btn" onclick="switchTab('suggestion',this);sgInit();closeSidebar()">💡 สินค้า Suggestion</button>
-    <button class="tab-btn" onclick="switchTab('purchhist',this);purchhistInit();closeSidebar()">🛍️ ประวัติการซื้อสินค้า</button>
     <button class="tab-btn" id="btnBpSales" onclick="switchTab('bpsales',this);bpInit();closeSidebar()" style="display:none">🛒 สินค้าที่ขาย</button>
     <button class="tab-btn" id="btnBpHist" onclick="switchTab('bphist',this);bphistInit();closeSidebar()" style="display:none">📋 สินค้าที่เคยขาย</button>
   </div>
@@ -352,7 +352,7 @@ header{position:relative}
   <div class="logo-text">Rattana <span>Sales Dashboard</span></div>
   <button class="icon-btn" onclick="refreshData()" id="btnRefresh" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" id="btnDark" title="Dark mode">🌙</button>
-  <span class="version-tag">v3.20 · 2026-06-13</span>
+  <span class="version-tag">v3.19 · 2026-06-13</span>
 </header>
 
 <!-- App Body -->
@@ -511,19 +511,6 @@ header{position:relative}
 </div>
 </div>
 
-<!-- ─────── TAB: ประวัติการซื้อสินค้า ─────── -->
-<div class="tab-panel" id="tab-purchhist">
-<div class="content">
-  <div id="purchhistContent">
-    <div class="tp-empty">
-      <div style="font-size:48px;margin-bottom:12px">🛍️</div>
-      <div style="font-size:16px;font-weight:700;margin-bottom:6px">ประวัติการซื้อสินค้า</div>
-      <div style="font-size:13px">กำลังโหลด...</div>
-    </div>
-  </div>
-</div>
-</div>
-
 <!-- ─────── TAB: สินค้าที่เคยขาย ─────── -->
 <div class="tab-panel" id="tab-bphist">
 <div class="content">
@@ -673,7 +660,7 @@ function showApp() {
   // Header user chip (hidden now — info moved to sidebar)
   const nick = currentUser.nickname || currentUser.name.split(' ')[0] || currentUser.empId;
   // Sidebar profile
-  document.getElementById('sidebarAvatar').innerHTML = '🧑‍💼';
+  document.getElementById('sidebarAvatar').textContent = nick.charAt(0) || '?';
   document.getElementById('sidebarName').textContent = currentUser.name || currentUser.empId;
   document.getElementById('sidebarRole').textContent =
     `รหัส ${currentUser.empId} · Role ${currentUser.role}` + (currentUser.wh ? ` · ${currentUser.wh}` : '');
@@ -2207,125 +2194,6 @@ function bpFilterSearch(q){
     if(!q){card.style.display='';return;}
     const match=card.dataset.bp.includes(q)||card.dataset.name.includes(q)||card.dataset.prods.includes(q);
     card.style.display=match?'':'none';
-  });
-}
-
-// ─── ประวัติการซื้อสินค้า ───
-let _purchhistInited=false;
-function purchhistInit(){
-  const el=document.getElementById('purchhistContent');
-  if(!el)return;
-  bpLoad(()=>{_purchhistInited=true;purchhistRender();},el);
-}
-
-function purchhistRender(){
-  const el=document.getElementById('purchhistContent');
-  if(!el)return;
-  const myCode=(currentUser&&currentUser.saleCode)||'';
-  const myName=(currentUser&&(currentUser.name||currentUser.saleNoRoo))||'';
-  const myStores=myCode&&window.BP2_SELLERS?window.BP2_SELLERS[myCode]:null;
-
-  if(!myStores||!Object.keys(myStores).length){
-    el.innerHTML=`<div class="tp-empty"><div style="font-size:48px;margin-bottom:12px">🛍️</div><div style="font-size:16px;font-weight:700;margin-bottom:6px">ไม่พบข้อมูล</div><div style="font-size:13px;color:var(--muted)">รหัสเซลล์: ${myCode||'(ไม่ทราบ)'}</div></div>`;
-    return;
-  }
-
-  const custMap={};
-  (window.CUSTS2||[]).filter(c=>c[5]===myCode).forEach(c=>{
-    custMap[c[1]]={sub:c[2]||'(ไม่ระบุตำบล)',shopType:c[3]||''};
-  });
-
-  const storeList=Object.entries(myStores);
-  const totalStores=storeList.length;
-  const totalSKU=storeList.reduce((s,[,v])=>s+Object.keys(v.p).length,0);
-  const totalCS=storeList.reduce((s,[,v])=>s+Object.values(v.p).reduce((a,b)=>a+b,0),0);
-
-  let html=`<div class="fade-in">
-  <div class="tp-stat-grid" style="margin-bottom:14px">
-    <div class="tp-stat-card"><div class="s-label">ร้านค้าของฉัน</div><div class="s-value">${totalStores}</div><div class="s-sub">${myName||myCode}</div></div>
-    <div class="tp-stat-card" style="border-top-color:var(--gold)"><div class="s-label">SKU ที่ซื้อ (3 เดือน)</div><div class="s-value" style="color:var(--navy)">${totalSKU.toLocaleString()}</div><div class="s-sub">รายการสินค้า</div></div>
-    <div class="tp-stat-card" style="border-top-color:#2ecc71"><div class="s-label">เฉลี่ย/เดือน</div><div class="s-value" style="color:#1e8449">${(totalCS/3).toLocaleString(undefined,{maximumFractionDigits:0})}</div><div class="s-sub">ลัง (CS)</div></div>
-  </div>
-  <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin-bottom:14px">
-    <input class="finput" type="text" id="purchSearch" placeholder="🔍 ค้นหาร้านค้า / รหัส / สินค้า..." style="width:100%;box-sizing:border-box" oninput="purchhistFilter(this.value)">
-    <span style="font-size:12px;color:var(--muted);white-space:nowrap">ข้อมูลย้อนหลัง 3 เดือน</span>
-  </div>
-  <div id="purchhistList">`;
-
-  // จัดกลุ่มตามตำบล
-  const subMap={};
-  storeList.forEach(([bpCode,store])=>{
-    const info=custMap[bpCode]||{sub:'(ไม่ระบุตำบล)',shopType:''};
-    if(!subMap[info.sub])subMap[info.sub]=[];
-    subMap[info.sub].push({bpCode,store,shopType:info.shopType});
-  });
-
-  Object.entries(subMap).sort((a,b)=>a[0].localeCompare(b[0],'th')).forEach(([sub,stores])=>{
-    const subCS=stores.reduce((s,{store})=>s+Object.values(store.p).reduce((a,b)=>a+b,0),0);
-    html+=`<div class="card ph-sub-card" style="margin-bottom:16px">
-      <div class="card-head">
-        <h3>📍 ${sub}</h3>
-        <span class="badge" style="background:rgba(0,0,0,.07);color:var(--navy)">${stores.length} ร้าน · ${(subCS/3).toLocaleString(undefined,{maximumFractionDigits:0})} ลัง/เดือน</span>
-      </div>`;
-
-    stores.sort((a,b)=>a.store.n.localeCompare(b.store.n,'th')).forEach(({bpCode,store,shopType})=>{
-      const prods=Object.entries(store.p).sort((a,b)=>b[1]-a[1]);
-      const storeCS=Object.values(store.p).reduce((a,b)=>a+b,0);
-      html+=`<div class="ph-store-card" data-store="${store.n.toLowerCase()}" data-bp="${bpCode.toLowerCase()}" data-prods="${prods.map(([p])=>p.toLowerCase()).join('|')}" style="border-top:1px solid var(--border);padding:14px 16px">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-          <div>
-            <div style="font-weight:700;font-size:14px">${store.n}</div>
-            <div style="font-size:11px;color:var(--muted);margin-top:3px;display:flex;gap:8px;flex-wrap:wrap">
-              ${bpCode?`<span style="font-family:monospace">${bpCode}</span>`:''}
-              ${shopType?`<span>${shopType}</span>`:''}
-            </div>
-          </div>
-          <div style="text-align:right;flex-shrink:0">
-            <div style="font-size:13px;font-weight:700;color:var(--navy)">${(storeCS/3).toLocaleString(undefined,{maximumFractionDigits:1})} ลัง/เดือน</div>
-            <div style="font-size:11px;color:var(--muted)">${prods.length} SKU · 3 เดือนรวม ${storeCS.toLocaleString(undefined,{maximumFractionDigits:0})} ลัง</div>
-          </div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:5px">`;
-
-      prods.forEach(([pn,cs],i)=>{
-        const avgMo=(cs/3).toFixed(1);
-        const pct=storeCS>0?Math.round(cs/storeCS*100):0;
-        const bar=Math.min(100,pct);
-        const rankColor=i===0?'#c9a84c':i===1?'#8a98b8':i===2?'#b87333':'var(--border)';
-        html+=`<div style="display:flex;align-items:center;gap:8px;font-size:12.5px" class="ph-prod-row">
-          <div style="width:20px;text-align:center;font-weight:700;color:${rankColor};flex-shrink:0">${i+1}</div>
-          <div style="flex:1;min-width:0">
-            <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">${pn}</div>
-            <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden">
-              <div style="height:100%;width:${bar}%;background:${i<3?'var(--gold)':'var(--info)'};border-radius:2px"></div>
-            </div>
-          </div>
-          <div style="text-align:right;flex-shrink:0;min-width:70px">
-            <span style="font-weight:600;color:var(--navy)">${avgMo} ลัง/เดือน</span>
-          </div>
-        </div>`;
-      });
-
-      html+=`</div></div>`;
-    });
-
-    html+=`</div>`;
-  });
-
-  html+=`</div></div>`;
-  el.innerHTML=html;
-}
-
-function purchhistFilter(q){
-  q=q.toLowerCase().trim();
-  document.querySelectorAll('.ph-sub-card').forEach(card=>{
-    let anyVisible=false;
-    card.querySelectorAll('.ph-store-card').forEach(s=>{
-      const match=!q||s.dataset.store.includes(q)||s.dataset.bp.includes(q)||s.dataset.prods.includes(q);
-      s.style.display=match?'':'none';
-      if(match)anyVisible=true;
-    });
-    card.style.display=anyVisible?'':'none';
   });
 }
 
