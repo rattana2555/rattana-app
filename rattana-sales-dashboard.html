@@ -1046,11 +1046,13 @@ async function loadAllData() {
     // Populate filter dropdowns from actual data
     populateFilters();
 
-    // Unique bills — query แยกหลัง main load, fallback ถ้า fail
-    DATA.totalBills = DATA.monthly.reduce((s, r) => s + r.bills, 0);
-    gviz(`SELECT B, count(B) WHERE N>0 ${sw} GROUP BY B`)
-      .then(r => { DATA.totalBills = r ? r.length : DATA.totalBills; renderSummary(); })
-      .catch(() => {});
+    // Unique bills — รวมใน load เลย (query ใช้งานได้แล้ว)
+    try {
+      const rUniq = await gviz(`SELECT B, count(B) WHERE N>0 ${sw} GROUP BY B`);
+      DATA.totalBills = rUniq ? rUniq.length : DATA.monthly.reduce((s,r)=>s+r.bills,0);
+    } catch(e) {
+      DATA.totalBills = DATA.monthly.reduce((s,r)=>s+r.bills,0);
+    }
 
     // Render all tabs
     renderSummary();
@@ -1169,17 +1171,14 @@ async function renderSummary() {
     periodLabel = label;
     const sw = getSaleWhere();
     try {
-      const [rTot, rBU] = await Promise.all([
-        gviz(`SELECT sum(N), count(B) WHERE N>0 AND ${dateWhere} ${sw}`),
+      const [rTot, rBU, rUniq] = await Promise.all([
+        gviz(`SELECT sum(N) WHERE N>0 AND ${dateWhere} ${sw}`),
         gviz(`SELECT R, sum(N) WHERE N>0 AND R!='' AND ${dateWhere} ${sw} GROUP BY R ORDER BY sum(N) DESC`),
+        gviz(`SELECT B, count(B) WHERE N>0 AND ${dateWhere} ${sw} GROUP BY B`),
       ]);
       totalSales = (rTot && rTot[0]) ? (rTot[0][0] || 0) : 0;
-      totalBills = (rTot && rTot[0]) ? (rTot[0][1] || 0) : 0;
+      totalBills = rUniq ? rUniq.length : 0;
       buData = (rBU || []).map(r => ({ bu: r[0]||'', total: r[1]||0 })).filter(r => r.bu);
-      // Unique bills — non-blocking, อัปเดต card หลัง query เสร็จ
-      gviz(`SELECT B, count(B) WHERE N>0 AND ${dateWhere} ${sw} GROUP BY B`)
-        .then(r => { if (r) document.getElementById('kpiBills').textContent = fmt(r.length); })
-        .catch(() => {});
       buData = (rBU || []).map(r => ({ bu: r[0] || '', total: r[1] || 0 })).filter(r => r.bu);
     } catch(e) { totalSales = 0; totalBills = 0; buData = []; }
   }
