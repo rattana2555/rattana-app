@@ -598,7 +598,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.50';
+const APP_VERSION='1.51';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -3012,7 +3012,7 @@ async function syncJobsFromSheet(){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-Delivery — Apps Script Backend v3.5 (LockService for save_return) */
+const APPS_SCRIPT_CODE=`/* D-Delivery — Apps Script Backend v3.6 (Drive photo upload) */
 const SHEET_INPUT='บันทึกเที่ยวส่ง';
 const SHEET_CIN='บันทึกบิลและการชำระ';
 const SHEET_CN='CN';
@@ -3045,7 +3045,7 @@ const HEADERS_CIN=['เลขใบคุม','Doc_Date','Doc_No','Customer_Code
   'จำนวนพาเลท','จำนวนเงินต่อเลท','จำนวนเงินรวม','รับใบคุม'];
 
 function doGet(e){
-  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.0'}))
+  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.6'}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -3064,6 +3064,8 @@ function doPost(e){
       const items=Array.isArray(data.items)?data.items:[];
       const jobId=String(data.jobId||'');
       const docNo=String(data.docNo||'');
+      // v3.6: แปลง base64 photo → Drive URL (ทำครั้งเดียวต่อใบ)
+      const photoUrl=uploadToDrive_(data.photo||'','CN_'+jobId+'_'+docNo+'.jpg');
       // ★ ลบแถวเดิมของ (รหัสใบคุม, เลขที่บิล DS) ก่อน เพื่อ replace ทั้งหมด
       const sheetData=cnSh.getDataRange().getValues();
       for(let i=sheetData.length-1;i>=1;i--){
@@ -3100,7 +3102,7 @@ function doPost(e){
           data.errorFrom||'',                  // ผิดพลาดจาก
           data.note||'',                       // หมายเหตุการคืน
           total,                               // ยอดรวมทั้งใบ
-          data.photo||'',                      // ภาพคืน
+          photoUrl,                            // ภาพคืน (Drive URL)
           'รออนุมัติ',                          // สถานะคืน
           '',                                  // อนุมัติคืน
           '',                                  // ผู้อนุมัติ
@@ -3113,7 +3115,7 @@ function doPost(e){
       cnSh.getRange('D:D').setNumberFormat('@');
       cnSh.getRange('J:J').setNumberFormat('@');
       cnSh.getRange('M:M').setNumberFormat('@');
-      return ContentService.createTextOutput(JSON.stringify({ok:true,rows:items.length})).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({ok:true,rows:items.length,photoUrl})).setMimeType(ContentService.MimeType.JSON);
       } finally { lock.releaseLock(); }
     }
     const inSh=ensureSheet_(ss,SHEET_INPUT,HEADERS_INPUT);
@@ -3228,11 +3230,31 @@ function doPost(e){
       cinSh.getRange('C:C').setNumberFormat('@');
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.0'}))
+    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.6'}))
       .setMimeType(ContentService.MimeType.JSON);
   }catch(err){
     return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err)}))
       .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/* v3.6: อัปโหลด base64 image → Google Drive folder "D-Delivery Photos"
+   คืน shareable URL — ถ้า input ไม่ใช่ base64 (เช่น '' หรือ URL เดิม) คืน input เดิม */
+function uploadToDrive_(dataUrl, filename){
+  if(!dataUrl||!dataUrl.startsWith('data:')) return dataUrl||'';
+  try{
+    const match=dataUrl.match(/^data:(image\/\w+);base64,(.+)$/s);
+    if(!match) return '';
+    const mimeType=match[1];
+    const blob=Utilities.newBlob(Utilities.base64Decode(match[2]),mimeType,filename);
+    const folders=DriveApp.getFoldersByName('D-Delivery Photos');
+    const folder=folders.hasNext()?folders.next():DriveApp.createFolder('D-Delivery Photos');
+    const file=folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW);
+    return 'https://drive.google.com/file/d/'+file.getId()+'/view';
+  }catch(e){
+    console.error('uploadToDrive_ failed:',e);
+    return '';
   }
 }
 
