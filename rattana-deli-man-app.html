@@ -598,7 +598,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.53';
+const APP_VERSION='1.54';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -1330,6 +1330,7 @@ const REASON_TREE={
   'อื่นๆ':['อื่นๆ'],
 };
 const ITEM_UNITS=['ชิ้น(EA)','แพ็ค(CS)'];
+const RETURN_DRAFT_KEY='d_delivery_return_draft_v1';
 const returnState={
   photo:'',
   returnType:'', billType:'',
@@ -1341,11 +1342,42 @@ const returnState={
   items:[{productId:'',productName:'',unit:'ชิ้น(EA)',qty:'',price:''}],
 };
 
+function saveReturnDraft(){
+  try{
+    const {photo,returnType,billType,customerCode,customerName,docNo,driverName,reasonCategory,reasonSub,note,items}=returnState;
+    localStorage.setItem(RETURN_DRAFT_KEY,JSON.stringify({photo,returnType,billType,customerCode,customerName,docNo,driverName,reasonCategory,reasonSub,note,items,_ts:Date.now()}));
+  }catch(e){}
+}
+function clearReturnDraft(){ localStorage.removeItem(RETURN_DRAFT_KEY); }
+function tryRestoreReturnDraft(){
+  try{
+    const raw=localStorage.getItem(RETURN_DRAFT_KEY); if(!raw) return false;
+    const saved=JSON.parse(raw);
+    if(Date.now()-saved._ts>24*3600000){ clearReturnDraft(); return false; }
+    const hasData=saved.customerCode||saved.docNo||(saved.items||[]).some(it=>it.productName);
+    if(!hasData) return false;
+    Object.assign(returnState,{
+      photo:saved.photo||'', returnType:saved.returnType||'', billType:saved.billType||'',
+      customerCode:saved.customerCode||'', customerName:saved.customerName||'',
+      docNo:saved.docNo||'', driverName:saved.driverName||'',
+      reasonCategory:saved.reasonCategory||'', reasonSub:saved.reasonSub||'',
+      note:saved.note||'',
+      items:saved.items||[{productId:'',productName:'',unit:'ชิ้น(EA)',qty:'',price:''}],
+    });
+    return true;
+  }catch{ return false; }
+}
+
 function returnGrandTotal(){
   return returnState.items.reduce((s,it)=>s+(parseFloat(it.qty)||0)*(parseFloat(it.price)||0),0);
 }
 
 function renderReturn(){
+  // ครั้งแรกที่เปิดหน้า CN: ลอง restore draft ที่กรอกค้างไว้
+  if(!returnState._draftChecked){
+    returnState._draftChecked=true;
+    if(tryRestoreReturnDraft()) showToast('กู้ข้อมูลที่กรอกไว้ก่อนรีเฟช','ok');
+  }
   // โหลดสินค้า + รายละเอียดบิลครั้งแรก (background, ไม่บล็อก UI)
   if(!state.products.length) loadProducts();
   if(!Object.keys(state.billDetails).length) loadBillDetails();
@@ -1420,7 +1452,7 @@ function renderReturn(){
 
     <div class="field">
       <label>หมายเหตุ</label>
-      <textarea class="input" id="returnNote" placeholder="ระบุเพิ่มเติม (ถ้ามี)" oninput="returnState.note=this.value">${esc(returnState.note)}</textarea>
+      <textarea class="input" id="returnNote" placeholder="ระบุเพิ่มเติม (ถ้ามี)" oninput="returnState.note=this.value;saveReturnDraft()">${esc(returnState.note)}</textarea>
     </div>
 
     <div class="divider"></div>
@@ -1450,21 +1482,22 @@ function renderReturn(){
       returnState.customerCode=li.dataset.v;
       const cust=state.customers.find(c=>c.code===returnState.customerCode);
       returnState.customerName=cust?cust.name:'';
-      // เก็บ list ของ Doc_No สำหรับลูกค้านี้ — จะใช้ใน onDocInput
       returnState._docOptions=state.jobs.flatMap(j=>j.bills.filter(b=>b.code===returnState.customerCode).map(b=>b.doc)).filter((v,i,a)=>v&&a.indexOf(v)===i);
+      saveReturnDraft();
     });
   });
   document.querySelectorAll('#ddReturnDriver_list li').forEach(li=>{
-    li.addEventListener('click',()=>{ returnState.driverName=li.dataset.v; });
+    li.addEventListener('click',()=>{ returnState.driverName=li.dataset.v; saveReturnDraft(); });
   });
   document.querySelectorAll('#ddReturnReasonCat_list li').forEach(li=>{
     li.addEventListener('click',()=>{
       returnState.reasonCategory=li.dataset.v; returnState.reasonSub='';
+      saveReturnDraft();
       renderReturn();
     });
   });
   document.querySelectorAll('#ddReturnReasonSub_list li').forEach(li=>{
-    li.addEventListener('click',()=>{ returnState.reasonSub=li.dataset.v; });
+    li.addEventListener('click',()=>{ returnState.reasonSub=li.dataset.v; saveReturnDraft(); });
   });
   renderReturnItems();
 }
@@ -1503,11 +1536,11 @@ function renderReturnItems(){
         <div class="grid-2">
           <div class="field" style="margin-bottom:0">
             <label>จำนวน<span class="req">*</span></label>
-            <input class="input input-num" type="number" inputmode="numeric" min="0" value="${esc(it.qty)}" oninput="returnState.items[${i}].qty=this.value;recalcReturnTotal()" placeholder="0">
+            <input class="input input-num" type="number" inputmode="numeric" min="0" value="${esc(it.qty)}" oninput="returnState.items[${i}].qty=this.value;recalcReturnTotal();saveReturnDraft()" placeholder="0">
           </div>
           <div class="field" style="margin-bottom:0">
             <label>ราคา/หน่วย<span class="req">*</span></label>
-            <input class="input input-num" type="number" inputmode="decimal" step="any" min="0" value="${esc(it.price)}" oninput="returnState.items[${i}].price=this.value;recalcReturnTotal()" placeholder="0.00">
+            <input class="input input-num" type="number" inputmode="decimal" step="any" min="0" value="${esc(it.price)}" oninput="returnState.items[${i}].price=this.value;recalcReturnTotal();saveReturnDraft()" placeholder="0.00">
             ${it.product&&it.unitKey&&it.product.s03[it.unitKey]?`<div class="txt-xs mt-4" style="color:var(--muted);font-style:italic">💡 ราคาแนะนำ S03: ${fmt(it.product.s03[it.unitKey])} ฿</div>`:''}
           </div>
         </div>
@@ -1517,6 +1550,7 @@ function renderReturnItems(){
   }).join('');
   $('btnAddItem').disabled=returnState.items.length>=5;
   recalcReturnTotal();
+  saveReturnDraft();
 }
 function recalcReturnTotal(){
   const t=returnGrandTotal();
@@ -1650,7 +1684,7 @@ function pickDocNo(d){
   returnState.docNo=d;
   $('returnDocNo').value=d;
   $('docOptionsList').style.display='none';
-  // refresh product picker labels (bill filter)
+  saveReturnDraft();
   renderReturnItems();
 }
 function addReturnItem(){
@@ -1663,8 +1697,8 @@ function clearReturnItem(i){
   returnState.items[i]={productId:'',productName:'',product:null,unit:'ชิ้น(EA)',unitKey:'EA',qty:'',price:''};
   renderReturnItems();
 }
-function pickReturnType(btn){ btn.parentElement.querySelectorAll('.pill').forEach(p=>{p.classList.remove('active','gold');}); btn.classList.add('active','gold'); returnState.returnType=btn.dataset.v; }
-function pickBillType(btn){ btn.parentElement.querySelectorAll('.pill').forEach(p=>{p.classList.remove('active','gold');}); btn.classList.add('active','gold'); returnState.billType=btn.dataset.v; }
+function pickReturnType(btn){ btn.parentElement.querySelectorAll('.pill').forEach(p=>{p.classList.remove('active','gold');}); btn.classList.add('active','gold'); returnState.returnType=btn.dataset.v; saveReturnDraft(); }
+function pickBillType(btn){ btn.parentElement.querySelectorAll('.pill').forEach(p=>{p.classList.remove('active','gold');}); btn.classList.add('active','gold'); returnState.billType=btn.dataset.v; saveReturnDraft(); }
 function renderReturnThumb(){ return `<div class="photo-thumb"><img src="${returnState.photo}"><button class="photo-del" onclick="returnState.photo='';$('returnPhotoPreview').innerHTML=''">×</button></div>`; }
 function handleReturnPhoto(ev){
   const f=ev.target.files[0]; if(!f) return;
@@ -1678,16 +1712,18 @@ function handleReturnPhoto(ev){
       c.getContext('2d').drawImage(img,0,0,w,h);
       returnState.photo=c.toDataURL('image/jpeg',0.78);
       $('returnPhotoPreview').innerHTML=renderReturnThumb();
+      saveReturnDraft();
     };
     img.src=e.target.result;
   };
   reader.readAsDataURL(f);
 }
 function resetReturnForm(){
+  clearReturnDraft();
   Object.assign(returnState,{
     photo:'',returnType:'',billType:'',
     customerCode:'',customerName:'',docNo:'',
-    driverName:'',
+    driverName:'', _draftChecked:true,
     reasonCategory:'',reasonSub:'',note:'',
     items:[{productId:'',productName:'',unit:'ชิ้น(EA)',qty:'',price:''}]
   });
@@ -1760,6 +1796,7 @@ async function confirmReturn(){
       try{ await fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)}); }
       catch(e){ console.warn('return sync failed',e); }
     }
+    clearReturnDraft();
     showToast(`บันทึกรับคืน ${returnState.docNo} ✓`,'success');
     resetReturnForm();
     switchTab('sec-home');
