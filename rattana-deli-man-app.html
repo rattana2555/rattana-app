@@ -598,7 +598,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='1.51';
+const APP_VERSION='1.52';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -1335,7 +1335,6 @@ const returnState={
   returnType:'', billType:'',
   customerCode:'', customerName:'',
   docNo:'',
-  loaderName:'',
   driverName:'',
   reasonCategory:'', reasonSub:'',
   note:'',
@@ -1405,11 +1404,6 @@ function renderReturn(){
     </div>
 
     <div class="field">
-      <label>ชื่อพนักงานขนของ<span class="req">*</span></label>
-      ${buildDD('ddReturnLoader',drivers,'-- เลือกพนักงาน --')}
-    </div>
-
-    <div class="field">
       <label>ชื่อผู้ขับ<span class="req">*</span></label>
       ${buildDD('ddReturnDriver',drivers,'-- เลือกผู้ขับ --')}
     </div>
@@ -1444,7 +1438,6 @@ function renderReturn(){
     const cust=state.customers.find(c=>c.code===returnState.customerCode);
     if(cust) ddPick('ddReturnCust',cust.code,`${cust.name} — ${cust.code}`);
   }
-  if(returnState.loaderName) ddPick('ddReturnLoader',returnState.loaderName,returnState.loaderName);
   if(returnState.driverName) ddPick('ddReturnDriver',returnState.driverName,returnState.driverName);
   if(!returnState.driverName&&state.user.displayName){
     returnState.driverName=state.user.displayName;
@@ -1460,9 +1453,6 @@ function renderReturn(){
       // เก็บ list ของ Doc_No สำหรับลูกค้านี้ — จะใช้ใน onDocInput
       returnState._docOptions=state.jobs.flatMap(j=>j.bills.filter(b=>b.code===returnState.customerCode).map(b=>b.doc)).filter((v,i,a)=>v&&a.indexOf(v)===i);
     });
-  });
-  document.querySelectorAll('#ddReturnLoader_list li').forEach(li=>{
-    li.addEventListener('click',()=>{ returnState.loaderName=li.dataset.v; });
   });
   document.querySelectorAll('#ddReturnDriver_list li').forEach(li=>{
     li.addEventListener('click',()=>{ returnState.driverName=li.dataset.v; });
@@ -1554,25 +1544,22 @@ function pickItemUnit(idx,unit,unitKey){
   renderReturnItems();
 }
 
-/* ค้นหาสินค้า — กรองตาม รายละเอียด ของ Doc_No ก่อน, fallback ทั้งหมด 12k */
+/* ค้นหาสินค้า — ถ้า Doc_No มีข้อมูลใน รายละเอียด แสดงเฉพาะบิลนั้น (ไม่ fallback) */
 function onProductInput(idx,q){
   returnState.items[idx].productName=q;
   const ul=$('prodRes_'+idx); if(!ul) return;
   q=(q||'').trim().toLowerCase();
-  // กรองเฉพาะสินค้าในบิล ถ้ามีข้อมูลใน รายละเอียด
   const billItems=returnState.docNo?state.billDetails[returnState.docNo]:null;
-  if(billItems&&billItems.length){
-    // map sku → product เต็ม (ถ้าหาเจอ) เพื่อ pick แล้วเซ็ตหน่วย/ราคา/หน่วยให้ตรง
+  if(billItems){
+    // มีข้อมูลบิลนี้ใน รายละเอียด — แสดงเฉพาะสินค้าในบิล ไม่โชว์อื่น
     let list=billItems.map(b=>{
       const full=state.products.find(p=>p.name===b.sku);
       return {name:b.sku,_bill:b,product:full};
     });
     if(q) list=list.filter(x=>x.name.toLowerCase().includes(q));
-    if(!list.length){
-      ul.innerHTML='<li class="muted">ไม่พบในบิล — พิมพ์ค้นหาทั้งหมดด้านล่าง</li>';
-    } else {
-      ul.innerHTML=list.slice(0,30).map(x=>`<li onclick="pickProductFromBill(${idx},'${esc(x.name).replace(/'/g,"\\'")}')">${esc(x.name)} <span class="txt-xs txt-muted">· ${esc(x._bill.unit)} · ${fmtInt(x._bill.qty)}</span></li>`).join('');
-    }
+    ul.innerHTML=list.length
+      ? list.slice(0,30).map(x=>`<li onclick="pickProductFromBill(${idx},'${esc(x.name).replace(/'/g,"\\'")}')">${esc(x.name)} <span class="txt-xs txt-muted">· ${esc(x._bill.unit)} · ${fmtInt(x._bill.qty)}</span></li>`).join('')
+      : '<li class="muted">ไม่พบสินค้าในบิลนี้</li>';
     ul.style.display='block';
     return;
   }
@@ -1693,7 +1680,7 @@ function resetReturnForm(){
   Object.assign(returnState,{
     photo:'',returnType:'',billType:'',
     customerCode:'',customerName:'',docNo:'',
-    loaderName:'',driverName:'',
+    driverName:'',
     reasonCategory:'',reasonSub:'',note:'',
     items:[{productId:'',productName:'',unit:'ชิ้น(EA)',qty:'',price:''}]
   });
@@ -1709,7 +1696,6 @@ async function confirmReturn(){
   if(!returnState.billType){ showToast('กรุณาเลือกประเภทบิล','warning'); return; }
   if(!returnState.customerCode){ showToast('กรุณาเลือกชื่อร้านค้า','warning'); return; }
   if(!returnState.docNo){ showToast('กรุณาใส่เลขที่เอกสาร','warning'); return; }
-  if(!returnState.loaderName){ showToast('กรุณาเลือกชื่อพนักงานขนของ','warning'); return; }
   if(!returnState.driverName){ showToast('กรุณาเลือกชื่อผู้ขับ','warning'); return; }
   if(!returnState.reasonCategory){ showToast('กรุณาเลือกสาเหตุการคืน','warning'); return; }
   const subOpts=REASON_TREE[returnState.reasonCategory]||[];
@@ -1753,7 +1739,7 @@ async function confirmReturn(){
     note:returnState.note,
     photo:returnState.photo,
     driver:returnState.driverName||state.user.displayName||state.user.nickname,
-    loader:returnState.loaderName||'',
+    loader:'',
     submittedAt:Date.now(),
   };
   returnState._submitting=true;
