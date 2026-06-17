@@ -2260,33 +2260,26 @@ function lsLoadData() {
     showToast('ไม่พบ MERGED_DATA — รันสคริปต์อัพเดตข้อมูลก่อน', 'error'); return;
   }
   const mySeller = (currentUser && currentUser.saleNoRoo) ? currentUser.saleNoRoo : '';
-  const isAdmin  = canSeeAll();
-  const raw = window.MERGED_DATA.map(d => ({
+  const raw = window.MERGED_DATA.map(function(d) { return {
     'รหัส บีพลัส':          String(d.c || ''),
     'ชื่อร้านค้า':           String(d.n || ''),
     'ชื่อรูท':               String(d.r || ''),
     'เซลล์ผู้ดูแล':         String(d.s || ''),
     'ยอดขายเดือนปัจจุบัน': d.v || 0,
-    'ยอดขายเฉลี่ย3เดือน':  d.a || 0,
-  }));
-  lsAllData = isAdmin ? raw : raw.filter(function(r){ return r['เซลล์ผู้ดูแล'] === mySeller; });
+    'ยอดขายเฉลี่ย3เดือน':  d.a || 0
+  }; });
+  lsAllData = mySeller ? raw.filter(function(r){ return r['เซลล์ผู้ดูแล'] === mySeller; }) : raw;
   lsReady = true;
-  lsPopulateFilters(isAdmin);
+  lsPopulateFilters();
   lsApplyFilters();
-  showToast('โหลดข้อมูล ' + lsAllData.length.toLocaleString('th-TH') + ' ร้านค้า', 'success');
+  showToast('โหลด ' + lsAllData.length.toLocaleString('th-TH') + ' ร้านค้า · ' + (mySeller || 'ทั้งหมด'), 'success');
 }
 
-function lsPopulateFilters(isAdmin) {
-  const saleWrap = document.getElementById('lsSelSale')?.closest('.fld');
-  if (isAdmin) {
-    const sales  = [...new Set(lsAllData.map(r => r['เซลล์ผู้ดูแล']).filter(Boolean))].sort();
-    document.getElementById('lsSelSale').innerHTML = '<option value="">ทั้งหมด</option>' + sales.map(function(s){ return '<option value="' + escHtml(s) + '">' + escHtml(s) + '</option>'; }).join('');
-    if (saleWrap) saleWrap.style.display = '';
-  } else {
-    if (saleWrap) saleWrap.style.display = 'none';
-  }
-  const routes = [...new Set(lsAllData.map(r => r['ชื่อรูท']).filter(Boolean))].sort();
+function lsPopulateFilters() {
+  const routes = [...new Set(lsAllData.map(function(r){ return r['ชื่อรูท']; }).filter(Boolean))].sort();
   document.getElementById('lsSelRoute').innerHTML = '<option value="">ทั้งหมด</option>' + routes.map(function(r){ return '<option value="' + escHtml(r) + '">' + escHtml(r) + '</option>'; }).join('');
+  const saleWrap = document.getElementById('lsSelSale') ? document.getElementById('lsSelSale').closest('.fld') : null;
+  if (saleWrap) saleWrap.style.display = 'none';
 }
 
 function lsApplyFilters() {
