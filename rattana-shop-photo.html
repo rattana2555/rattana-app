@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Rattana เก็บภาพหน้าร้าน v1.5</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    :root {
+      --pink:        #e91e8c;
+      --pink-dark:   #c2185b;
+      --pink-mid:    #d81b60;
+      --pink-light:  #f8bbd9;
+      --pink-pale:   #fce4ec;
+      --navy:        #1a1a2e;
+      --success:     #2ecc71;
+      --danger:      #e74c3c;
+      --warning:     #f39c12;
+      --info:        #3498db;
+      --bg:          #fdf6f9;
+      --text:        #2d2020;
+      --card-bg:     #ffffff;
+      --border:      #f0cce0;
+      --muted:       #9e6b7a;
+      --shadow-sm:   0 1px 4px rgba(233,30,140,.08);
+      --shadow-md:   0 2px 10px rgba(233,30,140,.10);
+      --shadow-pink: 0 4px 16px rgba(233,30,140,.28);
+    }
+
+    *,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Sarabun', sans-serif;
+      min-height: 100dvh;
+      overflow-x: hidden;
+      background: var(--bg);
+      color: var(--text);
+    }
+    button { font-family: inherit; cursor: pointer; border: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+    input { font-family: inherit; font-size: 16px; }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, var(--pink-dark) 0%, var(--pink) 100%);
+      color: #fff;
+      padding: max(14px, env(safe-area-inset-top)) 16px 14px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 3px solid var(--pink-light);
+      box-shadow: 0 3px 16px rgba(194,24,91,.3);
+    }
+    .app-title { font-size: 18px; font-weight: 700; }
+    .app-ver   { font-size: 11px; color: rgba(255,255,255,.7); margin-left: 4px; }
+    .app-sub   { font-size: 11px; color: rgba(255,255,255,.7); margin-top: 1px; }
+
+    /* ── Drive Status Bar ── */
+    .drive-bar {
+      background: #1e1e2e; color: #ccc;
+      padding: 8px 16px; font-size: 12px;
+      display: flex; align-items: center; gap: 10px;
+      border-bottom: 1px solid #333;
+    }
+    .drive-bar .dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    }
+    .dot-ok  { background: #2ecc71; box-shadow: 0 0 6px #2ecc71; }
+    .dot-off { background: #888; }
+    .dot-busy{ background: #f39c12; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .drive-bar .btn-connect {
+      margin-left: auto; background: var(--pink);
+      color: #fff; border-radius: 6px;
+      padding: 4px 12px; font-size: 12px;
+      font-family: 'Sarabun', sans-serif;
+    }
+    .drive-bar .btn-connect:hover { opacity: .85; }
+
+    /* ── Drive badge on gallery items ── */
+    .drive-badge {
+      position: absolute; top: 6px; left: 6px;
+      background: rgba(255,255,255,.92);
+      border-radius: 6px; padding: 2px 6px;
+      font-size: 10px; font-weight: 700; color: #1a73e8;
+      display: flex; align-items: center; gap: 3px;
+      text-decoration: none; box-shadow: 0 1px 4px rgba(0,0,0,.2);
+    }
+    .drive-badge:hover { background: #fff; }
+
+    /* ── Layout ── */
+    .content { padding: 16px; max-width: 960px; margin: 0 auto; width: 100%; }
+    @media(min-width:640px){ .content{ padding: 20px; } }
+
+    /* ── Card ── */
+    .card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-md);
+      padding: 20px;
+      border-top: 3px solid var(--pink);
+      margin-bottom: 20px;
+    }
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--pink-dark);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    /* ── Upload Zone ── */
+    .upload-zone {
+      border: 2.5px dashed var(--pink);
+      border-radius: 14px;
+      background: var(--pink-pale);
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      position: relative;
+      transition: background .2s, border-color .2s, transform .15s;
+      user-select: none;
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      background: var(--pink-light);
+      border-color: var(--pink-dark);
+      transform: scale(1.015);
+    }
+    .upload-zone input[type=file] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .upload-icon { font-size: 54px; display: block; margin-bottom: 10px; }
+    .upload-title { font-size: 17px; font-weight: 700; color: var(--pink-dark); margin-bottom: 5px; }
+    .upload-sub   { font-size: 13px; color: var(--muted); }
+
+    /* ── Preview Grid ── */
+    .preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    @media(max-width:480px){ .preview-grid { grid-template-columns: repeat(2, 1fr); } }
+
+    .preview-item {
+      position: relative;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 2px solid var(--border);
+      aspect-ratio: 1;
+      background: #f5e0ea;
+    }
+    .preview-item img { width: 100%; height: 100%; object-fit: cover; }
+    .preview-item .rm-btn {
+      position: absolute; top: 4px; right: 4px;
+      background: rgba(231,76,60,.9); color: #fff;
+      border-radius: 50%; width: 24px; height: 24px;
+      font-size: 13px; display: flex; align-items: center; justify-content: center;
+    }
+    .preview-item .img-label {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: rgba(0,0,0,.55); color: #fff;
+      font-size: 10px; padding: 3px 6px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* ── Text Input ── */
+    .txt-input {
+      width: 100%; height: 44px; padding: 0 14px;
+      border: 1.5px solid var(--border); border-radius: 10px;
+      background: var(--card-bg); color: var(--text);
+      font-size: 15px; font-family: 'Sarabun', sans-serif;
+      outline: none; transition: border-color .15s;
+    }
+    .txt-input:focus { border-color: var(--pink); }
+
+    /* ── Buttons ── */
+    .btn-submit {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; min-height: 52px; margin-top: 14px;
+      background: linear-gradient(135deg, var(--pink-dark), var(--pink));
+      color: #fff; border-radius: 12px;
+      font-size: 16px; font-weight: 700;
+      box-shadow: var(--shadow-pink);
+      transition: opacity .2s, transform .1s;
+    }
+    .btn-submit:hover  { opacity: .9; }
+    .btn-submit:active { transform: scale(.98); }
+    .btn-submit:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+    .btn-cancel {
+      width: 100%; min-height: 40px; margin-top: 8px;
+      background: transparent; border: 1.5px solid var(--border);
+      border-radius: 10px; color: var(--muted);
+      font-size: 14px; font-family: 'Sarabun', sans-serif;
+    }
+    .btn-cancel:hover { background: var(--pink-pale); }
+
+    /* ── Section Header ── */
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin: 8px 0 12px;
+    }
+    .section-title {
+      font-size: 17px; font-weight: 700; color: var(--pink-dark);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .count-badge {
+      background: var(--pink); color: #fff;
+      border-radius: 20px; padding: 2px 10px;
+      font-size: 12px; font-weight: 700;
+    }
+
+    /* ── Search Bar ── */
+    .search-bar {
+      display: flex; gap: 8px; margin-bottom: 12px;
+    }
+    .search-input {
+      flex: 1; height: 40px; padding: 0 14px;
+      border: 1.5px solid var(--border); border-radius: 20px;
+      background: var(--card-bg); color: var(--text);
+      font-size: 14px; font-family: 'Sarabun', sans-serif;
+      outline: none; transition: border-color .15s;
+    }
+    .search-input:focus { border-color: var(--pink); }
+
+    /* ── Gallery Grid ── */
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 14px;
+    }
+    @media(max-width:480px){ .gallery-grid { grid-template-columns: repeat(2, 1fr); } }
+
+    .gallery-item {
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 2px solid var(--border);
+      box-shadow: var(--shadow-md);
+      aspect-ratio: 1;
+      background: #f5e0ea;
+      cursor: pointer;
+      transition: transform .2s, box-shadow .2s;
+      animation: fadeIn .3s ease;
+    }
+    .gallery-item:hover { transform: scale(1.04); box-shadow: var(--shadow-pink); }
+    .gallery-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .gallery-item .g-overlay {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: linear-gradient(transparent, rgba(0,0,0,.72));
+      color: #fff; padding: 18px 8px 8px;
+      pointer-events: none;
+    }
+    .g-time { font-size: 11px; font-weight: 600; display: block; }
+    .g-note { font-size: 10px; opacity: .8; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .gallery-item .del-btn {
+      position: absolute; top: 6px; right: 6px;
+      background: rgba(231,76,60,.85); color: #fff;
+      border-radius: 50%; width: 28px; height: 28px;
+      font-size: 13px; display: none; align-items: center; justify-content: center;
+    }
+    .gallery-item:hover .del-btn { display: flex; }
+
+    /* ── Empty State ── */
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center; padding: 52px 20px;
+      color: var(--muted);
+    }
+    .empty-icon { font-size: 58px; display: block; margin-bottom: 12px; opacity: .45; }
+
+    /* ── Storage Bar ── */
+    .storage-wrap {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .storage-track { background: var(--pink-pale); border-radius: 20px; height: 6px; margin-top: 6px; }
+    .storage-fill  { height: 100%; border-radius: 20px; background: var(--pink); transition: width .4s; }
+
+    /* ── Delete-all btn ── */
+    .btn-clear-all {
+      background: transparent; border: 1.5px solid #ffcdd2;
+      border-radius: 8px; padding: 6px 12px;
+      font-size: 12px; color: var(--danger);
+      font-family: 'Sarabun', sans-serif;
+    }
+    .btn-clear-all:hover { background: #fff5f5; }
+
+    /* ── Lightbox ── */
+    .lightbox {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.93); z-index: 9999;
+      align-items: center; justify-content: center;
+      flex-direction: column; padding: 20px;
+    }
+    .lightbox.open { display: flex; }
+    .lightbox img {
+      max-width: 100%; max-height: 78vh;
+      object-fit: contain; border-radius: 8px;
+      box-shadow: 0 8px 40px rgba(0,0,0,.6);
+    }
+    .lb-info { color: #fff; text-align: center; margin-top: 12px; font-size: 13px; }
+    .lb-close {
+      position: absolute; top: 16px; right: 16px;
+      background: rgba(255,255,255,.15); color: #fff;
+      border-radius: 50%; width: 42px; height: 42px;
+      font-size: 20px; display: flex; align-items: center; justify-content: center;
+    }
+    .lb-close:hover { background: rgba(255,255,255,.25); }
+    .lb-dl {
+      margin-top: 12px; padding: 8px 20px;
+      background: var(--pink); color: #fff;
+      border-radius: 20px; font-size: 13px;
+      font-family: 'Sarabun', sans-serif;
+      text-decoration: none; display: inline-block;
+    }
+
+    /* ── Spinner ── */
+    #spinner {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.5);
+      align-items: center; justify-content: center;
+      z-index: 99999; backdrop-filter: blur(3px);
+    }
+    #spinner.show { display: flex; }
+    .spin-box {
+      background: #fff; border-radius: 16px;
+      padding: 36px 44px; text-align: center;
+      border-top: 4px solid var(--pink);
+      min-width: 220px;
+    }
+    .spin-ring {
+      width: 52px; height: 52px;
+      border: 5px solid var(--pink-light);
+      border-top-color: var(--pink);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+      margin: 0 auto 14px;
+    }
+
+    /* ── Back-to-top ── */
+    #btt {
+      position: fixed;
+      bottom: max(24px, calc(16px + env(safe-area-inset-bottom)));
+      right: max(16px, calc(12px + env(safe-area-inset-right)));
+      background: var(--pink); color: #fff;
+      border-radius: 50%; width: 46px; height: 46px;
+      font-size: 20px; display: none;
+      align-items: center; justify-content: center;
+      box-shadow: var(--shadow-pink); z-index: 90;
+    }
+    #btt.show { display: flex; }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: max(24px, env(safe-area-inset-bottom));
+      right: 16px;
+      padding: 12px 20px; border-radius: 10px;
+      color: #fff; z-index: 9999;
+      animation: slideIn .3s ease;
+      font-weight: 500; font-size: 14px;
+      box-shadow: 0 4px 20px rgba(0,0,0,.2);
+      max-width: 90vw;
+    }
+    .toast-success { background: var(--success); }
+    .toast-error   { background: var(--danger); }
+    .toast-warning { background: var(--warning); color: #333; }
+    .toast-info    { background: var(--pink-dark); }
+
+    /* ── Shop Dropdown ── */
+    .dd-wrap { position: relative; width: 100%; margin-bottom: 14px; }
+    .dd-label-row {
+      font-size: 12px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .3px;
+      display: block; margin-bottom: 5px;
+    }
+    .dd-trigger {
+      width: 100%; min-height: 48px; padding: 10px 14px;
+      background: var(--card-bg); border: 1.5px solid var(--border);
+      border-radius: 10px; color: var(--text);
+      font-family: 'Sarabun', sans-serif; font-size: 15px;
+      text-align: left; display: flex; align-items: center;
+      justify-content: space-between; gap: 8px;
+      transition: border-color .15s;
+    }
+    .dd-trigger:hover, .dd-trigger.open { border-color: var(--pink); }
+    .dd-trigger .dd-val { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dd-trigger .dd-arrow { flex-shrink: 0; font-size: 12px; color: var(--muted); transition: transform .2s; }
+    .dd-trigger.open .dd-arrow { transform: rotate(180deg); }
+    .dd-panel {
+      position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+      background: var(--card-bg); border: 1.5px solid var(--pink);
+      border-radius: 12px; z-index: 500;
+      box-shadow: 0 8px 28px rgba(233,30,140,.18);
+      max-height: 280px; display: none; flex-direction: column;
+      overflow: hidden;
+    }
+    .dd-panel.open { display: flex; }
+    .dd-search {
+      padding: 10px 14px; font-size: 15px; border: none;
+      border-bottom: 1px solid var(--border);
+      background: var(--pink-pale); color: var(--text);
+      outline: none; font-family: 'Sarabun', sans-serif;
+    }
+    .dd-list {
+      overflow-y: auto; flex: 1; list-style: none; padding: 4px 0; margin: 0;
+    }
+    .dd-list li {
+      padding: 10px 14px; cursor: pointer;
+      font-size: 14px; transition: background .12s;
+    }
+    .dd-list li:hover  { background: var(--pink-pale); color: var(--pink-dark); }
+    .dd-list li.active { background: var(--pink); color: #fff; font-weight: 600; }
+    .dd-list li.no-res { color: var(--muted); cursor: default; font-style: italic; }
+    .dd-clear {
+      flex-shrink: 0; background: transparent; border: none;
+      color: var(--muted); font-size: 16px; padding: 0 6px;
+      line-height: 1; cursor: pointer;
+    }
+    .dd-clear:hover { color: var(--danger); }
+    .shop-required-hint {
+      font-size: 12px; color: var(--danger); margin-top: 6px; display: none;
+    }
+
+    /* ── Record Table ── */
+    .rec-section { margin-top: 28px; }
+    .tbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 12px; border: 1px solid var(--border); }
+    .rec-tbl { width: 100%; border-collapse: collapse; min-width: 560px; font-size: 13px; }
+    .rec-tbl thead { background: linear-gradient(135deg, var(--pink-dark), var(--pink)); color: #fff; }
+    .rec-tbl thead th {
+      padding: 11px 12px; text-align: left;
+      font-size: 12px; font-weight: 600; letter-spacing: .3px;
+      white-space: nowrap;
+    }
+    .rec-tbl tbody tr { border-bottom: 1px solid var(--border); transition: background .12s; }
+    .rec-tbl tbody tr:nth-child(even) { background: var(--pink-pale); }
+    .rec-tbl tbody tr:hover { background: var(--pink-light); }
+    .rec-tbl td { padding: 9px 12px; vertical-align: middle; }
+    .rec-tbl td.num { text-align: center; color: var(--muted); font-size: 12px; width: 36px; }
+    .rec-tbl .thumb {
+      width: 44px; height: 44px; object-fit: cover;
+      border-radius: 8px; border: 2px solid var(--border);
+      cursor: pointer; transition: transform .15s;
+    }
+    .rec-tbl .thumb:hover { transform: scale(1.1); }
+    .rec-tbl .shop-tag {
+      background: var(--pink-pale); color: var(--pink-dark);
+      border: 1px solid var(--pink-light); border-radius: 6px;
+      padding: 2px 8px; font-size: 12px; font-weight: 600;
+      white-space: nowrap;
+    }
+    .rec-tbl .drive-link {
+      display: inline-flex; align-items: center; gap: 5px;
+      color: #1a73e8; font-weight: 600; text-decoration: none;
+      background: #e8f0fe; border-radius: 6px; padding: 4px 10px;
+      font-size: 12px; white-space: nowrap;
+    }
+    .rec-tbl .drive-link:hover { background: #d2e3fc; }
+    .rec-tbl .no-drive {
+      color: var(--muted); font-size: 11px; font-style: italic;
+    }
+    .rec-tbl .uploader { font-size: 12px; color: var(--muted); }
+    .tbl-empty { text-align: center; padding: 36px 20px; color: var(--muted); font-size: 14px; }
+
+    /* ── Animations ── */
+    @keyframes spin    { to { transform: rotate(360deg); } }
+    @keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes fadeIn  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body>
+
+
+<!-- Spinner -->
+<div id="spinner">
+  <div class="spin-box">
+    <div class="spin-ring"></div>
+    <p id="spinMsg" style="font-family:'Sarabun',sans-serif;font-weight:600;color:#333">กำลังบันทึก...</p>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox">
+  <button class="lb-close" onclick="closeLightbox()">✕</button>
+  <img id="lbImg" src="" alt="">
+  <div class="lb-info">
+    <strong id="lbTime"></strong><br>
+    <span id="lbNote" style="opacity:.75"></span>
+  </div>
+  <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;justify-content:center">
+    <a id="lbDl" href="#" download class="lb-dl">⬇️ ดาวน์โหลดรูป</a>
+    <a id="lbDriveLink" href="#" target="_blank" class="lb-dl" style="background:#1a73e8;display:none">
+      📂 เปิดใน Google Drive
+    </a>
+  </div>
+</div>
+
+<!-- Header -->
+<header>
+  <span style="font-size:30px;line-height:1">📷</span>
+  <div style="flex:1">
+    <div class="app-title">Rattana เก็บภาพหน้าร้าน <span class="app-ver">v1.5</span></div>
+    <div class="app-sub">อัพโหลดและจัดเก็บรูปภาพหน้าร้านสาขา</div>
+  </div>
+</header>
+
+<!-- Drive Status Bar -->
+<div class="drive-bar" id="driveBar">
+  <span class="dot dot-off" id="driveDot"></span>
+  <span id="driveStatus">ยังไม่ได้เชื่อมต่อ Google Drive</span>
+  <button class="btn-connect" id="driveConnectBtn" onclick="connectDrive()">🔗 เชื่อมต่อ Drive</button>
+</div>
+
+<!-- Content -->
+<div class="content">
+
+  <!-- Upload Card -->
+  <div class="card">
+    <div class="card-title">📤 อัพโหลดรูปภาพ</div>
+
+    <!-- Shop Dropdown -->
+    <div class="dd-wrap" id="shopWrap">
+      <label class="dd-label-row">🏪 ชื่อร้านค้า <span style="color:var(--danger)">*</span></label>
+      <button type="button" class="dd-trigger" id="shopTrigger" onclick="toggleShopDD()">
+        <span class="dd-val" id="shopLabel">-- กรุณาเลือกร้านค้า --</span>
+        <button class="dd-clear" id="shopClear" style="display:none" onclick="event.stopPropagation();clearShop()">✕</button>
+        <span class="dd-arrow">▼</span>
+      </button>
+      <div class="dd-panel" id="shopPanel">
+        <input class="dd-search" id="shopSearch" type="text"
+          placeholder="🔍 พิมพ์ค้นหาชื่อร้าน..."
+          oninput="filterShops(this.value)"
+          autocomplete="off">
+        <ul class="dd-list" id="shopList">
+          <li class="no-res">กำลังโหลดรายชื่อร้าน...</li>
+        </ul>
+      </div>
+      <div class="shop-required-hint" id="shopHint">⚠️ กรุณาเลือกชื่อร้านค้าก่อนบันทึก</div>
+    </div>
+
+    <div class="upload-zone" id="dropZone">
+      <input type="file" id="fileInput" accept="image/*" multiple onchange="handleFiles(this.files)">
+      <span class="upload-icon">🖼️</span>
+      <div class="upload-title">คลิกเลือกรูป หรือลากมาวางที่นี่</div>
+      <div class="upload-sub">รองรับ JPG · PNG · HEIC · WebP — เลือกได้หลายรูปพร้อมกัน</div>
+    </div>
+
+    <!-- Preview Section -->
+    <div id="previewSection" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;margin-bottom:6px">
+        <span style="font-size:13px;font-weight:600;color:var(--muted)">
+          ตัวอย่างรูปที่เลือก — <span id="previewCount">0</span> รูป
+        </span>
+        <span style="font-size:11px;color:var(--muted)">คลิก ✕ เพื่อลบออก</span>
+      </div>
+      <div class="preview-grid" id="previewGrid"></div>
+
+      <div style="margin-top:14px">
+        <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;display:block;margin-bottom:5px">
+          บันทึก / หมายเหตุ (ไม่บังคับ)
+        </label>
+        <input type="text" id="noteInput" class="txt-input"
+          placeholder="เช่น: โปรโมชั่น วันที่ 15 ก.ค. 2568  สาขาสมุทรสงคราม">
+      </div>
+
+      <button class="btn-submit" id="submitBtn" onclick="savePhotos()">
+        💾 บันทึกรูปภาพทั้งหมด
+      </button>
+      <button class="btn-cancel" onclick="clearPreview()">✕ ยกเลิก / เคลียร์</button>
+    </div>
+  </div>
+
+  <!-- Storage Info -->
+  <div class="storage-wrap" id="storageWrap" style="display:none">
+    <div style="display:flex;justify-content:space-between">
+      <span>💾 พื้นที่จัดเก็บในอุปกรณ์</span>
+      <span id="storageText" style="font-weight:600;color:var(--pink-dark)"></span>
+    </div>
+    <div class="storage-track"><div class="storage-fill" id="storageFill"></div></div>
+  </div>
+
+  <!-- Gallery Header -->
+  <div class="section-header">
+    <div class="section-title">
+      🗂️ แกลเลอรี่รูปภาพ
+      <span class="count-badge" id="galCount">0</span>
+    </div>
+    <button class="btn-clear-all" onclick="clearAll()">🗑️ ลบทั้งหมด</button>
+  </div>
+
+  <!-- Search -->
+  <div class="search-bar">
+    <input type="text" id="searchInput" class="search-input"
+      placeholder="🔍 ค้นหาจากชื่อร้าน / หมายเหตุ / ชื่อไฟล์..."
+      oninput="renderGallery();renderRecordTable()">
+  </div>
+
+  <!-- Gallery Grid -->
+  <div class="gallery-grid" id="galleryGrid"></div>
+
+  <!-- Record Table Section -->
+  <div class="rec-section">
+    <div class="section-header" style="margin-top:28px">
+      <div class="section-title">📋 รายการที่บันทึกทั้งหมด</div>
+      <button onclick="exportRecordsCsv()" style="
+        background:transparent;border:1.5px solid var(--border);
+        border-radius:8px;padding:6px 12px;font-size:12px;
+        color:var(--pink-dark);font-family:'Sarabun',sans-serif;cursor:pointer;">
+        ⬇️ Export CSV
+      </button>
+    </div>
+    <div class="tbl-wrap">
+      <table class="rec-tbl">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>รูป</th>
+            <th>ร้านค้า</th>
+            <th>ชื่อไฟล์</th>
+            <th>วันที่บันทึก</th>
+            <th>ผู้บันทึก</th>
+            <th>ลิ้งรูป Drive</th>
+          </tr>
+        </thead>
+        <tbody id="recTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Back to Top -->
+<button id="btt" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+<script>
+// ── Config ──
+const STORE_KEY       = 'rattana_shop_photos_v1';
+const SHEET_ID        = '1dAxF4Mz-zhJIVbuJ_Ql126gt08qvVS1wndJD50pqCZI';
+const SHEET_NAME      = 'Customer';
+const COL_SHOP        = 'ชื่อร้านค้า';
+const DRIVE_FOLDER_ID = '1_7qi_ZYp38sQrrctFxk0UVNxP8OD-51f';
+const DRIVE_SCOPE     = 'https://www.googleapis.com/auth/drive.file';
+const CLIENT_ID       = '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com';
+
+let pending      = []; // { origName, dataUrl }
+let selectedShop = '';
+let allShops     = [];
+let driveToken   = null;
+let tokenClient  = null;
+
+async function loadFromSheets(sheetId, sheetName) {
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('โหลดข้อมูลไม่ได้');
+  return parseCsv(await res.text());
+}
+
+// ── Boot ──
+window.onload = () => {
+  renderGallery();
+  renderRecordTable();
+  updateStorage();
+  loadShops();
+  const gsiReady = setInterval(() => {
+    if (window.google?.accounts?.oauth2) {
+      clearInterval(gsiReady);
+      initDriveAuth();
+      setTimeout(() => tokenClient?.requestAccessToken({ prompt: '' }), 800);
+    }
+  }, 200);
+};
+
+// ── Google Drive Auth ──
+function initDriveAuth() {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: DRIVE_SCOPE,
+    callback: (resp) => {
+      if (resp.error) {
+        showToast('เชื่อมต่อ Drive ไม่สำเร็จ: ' + resp.error, 'error');
+        updateDriveUI(false);
+        return;
+      }
+      driveToken = resp.access_token;
+      // Token expires in ~1hr — clear it so user reconnects
+      setTimeout(() => { driveToken = null; updateDriveUI(false); }, (resp.expires_in - 60) * 1000);
+      updateDriveUI(true);
+      showToast('เชื่อมต่อ Google Drive แล้ว ✓', 'success');
+    },
+  });
+}
+
+function connectDrive() {
+  if (!tokenClient) { showToast('กรุณารอสักครู่แล้วลองใหม่', 'warning'); return; }
+  tokenClient.requestAccessToken({ prompt: '' });
+}
+
+function updateDriveUI(connected) {
+  document.getElementById('driveDot').className    = 'dot ' + (connected ? 'dot-ok' : 'dot-off');
+  document.getElementById('driveStatus').textContent = connected
+    ? `เชื่อมต่อ Google Drive แล้ว — รูปจะอัพโหลดเข้าโฟลเดอร์ร้านค้าอัตโนมัติ`
+    : 'ยังไม่ได้เชื่อมต่อ Google Drive';
+  document.getElementById('driveConnectBtn').textContent = connected ? '✓ เชื่อมต่อแล้ว' : '🔗 เชื่อมต่อ Drive';
+  document.getElementById('driveConnectBtn').disabled = connected;
+}
+
+// ── Upload to Google Drive ──
+function dataUrlToBlob(dataUrl) {
+  const [header, b64] = dataUrl.split(',');
+  const mime = header.match(/:(.*?);/)[1];
+  const bytes = atob(b64);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+async function uploadToDrive(dataUrl, filename, shopName) {
+  if (!driveToken) return null;
+
+  // Create or find shop subfolder
+  const folderId = await getOrCreateFolder(shopName);
+
+  const blob = dataUrlToBlob(dataUrl);
+  const meta = JSON.stringify({ name: filename, parents: [folderId] });
+  const form = new FormData();
+  form.append('metadata', new Blob([meta], { type: 'application/json' }));
+  form.append('file', blob);
+
+  const res = await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink',
+    { method: 'POST', headers: { Authorization: `Bearer ${driveToken}` }, body: form }
+  );
+  if (res.status === 401) { driveToken = null; updateDriveUI(false); return null; }
+  if (!res.ok) throw new Error('Drive upload HTTP ' + res.status);
+  return await res.json(); // { id, name, webViewLink }
+}
+
+// Cache folder IDs to avoid duplicate API calls within a session
+const folderCache = {};
+
+async function getOrCreateFolder(shopName) {
+  if (folderCache[shopName]) return folderCache[shopName];
+
+  // Search for existing folder with this name under DRIVE_FOLDER_ID
+  const q = encodeURIComponent(
+    `name='${shopName}' and mimeType='application/vnd.google-apps.folder' and '${DRIVE_FOLDER_ID}' in parents and trashed=false`
+  );
+  const searchRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`,
+    { headers: { Authorization: `Bearer ${driveToken}` } }
+  );
+  const searchData = await searchRes.json();
+
+  if (searchData.files && searchData.files.length > 0) {
+    folderCache[shopName] = searchData.files[0].id;
+    return folderCache[shopName];
+  }
+
+  // Create new subfolder
+  const createRes = await fetch('https://www.googleapis.com/drive/v3/files?fields=id', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${driveToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: shopName,
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [DRIVE_FOLDER_ID],
+    }),
+  });
+  const folder = await createRes.json();
+  folderCache[shopName] = folder.id;
+  return folder.id;
+}
+window.addEventListener('scroll', () => {
+  document.getElementById('btt').classList.toggle('show', window.scrollY > 300);
+});
+
+// ── Load Shops from Google Sheets ──
+async function loadShops() {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('fetch failed');
+    const rows = parseCsv(await res.text());
+    const names = [...new Set(rows.map(r => (r[COL_SHOP] || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'th'));
+    allShops = names;
+    renderShopList(names);
+  } catch (e) {
+    document.getElementById('shopList').innerHTML = '<li class="no-res">โหลดรายชื่อร้านไม่ได้ — ลองรีเฟรชหน้า</li>';
+  }
+}
+
+function parseCsv(text) {
+  if (!text) return [];
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const rows = []; let row = [], cell = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQ) { if (ch === '"') { if (text[i+1]==='"'){cell+='"';i++;}else inQ=false; } else cell+=ch; }
+    else {
+      if (ch==='"') inQ=true;
+      else if (ch===','){row.push(cell);cell='';}
+      else if (ch==='\r'){}
+      else if (ch==='\n'){row.push(cell);rows.push(row);row=[];cell='';}
+      else cell+=ch;
+    }
+  }
+  if (cell.length||row.length){row.push(cell);rows.push(row);}
+  if (!rows.length) return [];
+  const clean = s => String(s||'').replace(/[​‌‍﻿]/g,'').replace(/ /g,' ').trim();
+  const headers = rows[0].map(clean);
+  return rows.slice(1).filter(r=>r.some(c=>clean(c))).map(r=>Object.fromEntries(headers.map((k,i)=>[k,clean(r[i])])));
+}
+
+function renderShopList(names) {
+  const ul = document.getElementById('shopList');
+  if (!names.length) { ul.innerHTML = '<li class="no-res">ไม่พบข้อมูลร้านค้า</li>'; return; }
+  ul.innerHTML = names.map(n => `
+    <li class="${n === selectedShop ? 'active' : ''}" onclick="selectShop('${n.replace(/'/g,"&#39;")}')">${n}</li>
+  `).join('');
+}
+
+function filterShops(q) {
+  const filtered = q.trim()
+    ? allShops.filter(n => n.toLowerCase().includes(q.toLowerCase()))
+    : allShops;
+  const ul = document.getElementById('shopList');
+  if (!filtered.length) { ul.innerHTML = '<li class="no-res">ไม่พบร้านที่ค้นหา</li>'; return; }
+  ul.innerHTML = filtered.map(n => `
+    <li class="${n === selectedShop ? 'active' : ''}" onclick="selectShop('${n.replace(/'/g,"&#39;")}')">${n}</li>
+  `).join('');
+}
+
+function toggleShopDD() {
+  const panel   = document.getElementById('shopPanel');
+  const trigger = document.getElementById('shopTrigger');
+  const isOpen  = panel.classList.contains('open');
+  panel.classList.toggle('open', !isOpen);
+  trigger.classList.toggle('open', !isOpen);
+  if (!isOpen) {
+    const s = document.getElementById('shopSearch');
+    s.value = '';
+    renderShopList(allShops);
+    s.focus();
+  }
+}
+
+function selectShop(name) {
+  selectedShop = name;
+  document.getElementById('shopLabel').textContent = name;
+  document.getElementById('shopClear').style.display = '';
+  document.getElementById('shopPanel').classList.remove('open');
+  document.getElementById('shopTrigger').classList.remove('open');
+  document.getElementById('shopHint').style.display = 'none';
+  renderShopList(allShops);
+}
+
+function clearShop() {
+  selectedShop = '';
+  document.getElementById('shopLabel').textContent = '-- กรุณาเลือกร้านค้า --';
+  document.getElementById('shopClear').style.display = 'none';
+  renderShopList(allShops);
+}
+
+// Close dropdown on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('#shopWrap')) {
+    document.getElementById('shopPanel').classList.remove('open');
+    document.getElementById('shopTrigger').classList.remove('open');
+  }
+});
+
+// ── Drag & Drop ──
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('drag-over');
+  handleFiles(e.dataTransfer.files);
+});
+
+// ── File Handling ──
+function handleFiles(files) {
+  const imgs = Array.from(files || []).filter(f => f.type.startsWith('image/'));
+  if (!imgs.length) { showToast('กรุณาเลือกไฟล์รูปภาพเท่านั้น', 'error'); return; }
+  let done = 0;
+  imgs.forEach(f => {
+    const r = new FileReader();
+    r.onload = e => {
+      pending.push({ origName: f.name, dataUrl: e.target.result });
+      if (++done === imgs.length) renderPreview();
+    };
+    r.readAsDataURL(f);
+  });
+}
+
+// ── Preview ──
+function renderPreview() {
+  const sec = document.getElementById('previewSection');
+  sec.style.display = pending.length ? '' : 'none';
+  document.getElementById('previewCount').textContent = pending.length;
+  const g = document.getElementById('previewGrid');
+  g.innerHTML = pending.map((p, i) => `
+    <div class="preview-item">
+      <img src="${p.dataUrl}" alt="${p.origName}" loading="lazy">
+      <button class="rm-btn" onclick="removePending(${i})">✕</button>
+      <div class="img-label">${p.origName}</div>
+    </div>`).join('');
+}
+
+function removePending(i) {
+  pending.splice(i, 1);
+  renderPreview();
+  if (!pending.length) document.getElementById('fileInput').value = '';
+}
+
+function clearPreview() {
+  pending = [];
+  document.getElementById('fileInput').value = '';
+  document.getElementById('noteInput').value = '';
+  renderPreview();
+}
+
+// ── Compress ──
+function compress(dataUrl, maxW = 1024, q = 0.78) {
+  return new Promise(res => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      let w = img.width, h = img.height;
+      if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      res(c.toDataURL('image/jpeg', q));
+    };
+    img.src = dataUrl;
+  });
+}
+
+// ── Save ──
+async function savePhotos() {
+  if (!pending.length) return;
+  if (!selectedShop) {
+    document.getElementById('shopHint').style.display = '';
+    document.getElementById('shopTrigger').style.borderColor = 'var(--danger)';
+    setTimeout(() => document.getElementById('shopTrigger').style.borderColor = '', 2000);
+    showToast('กรุณาเลือกชื่อร้านค้าก่อน', 'error');
+    return;
+  }
+  const count = pending.length;
+  const note  = document.getElementById('noteInput').value.trim();
+  const btn   = document.getElementById('submitBtn');
+  btn.disabled = true;
+  showSpinner('กำลังบันทึกรูปภาพ...');
+
+  try {
+    const photos  = getPhotos();
+    const now     = new Date();
+    const dateStr = formatThai(now);
+    const useDrive = !!driveToken;
+    let driveOk = 0;
+
+    for (let i = 0; i < pending.length; i++) {
+      const item = pending[i];
+      document.getElementById('spinMsg').textContent =
+        `กำลังบันทึก ${i + 1}/${pending.length}${useDrive ? ' → Google Drive' : ''}...`;
+
+      // Compress thumbnail for localStorage display
+      const thumb = await compress(item.dataUrl);
+
+      // Upload original to Drive if connected
+      let driveFileId = null, driveLink = null;
+      if (useDrive) {
+        try {
+          const ts     = formatThaiFilename(now);
+          const fname  = `${selectedShop}_${ts}_${item.origName}`;
+          const result = await uploadToDrive(item.dataUrl, fname, selectedShop);
+          if (result) { driveFileId = result.id; driveLink = result.webViewLink; driveOk++; }
+        } catch (driveErr) {
+          console.warn('Drive upload failed for', item.origName, driveErr);
+        }
+      }
+
+      photos.unshift({
+        id:          Date.now() + '_' + Math.floor(Math.random() * 100000),
+        dataUrl:     thumb,
+        name:        item.origName,
+        shop:        selectedShop,
+        note:        note,
+        ts:          now.toISOString(),
+        displayDate: dateStr,
+        driveFileId,
+        driveLink,
+        uploadedBy: '',
+      });
+    }
+
+    // Guard localStorage ~5 MB limit
+    let json = JSON.stringify(photos);
+    while (json.length > 4.8 * 1024 * 1024 && photos.length > 1) { photos.pop(); json = JSON.stringify(photos); }
+    localStorage.setItem(STORE_KEY, json);
+
+    pending = [];
+    clearPreview();
+    renderGallery();
+    renderRecordTable();
+    updateStorage();
+
+    const driveMsg = useDrive ? ` · Drive ${driveOk}/${count} ✓` : ' (ไม่ได้เชื่อมต่อ Drive)';
+    showToast(`บันทึก ${count} รูปเรียบร้อย ✓${driveMsg}`, 'success');
+    setTimeout(() => document.querySelector('.section-header').scrollIntoView({ behavior: 'smooth' }), 300);
+  } catch (e) {
+    showToast('เกิดข้อผิดพลาด: ' + e.message, 'error');
+  } finally {
+    hideSpinner();
+    btn.disabled = false;
+  }
+}
+
+// ── Gallery ──
+function getPhotos() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch { return []; }
+}
+
+function renderGallery() {
+  const photos = getPhotos();
+  const q = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
+  const list = q
+    ? photos.filter(p =>
+        (p.shop || '').toLowerCase().includes(q) ||
+        (p.note || '').toLowerCase().includes(q) ||
+        (p.name || '').toLowerCase().includes(q))
+    : photos;
+
+  document.getElementById('galCount').textContent = photos.length;
+  const grid = document.getElementById('galleryGrid');
+
+  if (!list.length) {
+    grid.innerHTML = `
+      <div class="empty-state">
+        <span class="empty-icon">📭</span>
+        <div style="font-size:15px">${q ? 'ไม่พบรูปที่ตรงกับ "' + q + '"' : 'ยังไม่มีรูปภาพ — เริ่มอัพโหลดด้านบนได้เลย!'}</div>
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = list.map(p => `
+    <div class="gallery-item" onclick="openLb('${p.id}')">
+      <img src="${p.dataUrl}" alt="${p.name}" loading="lazy">
+      ${p.driveLink ? `<a class="drive-badge" href="${p.driveLink}" target="_blank" onclick="event.stopPropagation()">📂 Drive</a>` : ''}
+      <div class="g-overlay">
+        <span class="g-time">${p.displayDate || ''}</span>
+        <span class="g-note" style="font-weight:600;color:#ffd6ee">${p.shop || ''}</span>
+        ${p.note ? `<span class="g-note">${p.note}</span>` : ''}
+      </div>
+      <button class="del-btn" onclick="event.stopPropagation();delPhoto('${p.id}')">🗑️</button>
+    </div>`).join('');
+}
+
+function delPhoto(id) {
+  if (!confirm('ลบรูปนี้?')) return;
+  const upd = getPhotos().filter(p => p.id !== id);
+  localStorage.setItem(STORE_KEY, JSON.stringify(upd));
+  renderGallery();
+  renderRecordTable();
+  updateStorage();
+  showToast('ลบรูปเรียบร้อย', 'info');
+}
+
+function clearAll() {
+  const photos = getPhotos();
+  if (!photos.length) return;
+  if (!confirm(`ลบรูปทั้งหมด ${photos.length} รูป?\nไม่สามารถกู้คืนได้`)) return;
+  localStorage.removeItem(STORE_KEY);
+  renderGallery();
+  renderRecordTable();
+  updateStorage();
+  showToast('ลบรูปทั้งหมดเรียบร้อย', 'info');
+}
+
+// ── Lightbox ──
+function openLb(id) {
+  const p = getPhotos().find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('lbImg').src = p.dataUrl;
+  document.getElementById('lbTime').textContent = (p.shop ? '🏪 ' + p.shop + '  ' : '') + (p.displayDate || '');
+  document.getElementById('lbNote').textContent = p.note || p.name || '';
+  const dl = document.getElementById('lbDl');
+  dl.href = p.dataUrl;
+  dl.download = p.name || 'shop-photo.jpg';
+  const driveLink = document.getElementById('lbDriveLink');
+  if (p.driveLink) { driveLink.href = p.driveLink; driveLink.style.display = ''; }
+  else driveLink.style.display = 'none';
+  document.getElementById('lightbox').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+  document.body.style.overflow = '';
+}
+document.getElementById('lightbox').addEventListener('click', function(e) {
+  if (e.target === this) closeLightbox();
+});
+
+// ── Storage ──
+function updateStorage() {
+  const w = document.getElementById('storageWrap');
+  const raw = localStorage.getItem(STORE_KEY) || '';
+  if (!raw || raw === '[]') { w.style.display = 'none'; return; }
+  const used = new Blob([raw]).size;
+  const max  = 5 * 1024 * 1024;
+  const pct  = Math.min(100, Math.round(used / max * 100));
+  w.style.display = '';
+  document.getElementById('storageText').textContent = `${(used/1024/1024).toFixed(1)} MB / 5 MB (${pct}%)`;
+  const fill = document.getElementById('storageFill');
+  fill.style.width      = pct + '%';
+  fill.style.background = pct > 80 ? 'var(--danger)' : pct > 55 ? 'var(--warning)' : 'var(--pink)';
+}
+
+// ── Helpers ──
+function formatThai(d) {
+  const dd   = String(d.getDate()).padStart(2, '0');
+  const mm   = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear() + 543;
+  const hh   = String(d.getHours()).padStart(2, '0');
+  const min  = String(d.getMinutes()).padStart(2, '0');
+  return `${dd}/${mm}/${yyyy} ${hh}.${min}`;
+}
+
+function showSpinner(msg = 'กำลังโหลด...') {
+  document.getElementById('spinMsg').textContent = msg;
+  document.getElementById('spinner').classList.add('show');
+}
+function hideSpinner() { document.getElementById('spinner').classList.remove('show'); }
+
+// ── Record Table ──
+function renderRecordTable() {
+  const photos = getPhotos();
+  const q = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
+  const list = q
+    ? photos.filter(p =>
+        (p.shop || '').toLowerCase().includes(q) ||
+        (p.note || '').toLowerCase().includes(q) ||
+        (p.name || '').toLowerCase().includes(q))
+    : photos;
+
+  const tbody = document.getElementById('recTbody');
+  if (!list.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="tbl-empty">ยังไม่มีรายการ</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = list.map((p, i) => `
+    <tr>
+      <td class="num">${i + 1}</td>
+      <td><img class="thumb" src="${p.dataUrl}" onclick="openLb('${p.id}')" title="คลิกดูรูปเต็ม"></td>
+      <td><span class="shop-tag">${p.shop || '-'}</span></td>
+      <td style="max-width:200px;word-break:break-all;font-size:12px">
+        ${p.note ? `<div style="font-weight:600;color:var(--text)">${p.note}</div>` : ''}
+        <div style="color:var(--muted);font-size:11px">${p.name || '-'}</div>
+      </td>
+      <td style="white-space:nowrap;font-size:12px">${p.displayDate || '-'}</td>
+      <td class="uploader">${p.uploadedBy || '-'}</td>
+      <td>
+        ${p.driveLink
+          ? `<a class="drive-link" href="${p.driveLink}" target="_blank">📂 เปิดรูป</a>`
+          : `<span class="no-drive">ยังไม่ได้อัพ Drive</span>`}
+      </td>
+    </tr>`).join('');
+}
+
+function exportRecordsCsv() {
+  const photos = getPhotos();
+  if (!photos.length) { showToast('ไม่มีข้อมูลให้ Export', 'warning'); return; }
+  const header = ['#', 'ร้านค้า', 'หมายเหตุ', 'ชื่อไฟล์', 'วันที่บันทึก', 'ผู้บันทึก', 'ลิ้ง Drive'];
+  const rows = photos.map((p, i) => [
+    i + 1,
+    p.shop || '',
+    p.note || '',
+    p.name || '',
+    p.displayDate || '',
+    p.uploadedBy || '',
+    p.driveLink || '',
+  ]);
+  const csv = [header, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `rattana-shop-photos-${formatThaiFilename(new Date())}.csv`;
+  a.click();
+  showToast('Export CSV เรียบร้อย ✓', 'success');
+}
+
+function formatThaiFilename(d) {
+  const dd   = String(d.getDate()).padStart(2, '0');
+  const mm   = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear() + 543;
+  const hh   = String(d.getHours()).padStart(2, '0');
+  const min  = String(d.getMinutes()).padStart(2, '0');
+  const ss   = String(d.getSeconds()).padStart(2, '0');
+  return `${yyyy}${mm}${dd}_${hh}${min}${ss}`;
+}
+
+function showToast(msg, type = 'info') {
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+</script>
+</body>
+</html>

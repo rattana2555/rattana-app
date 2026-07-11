@@ -1,0 +1,2245 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Rattana OM Report v8.43</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --navy:       #0d1b3e;
+      --navy-mid:   #1a2f5e;
+      --navy-light: #243b73;
+      --gold:       #c9a84c;
+      --gold-light: #e8c86a;
+      --success:    #2ecc71;
+      --danger:     #e74c3c;
+      --warning:    #f39c12;
+      --info:       #3498db;
+      --bg:         #f4f6fb;
+      --text:       #0d1b3e;
+      --card-bg:    #ffffff;
+      --border:     #dde3f0;
+      --muted:      #6b7896;
+      --row-alt:    #fafbfd;
+      --radius-sm:  6px;
+      --radius-md:  12px;
+      --radius-lg:  16px;
+      --shadow-sm:  0 1px 4px rgba(0,0,0,.06);
+      --shadow-md:  0 2px 8px rgba(0,0,0,.08);
+      --shadow-lg:  0 8px 24px rgba(13,27,62,.12);
+      --shadow-gold:0 4px 12px rgba(201,168,76,.35);
+    }
+    body.dark {
+      --bg:      #0a1020; --text:    #e8eaf0;
+      --card-bg: #111c35; --border:  #243b73;
+      --muted:   #8a98b8; --row-alt: #0f1830;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Sarabun',sans-serif;min-height:100dvh;overflow-x:hidden;background:var(--bg);color:var(--text);transition:background .25s,color .25s}
+    button{font-family:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+    input,select{font-family:inherit;font-size:16px}
+
+    /* ── Header ── */
+    header{background:var(--navy);color:#fff;padding:10px 14px;position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:10px;border-bottom:3px solid var(--gold)}
+    .logo-text{font-weight:700;letter-spacing:.5px;font-size:16px;color:#fff;flex:1;min-width:0}
+    .logo-text span{color:var(--gold)}
+    .ver-badge{font-size:10px;background:rgba(255,255,255,.15);color:rgba(255,255,255,.7);padding:2px 6px;border-radius:4px;font-weight:400;white-space:nowrap}
+    .icon-btn{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.2);width:36px;height:36px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;transition:background .15s}
+    .icon-btn:hover{background:rgba(255,255,255,.12)}
+
+    /* ── Content ── */
+    .content{padding:12px;max-width:1400px;margin:0 auto;width:100%}
+    @media(min-width:640px){.content{padding:16px}}
+    @media(min-width:1024px){.content{padding:20px}}
+
+    /* ── Filter bar ── */
+    .filter-bar{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:7px 12px;margin-bottom:10px;box-shadow:var(--shadow-sm)}
+    .filter-row{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+    .filter-field{display:flex;flex-direction:column;gap:2px;min-width:160px;flex:1}
+    .filter-field label{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.3px;text-transform:uppercase}
+
+    /* ── Dropdown ── */
+    .dd-wrap{position:relative;width:100%}
+    .dd-trigger{width:100%;min-height:30px;padding:4px 10px;background:var(--card-bg);border:1.5px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:'Sarabun',sans-serif;font-size:13px;text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:6px;transition:border-color .15s}
+    .dd-trigger:hover{border-color:var(--gold)}
+    .dd-trigger-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .dd-panel{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--card-bg);border:1.5px solid var(--border);border-radius:var(--radius-sm);z-index:500;box-shadow:0 8px 24px rgba(0,0,0,.15);max-height:260px;display:flex;flex-direction:column}
+    .dd-search{padding:8px 12px;font-size:14px;border:none;border-bottom:1px solid var(--border);background:transparent;color:var(--text);outline:none;font-family:'Sarabun',sans-serif}
+    .dd-list{overflow-y:auto;flex:1;list-style:none;padding:4px 0;margin:0;scrollbar-width:thin}
+    .dd-list li{padding:8px 12px;cursor:pointer;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .dd-list li:hover{background:var(--navy-light);color:#fff}
+    .dd-list li.selected{background:rgba(201,168,76,.15);font-weight:600}
+    .dd-list li.no-result{color:#999;cursor:default;font-style:italic}
+
+    /* ── Stat grid ── */
+    .stat-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-bottom:12px}
+    .stat-card{background:var(--card-bg);border-radius:var(--radius-sm);padding:8px 10px;border:1px solid var(--border);border-top:3px solid var(--gold);box-shadow:var(--shadow-sm)}
+    .stat-card.c-info{border-top-color:var(--info)}
+    .stat-card.c-success{border-top-color:var(--success)}
+    .stat-card.c-danger{border-top-color:var(--danger)}
+    .s-label{font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.3px;text-transform:uppercase;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .s-value{font-size:18px;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums}
+    .s-sub{font-size:10px;color:var(--muted);margin-top:2px}
+
+    /* ── Chart row ── */
+    .chart-row{display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:14px}
+    @media(min-width:900px){.chart-row{grid-template-columns:3fr 2fr}}
+    .chart-card{background:var(--card-bg);border-radius:var(--radius-md);border:1px solid var(--border);box-shadow:var(--shadow-md);padding:14px 16px}
+    .chart-title{font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+    .chart-title em{color:var(--gold);font-style:normal}
+    .chart-wrap{position:relative;height:260px}
+    @media(min-width:900px){.chart-wrap{height:300px}}
+
+    /* ── Table ── */
+    .card{background:var(--card-bg);border-radius:var(--radius-md);border:1px solid var(--border);box-shadow:var(--shadow-md);overflow:hidden}
+    .card-head{padding:12px 14px;border-bottom:1px solid var(--border);background:linear-gradient(to right,rgba(201,168,76,.07),transparent);display:flex;align-items:center;justify-content:space-between}
+    .card-head-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px}
+    .card-head-title em{color:var(--gold);font-style:normal}
+    .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .tbl{width:100%;border-collapse:collapse;min-width:560px}
+    .tbl thead{background:var(--navy);color:#fff;position:sticky;top:0;z-index:5}
+    #custTblWrap{scrollbar-width:none}
+    #custTblWrap::-webkit-scrollbar{display:none}
+    .tbl thead th{padding:10px 10px;text-align:left;font-size:12px;font-weight:600;letter-spacing:.3px;white-space:normal;word-break:keep-all;border-bottom:2px solid var(--gold);cursor:pointer;user-select:none}
+    .tbl thead th:hover{background:var(--navy-mid)}
+    .tbl tbody tr{border-bottom:1px solid var(--border);transition:background .12s}
+    .tbl tbody tr:nth-child(even){background:var(--row-alt)}
+    .tbl tbody tr:hover{background:rgba(201,168,76,.07)}
+    .tbl td{padding:9px 10px;font-size:13px;vertical-align:middle}
+    .tbl td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:500;white-space:nowrap}
+    .tbl .empty-row td{text-align:center;padding:40px 20px;color:var(--muted);font-size:14px}
+    .tbl tfoot td{background:var(--navy);color:#fff;font-weight:700;padding:10px;font-size:12px}
+    .tbl tfoot td.num{text-align:right}
+    .sort-ind{font-size:10px;color:var(--gold);margin-left:3px;font-weight:700}
+
+    /* ── Progress bar ── */
+    .prog-bar{height:5px;background:var(--border);border-radius:3px;margin-top:4px;min-width:60px;overflow:hidden}
+    .prog-fill{height:100%;background:var(--gold);border-radius:3px;transition:width .4s ease}
+
+    /* ── Badge ── */
+    .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap}
+    .badge-gold{background:rgba(201,168,76,.15);color:#7a5e1a;border:1px solid rgba(201,168,76,.35)}
+    body.dark .badge-gold{color:var(--gold-light)}
+
+    /* ── Info bar ── */
+    .info-bar{padding:8px 12px;background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.2);border-radius:var(--radius-sm);margin-bottom:12px;font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .info-bar strong{color:var(--text)}
+
+    /* ── Buttons ── */
+    .btn{display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid transparent;min-height:36px;transition:opacity .15s,transform .1s}
+    .btn:hover{opacity:.88}.btn:active{transform:scale(.97)}
+    .btn-gold{background:var(--gold);color:var(--navy)}
+    .btn-outline{background:transparent;color:var(--text);border-color:var(--border)}
+    .btn-sm{padding:5px 10px;font-size:12px;min-height:30px}
+
+    /* ── Toast ── */
+    .toast{position:fixed;bottom:max(20px,env(safe-area-inset-bottom));right:14px;padding:10px 18px;border-radius:var(--radius-md);color:#fff;z-index:9999;animation:slideIn .3s ease;font-weight:500;box-shadow:var(--shadow-lg);max-width:90vw;font-size:13px}
+    .toast-success{background:var(--success)}.toast-error{background:var(--danger)}.toast-warning{background:var(--warning);color:var(--navy)}.toast-info{background:var(--navy-mid);border-left:3px solid var(--gold)}
+
+    /* ── Spinner ── */
+    .spinner-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.55);align-items:center;justify-content:center;z-index:99999;backdrop-filter:blur(3px)}
+    .spinner-overlay.show{display:flex}
+    .spinner-box{background:var(--card-bg);border-radius:var(--radius-lg);padding:30px 38px;text-align:center;border-top:4px solid var(--gold);min-width:200px}
+    .spinner-ring{width:46px;height:46px;border:5px solid #dde3f0;border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+
+    /* ── Loading bar ── */
+    #loadingBar{position:fixed;top:0;left:0;height:3px;background:var(--gold);width:0;transition:width .4s;z-index:10000}
+
+    /* ── Back to top ── */
+    #backToTop{position:fixed;bottom:max(22px,env(safe-area-inset-bottom));right:max(14px,env(safe-area-inset-right));background:var(--gold);color:var(--navy);border:none;border-radius:50%;width:44px;height:44px;display:none;align-items:center;justify-content:center;box-shadow:var(--shadow-gold);z-index:90;font-size:20px;font-weight:700;cursor:pointer}
+    #backToTop.show{display:flex}
+
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+
+    .mt-14{margin-top:14px}
+    .flex-between{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+
+    /* ── App body (sidebar + content) ── */
+    .app-body{display:flex;align-items:flex-start;min-height:calc(100vh - 62px)}
+    .sidebar{width:150px;min-width:150px;flex-shrink:0;background:var(--navy);border-right:3px solid var(--gold);position:sticky;top:62px;height:calc(100vh - 62px);overflow-y:auto;display:flex;flex-direction:column;padding:8px 0;gap:2px;z-index:98;transition:width .22s,min-width .22s,padding .22s}
+    .sidebar.collapsed{width:0;min-width:0;padding:0;overflow:hidden}
+    .sidebar.collapsed .tab-btn,.sidebar.collapsed .sb-info{display:none}
+    .sb-info{padding:10px 14px;font-size:11px;color:rgba(255,255,255,.55);border-top:1px solid rgba(255,255,255,.1);line-height:1.7;word-break:break-word;margin-top:4px}
+    .sb-info strong{color:rgba(255,255,255,.9);font-weight:600}
+    .sb-info .sb-period{margin-top:6px;padding:6px 8px;background:rgba(201,168,76,.15);border:1px solid rgba(201,168,76,.25);border-radius:6px;font-size:10px;color:rgba(255,255,255,.75);line-height:1.6}
+    .main-content{flex:1;min-width:0;overflow:hidden}
+    #sidebarToggle{position:fixed;top:70px;left:154px;z-index:200;background:var(--gold);color:var(--navy);border:none;width:22px;height:38px;border-radius:0 6px 6px 0;cursor:pointer;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:2px 2px 6px rgba(0,0,0,.2);transition:left .22s}
+    #sidebarToggle.collapsed{left:3px}
+
+    /* ── Tab buttons (sidebar style) ── */
+    .tab-btn{background:transparent;border:none;color:rgba(255,255,255,.6);padding:14px 16px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;text-align:left;width:100%;border-left:3px solid transparent;transition:all .18s;display:flex;align-items:center;gap:8px;line-height:1.3;white-space:normal;word-break:keep-all}
+    .tab-btn:hover{color:#fff;background:rgba(255,255,255,.08)}
+    .tab-btn.active{color:var(--gold);background:rgba(201,168,76,.12);border-left-color:var(--gold);font-weight:700}
+
+    /* ── Tab panes ── */
+    .tab-pane{display:none}.tab-pane.active{display:block}
+
+    /* ── Summary dashboard KPI strip ── */
+    .cmp-strip{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-bottom:12px}
+    .cmp-card{background:var(--card-bg);border-radius:var(--radius-sm);padding:5px 8px 6px;border:1px solid var(--border);box-shadow:var(--shadow-sm);min-width:0}
+    .cmp-card.latest{border-top:2px solid var(--gold)}
+    .cmp-card.avg{border-top:2px solid var(--info)}
+    .cmp-card.up{border-top:2px solid var(--success)}
+    .cmp-card.down{border-top:2px solid var(--danger)}
+    .cmp-label{font-size:9px;font-weight:700;color:var(--muted);letter-spacing:.3px;text-transform:uppercase;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cmp-val{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2}
+    .cmp-sub{font-size:9px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+    /* ── Period badge ── */
+    .period-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.3);border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;color:var(--text);margin-bottom:12px;flex-wrap:wrap}
+    .period-badge .sep{color:var(--muted);font-weight:400}
+
+    /* ── Comparison table ── */
+    .cmp-tbl{width:100%;border-collapse:collapse;min-width:600px}
+    .cmp-tbl thead{background:var(--navy);color:#fff;position:sticky;top:0;z-index:5}
+    .cmp-tbl thead th{padding:9px 10px;text-align:left;font-size:11px;font-weight:600;letter-spacing:.3px;white-space:nowrap;border-bottom:2px solid var(--gold)}
+    .cmp-tbl thead th.r{text-align:right}
+    .cmp-tbl tbody tr{border-bottom:1px solid var(--border);transition:background .12s}
+    .cmp-tbl tbody tr:nth-child(even){background:var(--row-alt)}
+    .cmp-tbl tbody tr:hover{background:rgba(201,168,76,.07)}
+    .cmp-tbl td{padding:9px 10px;font-size:13px;vertical-align:middle}
+    .cmp-tbl td.r{text-align:right;font-variant-numeric:tabular-nums;font-weight:500;white-space:nowrap}
+    .cmp-tbl tfoot td{background:var(--navy);color:#fff;font-weight:700;padding:10px;font-size:12px}
+    .cmp-tbl tfoot td.r{text-align:right}
+    .cmp-tbl .empty-row td{text-align:center;padding:40px;color:var(--muted)}
+
+    /* ── Trend chip ── */
+    .trend{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap}
+    .trend.up{background:#e8f7ee;color:#1a7a3c}
+    .trend.down{background:#fde8e8;color:#b91c1c}
+    .trend.flat{background:rgba(0,0,0,.06);color:var(--muted)}
+    body.dark .trend.up{background:#1a3a25;color:#7be0a3}
+    body.dark .trend.down{background:#3a1a17;color:#ff8a7e}
+    body.dark .trend.flat{background:rgba(255,255,255,.08);color:var(--muted)}
+
+    /* ── VS mini bar ── */
+    .vs-bar{display:flex;flex-direction:column;gap:3px;min-width:100px}
+    .vs-track{height:7px;background:var(--border);border-radius:4px;overflow:hidden}
+    .vs-fill-latest{height:100%;border-radius:4px;background:var(--gold);transition:width .5s}
+    .vs-fill-avg{height:100%;border-radius:4px;background:var(--info);transition:width .5s}
+    .vs-legend{display:flex;gap:8px;font-size:10px;color:var(--muted)}
+    .vs-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block;margin-right:2px}
+  </style>
+</head>
+<body>
+
+<div id="loadingBar"></div>
+
+<div class="spinner-overlay" id="spinner">
+  <div class="spinner-box">
+    <div class="spinner-ring"></div>
+    <p id="spinnerMsg" style="color:var(--text);font-weight:600;font-size:14px">กำลังโหลดข้อมูล...</p>
+  </div>
+</div>
+
+<header>
+  
+  <div class="logo-text">Rattana <span>OM Report</span> <span class="ver-badge">v8.58 · 2026-07-04</span></div>
+  <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรชข้อมูล">↻</button>
+  <button class="icon-btn" id="btnDark" onclick="toggleDark()" title="Dark mode">🌙</button>
+  <button class="icon-btn" onclick="exportExcel()" title="Export Excel">📥</button>
+</header>
+
+<div class="app-body">
+
+<!-- Sidebar toggle button -->
+<button id="sidebarToggle" class="collapsed" onclick="toggleSidebar()" title="ซ่อน/แสดง Sidebar">▶</button>
+
+<!-- Sidebar navigation -->
+<aside class="sidebar collapsed" id="sidebar">
+  <button class="tab-btn active" onclick="switchTab('summary',this)">💰 ยอดขายรวม</button>
+  <button class="tab-btn" id="tabQuarterBtn" onclick="switchTab('quarter',this)">📦 Data รวม</button>
+  <button class="tab-btn" id="tabLatestBtn" onclick="switchTab('latest',this)">📋 Data รวม<br>(เดือนล่าสุด)</button>
+  <button class="tab-btn" id="tabSumBtn" onclick="switchTab('sumdata',this)">📊 Sum Data</button>
+  <div class="sb-info" id="infoBar2"><span style="color:rgba(255,255,255,.35)">⏳ กำลังโหลด...</span></div>
+  <div class="sb-info"><div class="sb-period" id="periodBadge"></div></div>
+</aside>
+
+<div class="main-content">
+<div class="content">
+
+<!-- ══════════════════════════════════════════ TAB: ยอดขายรวม ══ -->
+<div class="tab-pane active" id="pane-summary">
+
+  <!-- Filter bar -->
+  <div class="filter-bar">
+    <div class="filter-row">
+
+      <div class="filter-field" style="min-width:200px;flex:2">
+        <label>👤 พนักงานขาย</label>
+        <div class="dd-wrap" id="ddSale">
+          <button class="dd-trigger" onclick="toggleDD('ddSale')" type="button">
+            <span class="dd-trigger-label" id="ddSaleLabel">— เลือกพนักงาน —</span><span>▾</span>
+          </button>
+          <div class="dd-panel" id="ddSalePanel" style="display:none">
+            <ul class="dd-list" id="ddSaleList"></ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-field" style="min-width:160px;flex:1">
+        <label>🏷️ Cat BU</label>
+        <div class="dd-wrap" id="ddBU">
+          <button class="dd-trigger" onclick="toggleDD('ddBU')" type="button">
+            <span class="dd-trigger-label" id="ddBULabel">— ทั้งหมด —</span><span>▾</span>
+          </button>
+          <div class="dd-panel" id="ddBUPanel" style="display:none">
+            <input class="dd-search" type="text" placeholder="🔍 ค้นหา..." oninput="filterDD(this,'ddBUList')" autocomplete="off">
+            <ul class="dd-list" id="ddBUList"></ul>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:6px;align-items:flex-end;flex-shrink:0">
+        <button class="btn btn-outline btn-sm" onclick="clearBUFilter()">✕ ล้าง</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Overall KPI strip -->
+  <div class="cmp-strip" id="cmpStrip">
+    <div class="cmp-card avg">
+      <div class="cmp-label">📐 AVG ไตรมาสก่อน</div>
+      <div class="cmp-val" id="cmpAvgVal">—</div>
+      <div class="cmp-sub" id="cmpAvgSub">เฉลี่ย/เดือน บาท</div>
+    </div>
+    <div class="cmp-card latest">
+      <div class="cmp-label">📅 เดือนล่าสุด</div>
+      <div class="cmp-val" id="cmpLatestVal">—</div>
+      <div class="cmp-sub" id="cmpLatestSub">Exvat บาท</div>
+    </div>
+    <div class="cmp-card" id="cmpDeltaCard">
+      <div class="cmp-label">📈 ผลต่าง (Δ)</div>
+      <div class="cmp-val" id="cmpDeltaVal">—</div>
+      <div class="cmp-sub" id="cmpDeltaSub">บาท</div>
+    </div>
+    <div class="cmp-card" id="cmpPctCard">
+      <div class="cmp-label">🎯 % เปลี่ยนแปลง</div>
+      <div class="cmp-val" id="cmpPctVal">—</div>
+      <div class="cmp-sub">เทียบ AVG ไตรมาสก่อน</div>
+    </div>
+    <div class="cmp-card">
+      <div class="cmp-label" id="cmpQCustLabel">🏪 ร้านที่มียอด (ไตรมาส)</div>
+      <div class="cmp-val" id="cmpQCustVal">—</div>
+      <div class="cmp-sub" id="cmpQCustSub">ร้าน (ไม่นับร้านที่ยอด=0)</div>
+    </div>
+    <div class="cmp-card">
+      <div class="cmp-label" id="cmpLatestCustLabel">🏪 ร้านที่มียอด (เดือนล่าสุด)</div>
+      <div class="cmp-val" id="cmpLatestCustVal">—</div>
+      <div class="cmp-sub" id="cmpLatestCustSub">ร้าน (ไม่นับร้านที่ยอด=0)</div>
+    </div>
+    <div class="cmp-card">
+      <div class="cmp-label" id="cmpAvgSkuQLabel">📦 AVG SKU/ร้าน (ไตรมาส)</div>
+      <div class="cmp-val" id="cmpAvgSkuQVal">—</div>
+      <div class="cmp-sub" id="cmpAvgSkuQSub">SKU เฉลี่ยต่อร้าน</div>
+    </div>
+    <div class="cmp-card">
+      <div class="cmp-label" id="cmpAvgSkuLatestLabel">📦 AVG SKU/ร้าน (เดือนล่าสุด)</div>
+      <div class="cmp-val" id="cmpAvgSkuLatestVal">—</div>
+      <div class="cmp-sub" id="cmpAvgSkuLatestSub">SKU เฉลี่ยต่อร้าน</div>
+    </div>
+  </div>
+
+
+  <!-- Customer table -->
+  <div class="card" style="margin-top:14px">
+    <div class="card-head">
+      <div class="card-head-title">🏪 รายชื่อร้านค้า (ไม่ซ้ำ)</div>
+      <span id="custCount" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div id="custTopScroll" style="overflow-x:auto;overflow-y:hidden;height:12px"><div id="custTopScrollInner" style="height:1px"></div></div>
+    <div class="tbl-wrap" id="custTblWrap" style="max-height:calc(100vh - 150px);overflow-y:auto">
+      <table class="tbl" id="custTbl">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th style="min-width:180px">ชื่อร้าน</th>
+            <th id="thAvgLabel" style="text-align:right">AVG ไตรมาสก่อน (฿)</th>
+            <th id="thLatestLabel" style="text-align:right">ยอดล่าสุด (฿)</th>
+            <th style="text-align:center">โต/ตก</th>
+            <th id="thTop15Label" style="text-align:center">Top 15 Cat_Brand ติดลบ</th>
+            <th id="thTop15PosLabel" style="text-align:center">Top 15 Cat_Brand บวก</th>
+            <th id="thSkuLabel" style="text-align:center">SKU</th>
+            <th id="thSkuLatestLabel" style="text-align:center">SKU เดือนล่าสุด</th>
+            <th id="thNewSkuLabel" style="text-align:center;color:var(--warning)">NEW<br>SKU</th>
+            <th id="thNewProdLabel" style="text-align:center;color:var(--warning)">NEW<br>SKU</th>
+            <th style="text-align:center;color:var(--gold);padding-right:16px;min-width:110px">Budget</th>
+          </tr>
+        </thead>
+        <tbody id="custTblBody">
+          <tr class="empty-row"><td colspan="11">⏳ กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="text-align:center;padding:20px 0;color:var(--muted);font-size:11px">
+    Rattana OM Report v8.58 · 2026-07-04
+  </div>
+
+</div><!-- /pane-summary -->
+
+<!-- ══════════════════════════════════════════ TAB: ยอดขายไตรมาส ══ -->
+<div class="tab-pane" id="pane-quarter">
+
+  <div class="info-bar" id="infoBarQ" style="margin-bottom:10px"><span>⏳ กำลังโหลด...</span></div>
+  <div id="quarterBadge" style="margin-bottom:12px"></div>
+
+  <!-- KPI -->
+  <div class="stat-grid" style="margin-bottom:14px">
+    <div class="stat-card">
+      <div class="s-label">💰 Exvat รวมไตรมาส</div>
+      <div class="s-value" id="qKpiExvat">—</div>
+      <div class="s-sub" id="qKpiExvatSub">บาท</div>
+    </div>
+    <div class="stat-card c-info">
+      <div class="s-label">📦 Sales CS รวม</div>
+      <div class="s-value" id="qKpiCS">—</div>
+      <div class="s-sub">จำนวน CS</div>
+    </div>
+    <div class="stat-card c-success">
+      <div class="s-label">🏪 ร้านค้า</div>
+      <div class="s-value" id="qKpiCust">—</div>
+      <div class="s-sub">ร้านค้า (unique)</div>
+    </div>
+    <div class="stat-card c-danger">
+      <div class="s-label">🏷️ Cat BU</div>
+      <div class="s-value" id="qKpiBU">—</div>
+      <div class="s-sub">หมวดหมู่</div>
+    </div>
+  </div>
+
+  <!-- Quarter aggregated table: Customer × Cat_Brand -->
+  <div class="card">
+    <div class="card-head">
+      <div class="card-head-title">📋 ยอดขายรายร้าน × Cat_Brand — <em id="qCardLabel">ไตรมาสก่อน</em></div>
+      <span id="qCustCount" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
+      <table class="tbl" id="qTbl" style="min-width:820px">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Customer_Name</th>
+            <th>Cat_Brand</th>
+            <th style="text-align:right">AVG CS/เดือน</th>
+          </tr>
+        </thead>
+        <tbody id="qTblBody">
+          <tr class="empty-row"><td colspan="4">⏳ กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Quarter product detail table -->
+  <div class="card" style="margin-top:14px">
+    <div class="card-head">
+      <div class="card-head-title">📦 รายละเอียดสินค้า — <em id="qProdCardLabel">ไตรมาสก่อน</em></div>
+      <span id="qProdCount" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
+      <table class="tbl" id="qProdTbl" style="min-width:640px">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Customer_Name</th>
+            <th>Product_Name</th>
+            <th style="text-align:right" id="qProdThAvg">AVG Sales_CS/เดือน</th>
+          </tr>
+        </thead>
+        <tbody id="qProdTblBody">
+          <tr class="empty-row"><td colspan="4">⏳ กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SKU count per customer -->
+  <div class="card" style="margin-top:14px">
+    <div class="card-head">
+      <div class="card-head-title">🧮 จำนวน SKU ต่อร้าน — <em id="qSkuCardLabel">ไตรมาสก่อน</em></div>
+      <span id="qSkuCount" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
+      <table class="tbl" id="qSkuTbl" style="min-width:400px">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Customer_Name</th>
+            <th style="text-align:right">จำนวน SKU</th>
+          </tr>
+        </thead>
+        <tbody id="qSkuTblBody">
+          <tr class="empty-row"><td colspan="3">⏳ กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="text-align:center;padding:20px 0;color:var(--muted);font-size:11px">
+    Rattana OM Report v8.58 · 2026-07-04
+  </div>
+
+</div><!-- /pane-quarter -->
+
+<!-- ══════════════════════════════════════════ TAB: Data รวม เดือนล่าสุด ══ -->
+<div class="tab-pane" id="pane-latest">
+
+  <div class="info-bar" id="infoBarL" style="margin-bottom:10px"><span>⏳ กำลังโหลด...</span></div>
+
+  <!-- KPI -->
+  <div class="stat-grid" style="margin-bottom:14px">
+    <div class="stat-card">
+      <div class="s-label">💰 Exvat เดือนล่าสุด</div>
+      <div class="s-value" id="lKpiExvat">—</div>
+      <div class="s-sub" id="lKpiExvatSub">บาท</div>
+    </div>
+    <div class="stat-card c-info">
+      <div class="s-label">📦 Sales CS รวม</div>
+      <div class="s-value" id="lKpiCS">—</div>
+      <div class="s-sub">จำนวน CS</div>
+    </div>
+    <div class="stat-card c-success">
+      <div class="s-label">🏪 ร้านค้า</div>
+      <div class="s-value" id="lKpiCust">—</div>
+      <div class="s-sub">ร้านค้า (unique)</div>
+    </div>
+    <div class="stat-card c-danger">
+      <div class="s-label">🏷️ Cat BU</div>
+      <div class="s-value" id="lKpiBU">—</div>
+      <div class="s-sub">หมวดหมู่</div>
+    </div>
+  </div>
+
+  <!-- Latest month store table -->
+  <div class="card">
+    <div class="card-head">
+      <div class="card-head-title">📋 ยอดขายรายร้าน × Cat_Brand — <em id="lCardLabel">เดือนล่าสุด</em></div>
+      <span id="lCustCount" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
+      <table class="tbl" id="lTbl" style="min-width:640px">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Customer_Name</th>
+            <th>Cat_Brand</th>
+            <th style="text-align:right">Sales_CS</th>
+          </tr>
+        </thead>
+        <tbody id="lTblBody">
+          <tr class="empty-row"><td colspan="4">⏳ กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Latest month product detail table -->
+  <div class="card" style="margin-top:14px">
+    <div class="card-head">
+      <div class="card-head-title">📦 รายละเอียดสินค้า — <em id="lProdCardLabel">เดือนล่าสุด</em></div>
+      <span id="lProdCount" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
+      <table class="tbl" id="lProdTbl" style="min-width:640px">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Customer_Name</th>
+            <th>Product_Name</th>
+            <th style="text-align:right">Sales_CS</th>
+          </tr>
+        </thead>
+        <tbody id="lProdTblBody">
+          <tr class="empty-row"><td colspan="4">⏳ กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SKU count per customer (latest month) -->
+  <div class="card" style="margin-top:14px">
+    <div class="card-head">
+      <div class="card-head-title">🧮 จำนวน SKU ต่อร้าน — <em id="lSkuCardLabel">เดือนล่าสุด</em></div>
+      <span id="lSkuCount" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
+      <table class="tbl" id="lSkuTbl" style="min-width:400px">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Customer_Name</th>
+            <th style="text-align:right">จำนวน SKU</th>
+          </tr>
+        </thead>
+        <tbody id="lSkuTblBody">
+          <tr class="empty-row"><td colspan="3">⏳ กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="text-align:center;padding:20px 0;color:var(--muted);font-size:11px">
+    Rattana OM Report v8.58 · 2026-07-04
+  </div>
+
+</div><!-- /pane-latest -->
+
+<!-- ══════════════════════════════════════════ TAB: Sum Data ══ -->
+<div class="tab-pane" id="pane-sumdata">
+
+  <div class="info-bar" id="infoBarSD" style="margin-bottom:10px"><span>⏳ กำลังโหลด...</span></div>
+  <div id="periodBadgeSD" style="margin-bottom:12px"></div>
+
+  <!-- KPI -->
+  <div class="stat-grid" style="margin-bottom:14px">
+    <div class="stat-card">
+      <div class="s-label">💰 Exvat เดือนล่าสุด</div>
+      <div class="s-value" id="sdKpiLatest">—</div>
+      <div class="s-sub" id="sdKpiLatestSub">บาท</div>
+    </div>
+    <div class="stat-card c-info">
+      <div class="s-label">📐 AVG ไตรมาสก่อน</div>
+      <div class="s-value" id="sdKpiAvg">—</div>
+      <div class="s-sub" id="sdKpiAvgSub">เฉลี่ย/เดือน</div>
+    </div>
+    <div class="stat-card c-danger">
+      <div class="s-label">📉 ผลต่าง CS</div>
+      <div class="s-value" id="sdKpiDelta">—</div>
+      <div class="s-sub">เดือนล่าสุด − AVG</div>
+    </div>
+    <div class="stat-card c-success">
+      <div class="s-label">🏪 รายการ</div>
+      <div class="s-value" id="sdKpiRows">—</div>
+      <div class="s-sub">Customer × Brand</div>
+    </div>
+  </div>
+
+  <!-- ตารางติดลบ -->
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-head" style="border-top:3px solid var(--danger)">
+      <div class="card-head-title" style="color:var(--danger)">📉 ส่วนต่างติดลบ — <em id="sdCardLabel">เดือนล่าสุด vs AVG ไตรมาสก่อน</em></div>
+      <span id="sdRowCountNeg" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
+      <table class="tbl" id="sdTblNeg" style="min-width:780px">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Customer_Name</th>
+            <th>Cat_Brand</th>
+            <th id="sdThAvg" style="text-align:right">AVG CS ไตรมาสก่อน</th>
+            <th id="sdThLatest" style="text-align:right">CS เดือนล่าสุด</th>
+            <th style="text-align:right">ผลต่าง CS</th>
+            <th>Cat_Brand &amp; ผลต่าง CS</th>
+          </tr>
+        </thead>
+        <tbody id="sdTblBodyNeg">
+          <tr class="empty-row"><td colspan="7">⏳ กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ตารางบวก -->
+  <div class="card">
+    <div class="card-head" style="border-top:3px solid var(--success)">
+      <div class="card-head-title" style="color:var(--success)">📈 ส่วนต่างเป็นบวก</div>
+      <span id="sdRowCountPos" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
+      <table class="tbl" id="sdTblPos" style="min-width:780px">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Customer_Name</th>
+            <th>Cat_Brand</th>
+            <th style="text-align:right">AVG CS ไตรมาสก่อน</th>
+            <th style="text-align:right">CS เดือนล่าสุด</th>
+            <th style="text-align:right">ผลต่าง CS</th>
+            <th>Cat_Brand &amp; ผลต่าง CS</th>
+          </tr>
+        </thead>
+        <tbody id="sdTblBodyPos">
+          <tr class="empty-row"><td colspan="7">⏳ กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ตาราง Top 15 -->
+  <div class="card" style="margin-top:14px">
+    <div class="card-head" style="border-top:3px solid var(--gold)">
+      <div class="card-head-title">📊 OM เทียบ AVG <em id="sdTop15Label">(ไตรมาสก่อน)-(เดือนล่าสุด)</em> Top 15 Cat Brand</div>
+      <span id="sdTop15Count" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
+      <table class="tbl" id="sdTblTop15" style="min-width:600px">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Customer_Name</th>
+            <th>Top 15 Cat_Brand &amp; ผลต่าง CS</th>
+          </tr>
+        </thead>
+        <tbody id="sdTblBodyTop15">
+          <tr class="empty-row"><td colspan="3">⏳ กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ตาราง Top 15 บวก -->
+  <div class="card" style="margin-top:14px">
+    <div class="card-head" style="border-top:3px solid var(--success)">
+      <div class="card-head-title" style="color:var(--success)">📈 ยอดขาย <em id="sdTop15PosLabel">เดือนล่าสุด</em> Top 15 Cat Brand</div>
+      <span id="sdTop15PosCount" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
+      <table class="tbl" id="sdTblTop15Pos" style="min-width:600px">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Customer_Name</th>
+            <th>Top 15 Cat_Brand &amp; ผลต่าง CS</th>
+          </tr>
+        </thead>
+        <tbody id="sdTblBodyTop15Pos">
+          <tr class="empty-row"><td colspan="3">⏳ กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- New SKU table -->
+  <div class="card" style="margin-top:14px">
+    <div class="card-head" style="border-top:3px solid var(--info)">
+      <div class="card-head-title" style="color:var(--info)">🆕 New SKU — <em id="sdNewSkuLabel">ไตรมาสก่อน vs เดือนล่าสุด</em></div>
+      <span id="sdNewSkuCount" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
+      <table class="tbl" id="sdNewSkuTbl" style="min-width:700px">
+        <thead id="sdNewSkuThead">
+          <tr>
+            <th>Customer_Name</th>
+            <th>Product_Name</th>
+            <th id="sdNewSkuThAvg" style="text-align:right">AVG CS (ไตรมาส)</th>
+            <th id="sdNewSkuThLatest" style="text-align:right">CS (เดือนล่าสุด)</th>
+            <th style="text-align:center;color:var(--gold)">✨ New</th>
+          </tr>
+        </thead>
+        <tbody id="sdNewSkuTblBody">
+          <tr class="empty-row"><td colspan="3">⏳ กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- New_Product table -->
+  <div class="card" style="margin-top:14px">
+    <div class="card-head" style="border-top:3px solid var(--warning)">
+      <div class="card-head-title" style="color:var(--warning)">🛍️ New_Product — <em id="sdNewProdLabel">สินค้าใหม่ต่อร้าน</em></div>
+      <span id="sdNewProdCount" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
+      <table class="tbl" id="sdNewProdTbl" style="min-width:600px">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Customer_Name</th>
+            <th>New_Product</th>
+            <th style="text-align:right;white-space:nowrap">จำนวน New SKU</th>
+          </tr>
+        </thead>
+        <tbody id="sdNewProdTblBody">
+          <tr class="empty-row"><td colspan="4">⏳ กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="text-align:center;padding:20px 0;color:var(--muted);font-size:11px">
+    Rattana OM Report v8.58 · 2026-07-04
+  </div>
+
+</div><!-- /pane-sumdata -->
+
+</div><!-- /content -->
+</div><!-- /main-content -->
+</div><!-- /app-body -->
+
+<button id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="กลับขึ้นบน">↑</button>
+
+<script>
+// ── Config ──────────────────────────────────────
+const SHEET_ID        = '1wt7Yarh7cD1Il28OXQVDrfEs3ipHKsiOXhckrvWQyWI';
+const BUDGET_SHEET_ID = '1ACpa2hyJSgOjmvO610gnzJfCiKk_wLEohSidM46ZbRc';
+const CUST_MASTER_ID  = '1dAxF4Mz-zhJIVbuJ_Ql126gt08qvVS1wndJD50pqCZI';
+const TTL             = 5 * 60 * 1000; // 5 min
+
+let budgetData   = {}; // normSale → Customer_Name → รวมส่วนต่าง
+let custMasterMap = {}; // normSale → Set<ชื่อร้านค้า>
+
+const normSale = s => String(s||'').replace(/^คุณ\s+/,'').trim();
+
+async function fetchCustMaster() {
+  try {
+    const cacheKey = 'rattana_cust_master_v1';
+    const cached = getCached(cacheKey);
+    const rows = cached || await (async () => {
+      const url = `https://docs.google.com/spreadsheets/d/${CUST_MASTER_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent('Customer')}`;
+      const res = await fetch(url); if (!res.ok) throw new Error(res.status);
+      const d = parseCsv(await res.text());
+      setCache(cacheKey, d); return d;
+    })();
+    custMasterMap = {};
+    rows.forEach(r => {
+      const sale = normSale(r['เซลล์ผู้ดูแล'] || '');
+      const cust = String(r['ชื่อร้านค้า'] || '').trim();
+      if (!sale || !cust) return;
+      if (!custMasterMap[sale]) custMasterMap[sale] = new Set();
+      custMasterMap[sale].add(cust);
+    });
+  } catch(e) { console.warn('Customer master load failed:', e.message); }
+}
+
+async function fetchBudgetData() {
+  try {
+    const cacheKey = 'rattana_budget_v2';
+    const cached = getCached(cacheKey);
+    const rows = cached || await (async () => {
+      const url = `https://docs.google.com/spreadsheets/d/${BUDGET_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent('Budget Aom')}`;
+      const res = await fetch(url); if (!res.ok) throw new Error(res.status);
+      const d = parseCsv(await res.text());
+      setCache(cacheKey, d); return d;
+    })();
+    budgetData = {};
+    rows.forEach(r => {
+      const sale = normSale(r['Sale NO ROO']);
+      const cust = String(r['Customer_Name'] || '').trim();
+      const val  = parseFloat(String(r['รวมส่วนต่าง'] || '').replace(/,/g,'')) || 0;
+      if (!sale || !cust) return;
+      if (!budgetData[sale]) budgetData[sale] = {};
+      budgetData[sale][cust] = (budgetData[sale][cust] || 0) + val;
+    });
+    // re-render summary tab เพื่อให้ Budget column แสดงข้อมูล
+    if (activeTab === 'summary') renderSummaryTab();
+  } catch(e) { console.warn('Budget load failed:', e.message); }
+}
+
+function getBudget(saleName, custName) {
+  const sale = normSale(saleName);
+  return budgetData[sale] ? budgetData[sale][custName] : undefined;
+}
+const SALESPEOPLE = [
+  'สุรัตน์ รุ่งฤทธิเดช',
+  'นพดล พุทธรักษา',
+  'วิรัชย์ หัดกรรม',
+  'จารุพัฒน์ หอมวิเชียร',
+  'จิรายุ วันจันทร์',
+  'พัฒนะ ดำรงค์ศิลป์',
+  'ชัยสิทธิ์ มีศิริ',
+];
+
+// ── State ────────────────────────────────────────
+let allData       = [];
+let filteredData  = [];
+let chartBar      = null;
+let chartDoughnut = null;
+const sortState   = { key: 'Exvat', dir: 'desc' };
+let currentSheet = '';
+let selBU = '';
+
+// ── BU colour palette ─────────────────────────────
+const BU_COLORS = [
+  '#c9a84c','#0d1b3e','#2ecc71','#e74c3c','#3498db',
+  '#9b59b6','#e67e22','#1abc9c','#e91e63','#607d8b',
+  '#ff9800','#795548','#26a69a','#42a5f5','#ef5350',
+];
+
+// ── Spinner ──────────────────────────────────────
+const showSpinner = m => {
+  document.getElementById('spinnerMsg').textContent = m || 'กำลังโหลด...';
+  document.getElementById('spinner').classList.add('show');
+};
+const hideSpinner = () => document.getElementById('spinner').classList.remove('show');
+const setLoading  = on  => document.getElementById('loadingBar').style.width = on ? '85%' : '0';
+
+function showToast(msg, type = 'info') {
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+// ── Cache ─────────────────────────────────────────
+const getCached = k => {
+  try {
+    const i = JSON.parse(localStorage.getItem(k));
+    return i && (Date.now() - i.ts) < TTL ? i.data : null;
+  } catch { return null; }
+};
+const setCache = (k, d) => {
+  try { localStorage.setItem(k, JSON.stringify({ ts: Date.now(), data: d })); } catch {}
+};
+
+// ── RFC-4180 CSV parser ───────────────────────────
+function parseCsv(text) {
+  if (!text) return [];
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const rows = []; let row = [], cell = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQ) {
+      if (ch === '"') { if (text[i+1]==='"'){cell+='"';i++;}else inQ=false; }
+      else cell += ch;
+    } else {
+      if (ch==='"') inQ=true;
+      else if (ch===',') { row.push(cell); cell=''; }
+      else if (ch==='\r') {}
+      else if (ch==='\n') { row.push(cell); rows.push(row); row=[]; cell=''; }
+      else cell += ch;
+    }
+  }
+  if (cell||row.length) { row.push(cell); rows.push(row); }
+  if (!rows.length) return [];
+  const clean = s => String(s||'').replace(/[​‌‍﻿]/g,'').replace(/ /g,' ').trim();
+  const headers = rows[0].map(clean);
+  return rows.slice(1)
+    .filter(r => r.some(c => clean(c)))
+    .map(r => Object.fromEntries(headers.map((k, i) => [k, clean(r[i])])));
+}
+
+// ── Fetch ─────────────────────────────────────────
+async function fetchSheet(sheetName) {
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return parseCsv(await res.text());
+}
+
+// ── Init ──────────────────────────────────────────
+function initApp() {
+  // Build salesperson dropdown first — no data loaded yet
+  buildSaleDD();
+}
+
+function buildSaleDD() {
+  const ul = document.getElementById('ddSaleList');
+  ul.innerHTML = '';
+  SALESPEOPLE.forEach(name => {
+    const li = document.createElement('li');
+    li.textContent = name;
+    li.className = name === currentSheet ? 'selected' : '';
+    li.onclick = () => {
+      document.getElementById('ddSaleLabel').textContent = name;
+      document.getElementById('ddSalePanel').style.display = 'none';
+      loadSheet(name);
+    };
+    ul.appendChild(li);
+  });
+}
+
+async function loadSheet(sheetName) {
+  if (!sheetName) return;
+  currentSheet = sheetName;
+  selBU = '';
+  document.getElementById('ddBULabel').textContent = '— ทั้งหมด —';
+  // update selected state in dd
+  document.querySelectorAll('#ddSaleList li').forEach(li => {
+    li.className = li.textContent === sheetName ? 'selected' : '';
+  });
+
+  const cacheKey = 'rattana_om_v1_' + sheetName;
+  showSpinner(`กำลังโหลด: ${sheetName}...`);
+  setLoading(true);
+  try {
+    fetchBudgetData();   // โหลด Budget ควบคู่
+    fetchCustMaster();   // โหลด Customer master ควบคู่
+    const cached = getCached(cacheKey);
+    if (cached) {
+      allData = cached;
+      buildFilters(); applyFilters();
+      showToast(`โหลด cache ${allData.length.toLocaleString()} รายการ`, 'info');
+      fetchSheet(sheetName).then(d => {
+        setCache(cacheKey, d); allData = d;
+        buildFilters(); applyFilters();
+      }).catch(() => {});
+    } else {
+      allData = await fetchSheet(sheetName);
+      setCache(cacheKey, allData);
+      buildFilters(); applyFilters();
+      showToast(`โหลดสำเร็จ ${allData.length.toLocaleString()} รายการ ✓`, 'success');
+    }
+  } catch (e) {
+    showToast('โหลดข้อมูลล้มเหลว: ' + e.message, 'error');
+    document.getElementById('mainTblBody').innerHTML =
+      `<tr class="empty-row"><td colspan="6">❌ โหลดข้อมูลล้มเหลว: ${e.message}</td></tr>`;
+    document.getElementById('infoBar').innerHTML = '❌ ไม่สามารถโหลดข้อมูลได้';
+  } finally {
+    hideSpinner(); setLoading(false);
+    setTimeout(() => { document.getElementById('loadingBar').style.width = '0'; }, 400);
+  }
+}
+
+async function refreshData() {
+  if (!currentSheet) { showToast('กรุณาเลือกพนักงานก่อน', 'warning'); return; }
+  const b = document.getElementById('btnRefresh');
+  b.disabled = true;
+  b.style.transform = 'rotate(360deg)'; b.style.transition = 'transform .6s';
+  showSpinner('กำลังอัพเดทข้อมูล...');
+  try {
+    allData = await fetchSheet(currentSheet);
+    setCache('rattana_om_v1_' + currentSheet, allData);
+    buildFilters(); applyFilters();
+    showToast(`อัพเดทสำเร็จ ${allData.length.toLocaleString()} รายการ ✓`, 'success');
+  } catch (e) {
+    showToast('อัพเดทล้มเหลว: ' + e.message, 'error');
+  } finally {
+    hideSpinner(); b.disabled = false;
+    setTimeout(() => { b.style.transform=''; b.style.transition=''; }, 700);
+  }
+}
+
+// ── Build filter dropdowns ────────────────────────
+function buildFilters() {
+  const bus = [...new Set(allData.map(r => r['Cat_BU']).filter(Boolean))].sort();
+  buildDD('ddBUList', 'ddBULabel', 'ddBUPanel', bus, v => { selBU = v; applyFilters(); }, selBU);
+}
+
+function buildDD(listId, labelId, panelId, items, onSelect, current) {
+  const ul = document.getElementById(listId);
+  const allLi = document.createElement('li');
+  allLi.textContent = '— ทั้งหมด —';
+  allLi.className = !current ? 'selected' : '';
+  allLi.onclick = () => {
+    onSelect('');
+    document.getElementById(labelId).textContent = '— ทั้งหมด —';
+    document.getElementById(panelId).style.display = 'none';
+  };
+  ul.innerHTML = '';
+  ul.appendChild(allLi);
+  items.forEach(v => {
+    const li = document.createElement('li');
+    li.textContent = v;
+    li.className = v === current ? 'selected' : '';
+    li.onclick = () => {
+      onSelect(v);
+      document.getElementById(labelId).textContent = v;
+      document.getElementById(panelId).style.display = 'none';
+    };
+    ul.appendChild(li);
+  });
+}
+
+// ── Dropdown utils ────────────────────────────────
+function filterDD(inp, listId) {
+  const q = inp.value.toLowerCase();
+  document.querySelectorAll(`#${listId} li`).forEach(li => {
+    li.style.display = li.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+function toggleDD(wrapId) {
+  const p = document.querySelector(`#${wrapId} .dd-panel`);
+  const open = p.style.display === 'flex';
+  document.querySelectorAll('.dd-panel').forEach(x => x.style.display = 'none');
+  p.style.display = open ? 'none' : 'flex';
+  if (!open) setTimeout(() => p.querySelector('.dd-search')?.focus(), 50);
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.dd-wrap'))
+    document.querySelectorAll('.dd-panel').forEach(x => x.style.display = 'none');
+});
+
+// ── Filters ──────────────────────────────────────
+function applyFilters() {
+  filteredData = allData.filter(r => {
+    if (selBU && r['Cat_BU'] !== selBU) return false;
+    return true;
+  });
+  renderAll();
+}
+
+function clearBUFilter() {
+  selBU = '';
+  document.getElementById('ddBULabel').textContent = '— ทั้งหมด —';
+  buildFilters();
+  applyFilters();
+}
+
+// ── Aggregate ─────────────────────────────────────
+function aggByBU(data) {
+  const map = {};
+  data.forEach(r => {
+    const k = r['Cat_BU'] || '(ไม่ระบุ)';
+    if (!map[k]) map[k] = { Cat_BU: k, Exvat: 0, Sales_CS: 0, custs: new Set(), brands: new Set() };
+    map[k].Exvat    += parseFloat(r['Exvat']    || 0);
+    map[k].Sales_CS += parseFloat(r['Sales_CS'] || 0);
+    map[k].custs.add(r['Customer_Code'] || r['Customer_Name'] || '');
+    map[k].brands.add(r['Cat_Brand'] || '');
+  });
+  const total = Object.values(map).reduce((s, v) => s + v.Exvat, 0);
+  return Object.values(map).map(v => ({
+    Cat_BU:    v.Cat_BU,
+    Exvat:     v.Exvat,
+    Sales_CS:  v.Sales_CS,
+    pct:       total > 0 ? (v.Exvat / total * 100) : 0,
+    customers: v.custs.size,
+    brands:    v.brands.size,
+  }));
+}
+
+function aggByBrand(data) {
+  const map = {};
+  data.forEach(r => {
+    const bu    = r['Cat_BU']    || '(ไม่ระบุ)';
+    const brand = r['Cat_Brand'] || '(ไม่ระบุ)';
+    const k = `${bu}|||${brand}`;
+    if (!map[k]) map[k] = { bu, brand, Exvat: 0, Sales_CS: 0 };
+    map[k].Exvat    += parseFloat(r['Exvat']    || 0);
+    map[k].Sales_CS += parseFloat(r['Sales_CS'] || 0);
+  });
+  const buTotals = {};
+  Object.values(map).forEach(v => { buTotals[v.bu] = (buTotals[v.bu] || 0) + v.Exvat; });
+  return Object.values(map)
+    .sort((a, b) => b.Exvat - a.Exvat)
+    .map(v => ({ ...v, pctInBU: buTotals[v.bu] > 0 ? (v.Exvat / buTotals[v.bu] * 100) : 0 }));
+}
+
+// ── Sort helper ───────────────────────────────────
+function sortRows(rows, key, type, dir) {
+  const m = dir === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    if (type === 'num')  return ((parseFloat(a[key])||0) - (parseFloat(b[key])||0)) * m;
+    if (type === 'date') return (new Date(a[key]) - new Date(b[key])) * m;
+    return String(a[key]||'').localeCompare(String(b[key]||''), 'th') * m;
+  });
+}
+function updateSortIndicators(tableId) {
+  document.querySelectorAll(`#${tableId} thead th`).forEach(th => {
+    const ind = th.querySelector('.sort-ind');
+    if (!ind) return;
+    ind.textContent = th.dataset.key === sortState.key
+      ? (sortState.dir === 'asc' ? '▲' : '▼') : '';
+  });
+}
+function bindHeaderSort() {
+  document.querySelectorAll('#mainTbl thead th[data-key]').forEach(th => {
+    th.addEventListener('click', () => {
+      const key  = th.dataset.key;
+      const type = th.dataset.type || 'str';
+      if (sortState.key === key) {
+        sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortState.key = key;
+        sortState.dir = (type === 'num' || type === 'date') ? 'desc' : 'asc';
+      }
+      const buRows = aggByBU(filteredData);
+      const sorted = sortRows(buRows, sortState.key, sortState.key === 'Cat_BU' ? 'str' : 'num', sortState.dir);
+      const totEx  = filteredData.reduce((s,r) => s + parseFloat(r['Exvat']||0), 0);
+      const totCS  = filteredData.reduce((s,r) => s + parseFloat(r['Sales_CS']||0), 0);
+      renderMainTable(sorted, totEx, totCS);
+      updateSortIndicators('mainTbl');
+    });
+  });
+}
+
+// ── Render all ────────────────────────────────────
+function renderAll() {
+  if (activeTab === 'quarter') renderQuarterTab();
+  else if (activeTab === 'latest')  renderLatestTab();
+  else if (activeTab === 'sumdata') renderSumDataTab();
+  else renderSummaryTab();
+}
+
+// ── Main table ────────────────────────────────────
+function renderMainTable(rows, totEx, totCS) {
+  const tbody = document.getElementById('mainTblBody');
+  const tfoot = document.getElementById('mainTblFoot');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="6">ไม่พบข้อมูลที่ตรงกับเงื่อนไข</td></tr>`;
+    tfoot.innerHTML = ''; return;
+  }
+  const maxEx = Math.max(...rows.map(r => r.Exvat), 1);
+  tbody.innerHTML = rows.map((r, i) => `
+    <tr>
+      <td>
+        <span style="color:var(--muted);font-size:11px;margin-right:4px">${i+1}</span>
+        <strong>${escHtml(r.Cat_BU)}</strong>
+      </td>
+      <td class="num">
+        ${fmtFull(r.Exvat)}
+        <div class="prog-bar"><div class="prog-fill" style="width:${(r.Exvat/maxEx*100).toFixed(1)}%"></div></div>
+      </td>
+      <td class="num">${fmtFull(r.Sales_CS)}</td>
+      <td class="num">
+        <span style="font-weight:700;color:${r.pct>=20?'var(--gold)':r.pct>=10?'var(--info)':'var(--text)'}">
+          ${r.pct.toFixed(1)}%
+        </span>
+      </td>
+      <td class="num">${r.customers.toLocaleString()}</td>
+      <td class="num">${r.brands}</td>
+    </tr>
+  `).join('');
+
+  const uCust = new Set(filteredData.map(r => r['Customer_Code']||r['Customer_Name'])).size;
+  const uBrand= new Set(filteredData.map(r => r['Cat_Brand'])).size;
+  tfoot.innerHTML = `<tr>
+    <td>📌 รวมทั้งหมด (${rows.length} BU)</td>
+    <td class="num">${fmtFull(totEx)}</td>
+    <td class="num">${fmtFull(totCS)}</td>
+    <td class="num">100%</td>
+    <td class="num">${uCust.toLocaleString()}</td>
+    <td class="num">${uBrand}</td>
+  </tr>`;
+}
+
+// ── Charts ────────────────────────────────────────
+function renderCharts(buRows) {
+  const labels  = buRows.map(r => r.Cat_BU);
+  const exvats  = buRows.map(r => r.Exvat);
+  const colors  = labels.map((_, i) => BU_COLORS[i % BU_COLORS.length]);
+
+  // Bar
+  if (chartBar) chartBar.destroy();
+  chartBar = new Chart(document.getElementById('chartBar').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ label:'Exvat (บาท)', data: exvats, backgroundColor: colors, borderColor: colors, borderWidth:1, borderRadius:4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display:false },
+        tooltip: { callbacks: { label: ctx => `฿ ${fmtFull(ctx.raw)}` } }
+      },
+      scales: {
+        y: { beginAtZero:true, ticks:{ callback: v => fmtShort(v), font:{size:11,family:'Sarabun'} }, grid:{ color:'rgba(0,0,0,.05)' } },
+        x: { ticks:{ font:{size:11,family:'Sarabun'}, maxRotation:30 } }
+      }
+    }
+  });
+
+  // Doughnut
+  if (chartDoughnut) chartDoughnut.destroy();
+  chartDoughnut = new Chart(document.getElementById('chartDoughnut').getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{ data: exvats, backgroundColor: colors, borderWidth:2, borderColor:'#fff' }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position:'right', labels:{ font:{size:11,family:'Sarabun'}, padding:8, boxWidth:13 } },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const tot = ctx.dataset.data.reduce((s,v) => s+v, 0);
+              return `${ctx.label}: ฿${fmtFull(ctx.raw)} (${(ctx.raw/tot*100).toFixed(1)}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+// ── Brand table ───────────────────────────────────
+function renderBrandTable(rows) {
+  const tbody = document.getElementById('brandTblBody');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="5">ไม่พบข้อมูล</td></tr>`; return;
+  }
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td><span class="badge badge-gold">${escHtml(r.bu)}</span></td>
+      <td><strong>${escHtml(r.brand)}</strong></td>
+      <td class="num">${fmtFull(r.Exvat)}</td>
+      <td class="num">${fmtFull(r.Sales_CS)}</td>
+      <td class="num" style="color:${r.pctInBU>=30?'var(--gold)':'inherit'}">${r.pctInBU.toFixed(1)}%</td>
+    </tr>
+  `).join('');
+}
+
+// ── Export Excel ──────────────────────────────────
+function exportExcel() {
+  if (!filteredData.length) { showToast('ไม่มีข้อมูลสำหรับ Export', 'warning'); return; }
+  try {
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Cat BU Summary
+    const buRows = aggByBU(filteredData);
+    const sorted = sortRows(buRows, 'Exvat', 'num', 'desc');
+    const ws1 = XLSX.utils.json_to_sheet(sorted.map((r,i) => ({
+      '#':            i+1,
+      'Cat BU':       r.Cat_BU,
+      'Exvat (บาท)':  parseFloat(r.Exvat.toFixed(2)),
+      'Sales CS':     parseFloat(r.Sales_CS.toFixed(2)),
+      '% สัดส่วน':    parseFloat(r.pct.toFixed(2)),
+      'จำนวนลูกค้า':  r.customers,
+      'จำนวน Brand':  r.brands,
+    })));
+    XLSX.utils.book_append_sheet(wb, ws1, 'Cat BU Summary');
+
+    // Sheet 2: Brand Summary
+    const bRows = aggByBrand(filteredData);
+    const ws2 = XLSX.utils.json_to_sheet(bRows.map(r => ({
+      'Cat BU':       r.bu,
+      'Cat Brand':    r.brand,
+      'Exvat (บาท)':  parseFloat(r.Exvat.toFixed(2)),
+      'Sales CS':     parseFloat(r.Sales_CS.toFixed(2)),
+      '% ใน BU':     parseFloat(r.pctInBU.toFixed(2)),
+    })));
+    XLSX.utils.book_append_sheet(wb, ws2, 'Cat Brand Summary');
+
+    // Sheet 3: Raw data
+    const ws3 = XLSX.utils.json_to_sheet(filteredData.map(r => ({
+      'Month_Year':    r['Month_Year'],
+      'Sale_No_ROO':   r['Sale_No_ROO'],
+      'Saleman_Code':  r['Saleman_Code'],
+      'Customer_Code': r['Customer_Code'],
+      'Customer_Name': r['Customer_Name'],
+      'Cat_BU':        r['Cat_BU'],
+      'Cat_Brand':     r['Cat_Brand'],
+      'Cat_3':         r['Cat_3'],
+      'Product_Name':  r['Product_Name'],
+      'Sales_CS':      parseFloat(r['Sales_CS']||0),
+      'Exvat':         parseFloat(r['Exvat']||0),
+    })));
+    XLSX.utils.book_append_sheet(wb, ws3, 'Raw Data');
+
+    const suffix = currentSheet || '';
+    XLSX.writeFile(wb, `rattana-om-report${suffix?'-'+suffix:''}.xlsx`);
+    showToast('Export Excel สำเร็จ ✓', 'success');
+  } catch (e) {
+    showToast('Export ล้มเหลว: ' + e.message, 'error');
+  }
+}
+
+// ── Format helpers ────────────────────────────────
+function fmtShort(n) {
+  return Math.round(parseFloat(n || 0)).toLocaleString('th-TH');
+}
+function fmtFull(n) {
+  return Math.round(parseFloat(n || 0)).toLocaleString('th-TH');
+}
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Dark mode ──────────────────────────────────────
+function toggleDark() {
+  document.body.classList.toggle('dark');
+  const dark = document.body.classList.contains('dark');
+  document.getElementById('btnDark').textContent = dark ? '☀️' : '🌙';
+  localStorage.setItem('om_dark', dark ? '1' : '0');
+  if (filteredData.length) {
+    const buRows = aggByBU(filteredData);
+    const sorted = sortRows(buRows, sortState.key, sortState.key==='Cat_BU'?'str':'num', sortState.dir);
+    renderCharts(sorted);
+  }
+}
+
+// ── Back to top ───────────────────────────────────
+window.addEventListener('scroll', () => {
+  document.getElementById('backToTop').classList.toggle('show', window.scrollY > 300);
+});
+
+// ── Dual scrollbar sync for custTbl ───────────────
+function initCustDualScroll() {
+  const wrap  = document.getElementById('custTblWrap');
+  const top   = document.getElementById('custTopScroll');
+  const inner = document.getElementById('custTopScrollInner');
+  if (!wrap || !top || !inner) return;
+  inner.style.width = wrap.scrollWidth + 'px';
+  let syncingTop = false, syncingWrap = false;
+  top.addEventListener('scroll', () => {
+    if (syncingTop) return;
+    syncingWrap = true;
+    wrap.scrollLeft = top.scrollLeft;
+    setTimeout(() => { syncingWrap = false; }, 50);
+  });
+  wrap.addEventListener('scroll', () => {
+    if (syncingWrap) return;
+    syncingTop = true;
+    top.scrollLeft = wrap.scrollLeft;
+    inner.style.width = wrap.scrollWidth + 'px';
+    setTimeout(() => { syncingTop = false; }, 50);
+  });
+  new ResizeObserver(() => { inner.style.width = wrap.scrollWidth + 'px'; }).observe(wrap);
+}
+
+// ── Tab switching ─────────────────────────────────
+let activeTab = 'summary';
+function toggleSidebar() {
+  const sb  = document.getElementById('sidebar');
+  const btn = document.getElementById('sidebarToggle');
+  const collapsed = sb.classList.toggle('collapsed');
+  btn.textContent = collapsed ? '▶' : '◀';
+  btn.classList.toggle('collapsed', collapsed);
+}
+
+function switchTab(id, btn) {
+  activeTab = id;
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('pane-' + id).classList.add('active');
+  btn.classList.add('active');
+  if (filteredData.length) {
+    if (id === 'summary') renderSummaryTab();
+    if (id === 'quarter') renderQuarterTab();
+    if (id === 'latest')  renderLatestTab();
+    if (id === 'sumdata') renderSumDataTab();
+  }
+}
+
+// ── Quarter helpers ───────────────────────────────
+function parseMonthStr(s) {
+  // "YYYY/MM" → { year, month (1-12) }
+  const [y, m] = (s || '').split('/').map(Number);
+  return { year: y, month: m };
+}
+function quarterOf(month) { return Math.ceil(month / 3); }
+function quarterMonthStrs(year, q) {
+  const starts = {1:[1,2,3],2:[4,5,6],3:[7,8,9],4:[10,11,12]};
+  return starts[q].map(m => `${year}/${String(m).padStart(2,'0')}`);
+}
+function prevQuarterMonths(monthStr) {
+  const { year, month } = parseMonthStr(monthStr);
+  const q = quarterOf(month);
+  const pq = q === 1 ? 4 : q - 1;
+  const py = q === 1 ? year - 1 : year;
+  return { months: quarterMonthStrs(py, pq), year: py, quarter: pq };
+}
+function qLabel(year, q) {
+  return `Q${q}/${String(year).slice(2)}`; // e.g. "Q4/25"
+}
+
+// ── Render summary tab ────────────────────────────
+let chartCmp = null;
+
+function renderSummaryTab() {
+  const data = filteredData;
+  if (!data.length) {
+    document.getElementById('infoBar2').innerHTML = '⚠️ ไม่มีข้อมูล';
+    document.getElementById('custTblBody').innerHTML = '<tr class="empty-row"><td colspan="6">ไม่พบข้อมูล</td></tr>';
+    return;
+  }
+
+  // ── Determine periods ──
+  const allMonths   = [...new Set(data.map(r => r['Month_Year']).filter(Boolean))].sort();
+  const latestMonth = allMonths[allMonths.length - 1];
+
+  let prevQMths, pqYear, pqQ;
+  const pq = prevQuarterMonths(latestMonth);
+  prevQMths = pq.months; pqYear = pq.year; pqQ = pq.quarter;
+
+  const prevQMthsInData = prevQMths.filter(m => allMonths.includes(m));
+  const { year: lYear, month: lMonth } = parseMonthStr(latestMonth);
+  const latestLabel = `${lYear}/${String(lMonth).padStart(2,'0')}`;
+  const prevQLabel  = qLabel(pqYear, pqQ);
+
+  // Info bar
+  let info = `📊 ข้อมูล <strong>${data.length.toLocaleString()}</strong> รายการ`;
+  if (currentSheet) info += ` &nbsp;|&nbsp; 👤 <strong>${currentSheet}</strong>`;
+  document.getElementById('infoBar2').innerHTML = info;
+
+  // Period badge
+  const prevQStr = prevQMthsInData.length
+    ? prevQMthsInData.join(', ')
+    : prevQMths.join(', ') + ' (ไม่มีข้อมูล)';
+  document.getElementById('periodBadge').innerHTML = `
+    <div class="period-badge">
+      <span>📅 เดือนล่าสุด: <strong>${latestLabel}</strong></span>
+      <span class="sep">VS</span>
+      <span>📐 AVG ${prevQLabel}: <strong>${prevQStr}</strong>
+        ${prevQMthsInData.length ? `(${prevQMthsInData.length} เดือน)` : '⚠️ ไม่มีข้อมูลไตรมาสก่อน'}</span>
+    </div>`;
+
+  // ── Aggregate per BU × month ──
+  const buSet = [...new Set(data.map(r => r['Cat_BU']).filter(Boolean))];
+  // buMonthMap[bu][month] = exvat
+  const buMonthMap = {};
+  buSet.forEach(b => { buMonthMap[b] = {}; });
+
+  data.forEach(r => {
+    const b = r['Cat_BU'] || '';
+    const m = r['Month_Year'] || '';
+    const v = parseFloat(r['Exvat'] || 0);
+    if (!buMonthMap[b]) return;
+    buMonthMap[b][m] = (buMonthMap[b][m] || 0) + v;
+  });
+
+  // Compute stats per BU
+  const buStats = {};
+  buSet.forEach(b => {
+    const latest  = buMonthMap[b][latestMonth] || 0;
+    const prevTot = prevQMthsInData.reduce((s, m) => s + (buMonthMap[b][m] || 0), 0);
+    const avgPrev = prevQMthsInData.length > 0 ? prevTot / prevQMthsInData.length : 0;
+    buStats[b] = { latest, avgPrev, prevTot };
+  });
+
+  // ── Overall KPI ──
+  const totLatest = buSet.reduce((s,b) => s + buStats[b].latest, 0);
+  const totAvg    = buSet.reduce((s,b) => s + (buStats[b].avgPrev || 0), 0);
+  const totDelta  = totLatest - totAvg;
+  const totPct    = totAvg !== 0 ? (totDelta / totAvg * 100) : null;
+
+  document.getElementById('cmpLatestVal').textContent = fmtShort(totLatest);
+  document.getElementById('cmpLatestSub').textContent = latestLabel;
+  document.getElementById('cmpAvgVal').textContent    = fmtShort(totAvg);
+  document.getElementById('cmpAvgSub').textContent    = `เฉลี่ย/เดือน · ${prevQLabel}`;
+
+  const isUp = totDelta >= 0;
+  document.getElementById('cmpDeltaCard').className = `cmp-card ${isUp?'up':'down'}`;
+  document.getElementById('cmpDeltaVal').textContent = (isUp?'+':'') + fmtShort(totDelta);
+  document.getElementById('cmpDeltaVal').style.color = isUp ? 'var(--success)' : 'var(--danger)';
+  document.getElementById('cmpDeltaSub').textContent = '';
+  document.getElementById('cmpPctCard').className = `cmp-card ${isUp?'up':'down'}`;
+  document.getElementById('cmpPctVal').textContent = totPct !== null ? (totPct>=0?'+':'') + totPct.toFixed(1) + '%' : 'N/A';
+  document.getElementById('cmpPctVal').style.color = isUp ? 'var(--success)' : 'var(--danger)';
+
+  // ── Customer table ──
+  // custMap[name] = { bu, latest, prevTot }
+  const custMap = {};
+  data.forEach(r => {
+    const name = r['Customer_Name'] || r['Customer_Code'] || '(ไม่ระบุ)';
+    const bu   = r['Cat_BU'] || '';
+    const m    = r['Month_Year'] || '';
+    const v    = parseFloat(r['Exvat'] || 0);
+    if (!custMap[name]) custMap[name] = { bu, latest: 0, prevTot: 0 };
+    if (m === latestMonth) custMap[name].latest += v;
+    if (prevQMthsInData.includes(m)) custMap[name].prevTot += v;
+  });
+
+  // รวมร้านจาก Customer master (เซลล์ตรงกัน) ที่ยังไม่มียอดขาย
+  const masterCusts = custMasterMap[normSale(currentSheet)] || new Set();
+  masterCusts.forEach(custName => {
+    if (!custMap[custName]) custMap[custName] = { latest: 0, prevTot: 0, bu: '' };
+  });
+
+  const custRows = Object.entries(custMap)
+    .filter(([name]) => masterCusts.size > 0 ? masterCusts.has(name) : true)
+    .map(([name, s]) => {
+      const avg   = prevQMthsInData.length > 0 ? s.prevTot / prevQMthsInData.length : 0;
+      const delta = s.latest - avg;
+      return { name, bu: s.bu, latest: s.latest, avg, delta };
+    })
+    .sort((a, b) => a.delta - b.delta);
+
+  // ── นับร้านที่มียอด > 0 (ไม่รวมร้านที่ยอด=0)
+  const qCustCount      = custRows.filter(r => r.avg > 0).length;
+  const latestCustCount = custRows.filter(r => r.latest > 0).length;
+  document.getElementById('cmpQCustLabel').textContent      = `🏪 ร้านที่มียอด (${prevQLabel})`;
+  document.getElementById('cmpQCustVal').textContent        = qCustCount.toLocaleString();
+  document.getElementById('cmpQCustSub').textContent        = `ร้าน (ไม่นับร้านที่ยอด=0)`;
+  document.getElementById('cmpLatestCustLabel').textContent = `🏪 ร้านที่มียอด (${latestLabel})`;
+  document.getElementById('cmpLatestCustVal').textContent   = latestCustCount.toLocaleString();
+  document.getElementById('cmpLatestCustSub').textContent   = `ร้าน (ไม่นับร้านที่ยอด=0)`;
+
+  // ── AVG SKU ต่อร้าน
+  const skuPerCustQ      = {};
+  const skuPerCustLatest = {};
+  data.forEach(r => {
+    const cust = r['Customer_Name'] || '';
+    const prod = r['Product_Name']  || '';
+    const m    = r['Month_Year']    || '';
+    if (!cust || !prod) return;
+    if (prevQMthsInData.includes(m)) {
+      if (!skuPerCustQ[cust]) skuPerCustQ[cust] = new Set();
+      skuPerCustQ[cust].add(prod);
+    }
+    if (m === latestMonth) {
+      if (!skuPerCustLatest[cust]) skuPerCustLatest[cust] = new Set();
+      skuPerCustLatest[cust].add(prod);
+    }
+  });
+  const qSkuCounts      = Object.values(skuPerCustQ).map(s => s.size);
+  const latestSkuCounts = Object.values(skuPerCustLatest).map(s => s.size);
+  const avgSkuQ      = qSkuCounts.length      ? (qSkuCounts.reduce((a,b)=>a+b,0)      / qSkuCounts.length).toFixed(1)      : '—';
+  const avgSkuLatest = latestSkuCounts.length ? (latestSkuCounts.reduce((a,b)=>a+b,0) / latestSkuCounts.length).toFixed(1) : '—';
+  document.getElementById('cmpAvgSkuQLabel').textContent      = `📦 AVG SKU/ร้าน (${prevQLabel})`;
+  document.getElementById('cmpAvgSkuQVal').textContent        = avgSkuQ;
+  document.getElementById('cmpAvgSkuQSub').textContent        = `SKU เฉลี่ยต่อร้าน (${qSkuCounts.length} ร้าน)`;
+  document.getElementById('cmpAvgSkuLatestLabel').textContent = `📦 AVG SKU/ร้าน (${latestLabel})`;
+  document.getElementById('cmpAvgSkuLatestVal').textContent   = avgSkuLatest;
+  document.getElementById('cmpAvgSkuLatestSub').textContent   = `SKU เฉลี่ยต่อร้าน (${latestSkuCounts.length} ร้าน)`;
+
+  // Update table column headers with actual period names
+  document.getElementById('thAvgLabel').innerHTML    = prevQLabel;
+  document.getElementById('thLatestLabel').innerHTML = latestLabel;
+
+  // คำนวณ Top 15 Cat_Brand ติดลบต่อร้าน (ใช้ข้อมูลเดียวกับ Sum Data)
+  const brandDeltaMap = {};
+  data.forEach(r => {
+    const cust  = r['Customer_Name'] || '';
+    const brand = r['Cat_Brand'] || '';
+    const month = r['Month_Year'] || '';
+    const cs    = parseFloat(r['Sales_CS'] || 0);
+    const key   = `${cust}|||${brand}`;
+    if (!brandDeltaMap[key]) brandDeltaMap[key] = { cust, brand, latestCS: 0, prevTot: 0 };
+    if (month === latestMonth) brandDeltaMap[key].latestCS += cs;
+    if (prevQMths.filter(m => allMonths.includes(m)).includes(month)) brandDeltaMap[key].prevTot += cs;
+  });
+  const nMo = prevQMths.filter(m => allMonths.includes(m)).length || 1;
+  const top15ByCust = {};
+  Object.values(brandDeltaMap).forEach(r => {
+    const avg   = r.prevTot / nMo;
+    const delta = r.latestCS - avg;
+    if (delta >= 0) return; // เอาเฉพาะติดลบ
+    if (!top15ByCust[r.cust]) top15ByCust[r.cust] = [];
+    top15ByCust[r.cust].push({ brand: r.brand, delta });
+  });
+  Object.keys(top15ByCust).forEach(c => {
+    top15ByCust[c].sort((a,b) => a.delta - b.delta);
+    top15ByCust[c] = top15ByCust[c].slice(0,15);
+  });
+  const fmt2 = v => parseFloat(v).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('thTop15Label').innerHTML = `OM เทียบ AVG ${prevQLabel} - ${latestLabel}<br>Top 15 Cat Brand`;
+  document.getElementById('thTop15PosLabel').innerHTML = `ยอดขาย ${latestLabel}<br>Top 15 Cat Brand`;
+  document.getElementById('thSkuLabel').innerHTML = `SKU<br>${prevQLabel}`;
+  document.getElementById('thSkuLatestLabel').innerHTML = `SKU<br>${latestLabel}`;
+
+  // SKU ต่อร้านจากไตรมาสก่อน
+  const skuByCust = {};
+  data.filter(r => prevQMthsInData.includes(r['Month_Year'])).forEach(r => {
+    const cust = r['Customer_Name'] || '';
+    const prod = r['Product_Name'] || '';
+    if (!skuByCust[cust]) skuByCust[cust] = new Set();
+    skuByCust[cust].add(prod);
+  });
+
+  // SKU ต่อร้านจากเดือนล่าสุด
+  const skuLatestByCust = {};
+  data.filter(r => r['Month_Year'] === latestMonth).forEach(r => {
+    const cust = r['Customer_Name'] || '';
+    const prod = r['Product_Name'] || '';
+    if (!skuLatestByCust[cust]) skuLatestByCust[cust] = new Set();
+    skuLatestByCust[cust].add(prod);
+  });
+
+  // New SKU ต่อร้าน = สินค้าที่ไม่มีในไตรมาสก่อน แต่มีในเดือนล่าสุด
+  const newSkuCountByCust = {};
+  const newProdNamesByCust = {};
+  const prevProdsPerCust = {};
+  data.filter(r => prevQMthsInData.includes(r['Month_Year'])).forEach(r => {
+    const cust = r['Customer_Name'] || '';
+    const prod = r['Product_Name'] || '';
+    if (!prevProdsPerCust[cust]) prevProdsPerCust[cust] = new Set();
+    prevProdsPerCust[cust].add(prod);
+  });
+  const newProdSetByCust = {};
+  data.filter(r => r['Month_Year'] === latestMonth).forEach(r => {
+    const cust = r['Customer_Name'] || '';
+    const prod = r['Product_Name'] || '';
+    const prevSet = prevProdsPerCust[cust] || new Set();
+    if (!prevSet.has(prod)) {
+      if (!newProdSetByCust[cust]) newProdSetByCust[cust] = new Set();
+      newProdSetByCust[cust].add(prod);
+    }
+  });
+  Object.entries(newProdSetByCust).forEach(([cust, set]) => {
+    newSkuCountByCust[cust] = set.size;
+    newProdNamesByCust[cust] = [...set];
+  });
+
+  // Top 15 บวกต่อร้าน
+  const top15PosByCust = {};
+  Object.values(brandDeltaMap).forEach(r => {
+    const avg   = r.prevTot / nMo;
+    const delta = r.latestCS - avg;
+    if (delta <= 0) return;
+    if (!top15PosByCust[r.cust]) top15PosByCust[r.cust] = [];
+    top15PosByCust[r.cust].push({ brand: r.brand, delta });
+  });
+  Object.keys(top15PosByCust).forEach(c => {
+    top15PosByCust[c].sort((a,b) => b.delta - a.delta);
+    top15PosByCust[c] = top15PosByCust[c].slice(0,15);
+  });
+
+  document.getElementById('custCount').textContent = `${custRows.length.toLocaleString()} ร้าน`;
+  document.getElementById('custTblBody').innerHTML = custRows.map((r, i) => {
+    const isUp = r.delta !== null ? r.delta >= 0 : null;
+    const deltaHtml = r.delta !== null
+      ? `<span style="color:${isUp?'var(--success)':'var(--danger)'};font-weight:600">${isUp?'+':''}${fmtFull(r.delta)}</span>`
+      : '—';
+    const negBrands = top15ByCust[r.name] || [];
+    const chunkOf5 = (arr, renderFn) => {
+      const rows = [];
+      for (let i = 0; i < arr.length; i += 5) rows.push(arr.slice(i, i + 5));
+      return rows.map(row => `<div style="white-space:nowrap;margin-bottom:2px">${row.map(renderFn).join('<span style="color:var(--border)"> · </span>')}</div>`).join('');
+    };
+    const top15Html = negBrands.length
+      ? chunkOf5(negBrands, b => `<span style="display:inline-block;margin:1px 3px 1px 0;white-space:nowrap"><span style="font-weight:600">${escHtml(b.brand)}</span> <span style="color:var(--danger);font-weight:700">${fmt2(b.delta)}</span></span>`)
+      : '<span style="color:var(--muted);font-size:11px">—</span>';
+    const posBrands = top15PosByCust[r.name] || [];
+    const top15PosHtml = posBrands.length
+      ? chunkOf5(posBrands, b => `<span style="display:inline-block;margin:1px 3px 1px 0;white-space:nowrap"><span style="font-weight:600">${escHtml(b.brand)}</span> <span style="color:var(--success);font-weight:700">+${fmt2(b.delta)}</span></span>`)
+      : '<span style="color:var(--muted);font-size:11px">—</span>';
+    return `<tr>
+      <td style="color:var(--muted);font-size:11px">${i+1}</td>
+      <td><strong>${escHtml(r.name)}</strong></td>
+      <td class="num" style="color:var(--info)">${fmtFull(r.avg)}</td>
+      <td class="num">${fmtFull(r.latest)}</td>
+      <td class="num">${deltaHtml}</td>
+      <td style="line-height:1.8;font-size:12px">${top15Html}</td>
+      <td style="line-height:1.8;font-size:12px">${top15PosHtml}</td>
+      <td style="font-weight:700;text-align:center;vertical-align:middle">${(skuByCust[r.name] ? skuByCust[r.name].size : 0).toLocaleString('th-TH')}</td>
+      <td style="font-weight:700;text-align:center;vertical-align:middle">${(skuLatestByCust[r.name] ? skuLatestByCust[r.name].size : 0).toLocaleString('th-TH')}</td>
+      <td style="font-weight:700;color:var(--warning);text-align:center;vertical-align:middle">${(newSkuCountByCust[r.name] || 0).toLocaleString('th-TH')}</td>
+      <td style="font-size:12px;min-width:500px;max-width:812px;line-height:1.9">${(() => { const prods = newProdNamesByCust[r.name]; if (!prods) return '<span style="color:var(--muted)">—</span>'; return prods.map((p,i)=>`<span style="font-weight:600;color:${i%2===0?'var(--text)':'var(--info)'}">${escHtml(p)}</span>`).join('<span style="color:var(--muted)"> , </span>'); })()}</td>
+      <td style="font-weight:700;color:var(--gold);text-align:center;padding:9px 16px;white-space:nowrap">${(() => { const b = getBudget(currentSheet, r.name); return b !== undefined ? b.toLocaleString('th-TH',{minimumFractionDigits:0,maximumFractionDigits:0}) : '—'; })()}</td>
+    </tr>`;
+  }).join('');
+
+  setTimeout(initCustDualScroll, 50);
+}
+
+// ── Render quarter tab ────────────────────────────
+function renderQuarterTab() {
+  const data = filteredData;
+  if (!data.length) {
+    document.getElementById('infoBarQ').innerHTML = '⚠️ ไม่มีข้อมูล';
+    document.getElementById('qTblBody').innerHTML = '<tr class="empty-row"><td colspan="6">ไม่พบข้อมูล</td></tr>';
+    return;
+  }
+
+  const allMonths   = [...new Set(data.map(r => r['Month_Year']).filter(Boolean))].sort();
+  const latestMonth = allMonths[allMonths.length - 1];
+  const { months: prevQMths, year: pqYear, quarter: pqQ } = prevQuarterMonths(latestMonth);
+  const prevQMthsInData = prevQMths.filter(m => allMonths.includes(m));
+  const qlabel = qLabel(pqYear, pqQ);
+
+  // Update tab button label
+  document.getElementById('tabQuarterBtn').textContent = `📦 Data รวม (${qlabel})`;
+  document.getElementById('qCardLabel').textContent = qlabel;
+
+  // Info bar
+  let info = `📅 ไตรมาส: <strong>${qlabel}</strong>`;
+  if (currentSheet) info += ` &nbsp;|&nbsp; 👤 <strong>${currentSheet}</strong>`;
+  if (selBU) info += ` &nbsp;|&nbsp; 🏷️ Cat BU: <strong>${escHtml(selBU)}</strong>`;
+  else info += ` &nbsp;|&nbsp; 🏷️ Cat BU: <strong>ทั้งหมด</strong>`;
+  document.getElementById('infoBarQ').innerHTML = info;
+
+  // Quarter badge
+  const mthsStr = prevQMthsInData.length
+    ? prevQMthsInData.join(', ')
+    : prevQMths.join(', ') + ' (ไม่มีข้อมูล)';
+  document.getElementById('quarterBadge').innerHTML = `
+    <div class="period-badge">
+      <span>📐 ${qlabel}: <strong>${mthsStr}</strong>
+        ${prevQMthsInData.length ? `(${prevQMthsInData.length} เดือน)` : '⚠️ ไม่มีข้อมูลไตรมาสนี้'}</span>
+    </div>`;
+
+  // Filter data to previous quarter only
+  const qData = data.filter(r => prevQMthsInData.includes(r['Month_Year']));
+
+  // KPI
+  const totEx  = qData.reduce((s,r) => s + parseFloat(r['Exvat']   ||0), 0);
+  const totCS  = qData.reduce((s,r) => s + parseFloat(r['Sales_CS']||0), 0);
+  const uCust  = new Set(qData.map(r => r['Customer_Name'] || r['Customer_Code'])).size;
+  const uBU    = new Set(qData.map(r => r['Cat_BU']).filter(Boolean)).size;
+  document.getElementById('qKpiExvat').textContent    = fmtShort(totEx);
+  document.getElementById('qKpiExvatSub').textContent = fmtFull(totEx) + ' บาท';
+  document.getElementById('qKpiCS').textContent       = fmtFull(totCS);
+  document.getElementById('qKpiCust').textContent     = uCust.toLocaleString();
+  document.getElementById('qKpiBU').textContent       = uBU;
+
+  // Aggregate: Customer_Name + Cat_Brand → total CS → AVG
+  const aggMap = {};
+  qData.forEach(r => {
+    const cust  = r['Customer_Name'] || r['Customer_Code'] || '(ไม่ระบุ)';
+    const brand = r['Cat_Brand'] || '(ไม่ระบุ)';
+    const cs    = parseFloat(r['Sales_CS'] || 0);
+    const key   = `${cust}|||${brand}`;
+    if (!aggMap[key]) aggMap[key] = { cust, brand, total: 0 };
+    aggMap[key].total += cs;
+  });
+
+  const nMonths = prevQMthsInData.length || 1;
+
+  const allRows = Object.values(aggMap).map(r => ({ ...r, avg: r.total / nMonths }));
+
+  // รวม AVG ทุก brand ของแต่ละร้าน เพื่อเรียงร้านจากยอดรวมมาก→น้อย
+  const custTotalAvg = {};
+  allRows.forEach(r => { custTotalAvg[r.cust] = (custTotalAvg[r.cust] || 0) + r.avg; });
+
+  const rows = allRows.sort((a, b) => {
+    const custDiff = custTotalAvg[b.cust] - custTotalAvg[a.cust]; // ร้านที่มี AVG รวมสูงกว่าขึ้นก่อน
+    if (custDiff !== 0) return custDiff;
+    return b.avg - a.avg; // ภายในร้านเดียวกัน เรียง brand AVG สูง→น้อย
+  });
+
+  document.getElementById('qCustCount').textContent = `${rows.length.toLocaleString()} รายการ`;
+  document.getElementById('qTblBody').innerHTML = rows.length ? rows.map((r, i) => `<tr>
+      <td style="color:var(--muted);font-size:11px">${i+1}</td>
+      <td><strong>${escHtml(r.cust)}</strong></td>
+      <td>${escHtml(r.brand)}</td>
+      <td class="num" style="color:var(--info);font-weight:600">${parseFloat(r.avg).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+    </tr>`).join('') : '<tr class="empty-row"><td colspan="4">ไม่พบข้อมูลไตรมาสนี้</td></tr>';
+
+  // ตารางรายละเอียดสินค้า Customer × Product_Name (AVG)
+  document.getElementById('qProdCardLabel').textContent = qlabel;
+  document.getElementById('qProdThAvg').textContent = `AVG Sales_CS/เดือน (${qlabel})`;
+  const nProdMonths = prevQMthsInData.length || 1;
+  const prodRows = data
+    .filter(r => prevQMthsInData.includes(r['Month_Year']))
+    .map(r => ({
+      cust: r['Customer_Name'] || '',
+      product: r['Product_Name'] || '',
+      cs: parseFloat(r['Sales_CS'] || 0)
+    }));
+  // รวม Sales_CS ต่อ Customer × Product แล้วหาร AVG
+  const prodMap = {};
+  prodRows.forEach(r => {
+    const key = `${r.cust}|||${r.product}`;
+    if (!prodMap[key]) prodMap[key] = { cust: r.cust, product: r.product, cs: 0 };
+    prodMap[key].cs += r.cs;
+  });
+  const prodList = Object.values(prodMap).map(r => ({ ...r, avg: r.cs / nProdMonths }));
+  // รวม AVG ทุกสินค้าต่อร้าน เพื่อเรียงร้านจากมากไปน้อย
+  const custAvgSum = {};
+  prodList.forEach(r => { custAvgSum[r.cust] = (custAvgSum[r.cust] || 0) + r.avg; });
+  prodList.sort((a,b) => {
+    const custDiff = custAvgSum[b.cust] - custAvgSum[a.cust];
+    if (custDiff !== 0) return custDiff;
+    return b.avg - a.avg;
+  });
+  document.getElementById('qProdCount').textContent = `${prodList.length.toLocaleString()} รายการ`;
+  document.getElementById('qProdTblBody').innerHTML = prodList.length ? prodList.map((r, i) => `<tr>
+      <td style="color:var(--muted);font-size:11px">${i+1}</td>
+      <td><strong>${escHtml(r.cust)}</strong></td>
+      <td>${escHtml(r.product)}</td>
+      <td class="num" style="color:var(--info);font-weight:600">${parseFloat(r.avg).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+    </tr>`).join('') : '<tr class="empty-row"><td colspan="4">ไม่พบข้อมูล</td></tr>';
+
+  // ตาราง SKU ต่อร้าน
+  document.getElementById('qSkuCardLabel').textContent = qlabel;
+  const skuMap = {};
+  prodList.forEach(r => {
+    if (!skuMap[r.cust]) skuMap[r.cust] = new Set();
+    skuMap[r.cust].add(r.product);
+  });
+  const skuList = Object.entries(skuMap)
+    .map(([cust, set]) => ({ cust, sku: set.size }))
+    .sort((a,b) => b.sku - a.sku);
+  document.getElementById('qSkuCount').textContent = `${skuList.length.toLocaleString()} ร้าน`;
+  document.getElementById('qSkuTblBody').innerHTML = skuList.length ? skuList.map((r, i) => `<tr>
+      <td style="color:var(--muted);font-size:11px">${i+1}</td>
+      <td><strong>${escHtml(r.cust)}</strong></td>
+      <td class="num" style="font-weight:700">${r.sku.toLocaleString('th-TH')}</td>
+    </tr>`).join('') : '<tr class="empty-row"><td colspan="3">ไม่พบข้อมูล</td></tr>';
+}
+
+// ── Render Sum Data tab ───────────────────────────
+function renderSumDataTab() {
+  const data = filteredData;
+  if (!data.length) {
+    document.getElementById('infoBarSD').innerHTML = '⚠️ ไม่มีข้อมูล';
+    document.getElementById('sdTblBodyNeg').innerHTML = '<tr class="empty-row"><td colspan="7">ไม่พบข้อมูล</td></tr>';
+    document.getElementById('sdTblBodyPos').innerHTML = '<tr class="empty-row"><td colspan="7">ไม่พบข้อมูล</td></tr>';
+    return;
+  }
+
+  const allMonths   = [...new Set(data.map(r => r['Month_Year']).filter(Boolean))].sort();
+  const latestMonth = allMonths[allMonths.length - 1];
+  const { months: prevQMths, year: pqYear, quarter: pqQ } = prevQuarterMonths(latestMonth);
+  const prevQMthsInData = prevQMths.filter(m => allMonths.includes(m));
+  const qlabel = qLabel(pqYear, pqQ);
+  const nMonths = prevQMthsInData.length || 1;
+
+  // Update labels
+  document.getElementById('sdCardLabel').textContent = `${latestMonth} vs AVG ${qlabel}`;
+  document.getElementById('sdThAvg').textContent    = `AVG CS (${qlabel})`;
+  document.getElementById('sdThLatest').textContent = `CS ${latestMonth}`;
+
+  // Info bar
+  let info = `📅 เดือนล่าสุด: <strong>${latestMonth}</strong> &nbsp;|&nbsp; 📐 AVG: <strong>${qlabel}</strong>`;
+  if (currentSheet) info += ` &nbsp;|&nbsp; 👤 <strong>${currentSheet}</strong>`;
+  if (selBU) info += ` &nbsp;|&nbsp; 🏷️ <strong>${escHtml(selBU)}</strong>`;
+  document.getElementById('infoBarSD').innerHTML = info;
+
+  // Period badge
+  const mthsStr = prevQMthsInData.length ? prevQMthsInData.join(', ') : prevQMths.join(', ') + ' (ไม่มีข้อมูล)';
+  document.getElementById('periodBadgeSD').innerHTML = `
+    <div class="period-badge">
+      <span>📅 เดือนล่าสุด: <strong>${latestMonth}</strong></span>
+      <span class="sep">VS</span>
+      <span>📐 AVG ${qlabel}: <strong>${mthsStr}</strong> (${prevQMthsInData.length} เดือน)</span>
+    </div>`;
+
+  // Aggregate by Customer × Cat_Brand
+  const aggMap = {};
+  data.forEach(r => {
+    const cust  = r['Customer_Name'] || r['Customer_Code'] || '(ไม่ระบุ)';
+    const brand = r['Cat_Brand'] || '(ไม่ระบุ)';
+    const month = r['Month_Year'] || '';
+    const cs    = parseFloat(r['Sales_CS'] || 0);
+    const key   = `${cust}|||${brand}`;
+    if (!aggMap[key]) aggMap[key] = { cust, brand, latestCS: 0, prevTot: 0 };
+    if (month === latestMonth) aggMap[key].latestCS += cs;
+    if (prevQMthsInData.includes(month)) aggMap[key].prevTot += cs;
+  });
+
+  const mapped = Object.values(aggMap)
+    .filter(r => r.latestCS > 0 || r.prevTot > 0)
+    .map(r => {
+      const avgCS = r.prevTot / nMonths;
+      const delta = r.latestCS - avgCS;
+      return { ...r, avgCS, delta };
+    });
+
+  // รวม delta ทุก brand ของแต่ละร้าน
+  const custDeltaSum = {};
+  mapped.forEach(r => { custDeltaSum[r.cust] = (custDeltaSum[r.cust] || 0) + r.delta; });
+
+  const rows = mapped.sort((a, b) => {
+    const custDiff = custDeltaSum[a.cust] - custDeltaSum[b.cust]; // ร้านที่ติดลบรวมมากสุดขึ้นก่อน
+    if (custDiff !== 0) return custDiff;
+    return a.delta - b.delta; // ภายในร้านเดียวกัน เรียง brand delta น้อย→มาก
+  });
+
+  // KPI
+  const totLatestEx = data.filter(r => r['Month_Year'] === latestMonth).reduce((s,r) => s + parseFloat(r['Exvat']||0), 0);
+  const totAvgCS    = rows.reduce((s,r) => s + r.avgCS, 0);
+  const totLatestCS = rows.reduce((s,r) => s + r.latestCS, 0);
+  const totDeltaCS  = totLatestCS - totAvgCS;
+
+  document.getElementById('sdKpiLatest').textContent    = fmtShort(totLatestEx);
+  document.getElementById('sdKpiLatestSub').textContent = latestMonth;
+  document.getElementById('sdKpiAvg').textContent       = parseFloat(totAvgCS).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('sdKpiAvgSub').textContent    = `เฉลี่ย/เดือน · ${qlabel}`;
+  document.getElementById('sdKpiDelta').textContent     = (totDeltaCS >= 0 ? '+' : '') + parseFloat(totDeltaCS).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('sdKpiDelta').style.color     = totDeltaCS >= 0 ? 'var(--success)' : 'var(--danger)';
+  document.getElementById('sdKpiRows').textContent      = rows.length.toLocaleString();
+
+  const rowNeg = rows.filter(r => r.delta < 0);
+  const rowPos = rows.filter(r => r.delta >= 0);
+
+  const renderRows = (arr, emptyMsg) => arr.length ? arr.map((r, i) => {
+    const isUp = r.delta >= 0;
+    const fmt2 = v => parseFloat(v).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const deltaVal = `${isUp?'+':''}${fmt2(r.delta)}`;
+    const deltaHtml = `<span style="color:${isUp?'var(--success)':'var(--danger)'};font-weight:700">${deltaVal}</span>`;
+    const combinedHtml = `<span style="font-weight:600">${escHtml(r.brand)}</span> <span style="color:${isUp?'var(--success)':'var(--danger)'};font-weight:700">${deltaVal}</span>`;
+    return `<tr>
+      <td style="color:var(--muted);font-size:11px">${i+1}</td>
+      <td><strong>${escHtml(r.cust)}</strong></td>
+      <td>${escHtml(r.brand)}</td>
+      <td class="num" style="color:var(--info)">${fmt2(r.avgCS)}</td>
+      <td class="num">${fmt2(r.latestCS)}</td>
+      <td class="num">${deltaHtml}</td>
+      <td>${combinedHtml}</td>
+    </tr>`;
+  }).join('') : `<tr class="empty-row"><td colspan="7">${emptyMsg}</td></tr>`;
+
+  document.getElementById('sdRowCountNeg').textContent = `${rowNeg.length.toLocaleString()} รายการ`;
+  document.getElementById('sdRowCountPos').textContent = `${rowPos.length.toLocaleString()} รายการ`;
+  document.getElementById('sdTblBodyNeg').innerHTML = renderRows(rowNeg, 'ไม่มีรายการติดลบ');
+  document.getElementById('sdTblBodyPos').innerHTML = renderRows(rowPos, 'ไม่มีรายการบวก');
+
+  document.getElementById('sdTop15Label').textContent = `${qlabel} - ${latestMonth}`;
+  document.getElementById('sdTop15PosLabel').textContent = latestMonth;
+
+  // ตาราง Top 15 Cat_Brand ติดลบมากสุดต่อร้าน
+  const fmt2 = v => parseFloat(v).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const custMap = {};
+  rowNeg.forEach(r => {
+    if (!custMap[r.cust]) custMap[r.cust] = [];
+    custMap[r.cust].push(r);
+  });
+  // เรียงร้านตาม custDeltaSum (ติดลบมากสุดก่อน)
+  const custList = Object.keys(custMap).sort((a,b) => custDeltaSum[a] - custDeltaSum[b]);
+  document.getElementById('sdTop15Count').textContent = `${custList.length.toLocaleString()} ร้าน`;
+  document.getElementById('sdTblBodyTop15').innerHTML = custList.length ? custList.map((cust, i) => {
+    const top15 = custMap[cust].sort((a,b) => a.delta - b.delta).slice(0,15);
+    const tagsHtml = top15.map(r =>
+      `<span style="display:inline-block;margin:2px 4px 2px 0;white-space:nowrap"><span style="font-weight:600">${escHtml(r.brand)}</span> <span style="color:var(--danger);font-weight:700">${fmt2(r.delta)}</span></span>`
+    ).join('<span style="color:var(--border)"> · </span>');
+    return `<tr>
+      <td style="color:var(--muted);font-size:11px">${i+1}</td>
+      <td style="white-space:nowrap"><strong>${escHtml(cust)}</strong></td>
+      <td style="line-height:1.8">${tagsHtml}</td>
+    </tr>`;
+  }).join('') : '<tr class="empty-row"><td colspan="3">ไม่มีข้อมูลติดลบ</td></tr>';
+
+  // ตาราง Top 15 Cat_Brand บวกมากสุดต่อร้าน
+  const custMapPos = {};
+  rowPos.forEach(r => {
+    if (!custMapPos[r.cust]) custMapPos[r.cust] = [];
+    custMapPos[r.cust].push(r);
+  });
+  // เรียงร้านตาม custDeltaSum (บวกมากสุดก่อน)
+  const custListPos = Object.keys(custMapPos).sort((a,b) => (custDeltaSum[b]||0) - (custDeltaSum[a]||0));
+  document.getElementById('sdTop15PosCount').textContent = `${custListPos.length.toLocaleString()} ร้าน`;
+  document.getElementById('sdTblBodyTop15Pos').innerHTML = custListPos.length ? custListPos.map((cust, i) => {
+    const top15 = custMapPos[cust].sort((a,b) => b.delta - a.delta).slice(0,15);
+    const tagsHtml = top15.map(r =>
+      `<span style="display:inline-block;margin:2px 4px 2px 0;white-space:nowrap"><span style="font-weight:600">${escHtml(r.brand)}</span> <span style="color:var(--success);font-weight:700">+${fmt2(r.delta)}</span></span>`
+    ).join('<span style="color:var(--border)"> · </span>');
+    return `<tr>
+      <td style="color:var(--muted);font-size:11px">${i+1}</td>
+      <td style="white-space:nowrap"><strong>${escHtml(cust)}</strong></td>
+      <td style="line-height:1.8">${tagsHtml}</td>
+    </tr>`;
+  }).join('') : '<tr class="empty-row"><td colspan="3">ไม่มีข้อมูลบวก</td></tr>';
+
+  // ── New SKU table ─────────────────────────────────────────────────────
+  const prevQSorted = [...prevQMthsInData].sort();
+
+  // อัพเดต label + header
+  document.getElementById('sdNewSkuLabel').textContent = `${qlabel} vs ${latestMonth}`;
+  document.getElementById('sdNewSkuThAvg').textContent = `AVG CS (${qlabel})`;
+  document.getElementById('sdNewSkuThLatest').textContent = `CS (${latestMonth})`;
+
+  // รวม CS ต่อ Customer × Product
+  const newSkuMap = {};
+  data.forEach(r => {
+    const cust  = r['Customer_Name'] || '';
+    const prod  = r['Product_Name']  || '';
+    const month = r['Month_Year']    || '';
+    const cs    = parseFloat(r['Sales_CS'] || 0);
+    const key   = `${cust}|||${prod}`;
+    if (!newSkuMap[key]) newSkuMap[key] = { cust, prod, qSum: 0, qCnt: 0, lCS: null };
+    if (prevQSorted.includes(month)) { newSkuMap[key].qSum += cs; newSkuMap[key].qCnt++; }
+    if (month === latestMonth) newSkuMap[key].lCS = (newSkuMap[key].lCS || 0) + cs;
+  });
+
+  // กรองเฉพาะแถวที่มีข้อมูลอย่างน้อย 1 ช่วง
+  const newSkuList = Object.values(newSkuMap)
+    .filter(r => r.qCnt > 0 || r.lCS !== null)
+    .sort((a,b) => {
+      if (a.cust < b.cust) return -1;
+      if (a.cust > b.cust) return  1;
+      if (a.prod < b.prod) return -1;
+      if (a.prod > b.prod) return  1;
+      return 0;
+    });
+
+  document.getElementById('sdNewSkuCount').textContent = `${newSkuList.length.toLocaleString()} รายการ`;
+
+  const fmt2NS = v => v === null
+    ? `<span style="color:var(--muted)">—</span>`
+    : parseFloat(v).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  document.getElementById('sdNewSkuTblBody').innerHTML = newSkuList.length ? newSkuList.map(r => {
+    const avgCS  = r.qCnt > 0 ? r.qSum / r.qCnt : null;
+    const isNew  = r.qCnt === 0 && r.lCS !== null;
+    const newCell = isNew
+      ? `<td style="color:var(--gold);font-weight:700;white-space:nowrap">${escHtml(r.prod)}</td>`
+      : `<td style="color:var(--muted)">—</td>`;
+    return `<tr>
+      <td style="font-weight:700;white-space:nowrap">${escHtml(r.cust)}</td>
+      <td>${escHtml(r.prod)}</td>
+      <td class="num" style="color:var(--info)">${fmt2NS(avgCS)}</td>
+      <td class="num">${fmt2NS(r.lCS)}</td>
+      ${newCell}
+    </tr>`;
+  }).join('') : `<tr class="empty-row"><td colspan="5">ไม่พบข้อมูล</td></tr>`;
+
+  // ── New_Product table ──────────────────────────────────────────────────
+  // รวม New SKU (qCnt===0 && lCS!==null) ต่อร้าน
+  const newProdMap = {};
+  newSkuList.forEach(r => {
+    const isNew = r.qCnt === 0 && r.lCS !== null;
+    if (!isNew) return;
+    if (!newProdMap[r.cust]) newProdMap[r.cust] = [];
+    newProdMap[r.cust].push(r.prod);
+  });
+
+  const newProdList = Object.entries(newProdMap)
+    .sort((a, b) => b[1].length - a[1].length); // เรียงจากมาก→น้อย
+
+  document.getElementById('sdNewProdLabel').textContent = `${latestMonth} — สินค้าใหม่ต่อร้าน`;
+  document.getElementById('sdNewProdCount').textContent = `${newProdList.length.toLocaleString()} ร้าน`;
+
+  document.getElementById('sdNewProdTblBody').innerHTML = newProdList.length
+    ? newProdList.map(([cust, prods], i) => `<tr>
+        <td style="color:var(--muted);font-size:11px">${i + 1}</td>
+        <td style="font-weight:700;white-space:nowrap">${escHtml(cust)}</td>
+        <td style="font-size:13px;line-height:1.7">${prods.map(p => escHtml(p)).join(', ')}</td>
+        <td class="num" style="font-weight:700;color:var(--warning)">${prods.length.toLocaleString()}</td>
+      </tr>`).join('')
+    : `<tr class="empty-row"><td colspan="4">ไม่พบข้อมูล New SKU</td></tr>`;
+}
+
+// ── Render latest month tab ───────────────────────
+function renderLatestTab() {
+  const data = filteredData;
+  if (!data.length) {
+    document.getElementById('infoBarL').innerHTML = '⚠️ ไม่มีข้อมูล';
+    document.getElementById('lTblBody').innerHTML = '<tr class="empty-row"><td colspan="4">ไม่พบข้อมูล</td></tr>';
+    return;
+  }
+
+  const allMonths   = [...new Set(data.map(r => r['Month_Year']).filter(Boolean))].sort();
+  const latestMonth = allMonths[allMonths.length - 1];
+
+  // Update tab button and card label with actual month
+  document.getElementById('tabLatestBtn').textContent = `📋 Data รวม (${latestMonth})`;
+  document.getElementById('lCardLabel').textContent = latestMonth;
+
+  // Info bar
+  let info = `📅 เดือนล่าสุด: <strong>${latestMonth}</strong>`;
+  if (currentSheet) info += ` &nbsp;|&nbsp; 👤 <strong>${currentSheet}</strong>`;
+  if (selBU) info += ` &nbsp;|&nbsp; 🏷️ Cat BU: <strong>${escHtml(selBU)}</strong>`;
+  else info += ` &nbsp;|&nbsp; 🏷️ Cat BU: <strong>ทั้งหมด</strong>`;
+  document.getElementById('infoBarL').innerHTML = info;
+
+  // Filter to latest month only
+  const lData = data.filter(r => r['Month_Year'] === latestMonth);
+
+  // KPI
+  const totEx  = lData.reduce((s,r) => s + parseFloat(r['Exvat']   ||0), 0);
+  const totCS  = lData.reduce((s,r) => s + parseFloat(r['Sales_CS']||0), 0);
+  const uCust  = new Set(lData.map(r => r['Customer_Name'] || r['Customer_Code'])).size;
+  const uBU    = new Set(lData.map(r => r['Cat_BU']).filter(Boolean)).size;
+  document.getElementById('lKpiExvat').textContent    = fmtShort(totEx);
+  document.getElementById('lKpiExvatSub').textContent = fmtFull(totEx) + ' บาท';
+  document.getElementById('lKpiCS').textContent       = fmtFull(totCS);
+  document.getElementById('lKpiCust').textContent     = uCust.toLocaleString();
+  document.getElementById('lKpiBU').textContent       = uBU;
+
+  // Aggregate: Customer_Name + Cat_Brand → total CS
+  const aggMap = {};
+  lData.forEach(r => {
+    const cust  = r['Customer_Name'] || r['Customer_Code'] || '(ไม่ระบุ)';
+    const brand = r['Cat_Brand'] || '(ไม่ระบุ)';
+    const cs    = parseFloat(r['Sales_CS'] || 0);
+    const key   = `${cust}|||${brand}`;
+    if (!aggMap[key]) aggMap[key] = { cust, brand, total: 0 };
+    aggMap[key].total += cs;
+  });
+
+  const allRows = Object.values(aggMap);
+
+  // รวม CS ทุก brand ของแต่ละร้าน เพื่อเรียงร้าน
+  const custTotal = {};
+  allRows.forEach(r => { custTotal[r.cust] = (custTotal[r.cust] || 0) + r.total; });
+
+  const rows = allRows.sort((a, b) => {
+    const custDiff = custTotal[b.cust] - custTotal[a.cust];
+    if (custDiff !== 0) return custDiff;
+    return b.total - a.total;
+  });
+
+  document.getElementById('lCustCount').textContent = `${rows.length.toLocaleString()} รายการ`;
+  document.getElementById('lTblBody').innerHTML = rows.length ? rows.map((r, i) => `
+    <tr>
+      <td style="color:var(--muted);font-size:11px">${i+1}</td>
+      <td><strong>${escHtml(r.cust)}</strong></td>
+      <td>${escHtml(r.brand)}</td>
+      <td class="num" style="color:var(--info);font-weight:600">${parseFloat(r.total).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+    </tr>`).join('')
+    : '<tr class="empty-row"><td colspan="4">ไม่พบข้อมูลเดือนนี้</td></tr>';
+
+  // ตารางรายละเอียดสินค้าเดือนล่าสุด
+  document.getElementById('lProdCardLabel').textContent = latestMonth;
+  const lProdMap = {};
+  lData.forEach(r => {
+    const cust = r['Customer_Name'] || '';
+    const product = r['Product_Name'] || '';
+    const cs = parseFloat(r['Sales_CS'] || 0);
+    const key = `${cust}|||${product}`;
+    if (!lProdMap[key]) lProdMap[key] = { cust, product, cs: 0 };
+    lProdMap[key].cs += cs;
+  });
+  // รวม CS ต่อร้านเพื่อเรียงร้านจากมากไปน้อย
+  const lCustTot = {};
+  Object.values(lProdMap).forEach(r => { lCustTot[r.cust] = (lCustTot[r.cust] || 0) + r.cs; });
+  const lProdList = Object.values(lProdMap).sort((a,b) => {
+    const custDiff = lCustTot[b.cust] - lCustTot[a.cust];
+    if (custDiff !== 0) return custDiff;
+    return b.cs - a.cs;
+  });
+  document.getElementById('lProdCount').textContent = `${lProdList.length.toLocaleString()} รายการ`;
+  document.getElementById('lProdTblBody').innerHTML = lProdList.length ? lProdList.map((r, i) => `<tr>
+      <td style="color:var(--muted);font-size:11px">${i+1}</td>
+      <td><strong>${escHtml(r.cust)}</strong></td>
+      <td>${escHtml(r.product)}</td>
+      <td class="num" style="color:var(--info);font-weight:600">${parseFloat(r.cs).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+    </tr>`).join('') : '<tr class="empty-row"><td colspan="4">ไม่พบข้อมูล</td></tr>';
+
+  // ตาราง SKU ต่อร้าน (เดือนล่าสุด)
+  document.getElementById('lSkuCardLabel').textContent = latestMonth;
+  const lSkuMap = {};
+  lProdList.forEach(r => {
+    if (!lSkuMap[r.cust]) lSkuMap[r.cust] = new Set();
+    lSkuMap[r.cust].add(r.product);
+  });
+  const lSkuList = Object.entries(lSkuMap)
+    .map(([cust, set]) => ({ cust, sku: set.size }))
+    .sort((a,b) => b.sku - a.sku);
+  document.getElementById('lSkuCount').textContent = `${lSkuList.length.toLocaleString()} ร้าน`;
+  document.getElementById('lSkuTblBody').innerHTML = lSkuList.length ? lSkuList.map((r, i) => `<tr>
+      <td style="color:var(--muted);font-size:11px">${i+1}</td>
+      <td><strong>${escHtml(r.cust)}</strong></td>
+      <td class="num" style="font-weight:700">${r.sku.toLocaleString('th-TH')}</td>
+    </tr>`).join('') : '<tr class="empty-row"><td colspan="3">ไม่พบข้อมูล</td></tr>';
+}
+
+// ── Export summary Excel ──────────────────────────
+function exportSummaryExcel() {
+  if (!filteredData.length) { showToast('ไม่มีข้อมูล', 'warning'); return; }
+  try {
+    const allMonths = [...new Set(filteredData.map(r=>r['Month_Year']).filter(Boolean))].sort();
+    const latestMonth = allMonths[allMonths.length-1];
+    const { months: prevQMths, year: pqYear, quarter: pqQ } = prevQuarterMonths(latestMonth);
+    const prevQMthsInData = prevQMths.filter(m => allMonths.includes(m));
+    const buSet = [...new Set(filteredData.map(r=>r['Cat_BU']).filter(Boolean))];
+
+    // build buMonthMap[bu][month]
+    const buMonthMap = {};
+    buSet.forEach(b => { buMonthMap[b] = {}; });
+    filteredData.forEach(r => {
+      const b=r['Cat_BU']||'', m=r['Month_Year']||'', v=parseFloat(r['Exvat']||0);
+      if (!buMonthMap[b]) return;
+      buMonthMap[b][m] = (buMonthMap[b][m]||0) + v;
+    });
+
+    const sortedBUs = [...buSet].sort((a,b)=>(buMonthMap[b][latestMonth]||0)-(buMonthMap[a][latestMonth]||0));
+    const prevQLabel = qLabel(pqYear, pqQ);
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(sortedBUs.map((b,i) => {
+      const latest = buMonthMap[b][latestMonth] || 0;
+      const prevTot = prevQMthsInData.reduce((s,m)=>s+(buMonthMap[b][m]||0),0);
+      const avg   = prevQMthsInData.length > 0 ? prevTot/prevQMthsInData.length : 0;
+      const delta = latest - avg;
+      const pct   = avg !== 0 ? (delta/avg*100) : null;
+      const row = { '#': i+1, 'Cat BU': b, [`เดือนล่าสุด ${latestMonth} (฿)`]: parseFloat(latest.toFixed(2)) };
+      prevQMths.forEach(m => { row[`${m} (฿)`] = parseFloat(((buMonthMap[b][m]||0)).toFixed(2)); });
+      row[`AVG ${prevQLabel} (฿)`] = parseFloat(avg.toFixed(2));
+      row['Δ บาท']    = parseFloat(delta.toFixed(2));
+      row['% เปลี่ยน'] = pct !== null ? parseFloat(pct.toFixed(2)) : '';
+      return row;
+    }));
+    XLSX.utils.book_append_sheet(wb, ws, 'Latest vs Quarter');
+    const suffix = currentSheet || '';
+    XLSX.writeFile(wb, `rattana-om-vs-quarter${suffix?'-'+suffix:''}.xlsx`);
+    showToast('Export Excel สำเร็จ ✓', 'success');
+  } catch(e) { showToast('Export ล้มเหลว: '+e.message, 'error'); }
+}
+
+// ── Bootstrap ─────────────────────────────────────
+window.onload = () => {
+  if (localStorage.getItem('om_dark') === '1') {
+    document.body.classList.add('dark');
+    document.getElementById('btnDark').textContent = '☀️';
+  }
+  bindHeaderSort();
+  initApp();
+};
+</script>
+</body>
+</html>

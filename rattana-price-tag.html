@@ -1,0 +1,3859 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Rattana Price Tag v4.8</title>
+<meta name="description" content="ระบบสร้างป้ายราคาสินค้าสำหรับร้านค้ารัตน — ดึงข้อมูลจาก Google Sheet พิมพ์ PDF A4 4 ป้าย/หน้า">
+<meta name="theme-color" content="#0d1b3e">
+<meta name="apple-mobile-web-app-title" content="Rattana Price Tag">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230d1b3e'/%3E%3Ctext x='50' y='68' font-size='52' text-anchor='middle' fill='%23c9a84c' font-family='Arial' font-weight='bold'%3E฿%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;500;600;700&family=Kanit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<style>
+:root {
+  /* Brand palette */
+  --navy: #0d1b3e;
+  --navy-mid: #1a2f5e;
+  --navy-light: #243b73;
+  --gold: #c9a84c;
+  --gold-light: #e8c86a;
+  --gold-deep: #a8893a;
+  /* Semantic */
+  --success: #10b981;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --info: #3b82f6;
+  /* Surface — softer, more refined */
+  --bg: #eef1f7;
+  --bg-grad: linear-gradient(180deg,#f4f6fb 0%,#e8ecf3 100%);
+  --text: #0d1b3e;
+  --text-soft: #475569;
+  --card-bg: #ffffff;
+  --card-bg-glass: rgba(255,255,255,0.72);
+  --border: #e2e8f0;
+  --border-soft: #eef1f5;
+  --muted: #64748b;
+  --row-alt: #f8fafc;
+  /* Spacing */
+  --space-xs: 4px; --space-sm: 8px; --space-md: 16px; --space-lg: 24px; --space-xl: 32px;
+  /* Radius */
+  --radius-sm: 8px; --radius-md: 14px; --radius-lg: 20px; --radius-xl: 28px;
+  /* Layered shadows — depth + dimension */
+  --shadow-xs: 0 1px 2px rgba(13,27,62,0.04);
+  --shadow-sm: 0 2px 4px rgba(13,27,62,0.04), 0 1px 2px rgba(13,27,62,0.06);
+  --shadow-md: 0 4px 12px rgba(13,27,62,0.06), 0 2px 4px rgba(13,27,62,0.04);
+  --shadow-lg: 0 12px 32px rgba(13,27,62,0.10), 0 4px 8px rgba(13,27,62,0.04);
+  --shadow-xl: 0 24px 48px rgba(13,27,62,0.14), 0 8px 16px rgba(13,27,62,0.06);
+  --shadow-gold: 0 8px 20px rgba(201,168,76,0.30), 0 2px 6px rgba(201,168,76,0.20);
+  --shadow-inset: inset 0 1px 0 rgba(255,255,255,0.6);
+}
+body.dark {
+  --bg: #050a16;
+  --bg-grad: linear-gradient(180deg,#070d1c 0%,#040814 100%);
+  --text: #e8eaf0;
+  --text-soft: #94a3b8;
+  --card-bg: #0f1830;
+  --card-bg-glass: rgba(15,24,48,0.72);
+  --border: #1e2a4a;
+  --border-soft: #15203b;
+  --muted: #64748b;
+  --row-alt: #0a1226;
+  --shadow-sm: 0 2px 4px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,0.5);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:'Anuphan',sans-serif;min-height:100dvh;overflow-x:hidden;
+  background:var(--bg-grad);background-attachment:fixed;color:var(--text);
+  transition:background .25s,color .25s;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+}
+button{font-family:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+input,select,textarea{font-family:inherit;font-size:16px}
+::selection{background:var(--gold);color:var(--navy)}
+
+/* Header — premium gradient with depth */
+header{
+  background:linear-gradient(135deg,#0d1b3e 0%,#1a2f5e 50%,#0d1b3e 100%);
+  color:#fff;padding:14px 18px;position:sticky;top:0;z-index:100;
+  display:flex;align-items:center;gap:14px;
+  padding-top:max(14px,env(safe-area-inset-top));
+  box-shadow:var(--shadow-lg);
+  position:relative;
+}
+header::after{
+  content:'';position:absolute;left:0;right:0;bottom:0;height:3px;
+  background:linear-gradient(90deg,transparent 0%,var(--gold) 20%,var(--gold-light) 50%,var(--gold) 80%,transparent 100%);
+}
+.logo-img{
+  width:44px;height:44px;border-radius:11px;
+  box-shadow:0 4px 14px rgba(0,0,0,0.35),0 0 0 1px rgba(201,168,76,0.45);
+  flex-shrink:0;
+}
+.logo-text{
+  font-weight:700;letter-spacing:1.5px;font-size:17px;color:#fff;flex:1;line-height:1.2;
+  font-family:'Kanit',sans-serif;
+}
+.logo-text small{
+  display:block;font-size:10px;color:var(--gold-light);font-weight:500;letter-spacing:1px;
+  margin-top:2px;font-family:'Anuphan',sans-serif;
+}
+.icon-btn{
+  background:rgba(255,255,255,0.05);color:#fff;
+  border:1px solid rgba(255,255,255,0.12);
+  width:40px;height:40px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;font-size:18px;
+  transition:all .2s;backdrop-filter:blur(8px);
+}
+.icon-btn:hover{
+  background:rgba(201,168,76,0.18);border-color:rgba(201,168,76,0.4);
+  transform:translateY(-1px);box-shadow:0 4px 12px rgba(201,168,76,0.2);
+}
+.icon-btn:active{transform:translateY(0);}
+
+/* Tab nav — floating pill style with glass effect */
+.tab-nav{
+  display:flex;gap:6px;
+  background:var(--card-bg-glass);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  padding:8px;border-radius:0;
+  border-bottom:1px solid var(--border-soft);
+  overflow-x:auto;scrollbar-width:none;
+  position:sticky;top:var(--header-h,68px);z-index:99;
+  box-shadow:0 2px 8px rgba(13,27,62,0.04);
+}
+.tab-nav::-webkit-scrollbar{display:none}
+.tab-btn{
+  background:transparent;border:none;color:var(--text-soft);
+  padding:10px 18px;font-size:13px;font-weight:600;font-family:inherit;
+  cursor:pointer;white-space:nowrap;flex-shrink:0;
+  transition:all .22s cubic-bezier(0.4,0,0.2,1);
+  border-radius:12px;
+  display:inline-flex;align-items:center;gap:6px;
+}
+.tab-btn:hover{
+  background:rgba(13,27,62,0.05);color:var(--text);
+}
+.tab-btn.active{
+  color:#fff;
+  background:linear-gradient(135deg,var(--navy) 0%,var(--navy-mid) 100%);
+  box-shadow:0 4px 12px rgba(13,27,62,0.25),inset 0 1px 0 rgba(255,255,255,0.1);
+  font-weight:700;
+}
+body.dark .tab-btn:hover{background:rgba(255,255,255,0.06)}
+.tab-btn .badge-count{
+  background:var(--gold);color:var(--navy);
+  font-size:10px;padding:2px 7px;border-radius:10px;
+  font-weight:800;min-width:18px;text-align:center;
+  box-shadow:0 1px 3px rgba(0,0,0,0.15);
+}
+.tab-btn.active .badge-count{background:rgba(255,255,255,0.95);color:var(--navy)}
+
+/* Content */
+.page{min-height:100dvh;display:flex;flex-direction:column}
+.content{flex:1;padding:12px;max-width:1400px;margin:0 auto;width:100%}
+@media(min-width:640px){.content{padding:16px}}
+.tab-pane{display:none;animation:fadeIn .2s}
+.tab-pane.active{display:block}
+
+/* Cards — refined with dimensional shadows */
+.card{
+  background:var(--card-bg);border-radius:var(--radius-lg);
+  border:1px solid var(--border-soft);box-shadow:var(--shadow-md);
+  margin-bottom:18px;overflow:hidden;
+  transition:box-shadow .3s,transform .3s;
+}
+.card-gold{
+  position:relative;
+}
+.card-gold::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,var(--gold-deep) 0%,var(--gold-light) 50%,var(--gold-deep) 100%);
+  border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+}
+.card-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 20px;border-bottom:1px solid var(--border-soft);
+  gap:10px;flex-wrap:wrap;
+  background:linear-gradient(180deg,rgba(201,168,76,0.04) 0%,transparent 100%);
+}
+.card-head h3{
+  font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px;
+  font-family:'Kanit',sans-serif;letter-spacing:0.3px;
+}
+.card-body{padding:18px 20px}
+
+/* Buttons — premium with gradient + dimensional shadow */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:10px 18px;border-radius:10px;
+  font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;
+  border:1px solid transparent;min-height:42px;
+  transition:all .2s cubic-bezier(0.4,0,0.2,1);
+  letter-spacing:0.2px;
+  position:relative;overflow:hidden;
+}
+.btn:hover{transform:translateY(-1px)}
+.btn:active{transform:translateY(0) scale(.98)}
+.btn-primary{
+  background:linear-gradient(135deg,var(--navy) 0%,var(--navy-mid) 100%);
+  color:#fff;
+  box-shadow:0 4px 12px rgba(13,27,62,0.25),inset 0 1px 0 rgba(255,255,255,0.1);
+}
+.btn-primary:hover{box-shadow:0 6px 20px rgba(13,27,62,0.35),inset 0 1px 0 rgba(255,255,255,0.15)}
+.btn-gold{
+  background:linear-gradient(135deg,var(--gold-light) 0%,var(--gold) 50%,var(--gold-deep) 100%);
+  color:var(--navy);
+  box-shadow:0 4px 12px rgba(201,168,76,0.35),inset 0 1px 0 rgba(255,255,255,0.4);
+  font-weight:700;
+}
+.btn-gold:hover{box-shadow:0 8px 20px rgba(201,168,76,0.45),inset 0 1px 0 rgba(255,255,255,0.5)}
+.btn-outline{
+  background:var(--card-bg);color:var(--text);
+  border-color:var(--border);box-shadow:var(--shadow-xs);
+}
+.btn-outline:hover{
+  border-color:var(--gold);background:rgba(201,168,76,0.04);
+  box-shadow:var(--shadow-sm);
+}
+.btn-danger{
+  background:linear-gradient(135deg,#f87171,#dc2626);
+  color:#fff;box-shadow:0 4px 12px rgba(239,68,68,0.25);
+}
+.btn-success{
+  background:linear-gradient(135deg,#34d399,#059669);
+  color:#fff;box-shadow:0 4px 12px rgba(16,185,129,0.25);
+}
+.btn-sm{padding:6px 12px;font-size:12px;min-height:32px;border-radius:8px}
+.btn-lg{padding:15px 28px;font-size:15px;min-height:54px;border-radius:14px}
+.btn-block{width:100%}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
+
+/* Inputs — refined with depth */
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+.field label{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.6px;text-transform:uppercase}
+.input{
+  height:46px;padding:0 16px;border-radius:12px;
+  border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);
+  font-size:16px;font-family:inherit;outline:none;width:100%;
+  transition:all .2s;box-shadow:var(--shadow-xs);
+}
+.input:hover{border-color:#cbd5e0}
+.input:focus{
+  border-color:var(--gold);
+  box-shadow:0 0 0 4px rgba(201,168,76,0.12),var(--shadow-sm);
+}
+.input-sm{height:38px;font-size:14px;padding:0 14px;border-radius:10px}
+
+/* Stat cards — premium with gradient accent */
+.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px}
+@media(min-width:640px){.stat-grid{grid-template-columns:repeat(4,1fr);gap:16px}}
+.stat-card{
+  background:var(--card-bg);border-radius:14px;padding:16px;
+  border:1px solid var(--border-soft);box-shadow:var(--shadow-sm);
+  position:relative;overflow:hidden;
+  transition:all .3s;
+}
+.stat-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,var(--gold-deep),var(--gold-light));
+}
+.stat-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+.stat-card .s-label{font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.6px;text-transform:uppercase;margin-bottom:6px}
+.stat-card .s-value{font-size:24px;font-weight:800;line-height:1.1;font-family:'Kanit',sans-serif;color:var(--navy)}
+body.dark .stat-card .s-value{color:var(--gold-light)}
+.stat-card .s-sub{font-size:11px;color:var(--muted);margin-top:4px}
+
+/* Filter bar — floating glassmorphic */
+.filter-bar{
+  background:var(--card-bg-glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border-radius:16px;padding:12px;margin-bottom:18px;
+  border:1px solid var(--border-soft);box-shadow:var(--shadow-md);
+  display:grid;grid-template-columns:1fr;gap:10px;
+  position:sticky;top:calc(var(--header-h,68px) + 60px);z-index:50;
+}
+.filter-bar > *{min-width:0;max-width:100%!important}
+.filter-bar .filter-actions{display:flex;gap:6px;justify-content:flex-end}
+@media(min-width:640px){
+  .filter-bar{grid-template-columns:2fr 1fr 1fr auto auto;align-items:center}
+  .filter-bar .filter-actions{display:contents}
+}
+/* v4.0: extra cols for Brand + Vendor filters */
+@media(min-width:900px){
+  .filter-bar-grid{grid-template-columns:1.6fr 1fr 1fr 1fr 1fr auto auto !important}
+}
+
+/* Product grid — 2 cols on small phones, larger cards on bigger screens */
+.prod-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(min-width:480px){.prod-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}}
+@media(min-width:768px){.prod-grid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}}
+
+.prod-card{
+  background:var(--card-bg);border-radius:16px;border:1.5px solid var(--border-soft);
+  padding:0;overflow:hidden;cursor:pointer;
+  transition:all .25s cubic-bezier(0.4,0,0.2,1);
+  position:relative;display:flex;flex-direction:column;
+  box-shadow:var(--shadow-sm);
+}
+.prod-card:hover{
+  border-color:var(--gold-light);
+  box-shadow:var(--shadow-lg);
+  transform:translateY(-3px);
+}
+.prod-card.selected{
+  border-color:var(--gold);
+  box-shadow:0 0 0 3px rgba(201,168,76,0.15),var(--shadow-lg);
+  background:linear-gradient(180deg,rgba(201,168,76,0.05) 0%,var(--card-bg) 40%);
+}
+.prod-card .p-img{
+  aspect-ratio:1;background:#f1f5f9;
+  overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+  color:#cbd5e0;font-size:36px;
+  position:relative;
+}
+body.dark .prod-card .p-img{background:#0f172a}
+.prod-card .p-img img{
+  width:100%;height:100%;object-fit:cover;
+  transition:transform .4s ease;
+}
+.prod-card:hover .p-img img{transform:scale(1.05)}
+.prod-card .p-img::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(180deg,transparent 60%,rgba(0,0,0,0.06) 100%);
+  pointer-events:none;
+}
+.prod-card .p-info{padding:10px 12px 12px;display:flex;flex-direction:column;gap:3px}
+.prod-card .p-sku{font-size:10px;color:var(--muted);font-family:'Courier New',monospace;font-weight:600;letter-spacing:0.3px}
+.prod-card .p-name{
+  font-size:13px;font-weight:600;line-height:1.3;
+  min-height:34px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  color:var(--text);
+}
+.prod-card .p-price-row{display:flex;align-items:baseline;gap:4px;margin-top:2px}
+.prod-card .p-price{
+  font-size:20px;font-weight:800;color:var(--navy);font-family:'Kanit',sans-serif;
+  letter-spacing:-0.5px;line-height:1;
+}
+body.dark .prod-card .p-price{color:var(--gold-light)}
+.prod-card .p-old{font-size:11px;color:var(--muted);text-decoration:line-through}
+.prod-card .p-unit{font-size:10px;color:var(--muted);margin-top:2px}
+.prod-card .p-check{
+  position:absolute;top:8px;right:8px;width:28px;height:28px;
+  border-radius:50%;background:rgba(255,255,255,0.95);
+  border:1.5px solid rgba(255,255,255,0.7);
+  backdrop-filter:blur(8px);
+  display:flex;align-items:center;justify-content:center;
+  font-size:15px;color:transparent;font-weight:800;
+  box-shadow:0 2px 6px rgba(0,0,0,0.1);
+  transition:all .2s;z-index:2;
+}
+.prod-card.selected .p-check{
+  background:linear-gradient(135deg,var(--gold-light),var(--gold));
+  border-color:var(--gold);color:var(--navy);
+  box-shadow:0 3px 10px rgba(201,168,76,0.5);transform:scale(1.05);
+}
+.prod-card .p-badge{
+  position:absolute;top:8px;left:8px;
+  color:#fff;font-size:10px;padding:3px 9px;border-radius:20px;font-weight:700;
+  box-shadow:0 2px 6px rgba(0,0,0,0.2);
+  backdrop-filter:blur(8px);letter-spacing:0.3px;
+  z-index:2;
+}
+
+/* Template picker */
+.tpl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.tpl-card{border:2px solid var(--border);border-radius:var(--radius-md);padding:10px;cursor:pointer;text-align:center;background:var(--card-bg);transition:all .15s}
+.tpl-card:hover{border-color:var(--gold-light)}
+.tpl-card.active{border-color:var(--gold);background:rgba(201,168,76,.05);box-shadow:var(--shadow-gold)}
+.tpl-preview{aspect-ratio:3/4;border-radius:8px;margin-bottom:6px;overflow:hidden;position:relative;background:#fff;border:1px solid #ddd}
+.tpl-card .tpl-name{font-size:12px;font-weight:600}
+
+/* ============== PRICE TAG TEMPLATES ============== */
+/* Each tag = 95mm x 138mm (A4 / 4 with margins) */
+/* v4.0 — LANDSCAPE tags (190mm × 66mm), 4 per A4 portrait, stacked vertically */
+.tag-stage{display:flex;flex-direction:column;gap:18px;align-items:center}
+
+.tag {
+  width:190mm; height:66mm;
+  background:#fff; color:#000;
+  position:relative; overflow:hidden;
+  font-family:'Kanit','Anuphan',sans-serif;
+  page-break-inside:avoid;
+  border-radius:8px;
+  box-shadow:0 6px 18px rgba(0,0,0,.15);
+  display:flex; flex-direction:row;  /* horizontal: image left, info right */
+}
+
+/* ====================================================================
+   v1.4 — Redesigned templates inspired by:
+   - อิศราภัณฑ์ Supermarket (clean modern card, orange "ปกติ" pill)
+   - เทพธัญญะ (red circle "พิเศษ" + yellow unit strip)
+   - ฮงล้งมินิมาร์ท (comic-burst SALE explosion)
+   ==================================================================== */
+
+/* ====== Shared inner elements (landscape) ====== */
+.tag .t-img{
+  flex:0 0 58mm;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+.tag .t-img img{max-width:100%;max-height:100%;object-fit:contain}
+.tag .t-info{
+  flex:1;display:flex;flex-direction:column;
+  padding:3mm 5mm 2mm;position:relative;min-width:0;
+}
+.tag .t-foot{
+  position:absolute;bottom:1.5mm;right:3mm;
+  display:flex;align-items:center;gap:2mm;
+  font-size:6.5pt;color:#64748b;font-family:'Courier New',monospace;
+  z-index:5;
+}
+.tag .t-foot .t-sku{font-weight:700;line-height:1.1;text-align:right;opacity:0.7}
+.tag .t-foot canvas,.tag .t-foot svg{background:#fff;padding:0.5mm;border-radius:2px}
+/* v4.0 — Location chip (replaces QR) */
+.tag .t-foot .t-loc{
+  display:flex;align-items:center;gap:1mm;
+  background:rgba(201,168,76,0.95);color:#0d1b3e;
+  padding:0.8mm 2.5mm;border-radius:30px;
+  font-family:'Anuphan',sans-serif;font-weight:800;
+  font-size:7pt;letter-spacing:0.3px;
+  box-shadow:0 1.5px 4px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.4);
+  border:0.5px solid #d97706;line-height:1;
+  white-space:nowrap;
+}
+.tag .t-foot .t-loc-icon{font-size:7pt;filter:drop-shadow(0 1px 1px rgba(0,0,0,0.3))}
+.tag .t-foot .t-loc-text{font-family:'Courier New',monospace;font-weight:800}
+
+/* === TEMPLATE 1: REGULAR — v4.0 Rattana Mart navy+gold premium === */
+.tpl-regular{
+  background:
+    radial-gradient(ellipse at top right,rgba(201,168,76,0.12) 0%,transparent 50%),
+    linear-gradient(135deg,#0a1428 0%,#0d1b3e 50%,#050d22 100%);
+  border-radius:10px;
+  position:relative;overflow:hidden;
+}
+/* Gold inner frame */
+.tpl-regular::before{
+  content:'';position:absolute;inset:2.5mm;
+  border:1.5px solid rgba(201,168,76,0.55);
+  border-radius:5mm;pointer-events:none;z-index:1;
+}
+/* Subtle sparkle dots */
+.tpl-regular::after{
+  content:'';position:absolute;inset:0;
+  background:
+    radial-gradient(circle at 88% 15%,rgba(201,168,76,0.5) 1px,transparent 2px),
+    radial-gradient(circle at 95% 80%,rgba(201,168,76,0.4) 1px,transparent 2px),
+    radial-gradient(circle at 70% 90%,rgba(201,168,76,0.35) 0.8px,transparent 1.5px);
+  pointer-events:none;z-index:1;
+}
+.tpl-regular .t-img{
+  flex:0 0 52mm;
+  background:#fff;
+  margin:5mm 0 5mm 5mm;border-radius:6mm;
+  padding:3mm;
+  box-shadow:0 6px 16px rgba(0,0,0,0.5),0 0 0 2px rgba(201,168,76,0.45);
+  position:relative;z-index:2;
+}
+.tpl-regular .t-img-empty{color:#cbd5e0;font-size:38pt}
+.tpl-regular .t-info{
+  padding:4mm 5mm;color:#fff;
+  flex-direction:row;align-items:stretch;gap:4mm;
+  position:relative;z-index:2;
+}
+.tpl-regular .t-info-left{
+  flex:1;display:flex;flex-direction:column;justify-content:center;min-width:0;
+}
+.tpl-regular .t-name{
+  font-size:15pt;font-weight:800;line-height:1.2;color:#fff;
+  font-family:'Anuphan',sans-serif;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  overflow:hidden;margin-bottom:1.5mm;
+  text-shadow:1px 1px 3px rgba(0,0,0,0.4);
+}
+.tpl-regular .t-size{
+  font-size:9pt;color:#c9a84c;font-weight:600;
+  letter-spacing:0.5px;margin-bottom:1mm;
+}
+.tpl-regular .t-old-line{
+  font-size:9pt;color:rgba(255,255,255,0.7);font-weight:500;
+  font-style:italic;letter-spacing:0.3px;margin-top:1mm;
+}
+/* The signature black price card with gold border */
+.tpl-regular .t-price-card{
+  flex:0 0 auto;align-self:center;
+  background:linear-gradient(135deg,#000 0%,#1a1a2e 100%);
+  border:2.5px solid #c9a84c;
+  border-radius:6mm;
+  padding:3mm 8mm 4mm;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  box-shadow:
+    0 6px 16px rgba(0,0,0,0.6),
+    inset 0 1px 0 rgba(255,255,255,0.1),
+    0 0 0 4px rgba(201,168,76,0.15);
+  min-width:42mm;
+}
+.tpl-regular .t-price-label{
+  font-size:11pt;color:#fff;font-weight:500;
+  letter-spacing:1px;line-height:1;
+  font-family:'Anuphan',sans-serif;
+  margin-bottom:1mm;
+}
+.tpl-regular .t-price{
+  font-size:52pt;color:#fbbf24;
+  font-weight:800;font-family:'Kanit',sans-serif;
+  line-height:0.85;letter-spacing:-1px;
+  text-shadow:0 2px 8px rgba(251,191,36,0.35),0 0 1px rgba(0,0,0,0.5);
+}
+.tpl-regular .t-foot{color:#c9a84c}
+.tpl-regular .t-foot .t-sku{color:rgba(201,168,76,0.7)}
+.tpl-regular .t-foot canvas,.tpl-regular .t-foot svg{background:#fff}
+/* v4.0 — Unit pill (prominent display of EA/PA/BP/CS info) */
+.tpl-regular .t-unit-row{margin:1mm 0 1.5mm}
+.tpl-regular .t-unit-pill{
+  display:inline-block;
+  background:linear-gradient(135deg,#c9a84c 0%,#e8c86a 100%);
+  color:#0d1b3e;font-weight:800;font-family:'Anuphan',sans-serif;
+  padding:0.8mm 4mm;border-radius:30px;
+  font-size:9pt;letter-spacing:0.3px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.4);
+  border:1px solid #d97706;
+}
+
+/* ========================================================================
+   v4.0 — Per-layout INNER element sizing (tags fill cells via grid engine)
+   Container/grid/tag-size handled by the Universal A4 Layout Engine.
+   Here we only tune fonts, images, paddings per layout.
+   ======================================================================== */
+
+/* ─────────── LAYOUT 1 (1 ป้าย/หน้า) — Full A4 POSTER ─────────── */
+.pdf-page.layout-1 .tag::before{inset:6mm !important;border-radius:9mm !important;border-width:2px !important}
+.pdf-page.layout-1 .tag .t-img{
+  flex:0 0 120mm !important;
+  width:155mm !important;max-width:90% !important;height:120mm !important;
+  margin:16mm auto 0 !important;align-self:center !important;
+  padding:6mm !important;border-radius:10mm !important;
+  box-shadow:0 14px 36px rgba(0,0,0,0.5),0 0 0 4px rgba(201,168,76,0.45) !important;
+}
+.pdf-page.layout-1 .tag .t-img-empty{font-size:80pt !important}
+.pdf-page.layout-1 .tag .t-info{
+  flex:1 1 auto !important;flex-direction:column !important;
+  padding:6mm 16mm 22mm !important;
+  align-items:center !important;justify-content:center !important;gap:6mm !important;
+}
+.pdf-page.layout-1 .tag .t-info-left{
+  align-items:center !important;text-align:center !important;
+  flex:0 0 auto !important;gap:3mm !important;width:100% !important;
+}
+.pdf-page.layout-1 .tag .t-name{
+  font-size:30pt !important;-webkit-line-clamp:3 !important;
+  margin-bottom:1mm !important;text-align:center !important;
+  min-height:auto !important;line-height:1.1 !important;
+}
+.pdf-page.layout-1 .tag .t-size{font-size:16pt !important;margin-bottom:1mm !important}
+.pdf-page.layout-1 .tag .t-unit-pill{font-size:16pt !important;padding:1.5mm 8mm !important}
+.pdf-page.layout-1 .tag .t-old-line{font-size:16pt !important;margin-top:1mm !important}
+.pdf-page.layout-1 .tag .t-price-card{
+  align-self:center !important;margin:2mm auto 0 !important;
+  padding:5mm 18mm 6mm !important;border-radius:12mm !important;
+  border-width:4px !important;min-width:110mm !important;width:auto !important;
+}
+.pdf-page.layout-1 .tag .t-price-card::before{font-size:13pt !important;padding:1.5mm 8mm !important;top:-5mm !important}
+.pdf-page.layout-1 .tag .t-price-label{font-size:18pt !important;margin:1mm 0 2mm !important}
+.pdf-page.layout-1 .tag .t-price{font-size:80pt !important;line-height:0.9 !important}
+.pdf-page.layout-1 .tag .t-promo-banner{font-size:22pt !important;padding:3mm 10mm !important;border-radius:10mm !important}
+.pdf-page.layout-1 .tag .t-foot{
+  position:absolute !important;bottom:9mm !important;right:11mm !important;
+  font-size:13pt !important;gap:4mm !important;z-index:20 !important;
+}
+.pdf-page.layout-1 .tag .t-loc{font-size:13pt !important;padding:1.5mm 5mm !important}
+.pdf-page.layout-1 .tag .t-sale-ribbon,
+.pdf-page.layout-1 .tag .t-new-ribbon{font-size:14pt !important;padding:2.5mm 18mm !important;top:14mm !important}
+
+/* ─────────── LAYOUT 2 (2 ป้าย/หน้า) — Landscape: image LEFT, info RIGHT ─────────── */
+.pdf-page.layout-2 .tag{align-items:stretch !important}
+.pdf-page.layout-2 .tag::before{inset:4mm !important;border-radius:7mm !important}
+.pdf-page.layout-2 .tag .t-img{
+  flex:0 0 78mm !important;width:auto !important;height:auto !important;
+  margin:7mm 0 7mm 7mm !important;
+  padding:5mm !important;border-radius:8mm !important;
+}
+.pdf-page.layout-2 .tag .t-img-empty{font-size:48pt !important}
+.pdf-page.layout-2 .tag .t-info{
+  flex:1 1 auto !important;
+  padding:7mm 8mm !important;
+  flex-direction:column !important;
+  align-items:center !important;justify-content:center !important;gap:4mm !important;
+}
+.pdf-page.layout-2 .tag .t-info-left{
+  flex:0 0 auto !important;align-items:center !important;text-align:center !important;
+  gap:2mm !important;width:100% !important;
+}
+.pdf-page.layout-2 .tag .t-name{
+  font-size:19pt !important;-webkit-line-clamp:2 !important;
+  min-height:auto !important;line-height:1.15 !important;margin-bottom:1mm !important;text-align:center !important;
+}
+.pdf-page.layout-2 .tag .t-size{font-size:12pt !important;text-align:center !important}
+.pdf-page.layout-2 .tag .t-unit-pill{font-size:13pt !important;padding:1.2mm 6mm !important}
+.pdf-page.layout-2 .tag .t-old-line{font-size:13pt !important;margin-top:1mm !important;text-align:center !important}
+.pdf-page.layout-2 .tag .t-price-card{
+  align-self:center !important;margin:1mm auto 0 !important;
+  padding:4mm 12mm 5mm !important;border-radius:9mm !important;
+  border-width:3px !important;min-width:72mm !important;max-width:96mm !important;
+}
+.pdf-page.layout-2 .tag .t-price-card::before{font-size:9pt !important;padding:1mm 5mm !important;top:-4mm !important}
+.pdf-page.layout-2 .tag .t-price-label{font-size:13pt !important;margin:1mm 0 1mm !important}
+.pdf-page.layout-2 .tag .t-price{font-size:54pt !important;line-height:0.9 !important}
+.pdf-page.layout-2 .tag .t-promo-banner{font-size:15pt !important;padding:1.5mm 5mm !important}
+.pdf-page.layout-2 .tag .t-foot{
+  position:absolute !important;bottom:3mm !important;right:5mm !important;
+  font-size:9pt !important;gap:2mm !important;z-index:20 !important;
+}
+.pdf-page.layout-2 .tag .t-loc{font-size:9pt !important;padding:1mm 3mm !important}
+.pdf-page.layout-2 .tag .t-sale-ribbon,
+.pdf-page.layout-2 .tag .t-new-ribbon{font-size:11pt !important;padding:2mm 14mm !important}
+
+/* ─────────── LAYOUT 4 (4 ป้าย/หน้า) — Landscape: image LEFT, info RIGHT ─────────── */
+.pdf-page.layout-4 .tag{align-items:stretch !important}
+.pdf-page.layout-4 .tag::before{inset:2.5mm !important;border-radius:5mm !important}
+.pdf-page.layout-4 .tag .t-img{
+  flex:0 0 54mm !important;width:auto !important;height:auto !important;
+  margin:3.5mm 0 3.5mm 4mm !important;
+  padding:2.5mm !important;border-radius:5mm !important;
+}
+.pdf-page.layout-4 .tag .t-img-empty{font-size:30pt !important}
+.pdf-page.layout-4 .tag .t-info{
+  flex:1 1 auto !important;
+  padding:3mm 6mm !important;
+  flex-direction:row !important;align-items:center !important;justify-content:space-between !important;gap:4mm !important;
+}
+.pdf-page.layout-4 .tag .t-info-left{
+  flex:1 1 auto !important;align-items:flex-start !important;text-align:left !important;
+  gap:1.5mm !important;min-width:0 !important;
+}
+.pdf-page.layout-4 .tag .t-name{
+  font-size:14pt !important;-webkit-line-clamp:2 !important;
+  min-height:auto !important;line-height:1.15 !important;margin-bottom:0.5mm !important;
+}
+.pdf-page.layout-4 .tag .t-size{font-size:9pt !important}
+.pdf-page.layout-4 .tag .t-unit-pill{font-size:10pt !important;padding:0.8mm 5mm !important}
+.pdf-page.layout-4 .tag .t-old-line{font-size:10pt !important;margin-top:0.5mm !important}
+.pdf-page.layout-4 .tag .t-price-card{
+  flex:0 0 auto !important;align-self:center !important;margin:0 !important;
+  padding:3mm 9mm 3.5mm !important;border-radius:6mm !important;
+  border-width:2.5px !important;min-width:46mm !important;
+}
+.pdf-page.layout-4 .tag .t-price-card::before{font-size:7pt !important;padding:0.6mm 4mm !important;top:-3mm !important}
+.pdf-page.layout-4 .tag .t-price-label{font-size:10pt !important;margin:0.5mm 0 0.5mm !important}
+.pdf-page.layout-4 .tag .t-price{font-size:38pt !important;line-height:0.9 !important}
+.pdf-page.layout-4 .tag .t-promo-banner{font-size:11pt !important;padding:1mm 4mm !important}
+.pdf-page.layout-4 .tag .t-foot{
+  position:absolute !important;bottom:2mm !important;right:4mm !important;
+  font-size:7pt !important;gap:2mm !important;z-index:20 !important;
+}
+.pdf-page.layout-4 .tag .t-loc{font-size:7pt !important;padding:0.6mm 2.5mm !important}
+.pdf-page.layout-4 .tag .t-foot canvas,
+.pdf-page.layout-4 .tag .t-foot svg{transform:scale(0.8);transform-origin:bottom right}
+.pdf-page.layout-4 .tag .t-sale-ribbon,
+.pdf-page.layout-4 .tag .t-new-ribbon{font-size:8pt !important;padding:1.2mm 10mm !important;top:5mm !important}
+
+/* ─────────── LAYOUT 6 (6 ป้าย/หน้า) — Portrait cells: image TOP, info BELOW ─────────── */
+.pdf-page.layout-6 .tag::before{inset:1.5mm !important;border-radius:3mm !important;border-width:1px !important}
+.pdf-page.layout-6 .tag .t-img{
+  flex:0 0 36mm !important;width:78mm !important;max-width:88% !important;height:36mm !important;
+  margin:3.5mm auto 1mm !important;align-self:center !important;
+  padding:2mm !important;border-radius:4mm !important;
+}
+.pdf-page.layout-6 .tag .t-img-empty{font-size:22pt !important}
+.pdf-page.layout-6 .tag .t-info{
+  flex:1 1 auto !important;
+  flex-direction:column !important;align-items:center !important;justify-content:center !important;
+  padding:0 3mm 5mm !important;gap:1.5mm !important;text-align:center !important;
+}
+.pdf-page.layout-6 .tag .t-info-left{
+  align-items:center !important;text-align:center !important;flex:0 0 auto !important;gap:1mm !important;
+}
+.pdf-page.layout-6 .tag .t-name{
+  font-size:9.5pt !important;-webkit-line-clamp:2 !important;
+  text-align:center !important;margin-bottom:0.5mm !important;min-height:auto !important;line-height:1.1 !important;
+}
+.pdf-page.layout-6 .tag .t-size{font-size:7pt !important}
+.pdf-page.layout-6 .tag .t-unit-row{margin:0 !important}
+.pdf-page.layout-6 .tag .t-unit-pill{font-size:7.5pt !important;padding:0.5mm 3mm !important}
+.pdf-page.layout-6 .tag .t-old-line{font-size:7pt !important;margin-top:0.5mm !important}
+.pdf-page.layout-6 .tag .t-price-card{
+  align-self:center !important;margin:0.5mm auto 0 !important;
+  padding:1.5mm 5mm 2mm !important;border-radius:4mm !important;
+  min-width:auto !important;max-width:92% !important;border-width:2px !important;
+}
+.pdf-page.layout-6 .tag .t-price-card::before{font-size:5pt !important;padding:0.3mm 2.5mm !important;top:-2mm !important}
+.pdf-page.layout-6 .tag .t-price-label{font-size:7pt !important;margin-bottom:0 !important}
+.pdf-page.layout-6 .tag .t-price{font-size:23pt !important;line-height:0.9 !important}
+.pdf-page.layout-6 .tag .t-promo-banner{font-size:8pt !important;padding:0.5mm 2mm !important}
+.pdf-page.layout-6 .tag .t-foot{
+  position:absolute !important;bottom:1mm !important;right:2mm !important;
+  font-size:5pt !important;gap:1mm !important;z-index:20 !important;
+}
+.pdf-page.layout-6 .tag .t-loc{font-size:5pt !important;padding:0.3mm 1.5mm !important}
+.pdf-page.layout-6 .tag .t-sale-ribbon,
+.pdf-page.layout-6 .tag .t-new-ribbon{font-size:6pt !important;padding:0.8mm 6mm !important;top:2mm !important}
+.pdf-page.layout-6 .tag .t-foot canvas,
+.pdf-page.layout-6 .tag .t-foot svg{transform:scale(0.65);transform-origin:bottom right}
+
+/* ============================================================
+   v4.0 — PROMO HEADER (used by Layout 12 + 16)
+   ============================================================ */
+.promo-header{
+  position:relative;
+  flex:0 0 34mm;height:34mm;
+  border-radius:7mm;overflow:hidden;
+  background:var(--ph-bg, linear-gradient(135deg,#0a1428 0%,#0d1b3e 45%,#1e293b 100%));
+  display:flex;align-items:center;justify-content:space-between;
+  padding:4mm 7mm;
+  box-shadow:0 4px 14px rgba(0,0,0,0.25);
+  border:2px solid #c9a84c;
+}
+.promo-header-overlay{
+  position:absolute;inset:0;z-index:1;
+  background:
+    radial-gradient(ellipse at 90% 30%,rgba(220,38,38,0.3) 0%,transparent 50%),
+    radial-gradient(ellipse at 10% 70%,rgba(251,191,36,0.15) 0%,transparent 50%);
+  pointer-events:none;
+}
+.promo-header[style*="background-image"]{background-blend-mode:overlay}
+.promo-header[style*="background-image"] .promo-header-overlay{background:rgba(13,27,62,0.55)}
+.promo-date-badge{
+  position:absolute;top:2.5mm;left:3.5mm;z-index:3;
+  background:var(--ph-badge, linear-gradient(135deg,#fbbf24,#d97706));
+  color:var(--ph-badge-text, #0d1b3e);
+  font-family:'Kanit',sans-serif;font-weight:800;
+  font-size:8.5pt;padding:1.2mm 4mm;border-radius:30px;
+  border:1px solid #92400e;
+  box-shadow:0 2px 6px rgba(0,0,0,0.4);letter-spacing:0.5px;
+}
+.promo-brand{position:relative;z-index:2;display:flex;align-items:center;gap:2.5mm;flex:0 0 auto}
+.promo-brand svg{width:13mm;height:13mm;flex:0 0 auto;border-radius:3mm}
+.promo-brand-text{display:flex;flex-direction:column;line-height:1}
+.promo-brand-th{font-family:'Kanit',sans-serif;font-weight:800;font-size:15pt;color:#fff;letter-spacing:1px}
+.promo-brand-th b{color:#fbbf24}
+.promo-brand-en{font-family:'Kanit',sans-serif;font-weight:600;font-size:7pt;color:#c9a84c;letter-spacing:3px;margin-top:1mm}
+.promo-title-wrap{position:relative;z-index:2;flex:1;text-align:center;padding:0 4mm}
+.promo-title{
+  font-family:'Kanit',sans-serif;font-weight:900;
+  font-size:26pt;color:var(--ph-title, #fbbf24);line-height:1;letter-spacing:1.5px;
+  text-shadow:2px 2px 0 rgba(180,83,9,0.7),4px 4px 0 rgba(0,0,0,0.35),0 0 18px rgba(251,191,36,0.45);
+  -webkit-text-stroke:0.5px rgba(180,83,9,0.6);
+}
+.promo-subtitle{
+  font-family:'Anuphan',sans-serif;font-weight:600;font-size:10.5pt;
+  color:var(--ph-sub, #fff);margin-top:1mm;letter-spacing:1.5px;
+  text-shadow:1px 1px 3px rgba(0,0,0,0.5);
+}
+
+/* ─────────── LAYOUT 12 (3×4) — compact portrait cells ─────────── */
+.pdf-page.layout-12 .tag::before{inset:1.5mm !important;border-radius:3mm !important;border-width:1px !important}
+.pdf-page.layout-12 .tag .t-img{
+  flex:0 0 26mm !important;width:52mm !important;max-width:88% !important;height:26mm !important;
+  margin:2mm auto 1mm !important;align-self:center !important;
+  padding:1.5mm !important;border-radius:3mm !important;
+  box-shadow:0 2px 6px rgba(0,0,0,0.3),0 0 0 1px rgba(201,168,76,0.4) !important;
+}
+.pdf-page.layout-12 .tag .t-img-empty{font-size:15pt !important}
+.pdf-page.layout-12 .tag .t-info{
+  flex:1 1 auto !important;
+  flex-direction:column !important;align-items:center !important;justify-content:center !important;text-align:center !important;
+  padding:0 2mm 4mm !important;gap:0.8mm !important;
+}
+.pdf-page.layout-12 .tag .t-info-left{
+  align-items:center !important;text-align:center !important;flex:0 0 auto !important;gap:0.8mm !important;
+}
+.pdf-page.layout-12 .tag .t-name{
+  font-size:8pt !important;-webkit-line-clamp:2 !important;
+  text-align:center !important;margin:0 !important;min-height:auto !important;line-height:1.1 !important;
+}
+.pdf-page.layout-12 .tag .t-unit-row{margin:0 !important}
+.pdf-page.layout-12 .tag .t-unit-pill{font-size:6.5pt !important;padding:0.3mm 2mm !important}
+.pdf-page.layout-12 .tag .t-size,
+.pdf-page.layout-12 .tag .t-old-line{font-size:6pt !important;margin:0 !important}
+.pdf-page.layout-12 .tag .t-price-card{
+  align-self:center !important;margin:0.5mm auto 0 !important;
+  padding:1mm 4mm 1.5mm !important;border-radius:3mm !important;border-width:1.5px !important;
+  min-width:auto !important;max-width:92% !important;
+}
+.pdf-page.layout-12 .tag .t-price-card::before{font-size:4.5pt !important;padding:0.2mm 2mm !important;top:-1.5mm !important}
+.pdf-page.layout-12 .tag .t-price-label{font-size:6pt !important;margin:0 !important}
+.pdf-page.layout-12 .tag .t-price{font-size:20pt !important;line-height:0.9 !important}
+.pdf-page.layout-12 .tag .t-promo-banner{font-size:7pt !important;padding:0.3mm 1.5mm !important}
+/* v4.0 — footer STACKED at bottom-LEFT, narrow, never covers the centered price card */
+.pdf-page.layout-12 .tag .t-foot{
+  position:absolute !important;bottom:1mm !important;left:1.5mm !important;right:auto !important;
+  font-size:3.5pt !important;gap:0.4mm !important;z-index:20 !important;
+  flex-direction:column !important;align-items:flex-start !important;
+  max-width:32% !important;
+}
+.pdf-page.layout-12 .tag .t-sku{font-size:3pt !important;text-align:left !important}
+.pdf-page.layout-12 .tag .t-loc{font-size:3.5pt !important;padding:0.15mm 1mm !important}
+.pdf-page.layout-12 .tag .t-foot canvas,
+.pdf-page.layout-12 .tag .t-foot svg{
+  transform:none !important;width:14mm !important;height:3mm !important;max-width:14mm !important;
+}
+.pdf-page.layout-12 .tag .t-sale-ribbon,
+.pdf-page.layout-12 .tag .t-new-ribbon{font-size:5.5pt !important;padding:0.6mm 5mm !important;top:1.5mm !important}
+
+/* ─────────── LAYOUT 16 (4×4) — compact portrait cells ─────────── */
+.pdf-page.layout-16 .tag::before{inset:1.2mm !important;border-radius:2.5mm !important;border-width:1px !important}
+.pdf-page.layout-16 .tag .t-img{
+  flex:0 0 22mm !important;width:40mm !important;max-width:88% !important;height:22mm !important;
+  margin:1.5mm auto 1mm !important;align-self:center !important;
+  padding:1mm !important;border-radius:2.5mm !important;
+  box-shadow:0 1.5px 4px rgba(0,0,0,0.3),0 0 0 1px rgba(201,168,76,0.4) !important;
+}
+.pdf-page.layout-16 .tag .t-img-empty{font-size:12pt !important}
+.pdf-page.layout-16 .tag .t-info{
+  flex:1 1 auto !important;
+  flex-direction:column !important;align-items:center !important;justify-content:center !important;text-align:center !important;
+  padding:0 1.5mm 6mm !important;gap:0.5mm !important;  /* extra bottom padding lifts card above footer */
+}
+.pdf-page.layout-16 .tag .t-info-left{
+  align-items:center !important;text-align:center !important;flex:0 0 auto !important;gap:0.5mm !important;
+}
+.pdf-page.layout-16 .tag .t-name{
+  font-size:7pt !important;-webkit-line-clamp:2 !important;
+  text-align:center !important;margin:0 !important;min-height:auto !important;line-height:1.05 !important;
+}
+.pdf-page.layout-16 .tag .t-unit-row{margin:0 !important}
+.pdf-page.layout-16 .tag .t-unit-pill{font-size:5.5pt !important;padding:0.2mm 1.5mm !important}
+.pdf-page.layout-16 .tag .t-size,
+.pdf-page.layout-16 .tag .t-old-line{font-size:5pt !important;margin:0 !important}
+.pdf-page.layout-16 .tag .t-price-card{
+  align-self:center !important;margin:0.5mm auto 0 !important;
+  padding:0.8mm 3mm 1mm !important;border-radius:2.5mm !important;border-width:1px !important;
+  min-width:auto !important;max-width:92% !important;
+}
+.pdf-page.layout-16 .tag .t-price-card::before{font-size:4pt !important;padding:0.1mm 1.5mm !important;top:-1.2mm !important}
+.pdf-page.layout-16 .tag .t-price-label{font-size:5pt !important;margin:0 !important}
+.pdf-page.layout-16 .tag .t-price{font-size:16pt !important;line-height:0.9 !important}
+.pdf-page.layout-16 .tag .t-promo-banner{font-size:6pt !important;padding:0.2mm 1.2mm !important}
+/* v4.0 — footer STACKED at bottom-LEFT, narrow, never covers the centered price card */
+.pdf-page.layout-16 .tag .t-foot{
+  position:absolute !important;bottom:0.8mm !important;left:1.2mm !important;right:auto !important;
+  font-size:2.8pt !important;gap:0.3mm !important;z-index:20 !important;
+  flex-direction:column !important;align-items:flex-start !important;
+  max-width:46% !important;
+}
+.pdf-page.layout-16 .tag .t-sku{font-size:2.4pt !important;text-align:left !important}
+.pdf-page.layout-16 .tag .t-loc{font-size:2.8pt !important;padding:0.1mm 0.6mm !important}
+.pdf-page.layout-16 .tag .t-foot canvas,
+.pdf-page.layout-16 .tag .t-foot svg{
+  transform:none !important;width:9mm !important;height:2.4mm !important;max-width:9mm !important;
+}
+.pdf-page.layout-16 .tag .t-sale-ribbon,
+.pdf-page.layout-16 .tag .t-new-ribbon{font-size:4.5pt !important;padding:0.4mm 4mm !important;top:1mm !important}
+
+/* ════════════════════════════════════════════════════════════
+   v4.0 — MINI LABEL (Layout 30): รูป + ชื่อ + บาร์โค้ด เท่านั้น
+   Clean white tag, no price card / location / ribbon / brand chip.
+   Cell ≈ 37 × 44 mm (5 cols × 6 rows on A4)
+   ════════════════════════════════════════════════════════════ */
+.tag.tpl-mini{
+  background:#fff !important;
+  border:1.5px solid #0d1b3e;
+  border-radius:3mm;
+  flex-direction:column !important;
+  align-items:center;justify-content:flex-start;
+  padding:1.5mm 1mm 1mm;overflow:hidden;
+}
+.tag.tpl-mini::before,.tag.tpl-mini::after{display:none !important}
+.tag.tpl-mini .t-img{
+  flex:0 0 auto !important;
+  width:100% !important;height:26mm !important;   /* v4.0 — bigger image */
+  display:flex;align-items:center;justify-content:center;
+  background:#fff !important;margin:0 !important;padding:0 !important;
+  border:none !important;box-shadow:none !important;border-radius:0 !important;
+}
+.tag.tpl-mini .t-img img{max-width:100% !important;max-height:100% !important;object-fit:contain !important}
+.tag.tpl-mini .t-img-empty{font-size:22pt !important;color:#cbd5e0 !important}
+.tag.tpl-mini .t-name{
+  font-size:7pt !important;font-weight:700;line-height:1.05;
+  color:#0d1b3e !important;text-align:center;
+  font-family:'Anuphan',sans-serif;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  overflow:hidden;width:100%;margin:auto 0 0.6mm;min-height:6mm;  /* v4.0 — push name down toward barcode */
+  text-shadow:none !important;
+}
+.tag.tpl-mini .t-mini-bc{
+  width:100%;display:flex;align-items:center;justify-content:center;
+  margin-top:0;
+}
+.tag.tpl-mini .t-mini-bc svg{
+  width:32mm !important;height:8mm !important;max-width:100% !important;
+  background:#fff;
+}
+.tag.tpl-mini .t-mini-code{
+  font-family:'Courier New',monospace;font-weight:700;
+  font-size:5.5pt;color:#334155;letter-spacing:0.5px;
+  margin-top:0.3mm;text-align:center;
+}
+/* ink-save: mini already minimal — just ensure pure white */
+body.ink-save .tag.tpl-mini{background:#fff !important;border-color:#0d1b3e !important}
+body.ink-save .tag.tpl-mini .t-name{color:#0d1b3e !important}
+
+/* Layout-30 cell tuning */
+.pdf-page.layout-30 .tag.tpl-mini{padding:1.5mm 1mm 1mm}
+
+/* ════════════════════════════════════════════════════════════
+   v4.0 — CATALOG CARD (Layout cat12): group by CAT SIZE
+   Images row on top · CAT SIZE title · flavor list · unit info
+   ════════════════════════════════════════════════════════════ */
+.pdf-page.layout-cat .pdf-page-grid{width:100%;height:100%}
+.catalog-card{
+  background:#fff;border:1.5px solid #1e3a8a;border-radius:2mm;
+  display:flex;flex-direction:column;align-items:center;
+  padding:2mm 2mm 2.5mm;overflow:hidden;box-sizing:border-box;
+  width:100%;height:100%;
+}
+/* v4.0 — image area GROWS to fill the top space (bigger images) */
+.catalog-card .cat-imgs{
+  flex:1 1 auto;width:100%;min-height:30mm;
+  display:flex;align-items:center;justify-content:center;gap:1mm;
+  margin-bottom:1mm;padding:1mm 0;
+}
+.catalog-card .cat-img{
+  flex:1 1 0;min-width:0;height:100%;
+  display:flex;align-items:center;justify-content:center;
+}
+/* v4.0 — mix-blend multiply makes the photo's white background blend into the white card */
+.catalog-card .cat-img img{
+  max-width:100%;max-height:100%;object-fit:contain;
+  mix-blend-mode:multiply;
+}
+.catalog-card .cat-img-empty{font-size:32pt;color:#cbd5e0;align-self:center}
+/* v4.0 — title + flavors sit LOWER, just above the unit block */
+.catalog-card .cat-title{
+  flex:0 0 auto;
+  font-family:'Anuphan',sans-serif;font-weight:800;   /* v4.5 — Anuphan */
+  font-size:11.5pt;color:#0d1b3e;text-align:center;line-height:1.05;
+  margin-bottom:0.6mm;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.catalog-card .cat-flavors{
+  flex:0 0 auto;
+  font-family:'Anuphan',sans-serif;font-weight:500;
+  font-size:6.5pt;color:#475569;text-align:center;line-height:1.15;
+  margin-bottom:1mm;width:100%;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.catalog-card .cat-units{
+  flex:0 0 auto;
+  width:100%;border-top:1px solid #e2e8f0;padding-top:1mm;
+}
+.catalog-card .cat-unit-row{
+  display:flex;justify-content:space-between;align-items:center;gap:2mm;
+  font-family:'Anuphan',sans-serif;font-size:7pt;
+}
+.catalog-card .cat-unit-label{color:#0d1b3e;font-weight:700}
+.catalog-card .cat-unit-val{color:#1e3a8a;font-weight:800;text-align:right}
+.catalog-card .cat-noea{
+  color:#dc2626;font-weight:700;font-size:6.5pt;
+  font-family:'Anuphan',sans-serif;margin-top:0.3mm;
+}
+body.ink-save .catalog-card{border-color:#0d1b3e}
+
+/* === TEMPLATE 2: SALE — v4.0 Premium Drama (navy+gold base, red ribbon + SALE badge) === */
+.tpl-sale{
+  background:
+    radial-gradient(ellipse at top left,rgba(220,38,38,0.22) 0%,transparent 50%),
+    radial-gradient(ellipse at bottom right,rgba(201,168,76,0.18) 0%,transparent 50%),
+    linear-gradient(135deg,#0a1428 0%,#0d1b3e 50%,#050d22 100%);
+  border-radius:10px;position:relative;overflow:hidden;
+}
+.tpl-sale::before{
+  content:'';position:absolute;inset:2.5mm;
+  border:1.5px solid rgba(201,168,76,0.55);
+  border-radius:5mm;pointer-events:none;z-index:1;
+}
+.tpl-sale::after{
+  content:'';position:absolute;inset:0;
+  background:
+    radial-gradient(circle at 12% 20%,rgba(251,191,36,0.6) 1px,transparent 2px),
+    radial-gradient(circle at 88% 18%,rgba(220,38,38,0.7) 1.2px,transparent 2px),
+    radial-gradient(circle at 92% 78%,rgba(251,191,36,0.55) 1px,transparent 2px),
+    radial-gradient(circle at 25% 90%,rgba(251,191,36,0.4) 0.8px,transparent 1.5px);
+  pointer-events:none;z-index:1;
+}
+/* Diagonal SALE ribbon — top-left corner */
+.tpl-sale .t-sale-ribbon{
+  position:absolute;top:5mm;left:-10mm;z-index:5;
+  background:linear-gradient(135deg,#ef4444 0%,#dc2626 50%,#991b1b 100%);
+  color:#fff;font-family:'Kanit',sans-serif;
+  font-weight:800;font-size:8pt;letter-spacing:3px;
+  padding:1.5mm 12mm;transform:rotate(-25deg);
+  box-shadow:0 4px 12px rgba(220,38,38,0.6),inset 0 1px 0 rgba(255,255,255,0.3);
+  text-shadow:1px 1px 0 rgba(0,0,0,0.4);
+  border-top:1px solid rgba(251,191,36,0.6);
+  border-bottom:1px solid rgba(251,191,36,0.6);
+}
+.tpl-sale .t-img{
+  flex:0 0 52mm;background:#fff;
+  margin:5mm 0 5mm 5mm;border-radius:6mm;padding:3mm;
+  box-shadow:0 6px 16px rgba(0,0,0,0.5),0 0 0 2px rgba(251,191,36,0.5);
+  position:relative;z-index:2;
+}
+.tpl-sale .t-img-empty{color:#cbd5e0;font-size:38pt}
+.tpl-sale .t-info{
+  padding:4mm 5mm;color:#fff;
+  flex-direction:row;align-items:stretch;gap:4mm;
+  position:relative;z-index:2;
+}
+.tpl-sale .t-info-left{
+  flex:1;display:flex;flex-direction:column;justify-content:center;min-width:0;
+}
+.tpl-sale .t-name{
+  font-size:15pt;font-weight:800;color:#fff;
+  font-family:'Anuphan',sans-serif;line-height:1.2;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  overflow:hidden;margin-bottom:1.5mm;
+  text-shadow:1px 1px 3px rgba(0,0,0,0.5);
+}
+.tpl-sale .t-unit-row{margin:1mm 0 1.5mm}
+.tpl-sale .t-unit-pill{
+  display:inline-block;
+  background:linear-gradient(135deg,#c9a84c 0%,#e8c86a 100%);
+  color:#0d1b3e;font-weight:800;font-family:'Anuphan',sans-serif;
+  padding:0.8mm 4mm;border-radius:30px;font-size:11pt;
+  box-shadow:0 2px 6px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.4);
+  border:1px solid #d97706;
+}
+.tpl-sale .t-old-line{
+  font-size:12pt;color:#fbbf24;font-weight:700;
+  font-family:'Kanit',sans-serif;margin-top:1.5mm;letter-spacing:0.3px;
+  text-shadow:1px 1px 2px rgba(0,0,0,0.5);
+}
+.tpl-sale .t-old-line s{
+  color:#fbbf24;text-decoration-color:#dc2626;text-decoration-thickness:2px;
+}
+/* Sale price card — red+gold double border with SALE badge */
+.tpl-sale .t-price-card{
+  flex:0 0 auto;align-self:center;
+  background:linear-gradient(135deg,#000 0%,#1a1a2e 100%);
+  border:2.5px solid #dc2626;border-radius:6mm;
+  padding:4mm 8mm;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  box-shadow:
+    0 6px 16px rgba(220,38,38,0.4),
+    0 0 0 2px rgba(201,168,76,0.5),
+    0 0 0 4px rgba(220,38,38,0.2),
+    inset 0 1px 0 rgba(255,255,255,0.1);
+  min-width:42mm;position:relative;margin-top:3mm;
+}
+/* "SALE!" floating badge on top of price card */
+.tpl-sale .t-price-card::before{
+  content:'★ SALE ★';position:absolute;top:-3mm;left:50%;transform:translateX(-50%);
+  background:linear-gradient(135deg,#dc2626,#991b1b);color:#fff;
+  font-family:'Kanit',sans-serif;font-weight:800;font-size:7pt;
+  letter-spacing:2px;padding:0.8mm 5mm;border-radius:30px;
+  box-shadow:0 3px 8px rgba(220,38,38,0.6);
+  border:1.5px solid rgba(251,191,36,0.7);
+  text-shadow:1px 1px 0 rgba(0,0,0,0.4);
+  white-space:nowrap;
+}
+.tpl-sale .t-price-label{
+  font-size:10pt;color:#fff;font-weight:500;
+  letter-spacing:1px;margin-bottom:1mm;margin-top:1mm;
+  font-family:'Anuphan',sans-serif;
+}
+.tpl-sale .t-price{
+  font-size:52pt;color:#fbbf24;font-weight:800;font-family:'Kanit',sans-serif;
+  line-height:0.85;letter-spacing:-1px;
+  text-shadow:0 2px 8px rgba(251,191,36,0.4),0 0 1px rgba(0,0,0,0.5);
+}
+.tpl-sale .t-foot{color:#c9a84c}
+.tpl-sale .t-foot .t-sku{color:rgba(201,168,76,0.7)}
+.tpl-sale .t-foot canvas,.tpl-sale .t-foot svg{background:#fff}
+
+/* === TEMPLATE 3: NEW — v4.0 Premium Fresh (navy+gold base + green NEW ribbon + sparkles) === */
+.tpl-new{
+  background:
+    radial-gradient(ellipse at top right,rgba(16,185,129,0.25) 0%,transparent 50%),
+    radial-gradient(ellipse at bottom left,rgba(201,168,76,0.15) 0%,transparent 50%),
+    linear-gradient(135deg,#0a1428 0%,#0d1b3e 50%,#050d22 100%);
+  border-radius:10px;position:relative;overflow:hidden;
+}
+.tpl-new::before{
+  content:'';position:absolute;inset:2.5mm;
+  border:1.5px solid rgba(201,168,76,0.55);
+  border-radius:5mm;pointer-events:none;z-index:1;
+}
+.tpl-new::after{
+  content:'';position:absolute;inset:0;
+  background:
+    radial-gradient(circle at 8% 15%,rgba(16,185,129,0.7) 1.2px,transparent 2px),
+    radial-gradient(circle at 92% 22%,rgba(201,168,76,0.6) 1px,transparent 2px),
+    radial-gradient(circle at 88% 82%,rgba(16,185,129,0.55) 1px,transparent 2px),
+    radial-gradient(circle at 18% 88%,rgba(201,168,76,0.5) 0.8px,transparent 1.5px);
+  pointer-events:none;z-index:1;
+}
+/* Diagonal NEW ribbon — top-right corner with star burst */
+.tpl-new .t-new-ribbon{
+  position:absolute;top:5mm;right:-10mm;z-index:5;
+  background:linear-gradient(135deg,#10b981 0%,#059669 50%,#047857 100%);
+  color:#fff;font-family:'Kanit',sans-serif;
+  font-weight:800;font-size:9pt;letter-spacing:3px;
+  padding:1.5mm 12mm;transform:rotate(25deg);
+  box-shadow:0 4px 12px rgba(5,150,105,0.6),inset 0 1px 0 rgba(255,255,255,0.3);
+  text-shadow:1px 1px 0 rgba(0,0,0,0.4);
+  border-top:1px solid rgba(251,191,36,0.6);
+  border-bottom:1px solid rgba(251,191,36,0.6);
+}
+.tpl-new .t-img{
+  flex:0 0 52mm;background:#fff;
+  margin:5mm 0 5mm 5mm;border-radius:6mm;padding:3mm;
+  box-shadow:0 6px 16px rgba(0,0,0,0.5),0 0 0 2px rgba(16,185,129,0.55);
+  position:relative;z-index:2;
+}
+.tpl-new .t-img-empty{color:#cbd5e0;font-size:38pt}
+.tpl-new .t-info{
+  padding:4mm 5mm;color:#fff;
+  flex-direction:row;align-items:stretch;gap:4mm;
+  position:relative;z-index:2;
+}
+.tpl-new .t-info-left{
+  flex:1;display:flex;flex-direction:column;justify-content:center;min-width:0;
+}
+.tpl-new .t-name{
+  font-size:15pt;font-weight:800;color:#fff;
+  font-family:'Anuphan',sans-serif;line-height:1.2;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  overflow:hidden;margin-bottom:1.5mm;padding-right:0;
+  text-shadow:1px 1px 3px rgba(0,0,0,0.5);
+}
+.tpl-new .t-unit-row{margin:1mm 0 1.5mm}
+.tpl-new .t-unit-pill{
+  display:inline-block;
+  background:linear-gradient(135deg,#10b981 0%,#34d399 100%);
+  color:#fff;font-weight:800;font-family:'Anuphan',sans-serif;
+  padding:0.8mm 4mm;border-radius:30px;font-size:11pt;
+  box-shadow:0 2px 6px rgba(5,150,105,0.5),inset 0 1px 0 rgba(255,255,255,0.4);
+  border:1px solid #047857;
+}
+.tpl-new .t-size{
+  font-size:11pt;color:#34d399;font-weight:600;
+  letter-spacing:0.5px;
+}
+/* New price card — green+gold accents with "★ ใหม่ ★" badge */
+.tpl-new .t-price-card{
+  flex:0 0 auto;align-self:center;
+  background:linear-gradient(135deg,#000 0%,#1a1a2e 100%);
+  border:2.5px solid #10b981;border-radius:6mm;
+  padding:4mm 8mm;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  box-shadow:
+    0 6px 16px rgba(5,150,105,0.4),
+    0 0 0 2px rgba(201,168,76,0.5),
+    0 0 0 4px rgba(16,185,129,0.2),
+    inset 0 1px 0 rgba(255,255,255,0.1);
+  min-width:42mm;position:relative;margin-top:3mm;
+}
+.tpl-new .t-price-card::before{
+  content:'✦ ใหม่ ✦';position:absolute;top:-3mm;left:50%;transform:translateX(-50%);
+  background:linear-gradient(135deg,#10b981,#047857);color:#fff;
+  font-family:'Kanit',sans-serif;font-weight:800;font-size:7pt;
+  letter-spacing:2px;padding:0.8mm 5mm;border-radius:30px;
+  box-shadow:0 3px 8px rgba(5,150,105,0.6);
+  border:1.5px solid rgba(251,191,36,0.7);
+  text-shadow:1px 1px 0 rgba(0,0,0,0.4);
+  white-space:nowrap;
+}
+.tpl-new .t-price-label{
+  font-size:10pt;color:#fff;font-weight:500;
+  letter-spacing:1px;margin-bottom:1mm;margin-top:1mm;
+  font-family:'Anuphan',sans-serif;
+}
+.tpl-new .t-price{
+  font-size:52pt;color:#fbbf24;font-weight:800;font-family:'Kanit',sans-serif;
+  line-height:0.85;letter-spacing:-1px;
+  text-shadow:0 2px 8px rgba(251,191,36,0.4),0 0 1px rgba(0,0,0,0.5);
+}
+.tpl-new .t-foot{color:#c9a84c}
+.tpl-new .t-foot .t-sku{color:rgba(201,168,76,0.7)}
+.tpl-new .t-foot canvas,.tpl-new .t-foot svg{background:#fff}
+
+/* === TEMPLATE 4: BOGO — v4.0 Premium Promo (navy+gold base + big yellow banner + burst) === */
+.tpl-bogo{
+  background:
+    radial-gradient(ellipse at top,rgba(220,38,38,0.18) 0%,transparent 50%),
+    radial-gradient(ellipse at bottom right,rgba(251,191,36,0.18) 0%,transparent 50%),
+    linear-gradient(135deg,#0a1428 0%,#0d1b3e 50%,#050d22 100%);
+  border-radius:10px;position:relative;overflow:hidden;
+}
+.tpl-bogo::before{
+  content:'';position:absolute;inset:2.5mm;
+  border:1.5px solid rgba(201,168,76,0.55);
+  border-radius:5mm;pointer-events:none;z-index:1;
+}
+.tpl-bogo::after{
+  content:'';position:absolute;inset:0;
+  background:
+    radial-gradient(circle at 10% 20%,rgba(251,191,36,0.6) 1.2px,transparent 2px),
+    radial-gradient(circle at 90% 25%,rgba(220,38,38,0.5) 1px,transparent 2px),
+    radial-gradient(circle at 88% 85%,rgba(251,191,36,0.55) 1px,transparent 2px),
+    radial-gradient(circle at 15% 85%,rgba(251,191,36,0.4) 0.8px,transparent 1.5px);
+  pointer-events:none;z-index:1;
+}
+.tpl-bogo .t-img{
+  flex:0 0 50mm;background:#fff;
+  margin:5mm 0 5mm 5mm;border-radius:6mm;padding:3mm;
+  box-shadow:0 6px 16px rgba(0,0,0,0.5),0 0 0 2px rgba(251,191,36,0.6);
+  position:relative;z-index:2;
+}
+.tpl-bogo .t-img-empty{color:#cbd5e0;font-size:36pt}
+.tpl-bogo .t-info{
+  padding:4mm 5mm;color:#fff;
+  flex-direction:row;align-items:stretch;gap:4mm;
+  position:relative;z-index:2;
+}
+.tpl-bogo .t-info-left{
+  flex:1;display:flex;flex-direction:column;justify-content:center;min-width:0;gap:1.5mm;
+}
+.tpl-bogo .t-name{
+  font-size:15pt;font-weight:800;color:#fff;
+  font-family:'Anuphan',sans-serif;line-height:1.2;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  overflow:hidden;
+  text-shadow:1px 1px 3px rgba(0,0,0,0.5);
+}
+.tpl-bogo .t-unit-pill{
+  display:inline-block;align-self:flex-start;
+  background:linear-gradient(135deg,#c9a84c 0%,#e8c86a 100%);
+  color:#0d1b3e;font-weight:800;font-family:'Anuphan',sans-serif;
+  padding:0.8mm 4mm;border-radius:30px;font-size:11pt;
+  box-shadow:0 2px 6px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.4);
+  border:1px solid #d97706;
+}
+/* MEGA promo banner — 3D gold ribbon */
+.tpl-bogo .t-promo-banner{
+  display:block;align-self:stretch;text-align:center;
+  background:linear-gradient(180deg,#fef08a 0%,#fbbf24 50%,#d97706 100%);
+  color:#7f1d1d;font-family:'Kanit',sans-serif;
+  font-weight:800;font-size:16pt;letter-spacing:2px;
+  padding:2mm 5mm;border-radius:6mm;
+  box-shadow:
+    0 4px 10px rgba(0,0,0,0.4),
+    inset 0 1px 0 rgba(255,255,255,0.6),
+    inset 0 -2px 0 rgba(0,0,0,0.15);
+  text-shadow:1px 1px 0 rgba(255,255,255,0.5),-1px -1px 0 rgba(127,29,29,0.2);
+  border:1.5px solid #b45309;
+  position:relative;
+}
+.tpl-bogo .t-promo-banner::before,
+.tpl-bogo .t-promo-banner::after{
+  content:'✦';position:absolute;top:50%;transform:translateY(-50%);
+  color:#7f1d1d;font-size:10pt;
+}
+.tpl-bogo .t-promo-banner::before{left:2mm}
+.tpl-bogo .t-promo-banner::after{right:2mm}
+.tpl-bogo .t-old-line{
+  font-size:12pt;color:#fbbf24;font-weight:600;
+  letter-spacing:0.3px;
+  text-shadow:1px 1px 2px rgba(0,0,0,0.5);
+}
+/* BOGO price card — 1+1 badge + comic burst feel */
+.tpl-bogo .t-price-card{
+  flex:0 0 auto;align-self:center;
+  background:linear-gradient(135deg,#000 0%,#1a1a2e 100%);
+  border:2.5px solid #fbbf24;border-radius:6mm;
+  padding:4mm 8mm;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  box-shadow:
+    0 6px 16px rgba(251,191,36,0.35),
+    0 0 0 2px rgba(220,38,38,0.5),
+    0 0 0 4px rgba(251,191,36,0.2),
+    inset 0 1px 0 rgba(255,255,255,0.1);
+  min-width:42mm;position:relative;margin-top:3mm;
+}
+.tpl-bogo .t-price-card::before{
+  content:'1 + 1';position:absolute;top:-4mm;left:50%;transform:translateX(-50%) rotate(-5deg);
+  background:linear-gradient(135deg,#dc2626,#991b1b);color:#fff;
+  font-family:'Kanit',sans-serif;font-weight:800;font-size:10pt;
+  letter-spacing:2px;padding:1mm 5mm;border-radius:30px;
+  box-shadow:0 4px 10px rgba(220,38,38,0.6);
+  border:1.5px solid rgba(251,191,36,0.8);
+  text-shadow:1px 1px 0 rgba(0,0,0,0.4);
+  white-space:nowrap;
+}
+.tpl-bogo .t-price-label{
+  font-size:10pt;color:#fff;font-weight:500;
+  letter-spacing:1px;margin-bottom:1mm;margin-top:1mm;
+  font-family:'Anuphan',sans-serif;
+}
+.tpl-bogo .t-price{
+  font-size:50pt;color:#fbbf24;font-weight:800;font-family:'Kanit',sans-serif;
+  line-height:0.85;letter-spacing:-1px;
+  text-shadow:0 2px 8px rgba(251,191,36,0.4),0 0 1px rgba(0,0,0,0.5);
+}
+.tpl-bogo .t-foot{color:#c9a84c}
+.tpl-bogo .t-foot .t-sku{color:rgba(201,168,76,0.7)}
+.tpl-bogo .t-foot canvas,.tpl-bogo .t-foot svg{background:#fff}
+
+/* ====================================================================
+   v4.0 — BRAND CHIP (Rattana Mart logo, top-left of every tag)
+   ==================================================================== */
+.tag .t-brand{
+  position:absolute;top:3mm;left:3mm;z-index:6;
+  display:flex;align-items:center;gap:1.5mm;
+  background:rgba(0,0,0,0.55);backdrop-filter:blur(4px);
+  padding:1mm 3mm 1mm 1.5mm;border-radius:30px;
+  border:1px solid rgba(201,168,76,0.6);
+  box-shadow:0 2px 6px rgba(0,0,0,0.4);
+}
+.tag .t-brand .t-brand-icon{
+  width:5mm;height:5mm;flex:0 0 auto;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+}
+.tag .t-brand .t-brand-text{
+  font-family:'Kanit',sans-serif;font-weight:700;
+  font-size:6.5pt;color:#fff;letter-spacing:1.5px;
+  line-height:1;white-space:nowrap;
+}
+.tag .t-brand .t-brand-text b{color:#fbbf24;font-weight:800}
+.pdf-page.layout-12 .tag .t-brand,
+.pdf-page.layout-16 .tag .t-brand{display:none !important}
+body.ink-save .tag .t-brand{
+  background:#fff !important;
+  border:1px solid #0d1b3e !important;box-shadow:none !important;
+}
+body.ink-save .tag .t-brand .t-brand-text{color:#0d1b3e !important}
+body.ink-save .tag .t-brand .t-brand-text b{color:#c9a84c !important}
+body.ink-save .tag .t-brand .t-brand-icon g{fill:#0d1b3e !important}
+
+/* ====================================================================
+   v4.0 — AI DESIGN STUDIO (Setup Tab)
+   ==================================================================== */
+.ai-studio{
+  background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(168,85,247,0.06),rgba(236,72,153,0.04));
+  padding:14px 14px 14px;border-radius:12px;
+  border:1.5px dashed #a855f7;margin-top:10px;
+}
+.ai-studio-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.ai-studio-icon{font-size:24px;filter:drop-shadow(0 0 6px rgba(168,85,247,0.6))}
+.ai-studio-title{font-weight:800;font-size:15px;color:var(--text);
+  background:linear-gradient(135deg,#a855f7,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.ai-studio-sub{font-size:11px;color:var(--muted);font-weight:500}
+.ai-section-label{
+  font-size:11px;font-weight:700;color:var(--text);letter-spacing:0.5px;
+  text-transform:uppercase;margin-bottom:8px;
+}
+
+/* Style gallery */
+.ai-style-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+@media(min-width:640px){.ai-style-grid{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:900px){.ai-style-grid{grid-template-columns:repeat(6,1fr)}}
+.ai-style{cursor:pointer;border-radius:8px;overflow:hidden;border:2px solid transparent;transition:all .15s;background:var(--card-bg)}
+.ai-style:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,0.15)}
+.ai-style.active{border-color:#fbbf24;box-shadow:0 0 0 3px rgba(251,191,36,0.3)}
+.ai-style-preview{
+  aspect-ratio:16/7;display:flex;align-items:center;justify-content:center;
+  font-family:'Kanit',sans-serif;font-weight:900;font-size:11px;letter-spacing:2px;
+}
+.ai-style-preview span{color:#fff;text-shadow:2px 2px 0 rgba(0,0,0,0.4)}
+.ai-style-name{padding:5px 6px;font-size:10px;text-align:center;color:var(--text);font-weight:600;background:var(--card-bg)}
+
+/* Header style backgrounds */
+.style-navy{background:
+  radial-gradient(ellipse at 80% 20%,rgba(251,191,36,0.3) 0%,transparent 50%),
+  linear-gradient(135deg,#0a1428,#0d1b3e,#1e293b)}
+.style-sunset{background:
+  radial-gradient(ellipse at 70% 30%,rgba(255,255,255,0.3) 0%,transparent 40%),
+  linear-gradient(135deg,#dc2626,#ea580c,#f59e0b,#fbbf24)}
+.style-ocean{background:
+  radial-gradient(ellipse at 30% 70%,rgba(255,255,255,0.2) 0%,transparent 50%),
+  linear-gradient(135deg,#0891b2,#0e7490,#0c4a6e,#082f49)}
+.style-royal{background:
+  radial-gradient(ellipse at 60% 40%,rgba(251,191,36,0.25) 0%,transparent 50%),
+  linear-gradient(135deg,#581c87,#7c3aed,#a855f7,#581c87)}
+.style-cyber{background:
+  radial-gradient(circle at 80% 30%,rgba(34,211,238,0.4) 0%,transparent 40%),
+  radial-gradient(circle at 20% 70%,rgba(168,85,247,0.3) 0%,transparent 40%),
+  linear-gradient(135deg,#020617,#0f172a,#020617)}
+.style-garden{background:
+  radial-gradient(ellipse at 60% 40%,rgba(254,243,199,0.4) 0%,transparent 50%),
+  linear-gradient(135deg,#065f46,#10b981,#34d399,#86efac)}
+
+/* AI Background gallery */
+.ai-bg-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+@media(min-width:480px){.ai-bg-grid{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:768px){.ai-bg-grid{grid-template-columns:repeat(4,1fr)}}
+@media(min-width:1100px){.ai-bg-grid{grid-template-columns:repeat(6,1fr)}}
+.ai-bg-item{
+  aspect-ratio:16/8;cursor:pointer;border-radius:6px;overflow:hidden;
+  border:2px solid transparent;background:#e2e8f0;transition:all .15s;
+  position:relative;background-size:cover;background-position:center;
+}
+.ai-bg-item:hover{transform:scale(1.05);box-shadow:0 3px 10px rgba(0,0,0,0.2)}
+.ai-bg-item.active{border-color:#fbbf24;box-shadow:0 0 0 2px rgba(251,191,36,0.4)}
+.ai-bg-item-label{
+  position:absolute;bottom:0;left:0;right:0;
+  background:linear-gradient(transparent,rgba(0,0,0,0.7));
+  color:#fff;font-size:9px;font-weight:700;
+  padding:8px 4px 3px;text-align:center;letter-spacing:0.5px;
+}
+
+/* Title chips */
+.ai-title-chips{display:flex;flex-wrap:wrap;gap:5px}
+.ai-title-chip{
+  background:var(--card-bg);border:1.5px solid var(--border);
+  color:var(--text);padding:4px 10px;border-radius:30px;
+  font-size:11px;font-weight:600;cursor:pointer;
+  transition:all .15s;font-family:inherit;
+}
+.ai-title-chip:hover{
+  background:linear-gradient(135deg,#a855f7,#ec4899);color:#fff;
+  border-color:transparent;transform:translateY(-1px);
+}
+
+/* ====================================================================
+   v4.0 — INK-SAVING LIGHT MODE
+   When body.ink-save is set, all tags become white-bg + minimal color
+   ==================================================================== */
+body.ink-save .tag.tpl-regular,
+body.ink-save .tag.tpl-sale,
+body.ink-save .tag.tpl-new,
+body.ink-save .tag.tpl-bogo{
+  background:#ffffff !important;
+  border:3px solid #0d1b3e;
+}
+body.ink-save .tag::before,
+body.ink-save .tag::after{display:none !important}
+body.ink-save .tag .t-name{color:#0d1b3e !important;text-shadow:none !important}
+body.ink-save .tag .t-size,
+body.ink-save .tag .t-old-line{color:#475569 !important;text-shadow:none !important}
+body.ink-save .tag .t-img{
+  background:#fff !important;
+  box-shadow:0 1px 4px rgba(0,0,0,0.1) !important;
+  border:1px solid #e2e8f0;
+}
+body.ink-save .tag .t-price-card{
+  background:#fff !important;
+  border:3px solid #0d1b3e !important;
+  box-shadow:0 2px 6px rgba(0,0,0,0.12) !important;
+}
+body.ink-save .tag .t-price-label{color:#0d1b3e !important}
+body.ink-save .tag .t-price{color:#0d1b3e !important;text-shadow:none !important}
+body.ink-save .tpl-sale .t-price-card{border-color:#dc2626 !important}
+body.ink-save .tpl-sale .t-price{color:#dc2626 !important}
+body.ink-save .tpl-sale .t-price-card::before{background:#dc2626 !important}
+body.ink-save .tpl-new .t-price-card{border-color:#059669 !important}
+body.ink-save .tpl-new .t-price{color:#059669 !important}
+body.ink-save .tpl-new .t-price-card::before{background:#059669 !important}
+body.ink-save .tpl-bogo .t-price-card{border-color:#d97706 !important}
+body.ink-save .tpl-bogo .t-price{color:#d97706 !important}
+body.ink-save .tpl-bogo .t-promo-banner{
+  background:#fff !important;color:#d97706 !important;
+  border:2px solid #d97706 !important;text-shadow:none !important;
+  box-shadow:none !important;
+}
+body.ink-save .tag .t-unit-pill{
+  background:#fff !important;color:#0d1b3e !important;
+  border:1.5px solid #0d1b3e !important;box-shadow:none !important;
+}
+body.ink-save .tag .t-sale-ribbon,
+body.ink-save .tag .t-new-ribbon{box-shadow:none !important}
+body.ink-save .tag .t-foot{color:#475569 !important}
+body.ink-save .tag .t-foot .t-sku{color:#64748b !important}
+body.ink-save .tag .t-loc{
+  background:#fff !important;color:#0d1b3e !important;
+  border:1px solid #c9a84c !important;box-shadow:none !important;
+}
+
+/* v4.0 — Tag preview wrapper: large, readable, responsive scaling */
+.tag-wrap{
+  position:relative;width:100%;max-width:780px;margin:0 auto;
+  background:var(--card-bg);border-radius:16px;padding:16px;
+  border:1px solid var(--border-soft);box-shadow:var(--shadow-md);
+  --tag-scale:0.43;
+}
+@media(min-width:480px){.tag-wrap{--tag-scale:0.55}}
+@media(min-width:640px){.tag-wrap{--tag-scale:0.72}}
+@media(min-width:820px){.tag-wrap{--tag-scale:0.96}}
+.tag-wrap .tag-overlay{position:absolute;top:12px;right:12px;display:flex;gap:6px;z-index:10}
+.tag-wrap .tag-tpl-pick{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;justify-content:center}
+.tag-wrap .tpl-btn{
+  padding:7px 16px;font-size:12px;border-radius:8px;
+  border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);
+  cursor:pointer;font-weight:600;font-family:inherit;
+  transition:all .2s;min-height:32px;
+}
+.tag-wrap .tpl-btn:hover{border-color:var(--gold-light);background:rgba(201,168,76,0.05)}
+.tag-wrap .tpl-btn.active{
+  background:linear-gradient(135deg,var(--gold-light),var(--gold));
+  color:var(--navy);border-color:var(--gold);
+  box-shadow:0 2px 8px rgba(201,168,76,0.4);
+}
+.tag-wrap .tag-preview-frame{
+  position:relative;width:100%;
+  /* Height = tag native (66mm ≈ 250px) × scale.  Use padding-bottom so it scales */
+  /* Native tag width 190mm ≈ 718px; aspect 66/190 = 34.7% */
+  height:calc(718px * var(--tag-scale) * 0.347);
+  min-height:calc(718px * var(--tag-scale) * 0.347);
+  overflow:hidden;border-radius:10px;background:#f4f6fb;
+  box-shadow:inset 0 0 0 1px rgba(13,27,62,0.06);
+}
+body.dark .tag-wrap .tag-preview-frame{background:#0a1226}
+.tag-wrap .tag-scale{
+  position:absolute;top:0;left:0;
+  transform-origin:top left;
+  transform:scale(var(--tag-scale));
+}
+
+/* Modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.65);z-index:9000;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px);overflow-y:auto}
+.modal-overlay.open{display:flex}
+.modal{background:var(--card-bg);border-radius:var(--radius-lg);max-width:560px;width:100%;max-height:92dvh;overflow-y:auto;border-top:4px solid var(--gold);animation:slideUp .22s ease}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+.modal-head h3{font-size:16px;font-weight:700}
+.modal-close{background:transparent;border:none;font-size:24px;color:var(--muted);cursor:pointer;padding:4px 8px;border-radius:6px;line-height:1}
+.modal-body{padding:20px}
+.modal-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+
+/* Toast */
+.toast{position:fixed;bottom:max(24px,env(safe-area-inset-bottom));right:16px;padding:12px 20px;border-radius:var(--radius-md);color:#fff;z-index:9999;animation:slideIn .3s ease;font-weight:500;box-shadow:var(--shadow-lg);max-width:90vw;font-size:13px}
+.toast-success{background:var(--success)}
+.toast-error{background:var(--danger)}
+.toast-warning{background:var(--warning);color:var(--navy)}
+.toast-info{background:var(--navy-mid);border-left:3px solid var(--gold)}
+
+/* Spinner */
+.spinner-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.55);align-items:center;justify-content:center;z-index:99999;backdrop-filter:blur(3px)}
+.spinner-overlay.show{display:flex}
+.spinner-box{background:#fff;border-radius:var(--radius-lg);padding:32px 40px;text-align:center;border-top:4px solid var(--gold);min-width:240px}
+.spinner-ring{width:48px;height:48px;border:5px solid #dde3f0;border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px}
+body.dark .spinner-box{background:var(--card-bg)}
+
+/* Back to top */
+#backToTop{position:fixed;bottom:max(24px,calc(16px + env(safe-area-inset-bottom)));right:max(16px,calc(12px + env(safe-area-inset-right)));background:var(--gold);color:var(--navy);border:none;border-radius:50%;width:46px;height:46px;display:none;align-items:center;justify-content:center;box-shadow:var(--shadow-gold);z-index:90;font-size:18px;font-weight:700;cursor:pointer}
+#backToTop.show{display:flex}
+
+/* Login screen */
+#loginScreen{position:fixed;inset:0;background:linear-gradient(135deg,var(--navy) 0%,#1a2f5e 100%);display:flex;align-items:center;justify-content:center;padding:20px;z-index:1000}
+.login-card{background:#fff;border-radius:var(--radius-lg);padding:40px 32px;max-width:420px;width:100%;text-align:center;border-top:5px solid var(--gold);box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.login-card .login-logo{height:80px;margin:0 auto 16px;display:block}
+.login-card h1{color:var(--navy);font-size:24px;margin-bottom:6px;font-family:'Kanit',sans-serif;font-weight:700}
+.login-card .subtitle{color:var(--muted);font-size:13px;margin-bottom:24px}
+.login-card .g-id-signin{display:inline-block}
+.login-err{color:var(--danger);font-size:13px;margin-top:12px;min-height:20px}
+
+/* Animations */
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* Utility */
+.flex{display:flex}.flex-center{display:flex;align-items:center;justify-content:center}.flex-between{display:flex;align-items:center;justify-content:space-between}
+.gap-4{gap:4px}.gap-8{gap:8px}.gap-12{gap:12px}
+.mt-8{margin-top:8px}.mt-12{margin-top:12px}.mt-16{margin-top:16px}
+.txt-muted{color:var(--muted)}.txt-bold{font-weight:700}.txt-center{text-align:center}
+.hidden{display:none!important}
+.empty-state{
+  text-align:center;padding:80px 20px;color:var(--muted);
+  background:var(--card-bg);border-radius:20px;border:1px dashed var(--border);
+  animation:fadeIn .4s;
+}
+.empty-state .emoji{
+  font-size:56px;margin-bottom:14px;display:inline-block;
+  filter:drop-shadow(0 4px 12px rgba(0,0,0,0.08));
+}
+.empty-state h3{font-size:17px;margin-bottom:6px;color:var(--text);font-family:'Kanit',sans-serif}
+.empty-state .empty-sub{font-size:13px;max-width:340px;margin:0 auto}
+
+/* Skeleton loading */
+.skel{
+  background:linear-gradient(90deg,var(--border-soft) 0%,var(--row-alt) 50%,var(--border-soft) 100%);
+  background-size:200% 100%;
+  animation:shimmer 1.4s infinite linear;
+  border-radius:8px;
+}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.skel-card{
+  background:var(--card-bg);border-radius:16px;border:1px solid var(--border-soft);
+  padding:0;overflow:hidden;box-shadow:var(--shadow-sm);
+}
+.skel-card .skel-img{aspect-ratio:1;border-radius:0;width:100%}
+.skel-card .skel-body{padding:10px 12px 12px;display:flex;flex-direction:column;gap:6px}
+.skel-card .skel-line{height:10px;width:60%}
+.skel-card .skel-line.lg{height:14px;width:90%}
+.skel-card .skel-line.price{height:22px;width:40%;margin-top:4px}
+
+/* Hero section above products */
+.hero-strip{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 18px;margin-bottom:14px;
+  background:linear-gradient(135deg,#0d1b3e 0%,#1a2f5e 50%,#243b73 100%);
+  border-radius:18px;color:#fff;
+  box-shadow:var(--shadow-lg);position:relative;overflow:hidden;
+}
+.hero-strip::before{
+  content:'';position:absolute;inset:0;
+  background:
+    radial-gradient(circle at 90% 50%,rgba(201,168,76,0.25),transparent 40%),
+    radial-gradient(circle at 10% 80%,rgba(201,168,76,0.12),transparent 50%);
+  pointer-events:none;
+}
+.hero-strip .hero-content{position:relative;z-index:1}
+.hero-strip .hero-title{font-size:14px;font-weight:700;color:var(--gold-light);letter-spacing:1px;font-family:'Kanit',sans-serif}
+.hero-strip .hero-sub{font-size:11px;opacity:0.7;margin-top:2px}
+.hero-strip .hero-stat{position:relative;z-index:1;text-align:right}
+.hero-strip .hero-num{font-size:28px;font-weight:800;font-family:'Kanit',sans-serif;color:var(--gold-light);line-height:1}
+.hero-strip .hero-num-label{font-size:10px;opacity:0.7;letter-spacing:0.5px;text-transform:uppercase;margin-top:2px}
+
+/* PDF preview area — A4 portrait with flexible tag layout (1/2/4/6 per page) */
+.pdf-stage{display:flex;flex-direction:column;gap:18px;align-items:center;overflow-x:auto;
+  background:#e2e6ed;padding:20px;border-radius:12px;
+  background-image:
+    linear-gradient(rgba(0,0,0,0.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,0,0,0.025) 1px,transparent 1px);
+  background-size:20px 20px;
+}
+body.dark .pdf-stage{background-color:#0a1226}
+/* ════════════════════════════════════════════════════════════════
+   v4.0 — UNIVERSAL A4 LAYOUT ENGINE
+   .pdf-page  = fixed A4 white sheet (210×297mm), flex column
+   .pdf-page-grid = universal tag container (grid), fills remaining space
+   .tag       = always fills its grid cell (100% × 100%)
+   ════════════════════════════════════════════════════════════════ */
+.pdf-page{
+  background:#fff;width:210mm;height:297mm;        /* FIXED height for definite grid rows */
+  padding:8mm;position:relative;
+  box-shadow:0 12px 36px rgba(0,0,0,0.25),0 0 0 1px rgba(0,0,0,0.05);
+  page-break-after:always;flex-shrink:0;box-sizing:border-box;
+  border-radius:2px;
+  display:flex;flex-direction:column;gap:5mm;overflow:hidden;
+}
+.pdf-page::before{
+  content:'A4 · 210 × 297 mm';position:absolute;top:-22px;left:8mm;
+  font-size:10px;color:#64748b;font-family:'Anuphan',sans-serif;font-weight:600;
+  letter-spacing:1px;text-transform:uppercase;
+}
+/* Universal grid container — fills space left after optional promo header */
+.pdf-page-grid{
+  flex:1 1 auto;min-height:0;width:100%;
+  display:grid;
+}
+/* Every tag fills its grid cell — no hardcoded mm sizing */
+.pdf-page .tag{
+  width:100% !important;height:100% !important;margin:0 !important;
+}
+/* Per-layout grid templates */
+.pdf-page.layout-1 .pdf-page-grid{grid-template-columns:1fr;grid-template-rows:1fr;gap:0}
+.pdf-page.layout-2 .pdf-page-grid{grid-template-columns:1fr;grid-template-rows:1fr 1fr;gap:5mm}
+.pdf-page.layout-4 .pdf-page-grid{grid-template-columns:1fr;grid-template-rows:repeat(4,1fr);gap:4mm}
+.pdf-page.layout-6 .pdf-page-grid{grid-template-columns:1fr 1fr;grid-template-rows:repeat(3,1fr);gap:4mm}
+.pdf-page.layout-12 .pdf-page-grid{grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(4,1fr);gap:3mm}
+.pdf-page.layout-16 .pdf-page-grid{grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(4,1fr);gap:2.5mm}
+.pdf-page.layout-30 .pdf-page-grid{grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(6,1fr);gap:2.5mm}
+.pdf-page.layout-cat .pdf-page-grid{grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(4,1fr);gap:3mm}
+
+/* v4.0 — manual image scaling (all modes). Applied to product images only.
+   v4.4 — plus translate() for drag-to-move (pan). Offsets are in unscaled px so
+   they read consistently regardless of --img-scale.
+   NOTE: no CSS transition here — it freezes the var-based transform re-resolution. */
+.pdf-stage .tag .t-img img,
+.pdf-stage .catalog-card .cat-img img{
+  transform:translate(var(--img-x,0px),var(--img-y,0px)) scale(var(--img-scale,1));
+  transform-origin:center center;
+  touch-action:none;            /* drag-to-pan on touch without page scroll */
+  user-select:none;-webkit-user-drag:none;
+}
+/* v4.6 — sticky print toolbar (stays below the tab-nav while scrolling the preview) */
+.print-toolbar{
+  background:var(--card-bg-glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border:1px solid var(--border-soft);border-radius:16px;box-shadow:var(--shadow-md);
+  padding:10px 12px;margin-bottom:16px;
+  display:flex;flex-direction:column;gap:8px;
+  position:sticky;top:calc(var(--header-h,68px) + 60px);z-index:55;
+}
+.print-toolbar-btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+/* nested slider inside the toolbar → strip its own frame to avoid a card-in-card look */
+.print-toolbar .img-scale-wrap{background:transparent;border:none;border-radius:0;padding:0;margin-bottom:0}
+/* image-size slider bar */
+.img-scale-wrap{
+  background:var(--card-bg-glass,rgba(255,255,255,.04));
+  border:1px solid var(--border-soft,var(--border));
+  border-radius:12px;padding:10px 14px;margin-bottom:14px;
+}
+.img-scale-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.img-scale-label{font-weight:700;font-size:13px;color:var(--text)}
+.img-scale-bar input[type=range]{
+  flex:1;min-width:140px;max-width:340px;accent-color:var(--gold);height:6px;cursor:pointer;
+}
+.img-scale-val{
+  font-weight:800;font-size:14px;color:var(--gold);font-family:'Kanit',sans-serif;
+  min-width:48px;text-align:right;
+}
+.img-scale-mode{
+  font-size:12px;margin-top:8px;padding:6px 10px;border-radius:8px;
+  background:rgba(52,152,219,.08);color:var(--text);
+}
+.img-scale-mode.targeted{background:rgba(201,168,76,.14);border:1px solid var(--gold)}
+.img-scale-mode b{color:var(--gold)}
+/* v4.0 — product images are clickable in the print preview */
+.pdf-stage .t-img img,
+.pdf-stage .cat-img img{cursor:pointer}
+.pdf-stage img.img-selected{
+  outline:3px solid var(--gold,#c9a84c);
+  outline-offset:2px;
+  box-shadow:0 0 0 6px rgba(201,168,76,.25);
+  border-radius:2px;
+}
+/* v4.5 — editable name/title in print preview. Affordance shows only on hover/focus,
+   so PDF/PNG exports (no hover/focus) stay clean. */
+.pdf-stage .editable-name{cursor:text;outline:none;border-radius:2px;transition:box-shadow .12s}
+.pdf-stage .editable-name:hover{box-shadow:inset 0 -2px 0 rgba(201,168,76,.55)}
+.pdf-stage .editable-name:focus{box-shadow:0 0 0 2px rgba(201,168,76,.85);background:rgba(201,168,76,.10)}
+/* Tag flex direction per layout: landscape (row) vs portrait (column) */
+.pdf-page.layout-1 .tag,
+.pdf-page.layout-6 .tag,
+.pdf-page.layout-12 .tag,
+.pdf-page.layout-16 .tag,
+.pdf-page.layout-30 .tag{flex-direction:column !important}
+.pdf-page.layout-2 .tag,
+.pdf-page.layout-4 .tag{flex-direction:row !important}
+
+.pdf-wrap{position:relative;overflow:hidden;border-radius:8px;background:#e8eaf0;padding:10px}
+.pdf-wrap-inner{transform-origin:top left}
+@media(max-width:880px){.pdf-wrap-inner{transform:scale(0.42)}}
+@media(min-width:881px) and (max-width:1100px){.pdf-wrap-inner{transform:scale(0.65)}}
+@media(min-width:1101px){.pdf-wrap-inner{transform:scale(0.85)}}
+
+/* Help block */
+.help-block{background:rgba(52,152,219,.08);border-left:3px solid var(--info);padding:12px 14px;border-radius:6px;font-size:13px;color:var(--text);margin-bottom:14px;line-height:1.6}
+.help-block code{background:var(--card-bg);padding:1px 6px;border-radius:4px;font-family:'Courier New',monospace;font-size:12px;border:1px solid var(--border)}
+.help-block ul{margin:6px 0 0 18px}
+.help-block li{margin-bottom:2px}
+
+/* Column-map field row */
+.cmap-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:520px){.cmap-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN SCREEN (disabled in v1.3 — open access) ============ -->
+<div id="loginScreen" style="display:none">
+  <div class="login-card">
+    <img class="login-logo" src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCAB4AHgDASIAAhEBAxEB/8QAHAABAAEFAQEAAAAAAAAAAAAAAAYBBAUHCAMC/8QAOxAAAQMEAQMBBQILKQAAAAAAAQACAwQFBhESByExEwgUQVFhItEVFxgyVFZxgZOU4iVSYmORkqGywf/EABsBAQACAwEBAAAAAAAAAAAAAAADBgECBQQH/8QAKxEAAgICAQIFAwQDAAAAAAAAAAECEQMEIRIxBQYTQVEiYfBxgZGhByPB/9oADAMBAAIRAxEAPwDllERWI4gREQBERAEREAREQBERAEREAREQBERAEREARE0fkUAREQBERAEREAREQBERAEREAREQBdJ4HF0Xyuitlu/A9pZe6unHq0jY5WPbIGbeA7x8CRo+FzYshjV2qLFkFvvNL3moqhkzW71y4nZb+wjY/eq/5h8Gn4pr1iyyxzjbi4yq3XCfyrr7/DOj4bvR1Mn1wUourtXx9iRdV8MkxTOK200ENVPRANmpnlhcfTeNgEgdyDsb+iieFd+hVX8F33LoBvtFxOG2YbVlp8arQR/0VfyimfqbW/zv9Cr2p4x5mw4IY8uh1ySScvVgra96+50s2l4XPI5Q2KTfbpfBz97hXfoVV/Bd9yGhrQCTRVIA/yXfcugfyimfqbW/wA7/Qp1lmbTUnRqbLZKR9vq6uiBpqd8nJzJJfsx99DfY8vHwWmz5t8Y1MmKGxoKPqSUV/si7b/RN/ubY/BtLNGUsexfSrf0vt+5x4iIvohWgiIgCIiAIiIAiL2pqOrqo55KalnmZTx+rO6OMuETP7ziB9lv1PZYB4oqAg+CD+w7VVkHVns6Xx1f0nbCyL16q0vlpxECAXj8+Mb+Gw7W/oo4faMt4OnYjVgjsQaxnY/7VovH8jv+PuldZLxW24za9T3eUtD9eNj46WMnlkmmfNK8vkkcXvcfLiTsn/VfPo/4/wBHLv7GxtxU4zfVGnJNXbknTS79ixvzHsQ18ePC6cVT4Tv4OmsS65U+R5Lb7HSYrVMlrZxEHmrYQweS4jj4ABP7lF/awyCvddKDGC2nbRMY2tBZITI9x5MHMa03Wna873v6LTeO3u6Y9dY7pZqs0lZG1zWShjXFocNHs4EeF93y73nJ70a+6VM1wuE/GPlwHJ2hprQ1o/4AUun5I1dDxfHua8FHFCL4bk31fPPCSX37+3ua5/Hs2xpyw5G3Jv4SVfHBjEVzX264W8sFfQVVIXglgnhdHyA865AbVsr1GSkrRX2mnTCIi2MBERAEREAXQfs6WIWnp/c+oFulyu7V0lS+11Vqx2Gllkip9B/qTRzsfzaSOwDf/dc+LYHTPKsLxyGGqulnyqO9U05kjuFkvYpDIzYLY3tLT2Gj3B7gqLMm40iXC0pWyazW7H8zgyvqFnFxvr8ax6eG2UFPSW+koa+d8rt8ZGsYI2lnLv22fmNaVpWdN+nl3wq2ZJh12yOSAZTTWCtfcGRN9dsoaTNE1o3Hrl2a7f1XzV9bLbfrzmkOV4h7zjuVVEFS+joqv0p6OaFrWskZIW6c4hjeWwNn6bBwEfUe3WrBKvE8cs1XTxDKIb7QT1dS2V0TYmtDY3gNHI7bskaHfWlEo5PzsS9WP3Mzj3Six3L2mazpdNcLiy1QVFTE2pYWeuRHAZASS3j5Gj28KFZNi9Fa+neOZJBUVD6m6z1kc0by3gwQv4t46G+487K2hbOt2CW7qd+Mmn6dXN2RVQeazleR6Eb3xcHuhbw3t3+LsATobOxA6bNcYrMKs2LZHjNdVw22aolFTS14hkBleXaALSNaOjv5AghebYlsxeOUItpPlKu3TL5a96JMUcDUlJpWuO/e1/yy8vOK4JjV/t9uvsmR1LLhbaKqjdSPhb6b5geZdyb3A+zoDv52VIcQ6exY7nOTT09fd7hcMXqIjQ0tqZF73O2RuxLqQEaaHaIAPff0Wus+y4ZRlkF3jt4oqSkhgpqWmEnMshi/NBd8Se/dZy7Zvi99ze75Jd7Fe4JayaOSmlt10EM1OGxhhaTx04EgHfYhc7Jr70sSUm/qj9S4fNx4q13XUnT/ALo9WPLqqbpLh8d1xT5/mqsylNZLVmWQ5G68XvL4aKyWp1cG3PUlVA/kPUYWHsR8tcd9vCwmQ4zitT06fmGKTXmJlJcGUNVTXIxuLi5vJr2uYAB9R93fJ3nqvFcLpfar8DTiO44+LLCZKoPlAB2JpX8ftuPx1pRSjymOn6aXDDzRPc+ruUVcKn1BpoY3jx4677+e1vr4d1dMqcaceLVVX1fr+Ua5sus7XDtPmnd+xGURFYTkhERAEREAREQGyMTxvC7tg1N77dKWivtRM4GSSrLTCwVMTPUc0nhwbE6Rxb+edAt7AquWUWA2q3V9ZZ6Sjusb62kfQf2rMXinkZKZY3tHEksfEGci0HTwdd2la1VVH0O+5J6nHY3BUYn05nuFSyK6UFKW3xgp6cXYu526OoZDIS9wI5vDnyA8gQ2Ls0h215R4b03mqGviyimjoquhe2kfUVvGSOrlqJmwiVrWnXpRxt570122u5AOC1GqrHpv5M+ovgmeEWXF7hQRSX+5Nop4rm0Ts9cD1KUNbza35P5OGneNB3yV7TY/iMUdE+putHJJFHUOr4/e3EAuifJBriASGlrWuDCSSR4PZa/ReaepklJtZWr/AK/L/mvgljsRikuhcEszOmxukonxWanYZW3GeATe+OkLoWNjLXhu9acXu0fk0fHaiaIvRhxPFDpbb+7IcuTrldUERFMRhERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREB//9k=" alt="Rattana Mart">
+    <h1>Rattana Price Tag</h1>
+    <div class="subtitle">ระบบสร้างป้ายราคาสินค้าติดในร้าน</div>
+    <div id="g_id_onload"
+         data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com"
+         data-callback="handleGoogleLogin"
+         data-auto_prompt="false"></div>
+    <div class="g_id_signin"
+         data-type="standard"
+         data-size="large"
+         data-theme="filled_blue"
+         data-text="sign_in_with"
+         data-shape="pill"
+         data-logo_alignment="left"></div>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ============ APP SCREEN ============ -->
+<div id="appScreen" class="page">
+
+  <header>
+    <svg class="logo-img" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="Rattana Mart"><rect width="100" height="100" rx="14" fill="#0d1b3e"/><g fill="#fbbf24"><rect x="19" y="34" width="11" height="6" rx="1.5"/><path d="M30 42 L80 42 L80 49 L30 49 Z"/><path d="M32 52 L80 52 L74 71 L43 71 Z"/><circle cx="48" cy="78" r="5"/><circle cx="66" cy="78" r="5"/></g></svg>
+    <div class="logo-text">RATTANA <span style="color:var(--gold)">PRICE TAG</span><small>ระบบทำป้ายราคาสินค้า v4.8</small></div>
+    <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="โหลดข้อมูลใหม่">⟳</button>
+    <button class="icon-btn" onclick="toggleDark()" title="โหมดมืด">🌙</button>
+    <button class="icon-btn" onclick="openUserModal()" title="ผู้ใช้">👤</button>
+  </header>
+
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="setup" onclick="switchTab('setup')">⚙️ ตั้งค่า</button>
+    <button class="tab-btn" data-tab="products" onclick="switchTab('products')">📦 เลือกสินค้า <span class="badge-count" id="badgeSelected">0</span></button>
+    <button class="tab-btn" data-tab="design" onclick="switchTab('design')">🎨 ออกแบบป้าย</button>
+    <button class="tab-btn" data-tab="print" onclick="switchTab('print')">🖨️ พิมพ์ / Export</button>
+  </nav>
+
+  <div class="content">
+
+    <!-- ===== TAB: SETUP ===== -->
+    <div class="tab-pane active" id="tab-setup">
+      <div class="card card-gold">
+        <div class="card-head"><h3>⚙️ เชื่อมต่อ Google Sheet</h3></div>
+        <div class="card-body">
+          <div class="help-block">
+            <b>วิธีตั้งค่า:</b>
+            <ol style="margin:6px 0 0 18px">
+              <li>เปิด Google Sheet ที่มีข้อมูลสินค้า</li>
+              <li>ไปที่ <b>ไฟล์ → แชร์ → เผยแพร่ในเว็บ</b> → กดเผยแพร่</li>
+              <li>คัดลอก Sheet ID จาก URL (ส่วนระหว่าง <code>/d/</code> กับ <code>/edit</code>)</li>
+              <li>วาง Sheet ID + ชื่อแท็บ + เลือกระดับราคา → กด "โหลดข้อมูล"</li>
+            </ol>
+          </div>
+
+          <div class="cmap-grid">
+            <div class="field">
+              <label>Sheet ID</label>
+              <input class="input" id="cfgSheetId" placeholder="เช่น 1ABCdef..." autocomplete="off">
+            </div>
+            <div class="field">
+              <label>ชื่อแท็บ (Sheet Name)</label>
+              <input class="input" id="cfgSheetName" placeholder="เช่น PDDT" autocomplete="off">
+            </div>
+          </div>
+
+          <div class="cmap-grid">
+            <div class="field">
+              <label>ระดับราคาปกติ (สำหรับ PDDT)</label>
+              <select class="input" id="cfgPriceTier">
+                <option value="CC00">CC00 — ราคาขายปลีก (default)</option>
+                <option value="CC01">CC01</option>
+                <option value="CC02">CC02</option>
+                <option value="CC03">CC03</option>
+                <option value="S00">S00</option>
+                <option value="S01">S01</option>
+                <option value="S02">S02</option>
+                <option value="S03">S03</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>ระดับราคาลด (สำหรับขีดฆ่าราคาปกติ)</label>
+              <select class="input" id="cfgSalePriceTier">
+                <option value="">— ไม่ใช้ราคาลด —</option>
+                <option value="CC01">CC01</option>
+                <option value="CC02">CC02</option>
+                <option value="CC03">CC03</option>
+                <option value="S00">S00</option>
+                <option value="S01">S01</option>
+                <option value="S02">S02</option>
+                <option value="S03">S03</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="cmap-grid">
+            <div class="field">
+              <label>หน่วยที่ต้องการ (ถอยลำดับถ้าไม่มีราคา)</label>
+              <select class="input" id="cfgUnitPref">
+                <option value="EA,PA,BP,CS">EA → PA → BP → CS (ชิ้น → ลัง)</option>
+                <option value="CS,BP,PA,EA">CS → BP → PA → EA (ลัง → ชิ้น)</option>
+                <option value="PA,BP,CS,EA">PA → BP → CS → EA</option>
+                <option value="EA">EA เท่านั้น (ชิ้น)</option>
+                <option value="PA">PA เท่านั้น (แพ็ค)</option>
+                <option value="BP">BP เท่านั้น</option>
+                <option value="CS">CS เท่านั้น (ลัง)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>จำนวนป้ายต่อหน้ากระดาษ A4</label>
+              <select class="input" id="cfgPerPage">
+                <option value="1">1 ป้าย (โปสเตอร์ A4 เต็มแผ่น)</option>
+                <option value="2">2 ป้าย (แบ่งครึ่งบน-ล่าง)</option>
+                <option value="4" selected>4 ป้าย (แนวนอน ซ้อน 4 ชั้น)</option>
+                <option value="6">6 ป้าย (3×2 ช่อง)</option>
+                <option value="12">12 ป้าย (3×4 + หัวโปร) 🆕</option>
+                <option value="16">16 ป้าย (4×4 + หัวโปร) 🆕</option>
+                <option value="30">30 ป้าย (5×6 · รูป+ชื่อ+บาร์โค้ด) 🏷️</option>
+                <option value="cat12">12 การ์ด (แค็ตตาล็อกจับกลุ่มขนาด) 📚</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- v4.0 — Warehouse (shared by IB filter + RANK sort) -->
+          <div class="cmap-grid">
+            <div class="field">
+              <label>คลังสินค้า (ใช้กรอง IB + เรียง RANK)</label>
+              <select class="input" id="cfgWarehouse">
+                <option value="W1">W1 — สมุทรสงคราม</option>
+                <option value="W2">W2 — สุพรรณบุรี</option>
+                <option value="W3">W3 — ราชบุรี</option>
+                <option value="W4">W4 — นครปฐม</option>
+                <option value="C4">C4 — ศูนย์กระจายสินค้า</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>การเรียงสินค้า (อัตโนมัติหลังเลือก)</label>
+              <div class="input" style="display:flex;align-items:center;background:rgba(16,185,129,0.06);border-color:#10b981;font-size:12px;color:var(--text);height:auto;min-height:44px;padding:8px 14px;line-height:1.4">
+                หมวดหมู่ → แบรนด์ → RANK ของคลัง
+              </div>
+            </div>
+          </div>
+
+          <div class="field" style="background:linear-gradient(135deg,rgba(52,152,219,0.08),transparent);padding:12px 14px;border-radius:10px;border:1.5px dashed var(--info);margin-top:8px">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+              <input type="checkbox" id="cfgIbFilter" style="width:20px;height:20px;cursor:pointer">
+              <div>
+                <div style="font-weight:700;font-size:14px;color:var(--text)">📥 กรองเฉพาะสินค้าที่มี IB ในคลังนี้</div>
+                <div style="font-size:11px;color:var(--muted);font-weight:500">เอาเฉพาะสินค้าที่มีประวัติสั่งซื้อ (IB) ในคลังที่เลือก · กรองตอนกดโหลด</div>
+              </div>
+            </label>
+          </div>
+
+          <div class="field" style="background:linear-gradient(135deg,rgba(201,168,76,0.08),transparent);padding:12px 14px;border-radius:10px;border:1.5px dashed var(--gold);margin-top:8px">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+              <input type="checkbox" id="cfgInkSave" onchange="toggleInkSave()" style="width:20px;height:20px;cursor:pointer">
+              <div>
+                <div style="font-weight:700;font-size:14px;color:var(--text)">💧 โหมดประหยัดหมึก</div>
+                <div style="font-size:11px;color:var(--muted);font-weight:500">พื้นหลังสีขาว · ใช้สีน้อย · ลดการใช้หมึกพิมพ์</div>
+              </div>
+            </label>
+          </div>
+
+          <!-- v4.0 — Promo header settings (only used for Layout 12/16) -->
+          <div class="field" style="background:linear-gradient(135deg,rgba(220,38,38,0.06),rgba(251,191,36,0.06));padding:14px 14px 10px;border-radius:10px;border:1.5px dashed #dc2626;margin-top:10px">
+            <div style="font-weight:800;font-size:14px;color:var(--text);margin-bottom:10px">
+              🎉 หัวกระดาษโปรโมชั่น <span style="font-weight:500;font-size:11px;color:var(--muted)">(ใช้กับ Layout 12 / 16 ป้าย)</span>
+            </div>
+            <div class="cmap-grid">
+              <div class="field">
+                <label>ข้อความหัวกระดาษ</label>
+                <input class="input input-sm" id="cfgPromoTitle" value="โปรโมชั่นเด็ดห้ามพลาด!" placeholder="ข้อความใหญ่กลางหัวกระดาษ">
+              </div>
+              <div class="field">
+                <label>คำบรรยายเล็ก (optional)</label>
+                <input class="input input-sm" id="cfgPromoSubtitle" value="ราคาดีที่สุดในย่าน" placeholder="ข้อความรองใต้หัวเรื่อง">
+              </div>
+            </div>
+            <div class="cmap-grid" style="margin-top:6px">
+              <div class="field">
+                <label>วันเริ่ม</label>
+                <input class="input input-sm" id="cfgPromoStart" type="date">
+              </div>
+              <div class="field">
+                <label>วันสิ้นสุด</label>
+                <input class="input input-sm" id="cfgPromoEnd" type="date">
+              </div>
+            </div>
+            <div class="field" style="margin-top:6px">
+              <label>URL รูปพื้นหลังหัวกระดาษ (optional)</label>
+              <input class="input input-sm" id="cfgPromoBg" placeholder="https://... หรือเลือกจาก AI Gallery ด้านล่าง">
+            </div>
+          </div>
+
+          <!-- v4.0 — AI DESIGN STUDIO -->
+          <div class="ai-studio">
+            <div class="ai-studio-head">
+              <span class="ai-studio-icon">✨</span>
+              <div>
+                <div class="ai-studio-title">AI Design Studio</div>
+                <div class="ai-studio-sub">เลือก style + รูปพื้นหลัง + ข้อความ ในคลิกเดียว</div>
+              </div>
+            </div>
+
+            <!-- 1. Header Style Gallery -->
+            <div class="ai-section-label">🎨 เลือกสไตล์หัวกระดาษ</div>
+            <div class="ai-style-grid">
+              <div class="ai-style" data-style="navy"   onclick="applyHeaderStyle('navy')"   title="Navy Premium">
+                <div class="ai-style-preview style-navy"><span>NAVY</span></div>
+                <div class="ai-style-name">Navy Premium</div>
+              </div>
+              <div class="ai-style" data-style="sunset" onclick="applyHeaderStyle('sunset')" title="Sunset Burst">
+                <div class="ai-style-preview style-sunset"><span>SUNSET</span></div>
+                <div class="ai-style-name">Sunset Burst</div>
+              </div>
+              <div class="ai-style" data-style="ocean"  onclick="applyHeaderStyle('ocean')"  title="Ocean Fresh">
+                <div class="ai-style-preview style-ocean"><span>OCEAN</span></div>
+                <div class="ai-style-name">Ocean Fresh</div>
+              </div>
+              <div class="ai-style" data-style="royal"  onclick="applyHeaderStyle('royal')"  title="Royal Velvet">
+                <div class="ai-style-preview style-royal"><span>ROYAL</span></div>
+                <div class="ai-style-name">Royal Velvet</div>
+              </div>
+              <div class="ai-style" data-style="cyber"  onclick="applyHeaderStyle('cyber')"  title="Cyber Modern">
+                <div class="ai-style-preview style-cyber"><span>CYBER</span></div>
+                <div class="ai-style-name">Cyber Modern</div>
+              </div>
+              <div class="ai-style" data-style="garden" onclick="applyHeaderStyle('garden')" title="Garden Fresh">
+                <div class="ai-style-preview style-garden"><span>GARDEN</span></div>
+                <div class="ai-style-name">Garden Fresh</div>
+              </div>
+            </div>
+
+            <!-- 2. AI Background Image Gallery (curated Unsplash) -->
+            <div class="ai-section-label" style="margin-top:14px">🖼️ คลังพื้นหลังภาพ AI</div>
+            <div class="ai-bg-grid" id="aiBgGrid"></div>
+            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+              <button class="btn btn-sm btn-outline" onclick="clearPromoBg()">🗑️ ใช้สีพื้นเริ่มต้น</button>
+              <a href="https://www.bing.com/images/create" target="_blank" rel="noopener" class="btn btn-sm btn-outline">🪄 สร้างภาพด้วย Bing AI</a>
+              <a href="https://copilot.microsoft.com/" target="_blank" rel="noopener" class="btn btn-sm btn-outline">💬 ใช้ Copilot AI</a>
+            </div>
+
+            <!-- 3. Promo Title Quick-pick Chips -->
+            <div class="ai-section-label" style="margin-top:14px">💬 ข้อความโปรโมชั่นยอดฮิต (คลิกเพื่อใช้)</div>
+            <div class="ai-title-chips" id="aiTitleChips"></div>
+          </div>
+
+          <button class="btn btn-gold btn-block btn-lg" onclick="loadProducts()" style="margin-top:12px">📥 โหลดข้อมูลสินค้า</button>
+        </div>
+      </div>
+
+      <div class="card card-gold" id="cardLoadStatus" style="display:none">
+        <div class="card-head"><h3>✅ สถานะข้อมูล</h3></div>
+        <div class="card-body">
+          <div class="stat-grid">
+            <div class="stat-card"><div class="s-label">สินค้าทั้งหมด</div><div class="s-value" id="statTotal">0</div></div>
+            <div class="stat-card"><div class="s-label">มีรูป</div><div class="s-value" id="statImage">0</div></div>
+            <div class="stat-card"><div class="s-label">ลดราคา</div><div class="s-value" id="statSale">0</div></div>
+            <div class="stat-card"><div class="s-label">หมวดหมู่</div><div class="s-value" id="statCat">0</div></div>
+          </div>
+          <div class="txt-muted txt-center" style="font-size:12px">โหลดล่าสุด: <span id="lastLoad">-</span></div>
+        </div>
+      </div>
+
+      <div class="card card-gold">
+        <div class="card-head"><h3>📋 รูปแบบ Sheet ที่รองรับ</h3></div>
+        <div class="card-body">
+          <div class="help-block">
+            <b>✅ PDDT (Rattana Master) — auto-detect</b><br>
+            <code>PRODUCT NAME</code> / <code>SHORT NAME</code> / <code>CODE EA/PA/BP/CS</code> /
+            <code>PRICE [tier] [unit]</code> / <code>UNIT EA/PA/BP/CS</code> /
+            <code>CAT SIZE</code> / <code>CAT GROUP</code> / <code>SKU_USAGE</code> (รูปภาพ URL)<br><br>
+            <b>📝 หรือ Sheet เปล่า:</b>
+            จำเป็น <code>รหัสสินค้า</code>, <code>ชื่อสินค้า</code>, <code>ราคา</code> +
+            เสริม <code>ราคาเดิม</code>, <code>หน่วย</code>, <code>รูปภาพ</code>, <code>บาร์โค้ด</code>, <code>ประเภทป้าย</code>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== TAB: PRODUCTS ===== -->
+    <div class="tab-pane" id="tab-products">
+      <div class="hero-strip">
+        <div class="hero-content">
+          <div class="hero-title">📦 คลังสินค้ารัตน · PDDT</div>
+          <div class="hero-sub" id="heroSub">กำลังโหลดข้อมูลจาก Google Sheet...</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-num" id="heroTotal">—</div>
+          <div class="hero-num-label">SKUs</div>
+        </div>
+      </div>
+
+      <div class="filter-bar filter-bar-grid">
+        <input class="input input-sm" id="searchBox" placeholder="🔍 ค้นหา ชื่อ / รหัส / บาร์โค้ด..." oninput="renderProducts()">
+        <select class="input input-sm" id="filterCat" onchange="renderProducts()"><option value="">ทุกหมวดหมู่</option></select>
+        <select class="input input-sm" id="filterBrand" onchange="renderProducts()"><option value="">ทุกแบรนด์</option></select>
+        <select class="input input-sm" id="filterVendor" onchange="renderProducts()"><option value="">ทุกผู้ขาย</option></select>
+        <select class="input input-sm" id="filterType" onchange="renderProducts()">
+          <option value="">ทุกประเภท</option>
+          <option value="regular">ราคาปกติ</option>
+          <option value="sale">ลดราคา</option>
+          <option value="new">สินค้าใหม่</option>
+          <option value="bogo">ซื้อ 1 แถม 1</option>
+        </select>
+        <div class="filter-actions">
+          <button class="btn btn-sm btn-outline" onclick="selectAll(true)">✓ เลือก</button>
+          <button class="btn btn-sm btn-outline" onclick="selectAll(false)">✗ ล้าง</button>
+        </div>
+      </div>
+
+      <div class="card card-gold">
+        <div class="card-head">
+          <h3>📦 รายการสินค้า <span class="txt-muted" style="font-weight:400;font-size:12px" id="prodCountInfo"></span></h3>
+          <div><button class="btn btn-sm btn-gold" onclick="switchTab('design')">ถัดไป: ออกแบบ →</button></div>
+        </div>
+        <div class="card-body">
+          <div id="prodGrid" class="prod-grid"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== TAB: DESIGN ===== -->
+    <div class="tab-pane" id="tab-design">
+      <div class="card card-gold">
+        <div class="card-head">
+          <h3>🎨 เลือก Template ป้ายราคา</h3>
+          <div class="txt-muted" style="font-size:12px">คลิกที่สินค้าเพื่อเปลี่ยน Template แต่ละชิ้น</div>
+        </div>
+        <div class="card-body">
+          <div class="help-block">
+            <b>มี 4 แบบให้เลือก:</b> <span style="color:#0d1b3e;font-weight:700">ราคาปกติ</span> /
+            <span style="color:#e74c3c;font-weight:700">ลดราคา</span> /
+            <span style="color:#2ecc71;font-weight:700">สินค้าใหม่</span> /
+            <span style="color:#1a6fb8;font-weight:700">ซื้อ 1 แถม 1</span><br>
+            ถ้าตั้งค่า "ประเภทป้าย" ใน Sheet ระบบจะเลือกให้อัตโนมัติ – กดปุ่มใต้รูปเพื่อเปลี่ยน
+          </div>
+
+          <div class="flex gap-8 mt-12" style="flex-wrap:wrap">
+            <button class="btn btn-sm btn-outline" onclick="bulkSetTemplate('regular')">ตั้งทั้งหมดเป็น: ปกติ</button>
+            <button class="btn btn-sm btn-outline" onclick="bulkSetTemplate('sale')">ลดราคา</button>
+            <button class="btn btn-sm btn-outline" onclick="bulkSetTemplate('new')">ใหม่</button>
+            <button class="btn btn-sm btn-outline" onclick="bulkSetTemplate('bogo')">ซื้อ 1 แถม 1</button>
+          </div>
+
+          <div class="tag-stage mt-16" id="designStage"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== TAB: PRINT ===== -->
+    <div class="tab-pane" id="tab-print">
+      <!-- v4.6 — sticky toolbar: export buttons + image-size slider stay pinned while scrolling the preview -->
+      <div class="print-toolbar">
+        <div class="print-toolbar-btns">
+          <button class="btn btn-gold" onclick="buildPdfPreview()">🔄 อัพเดทพรีวิว</button>
+          <button class="btn btn-success" onclick="exportPDF()">📄 PDF</button>
+          <button class="btn btn-primary" onclick="exportImage('png')">🖼️ PNG</button>
+          <button class="btn btn-primary" onclick="exportImage('jpeg')">📸 JPEG</button>
+        </div>
+        <!-- v4.0 — image size slider (page-wide OR per-image by clicking a picture) -->
+        <div class="img-scale-wrap">
+          <div class="img-scale-bar">
+            <span class="img-scale-label">ขนาดรูป</span>
+            <input type="range" id="imgScale" min="30" max="200" step="5" value="100" oninput="applyImgScale(this.value)">
+            <span class="img-scale-val" id="imgScaleVal">100%</span>
+            <button class="btn btn-sm btn-outline" onclick="resetImgScale()" style="margin-left:4px">↺ รีเซ็ต</button>
+          </div>
+          <div class="img-scale-mode" id="imgScaleMode">🖼️ ปรับทั้งหน้า — <span class="txt-muted">คลิกที่รูปเพื่อปรับเฉพาะรูปนั้น</span></div>
+        </div>
+      </div>
+      <div class="card card-gold">
+        <div class="card-head">
+          <h3>🖨️ พรีวิวและ Export</h3>
+        </div>
+        <div class="card-body">
+          <div class="help-block">
+            ขนาด A4 (210×297 mm) – พิมพ์ 4 ป้ายต่อหน้า – หลังจากได้ PDF ตัดตามรอยตารางได้เลย<br>
+            ✏️ <b>คลิกที่ชื่อสินค้าในพรีวิวเพื่อพิมพ์แก้เองได้</b> · คลิกรูปเพื่อปรับขนาด · ลากรูปเพื่อเลื่อนตำแหน่ง
+          </div>
+          <div class="pdf-stage" id="pdfStage">
+            <div class="empty-state">
+              <div class="emoji">📄</div>
+              <h3>ยังไม่มีสินค้าที่เลือก</h3>
+              <div class="empty-sub">กลับไปแท็บ "เลือกสินค้า" แล้วเลือกสินค้าที่จะพิมพ์</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <button id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+</div>
+
+<!-- Spinner -->
+<div class="spinner-overlay" id="spinner">
+  <div class="spinner-box">
+    <div class="spinner-ring"></div>
+    <p id="spinnerMsg">กำลังโหลด...</p>
+  </div>
+</div>
+
+<!-- User modal -->
+<div class="modal-overlay" id="userModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>👤 ข้อมูลผู้ใช้</h3>
+      <button class="modal-close" onclick="closeUserModal()">×</button>
+    </div>
+    <div class="modal-body" id="userModalBody"></div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeUserModal()">ปิด</button>
+      <button class="btn btn-danger" onclick="logout()">🗑️ ล้างข้อมูล + รีโหลด</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============== CONFIG ============== */
+// 🔒 Hardcoded backend config (v1.5) — no user-facing settings UI
+const SHEET_CONFIG = {
+  sheetId:   '16mYDqAqqJma-_0vCIAajy6bcjdOZ7F6VagxkdkqAB2I',
+  sheetName: 'PDDT',
+  priceTier:     'CC00',          // Regular price tier
+  salePriceTier: '',              // Sale price tier — empty = no sale comparison
+  unitPref:      'EA,PA,BP,CS',   // unit fallback order
+  perPage:       4,               // tags per A4 page: 1 / 2 / 4 / 6
+  // v4.0: Location lookup (Check sheet — barcode → โลเคชัน)
+  locSheetId:    '1OmdfoSmPPA3ueKn624AU-WY6BJxS5iSS4e5YlPgl5nk',
+  locSheetName:  'Check',
+  // v4.0: Warehouse selector (shared by IB filter + RANK sort) + IB filter toggle
+  warehouse:     'W1',         // W1 / W2 / W3 / W4 / C4
+  ibFilter:      false,        // true = keep only products with IB value in chosen warehouse
+  // v4.0: Promo header (Layout 12 / 16)
+  promoTitle:    'โปรโมชั่นเด็ดห้ามพลาด!',
+  promoSubtitle: 'ราคาดีที่สุดในย่าน',
+  promoStart:    '',
+  promoEnd:      '',
+  promoBg:       '',
+};
+// v4.0: barcode → location map (populated by loadLocations on init)
+const locationMap = new Map();
+const AUTH_CONFIG = {
+  clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
+  usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
+  usersSheetName: 'Rattana Users for apps',
+};
+const STORAGE = { user: 'rattanaUser_priceTag', config: 'rattanaPriceTag_cfg', cache: 'rattanaPriceTag_cache' };
+
+/* v4.0 — Safe localStorage write. Returns true if saved, false if quota/error.
+   Never throws, so the app keeps working even when the cache is too big. */
+function safeSetItem(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (e) {
+    // Quota exceeded. Free space by dropping the big product blob (NOT the small,
+    // precious location cache), then retry once.
+    try {
+      if (key !== STORAGE.cache) localStorage.removeItem(STORAGE.cache);
+      localStorage.setItem(key, value);
+      return true;
+    } catch (e2) {
+      console.warn('safeSetItem: too large, skipping persist for', key);
+      return false;
+    }
+  }
+}
+/* v4.3 — รวมสินค้าที่มี barcode (SKU) เดียวกันให้เหลือรายการแรก
+   สินค้าที่ไม่มี SKU เก็บไว้ทั้งหมด (ไม่จับรวม) */
+function dedupeBySku(list) {
+  const seen = new Set();
+  return list.filter(p => {
+    if (!p.sku) return true;
+    if (seen.has(p.sku)) return false;
+    seen.add(p.sku);
+    return true;
+  });
+}
+/* Trim a product to only the fields needed for rendering — keeps the cache small */
+function slimProduct(p) {
+  return {
+    sku: p.sku, name: p.name, price: p.price, oldPrice: p.oldPrice,
+    unit: p.unit, size: p.size, sizeUnit: p.sizeUnit, image: p.image, barcode: p.barcode,
+    tagType: p.tagType, category: p.category, brand: p.brand, vendor: p.vendor,
+    location: p.location, usedUnit: p.usedUnit, promo: p.promo,
+    rank: p.rank, ib: p.ib,   // v4.0 — keep RANK letters + IB flags (tiny)
+    stk: p.stk, sold: p.sold, units: p.units,  // v4.0 — catalog: stock/sales flags + unit strings
+    // allCodes dropped: location is already resolved into `location`
+  };
+}
+
+let currentUser = null;
+let products = [];          // loaded raw products
+let selectedSkus = new Set();
+let tplOverrides = {};      // sku -> 'regular'|'sale'|'new'|'bogo'
+
+/* ============== UTILS ============== */
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+const showSpinner = m => { $('#spinnerMsg').textContent = m || 'กำลังโหลด...'; $('#spinner').classList.add('show'); };
+const hideSpinner = () => $('#spinner').classList.remove('show');
+function showToast(msg, type='info') {
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 3500);
+}
+const normalizeEmail = s => String(s||'').replace(/[​‌‍﻿]/g,'').replace(/\s+/g,'').toLowerCase();
+const fmtThaiBaht = n => {
+  const v = Number(n);
+  if (isNaN(v)) return '-';
+  return v.toLocaleString('th-TH', {minimumFractionDigits: v % 1 === 0 ? 0 : 2, maximumFractionDigits: 2});
+};
+function formatThaiDate(input) {
+  if (!input) return '-';
+  const d = input instanceof Date ? input : new Date(input);
+  if (isNaN(d)) return '-';
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const yyyy = d.getFullYear()+543;
+  const hh = String(d.getHours()).padStart(2,'0');
+  const mi = String(d.getMinutes()).padStart(2,'0');
+  return `${dd}/${mm}/${yyyy} ${hh}.${mi}`;
+}
+function decodeJwtPayload(token) {
+  const parts = String(token||'').split('.');
+  if (parts.length < 2) throw new Error('JWT format invalid');
+  let b64 = parts[1].replace(/-/g,'+').replace(/_/g,'/');
+  const pad = (4 - b64.length % 4) % 4;
+  if (pad) b64 += '='.repeat(pad);
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return JSON.parse(new TextDecoder('utf-8').decode(bytes));
+}
+
+/* ============== CSV ============== */
+function parseCsv(text) {
+  if (!text) return [];
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const rows = []; let row = [], cell = '', inQuote = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuote) {
+      if (ch === '"') { if (text[i+1]==='"'){cell+='"';i++;} else inQuote=false; }
+      else cell += ch;
+    } else {
+      if (ch === '"') inQuote = true;
+      else if (ch === ',') { row.push(cell); cell=''; }
+      else if (ch === '\r') {}
+      else if (ch === '\n') { row.push(cell); rows.push(row); row=[]; cell=''; }
+      else cell += ch;
+    }
+  }
+  if (cell.length || row.length) { row.push(cell); rows.push(row); }
+  if (!rows.length) return [];
+  const clean = s => String(s||'').replace(/[​‌‍﻿]/g,'').replace(/ /g,' ').trim();
+  const headers = rows[0].map(clean);
+  return rows.slice(1).filter(r=>r.some(c=>clean(c))).map(r=>Object.fromEntries(headers.map((k,i)=>[k,clean(r[i])])));
+}
+async function loadFromSheets(sheetId, sheetName) {
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('โหลดข้อมูลไม่สำเร็จ (HTTP '+res.status+')');
+  const text = await res.text();
+  if (text.includes('<html') || text.includes('<!DOCTYPE')) {
+    throw new Error('ไม่สามารถเข้าถึง Sheet ได้ — ตรวจสอบว่า "เผยแพร่ในเว็บ" แล้วหรือยัง');
+  }
+  return parseCsv(text);
+}
+
+/* ============== AUTH ============== */
+async function handleGoogleLogin(r) {
+  showSpinner('กำลังตรวจสอบสิทธิ์...');
+  $('#loginErr').textContent = '';
+  try {
+    const email = normalizeEmail(decodeJwtPayload(r.credential).email);
+    const users = await loadFromSheets(AUTH_CONFIG.usersSheetId, AUTH_CONFIG.usersSheetName);
+    const user = users.find(u => normalizeEmail(u['E-mail']) === email);
+    if (!user) { $('#loginErr').textContent = '❌ ไม่พบอีเมลในระบบ ติดต่อผู้ดูแล'; return; }
+    if (String(user['Status']||'').trim().toLowerCase() !== 'active') {
+      $('#loginErr').textContent = '❌ บัญชีถูกระงับ ติดต่อผู้ดูแล'; return;
+    }
+    currentUser = {
+      email,
+      name: user['ชื่อ - สกุล']||'',
+      nickname: user['ชื่อเล่น']||'',
+      role: parseInt(user['User Role'])||1,
+      dept: user['แผนก']||'',
+      company: user['บริษัท']||'',
+      warehouse: user['W']||'',
+      empId: user['รหัสพนักงาน']||'',
+    };
+    localStorage.setItem(STORAGE.user, JSON.stringify({ data: currentUser, exp: Date.now() + 30*24*60*60*1000 }));
+    showApp();
+  } catch (e) {
+    console.error(e);
+    $('#loginErr').textContent = '❌ '+(e.message || 'เกิดข้อผิดพลาด ลองอีกครั้ง');
+  } finally {
+    hideSpinner();
+  }
+}
+// v1.3 — Login disabled, app starts immediately with guest user
+function startApp() {
+  currentUser = {
+    email: 'guest@rattana.local',
+    name: 'Guest User',
+    nickname: 'แขก',
+    role: 8,            // give full access in open mode
+    dept: '-',
+    company: 'Rattana',
+    warehouse: '-',
+    empId: '-',
+  };
+  initApp();
+}
+function logout() {
+  // In open mode, logout just clears local data and reloads
+  if (confirm('ล้างข้อมูลที่บันทึกไว้ในเครื่องและรีโหลดหน้านี้?')) {
+    localStorage.removeItem(STORAGE.user);
+    localStorage.removeItem(STORAGE.cache);
+    location.reload();
+  }
+}
+
+/* ============== USER MODAL ============== */
+function openUserModal() {
+  const u = currentUser || {};
+  $('#userModalBody').innerHTML = `
+    <div class="field"><label>ชื่อ-สกุล</label><div>${u.name||'-'} ${u.nickname?'('+u.nickname+')':''}</div></div>
+    <div class="field"><label>Email</label><div>${u.email||'-'}</div></div>
+    <div class="field"><label>รหัสพนักงาน</label><div>${u.empId||'-'}</div></div>
+    <div class="field"><label>บริษัท / สาขา</label><div>${u.company||'-'} / ${u.warehouse||'-'}</div></div>
+    <div class="field"><label>แผนก</label><div>${u.dept||'-'}</div></div>
+    <div class="field"><label>User Role</label><div>Level ${u.role||'-'}</div></div>
+  `;
+  $('#userModal').classList.add('open');
+}
+function closeUserModal(){ $('#userModal').classList.remove('open'); }
+
+/* ============== INIT ============== */
+function initApp() {
+  // Init dark mode
+  if (localStorage.getItem('darkMode') === '1') document.body.classList.add('dark');
+
+  // v4.0: Restore ink-save mode
+  if (localStorage.getItem('rattanaPriceTag_inkSave') === '1') {
+    document.body.classList.add('ink-save');
+    if ($('#cfgInkSave')) $('#cfgInkSave').checked = true;
+  }
+  // v4.0: Restore manual price overrides
+  restorePriceOverrides();
+
+  // v4.0: Restore image scale
+  restoreImgScale();
+
+  // v4.4: Click a product image → select it (slider resizes just that image).
+  //       Drag a product image → move (pan) it. Offsets stored per SKU.
+  (function initImgDrag(){
+    const stage = $('#pdfStage');
+    if (!stage) return;
+    let drag = null;   // { sku, img, startX, startY, baseX, baseY, pageScale, moved }
+    stage.addEventListener('dragstart', (e) => { if (e.target.closest('.t-img img, .cat-img img')) e.preventDefault(); });
+    stage.addEventListener('pointerdown', (e) => {
+      const img = e.target.closest('.t-img img, .cat-img img');
+      if (!img || !img.getAttribute('data-imgsku')) { if (selectedImgSku) selectImg(null); return; }
+      const sku = img.getAttribute('data-imgsku');
+      const page = img.closest('.pdf-page');
+      const pageScale = (page && page.offsetWidth) ? (page.getBoundingClientRect().width / page.offsetWidth) : 1;
+      const base = imgPosOverrides[sku] || { x:0, y:0 };
+      drag = { sku, img, startX:e.clientX, startY:e.clientY, baseX:base.x||0, baseY:base.y||0, pageScale:pageScale||1, moved:false };
+      try { img.setPointerCapture(e.pointerId); } catch {}
+      e.preventDefault();
+    });
+    stage.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const totX = e.clientX - drag.startX, totY = e.clientY - drag.startY;
+      if (!drag.moved) {
+        if (Math.hypot(totX, totY) < 4) return;      // small threshold → still a click
+        drag.moved = true;
+        if (selectedImgSku !== drag.sku) { selectedImgSku = drag.sku; updateScaleUI(); }
+        reapplyImgScales();                          // move selection outline once
+      }
+      const nx = +(drag.baseX + totX/drag.pageScale).toFixed(1);
+      const ny = +(drag.baseY + totY/drag.pageScale).toFixed(1);
+      imgPosOverrides[drag.sku] = { x:nx, y:ny };
+      drag.img.style.setProperty('--img-x', nx+'px');
+      drag.img.style.setProperty('--img-y', ny+'px');
+    });
+    const endDrag = (e) => {
+      if (!drag) return;
+      const d = drag; drag = null;
+      try { d.img.releasePointerCapture(e.pointerId); } catch {}
+      if (d.moved) saveImgPos();                      // dragged → persist position
+      else selectImg(d.sku);                          // no move → toggle selection
+    };
+    stage.addEventListener('pointerup', endDrag);
+    stage.addEventListener('pointercancel', endDrag);
+  })();
+
+  // v4.5: Type over a product name / catalog title in the print preview (font Anuphan)
+  restoreNameOverrides();
+  (function initNameEdit(){
+    const stage = $('#pdfStage');
+    if (!stage) return;
+    stage.addEventListener('input', (e) => {
+      const el = e.target.closest('.editable-name[contenteditable]');
+      if (!el) return;
+      const txt = el.textContent.replace(/\s*\n\s*/g,' ');
+      const sku = el.getAttribute('data-namesku');
+      const cat = el.getAttribute('data-cattitle');
+      if (sku != null) {
+        if (txt.trim() === '') delete nameOverrides[sku]; else nameOverrides[sku] = txt;
+        saveNameOverrides();
+      } else if (cat != null) {
+        if (txt.trim() === '') delete catTitleOverrides[cat]; else catTitleOverrides[cat] = txt;
+        saveCatTitleOverrides();
+      }
+    });
+    stage.addEventListener('keydown', (e) => {
+      const el = e.target.closest('.editable-name[contenteditable]');
+      if (!el) return;
+      if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+      else if (e.key === 'Escape') { el.blur(); }
+      e.stopPropagation();
+    });
+  })();
+
+  // v4.0: Init AI Design Studio (populate galleries + apply saved style)
+  initAIStudio();
+
+  // v4.0: Restore location cache + reload in background
+  restoreLocationsFromCache();
+  // loadLocations() re-attaches locations + re-renders the active preview itself (v4.0)
+  loadLocations();
+
+  // Restore saved config into form fields (fallback to SHEET_CONFIG defaults)
+  try {
+    const cfg = JSON.parse(localStorage.getItem(STORAGE.config) || '{}');
+    if (cfg.sheetId)              SHEET_CONFIG.sheetId       = cfg.sheetId;
+    if (cfg.sheetName)            SHEET_CONFIG.sheetName     = cfg.sheetName;
+    if (cfg.priceTier)            SHEET_CONFIG.priceTier     = cfg.priceTier;
+    if (cfg.salePriceTier != null)SHEET_CONFIG.salePriceTier = cfg.salePriceTier;
+    if (cfg.unitPref)             SHEET_CONFIG.unitPref      = cfg.unitPref;
+    if (cfg.perPage)              SHEET_CONFIG.perPage       = cfg.perPage;
+    if (cfg.promoTitle != null)   SHEET_CONFIG.promoTitle    = cfg.promoTitle;
+    if (cfg.promoSubtitle != null)SHEET_CONFIG.promoSubtitle = cfg.promoSubtitle;
+    if (cfg.promoStart != null)   SHEET_CONFIG.promoStart    = cfg.promoStart;
+    if (cfg.promoEnd != null)     SHEET_CONFIG.promoEnd      = cfg.promoEnd;
+    if (cfg.promoBg != null)      SHEET_CONFIG.promoBg       = cfg.promoBg;
+    if (cfg.warehouse)            SHEET_CONFIG.warehouse     = cfg.warehouse;
+    if (cfg.ibFilter != null)     SHEET_CONFIG.ibFilter      = cfg.ibFilter;
+  } catch {}
+  // Fill the setup form
+  if ($('#cfgWarehouse'))     $('#cfgWarehouse').value     = SHEET_CONFIG.warehouse;
+  if ($('#cfgIbFilter'))      $('#cfgIbFilter').checked    = !!SHEET_CONFIG.ibFilter;
+  if ($('#cfgSheetId'))       $('#cfgSheetId').value       = SHEET_CONFIG.sheetId;
+  if ($('#cfgSheetName'))     $('#cfgSheetName').value     = SHEET_CONFIG.sheetName;
+  if ($('#cfgPriceTier'))     $('#cfgPriceTier').value     = SHEET_CONFIG.priceTier;
+  if ($('#cfgSalePriceTier')) $('#cfgSalePriceTier').value = SHEET_CONFIG.salePriceTier;
+  if ($('#cfgUnitPref'))      $('#cfgUnitPref').value      = SHEET_CONFIG.unitPref;
+  if ($('#cfgPerPage'))       $('#cfgPerPage').value       = SHEET_CONFIG.perPage;
+  // v4.0: Promo header form values
+  if ($('#cfgPromoTitle'))    $('#cfgPromoTitle').value    = SHEET_CONFIG.promoTitle;
+  if ($('#cfgPromoSubtitle')) $('#cfgPromoSubtitle').value = SHEET_CONFIG.promoSubtitle;
+  if ($('#cfgPromoStart'))    $('#cfgPromoStart').value    = SHEET_CONFIG.promoStart;
+  if ($('#cfgPromoEnd'))      $('#cfgPromoEnd').value      = SHEET_CONFIG.promoEnd;
+  if ($('#cfgPromoBg'))       $('#cfgPromoBg').value       = SHEET_CONFIG.promoBg;
+
+  // Dynamic header height for sticky tab-nav
+  const setHeaderH = () => {
+    const h = document.querySelector('header');
+    if (h) document.documentElement.style.setProperty('--header-h', h.offsetHeight + 'px');
+  };
+  setHeaderH();
+  window.addEventListener('resize', setHeaderH);
+  window.addEventListener('orientationchange', setHeaderH);
+
+  // Back-to-top
+  window.addEventListener('scroll', () => {
+    $('#backToTop').classList.toggle('show', window.scrollY > 300);
+  });
+
+  // 1) Render cached products instantly (if any) — fast first paint
+  let hasCache = false;
+  try {
+    const cache = JSON.parse(localStorage.getItem(STORAGE.cache) || 'null');
+    if (cache && cache.products && cache.products.length) {
+      products = dedupeBySku(cache.products);   // v4.3 — กันบาร์โค้ดซ้ำจาก cache เก่า
+      hasCache = true;
+      updateStats();
+      renderProducts();
+      $('#heroSub').textContent = `แคชจาก ${formatThaiDate(cache.ts)} — กำลังเช็คข้อมูลใหม่...`;
+    }
+  } catch {}
+
+  // 2) Always fetch fresh from sheet in background (skeleton only if no cache)
+  if (!hasCache) showSkeleton();
+  loadProducts({ silent: hasCache });
+}
+function toggleDark() {
+  document.body.classList.toggle('dark');
+  localStorage.setItem('darkMode', document.body.classList.contains('dark') ? '1' : '0');
+}
+
+/* ============== TABS ============== */
+function switchTab(name) {
+  $$('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  $$('.tab-pane').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
+  if (name === 'design')  renderDesignStage();
+  if (name === 'print')   buildPdfPreview();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+/* ============== LOAD PRODUCTS ============== */
+/* ====================================================================
+   v4.0 — AI DESIGN STUDIO
+   ==================================================================== */
+const AI_BG_GALLERY = [
+  { label: 'Sale Burst',    url: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1200&q=80' },
+  { label: 'Gold Luxury',   url: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=1200&q=80' },
+  { label: 'Festival',      url: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?w=1200&q=80' },
+  { label: 'Fresh Market',  url: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=1200&q=80' },
+  { label: 'Sunset Glow',   url: 'https://images.unsplash.com/photo-1505968409348-bd000797c92e?w=1200&q=80' },
+  { label: 'Tropical',      url: 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?w=1200&q=80' },
+  { label: 'Bokeh Lights',  url: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&q=80' },
+  { label: 'Vintage Paper', url: 'https://images.unsplash.com/photo-1506466010722-395aa2bef877?w=1200&q=80' },
+  { label: 'Neon Cyber',    url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1200&q=80' },
+  { label: 'Confetti',      url: 'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=1200&q=80' },
+  { label: 'Songkran',      url: 'https://images.unsplash.com/photo-1530686577540-37dc8b8a73a8?w=1200&q=80' },
+  { label: 'New Year',      url: 'https://images.unsplash.com/photo-1467810563316-b5476525c0f9?w=1200&q=80' },
+];
+
+const AI_TITLE_PRESETS = [
+  'โปรโมชั่นเด็ดห้ามพลาด!',
+  'ลดสุดๆ ของดีราคาประหยัด',
+  'ราคาทุบสถิติ!',
+  'ช้อปเลย ก่อนของหมด',
+  'พิเศษเฉพาะเดือนนี้',
+  'ดีลเด็ด ห้ามรอ!',
+  'ราคาดีที่สุดในย่าน',
+  'ลดล้างสต๊อก!',
+  'ข้อเสนอสุดพิเศษ',
+  '🔥 ราคาร้อนแรง 🔥',
+  '⚡ เด็ดสุดสัปดาห์นี้ ⚡',
+  '✨ Mid Year Sale ✨',
+];
+
+const HEADER_STYLE_GRADIENTS = {
+  navy:   { bg: 'linear-gradient(135deg,#0a1428 0%,#0d1b3e 45%,#1e293b 100%)', title:'#fbbf24', sub:'#fff',  badge:'linear-gradient(135deg,#fbbf24,#d97706)', text:'#fff' },
+  sunset: { bg: 'linear-gradient(135deg,#dc2626 0%,#ea580c 50%,#fbbf24 100%)', title:'#fff',    sub:'#fff',  badge:'linear-gradient(135deg,#fff,#fde047)',     text:'#7f1d1d' },
+  ocean:  { bg: 'linear-gradient(135deg,#0891b2 0%,#0e7490 45%,#082f49 100%)', title:'#fde047', sub:'#cffafe',badge:'linear-gradient(135deg,#fde047,#fbbf24)',text:'#082f49' },
+  royal:  { bg: 'linear-gradient(135deg,#581c87 0%,#7c3aed 50%,#a855f7 100%)', title:'#fbbf24', sub:'#fff',  badge:'linear-gradient(135deg,#fbbf24,#d97706)',text:'#581c87' },
+  cyber:  { bg: 'linear-gradient(135deg,#020617 0%,#0f172a 50%,#020617 100%)', title:'#22d3ee', sub:'#a855f7',badge:'linear-gradient(135deg,#22d3ee,#a855f7)',text:'#020617' },
+  garden: { bg: 'linear-gradient(135deg,#065f46 0%,#10b981 50%,#86efac 100%)', title:'#fff',    sub:'#d1fae5',badge:'linear-gradient(135deg,#fde047,#fbbf24)',text:'#065f46' },
+};
+
+function applyHeaderStyle(style) {
+  if (!HEADER_STYLE_GRADIENTS[style]) return;
+  SHEET_CONFIG.headerStyle = style;
+  localStorage.setItem('rattanaPriceTag_headerStyle', style);
+  // Update active state in UI
+  document.querySelectorAll('.ai-style').forEach(el => {
+    el.classList.toggle('active', el.dataset.style === style);
+  });
+  // Apply CSS variables for the style to all promo headers
+  const s = HEADER_STYLE_GRADIENTS[style];
+  document.documentElement.style.setProperty('--ph-bg',    s.bg);
+  document.documentElement.style.setProperty('--ph-title', s.title);
+  document.documentElement.style.setProperty('--ph-sub',   s.sub);
+  document.documentElement.style.setProperty('--ph-badge', s.badge);
+  document.documentElement.style.setProperty('--ph-badge-text', s.text);
+  // Re-render previews
+  if ($('#tab-print')?.classList.contains('active')) buildPdfPreview();
+  showToast(`สไตล์ "${style}" ใช้งานแล้ว ✨`, 'success');
+}
+
+function applyPromoBg(url, label) {
+  $('#cfgPromoBg').value = url;
+  SHEET_CONFIG.promoBg = url;
+  document.querySelectorAll('.ai-bg-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.url === url);
+  });
+  // persist
+  const cfg = JSON.parse(localStorage.getItem(STORAGE.config) || '{}');
+  cfg.promoBg = url;
+  safeSetItem(STORAGE.config, JSON.stringify(cfg));
+  if ($('#tab-print')?.classList.contains('active')) buildPdfPreview();
+  if (label) showToast(`ใช้พื้นหลัง "${label}" ✨`, 'success');
+}
+
+function clearPromoBg() {
+  $('#cfgPromoBg').value = '';
+  SHEET_CONFIG.promoBg = '';
+  document.querySelectorAll('.ai-bg-item').forEach(el => el.classList.remove('active'));
+  const cfg = JSON.parse(localStorage.getItem(STORAGE.config) || '{}');
+  cfg.promoBg = '';
+  safeSetItem(STORAGE.config, JSON.stringify(cfg));
+  if ($('#tab-print')?.classList.contains('active')) buildPdfPreview();
+  showToast('ล้างรูปพื้นหลังแล้ว', 'info');
+}
+
+function applyPromoTitle(text) {
+  $('#cfgPromoTitle').value = text;
+  SHEET_CONFIG.promoTitle = text;
+  const cfg = JSON.parse(localStorage.getItem(STORAGE.config) || '{}');
+  cfg.promoTitle = text;
+  safeSetItem(STORAGE.config, JSON.stringify(cfg));
+  if ($('#tab-print')?.classList.contains('active')) buildPdfPreview();
+  showToast(`ใช้ข้อความ "${text}" ✨`, 'success');
+}
+
+function initAIStudio() {
+  // Populate background gallery
+  const grid = $('#aiBgGrid');
+  if (grid) {
+    grid.innerHTML = AI_BG_GALLERY.map(item => `
+      <div class="ai-bg-item" data-url="${escapeAttr(item.url)}"
+           style="background-image:url('${escapeAttr(item.url)}')"
+           onclick="applyPromoBg('${escapeAttr(item.url)}','${escapeAttr(item.label)}')">
+        <div class="ai-bg-item-label">${escapeHtml(item.label)}</div>
+      </div>`).join('');
+  }
+  // Populate title chips
+  const chips = $('#aiTitleChips');
+  if (chips) {
+    chips.innerHTML = AI_TITLE_PRESETS.map(t => `
+      <button class="ai-title-chip" onclick="applyPromoTitle('${escapeAttr(t)}')">${escapeHtml(t)}</button>
+    `).join('');
+  }
+  // Apply saved style (default to navy)
+  const savedStyle = localStorage.getItem('rattanaPriceTag_headerStyle') || 'navy';
+  SHEET_CONFIG.headerStyle = savedStyle;
+  applyHeaderStyle(savedStyle);
+  // Apply saved bg
+  if (SHEET_CONFIG.promoBg) {
+    document.querySelectorAll('.ai-bg-item').forEach(el => {
+      if (el.dataset.url === SHEET_CONFIG.promoBg) el.classList.add('active');
+    });
+  }
+}
+
+/* v4.0 — Ink-saving mode toggle (white bg, minimal color) */
+function toggleInkSave() {
+  const on = $('#cfgInkSave')?.checked || false;
+  document.body.classList.toggle('ink-save', on);
+  localStorage.setItem('rattanaPriceTag_inkSave', on ? '1' : '0');
+  if ($('#tab-design')?.classList.contains('active')) renderDesignStage();
+  if ($('#tab-print')?.classList.contains('active'))  buildPdfPreview();
+}
+
+/* ============== v4.0 — Image scaling: page-wide OR per-image (click to select) ============== */
+let imgScaleGlobal = 100;               // page-wide scale %
+let imgScaleOverrides = {};             // { sku: pct } per-image overrides
+let imgPosOverrides = {};               // v4.4 — { sku: {x,y} } per-image pan offsets (unscaled px)
+let selectedImgSku = null;              // currently selected image (null = whole page)
+function saveImgPos() { safeSetItem('rattanaPriceTag_imgPos', JSON.stringify(imgPosOverrides)); }
+
+function scaleForSku(sku) {
+  return imgScaleOverrides[sku] != null ? imgScaleOverrides[sku] : imgScaleGlobal;
+}
+// Apply the right --img-scale to every product image in the preview
+function reapplyImgScales() {
+  const stage = $('#pdfStage');
+  if (stage) stage.style.setProperty('--img-scale', (imgScaleGlobal/100).toFixed(2));  // base for all
+  document.querySelectorAll('#pdfStage img[data-imgsku]').forEach(img => {
+    const sku = img.getAttribute('data-imgsku');
+    if (imgScaleOverrides[sku] != null) img.style.setProperty('--img-scale', (imgScaleOverrides[sku]/100).toFixed(2));
+    else img.style.removeProperty('--img-scale');   // inherit page-wide from #pdfStage
+    const pos = imgPosOverrides[sku];               // v4.4 — pan offset
+    if (pos && (pos.x || pos.y)) {
+      img.style.setProperty('--img-x', (pos.x||0)+'px');
+      img.style.setProperty('--img-y', (pos.y||0)+'px');
+    } else { img.style.removeProperty('--img-x'); img.style.removeProperty('--img-y'); }
+    img.classList.toggle('img-selected', selectedImgSku === sku);
+  });
+}
+// Slider handler — targets the selected image, or the whole page if none selected
+function applyImgScale(pct) {
+  const v = Math.max(30, Math.min(300, parseInt(pct) || 100));
+  if (selectedImgSku) {
+    imgScaleOverrides[selectedImgSku] = v;
+    safeSetItem('rattanaPriceTag_imgOverrides', JSON.stringify(imgScaleOverrides));
+  } else {
+    imgScaleGlobal = v;
+    localStorage.setItem('rattanaPriceTag_imgScale', String(v));
+  }
+  if ($('#imgScale')) $('#imgScale').value = v;
+  if ($('#imgScaleVal')) $('#imgScaleVal').textContent = v + '%';
+  reapplyImgScales();
+}
+function resetImgScale() {
+  if (selectedImgSku) {
+    delete imgScaleOverrides[selectedImgSku];
+    delete imgPosOverrides[selectedImgSku];        // v4.4 — reset both size + position
+    safeSetItem('rattanaPriceTag_imgOverrides', JSON.stringify(imgScaleOverrides));
+    saveImgPos();
+  } else {
+    imgScaleGlobal = 100; localStorage.setItem('rattanaPriceTag_imgScale', '100');
+  }
+  updateScaleUI(); reapplyImgScales();
+}
+// Select / deselect an image (click). null = deselect → slider controls whole page.
+function selectImg(sku) {
+  selectedImgSku = (sku && sku === selectedImgSku) ? null : sku;   // click same img again → deselect
+  updateScaleUI(); reapplyImgScales();
+}
+function updateScaleUI() {
+  const cur = selectedImgSku ? scaleForSku(selectedImgSku) : imgScaleGlobal;
+  if ($('#imgScale')) $('#imgScale').value = cur;
+  if ($('#imgScaleVal')) $('#imgScaleVal').textContent = cur + '%';
+  const modeEl = $('#imgScaleMode');
+  if (modeEl) {
+    if (selectedImgSku) {
+      const p = products.find(x => x.sku === selectedImgSku);
+      modeEl.innerHTML = `🎯 ปรับรูปนี้: <b>${escapeHtml((p?.name||selectedImgSku).slice(0,20))}</b> <span class="txt-muted">· ลากรูปเพื่อเลื่อนตำแหน่ง</span> <button class="btn btn-sm btn-outline" onclick="selectImg(null)" style="margin-left:4px">↩ ปรับทั้งหน้า</button>`;
+      modeEl.classList.add('targeted');
+    } else {
+      modeEl.innerHTML = `🖼️ ปรับทั้งหน้า — <span class="txt-muted">คลิกที่รูปเพื่อเลือก · ลากรูปเพื่อเลื่อนตำแหน่ง</span>`;
+      modeEl.classList.remove('targeted');
+    }
+  }
+}
+function restoreImgScale() {
+  imgScaleGlobal = parseInt(localStorage.getItem('rattanaPriceTag_imgScale')) || 100;
+  try { imgScaleOverrides = JSON.parse(localStorage.getItem('rattanaPriceTag_imgOverrides') || '{}'); } catch { imgScaleOverrides = {}; }
+  try { imgPosOverrides = JSON.parse(localStorage.getItem('rattanaPriceTag_imgPos') || '{}'); } catch { imgPosOverrides = {}; }
+  selectedImgSku = null;
+  updateScaleUI();
+  reapplyImgScales();
+}
+
+/* v4.5 — Editable names in the PRINT preview (type over the name/title, font Anuphan) */
+let nameOverrides = {};       // sku → custom product name (tags)
+let catTitleOverrides = {};   // catalog group key (CAT SIZE) → custom title
+function restoreNameOverrides() {
+  try { nameOverrides = JSON.parse(localStorage.getItem('rattanaPriceTag_nameOv') || '{}'); } catch { nameOverrides = {}; }
+  try { catTitleOverrides = JSON.parse(localStorage.getItem('rattanaPriceTag_catTitleOv') || '{}'); } catch { catTitleOverrides = {}; }
+}
+function saveNameOverrides() { safeSetItem('rattanaPriceTag_nameOv', JSON.stringify(nameOverrides)); }
+function saveCatTitleOverrides() { safeSetItem('rattanaPriceTag_catTitleOv', JSON.stringify(catTitleOverrides)); }
+// Product name cell — editable only in the print preview (idPrefix starts with 'pdf-p')
+function nameCellHtml(p, editable) {
+  const shown = nameOverrides[p.sku] != null ? nameOverrides[p.sku] : (p.name || '');
+  const attrs = editable ? ` contenteditable="true" data-namesku="${escapeAttr(p.sku)}" spellcheck="false" title="คลิกเพื่อพิมพ์แก้ชื่อ"` : '';
+  return `<div class="t-name${editable ? ' editable-name' : ''}"${attrs}>${escapeHtml(shown)}</div>`;
+}
+
+/* v4.0 — Per-product price override (manual edit in design tab) */
+const priceOverrides = {};   // sku → { price, oldPrice }
+function openPriceEditor(sku) {
+  const p = products.find(x => x.sku === sku);
+  if (!p) return;
+  const cur = priceOverrides[sku] || { price: p.price, oldPrice: p.oldPrice };
+  const newPrice = prompt(`✏️ แก้ราคาของ "${p.name}"\n\nราคาปัจจุบัน: ${p.price} บาท\n\nใส่ราคาใหม่:`, cur.price);
+  if (newPrice === null) return;
+  const np = parseFloat(String(newPrice).replace(/,/g,'')) || 0;
+  if (np <= 0) { showToast('ราคาไม่ถูกต้อง', 'error'); return; }
+  const newOld = prompt('💸 ราคาเดิม (สำหรับขีดฆ่าเปรียบเทียบ)\n\nใส่ 0 ถ้าไม่ต้องการแสดง:', cur.oldPrice || 0);
+  if (newOld === null) return;
+  const no = parseFloat(String(newOld).replace(/,/g,'')) || 0;
+  priceOverrides[sku] = { price: np, oldPrice: no };
+  p.price = np;
+  p.oldPrice = no;
+  safeSetItem('rattanaPriceTag_priceOverrides', JSON.stringify(priceOverrides));
+  renderDesignStage();
+  showToast('✅ อัพเดทราคาแล้ว', 'success');
+}
+function resetPriceOverride(sku) {
+  if (!confirm('คืนค่าราคาเดิมจาก Sheet?')) return;
+  delete priceOverrides[sku];
+  safeSetItem('rattanaPriceTag_priceOverrides', JSON.stringify(priceOverrides));
+  try {
+    const cache = JSON.parse(localStorage.getItem(STORAGE.cache) || 'null');
+    if (cache && cache.products) {
+      const orig = cache.products.find(x => x.sku === sku);
+      const p = products.find(x => x.sku === sku);
+      if (orig && p) { p.price = orig.price; p.oldPrice = orig.oldPrice; }
+    }
+  } catch {}
+  renderDesignStage();
+  showToast('คืนค่าราคาเดิมแล้ว', 'info');
+}
+function restorePriceOverrides() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('rattanaPriceTag_priceOverrides') || '{}');
+    Object.assign(priceOverrides, saved);
+    products.forEach(p => {
+      const o = priceOverrides[p.sku];
+      if (o) { p.price = o.price; p.oldPrice = o.oldPrice; }
+    });
+  } catch {}
+}
+
+/* v4.0 — Re-render whichever preview is currently visible (after async data lands) */
+function refreshActivePreview() {
+  if ($('#tab-design')?.classList.contains('active')) renderDesignStage();
+  if ($('#tab-print')?.classList.contains('active'))  buildPdfPreview();
+}
+/* Normalize a code for matching: strip spaces, zero-width, leading apostrophe */
+function normCode(s) {
+  return String(s||'').replace(/[​‌‍﻿\s']/g,'').trim();
+}
+/* Attach location to a product by trying every code it carries */
+function lookupLocation(p) {
+  const candidates = [p.sku, p.barcode, ...(p.allCodes||[])];
+  for (const c of candidates) {
+    const key = normCode(c);
+    if (key && locationMap.has(key)) return locationMap.get(key);
+  }
+  return '';
+}
+
+/* v4.0 — Load Check sheet → barcode→location lookup (robust + auto re-render) */
+async function loadLocations() {
+  try {
+    const rows = await loadFromSheets(SHEET_CONFIG.locSheetId, SHEET_CONFIG.locSheetName);
+    locationMap.clear();
+    rows.forEach(r => {
+      const bc  = normCode(r['บาร์โค้ด']);
+      const loc = String(r['โลเคชัน']||'').trim();
+      if (bc && loc) locationMap.set(bc, loc);
+    });
+    // Persist for fast subsequent loads
+    safeSetItem('rattanaPriceTag_locCache', JSON.stringify({
+      ts: Date.now(),
+      pairs: Array.from(locationMap.entries()),
+    }));
+    // Re-attach location to every loaded product
+    products.forEach(p => { p.location = lookupLocation(p); });
+    // Re-render whatever preview is open so locations appear immediately
+    refreshActivePreview();
+    return locationMap.size;
+  } catch (e) {
+    console.warn('loadLocations failed:', e);
+    return 0;
+  }
+}
+function restoreLocationsFromCache() {
+  try {
+    const raw = localStorage.getItem('rattanaPriceTag_locCache');
+    if (!raw) return;
+    const { pairs } = JSON.parse(raw);
+    if (Array.isArray(pairs)) pairs.forEach(([k,v]) => locationMap.set(normCode(k), v));
+    // Apply to any products already in memory
+    products.forEach(p => { p.location = lookupLocation(p); });
+  } catch {}
+}
+
+async function loadProducts(opts = {}) {
+  const silent = opts.silent === true;  // when loading from cache in background
+  // Read from form fields if available (so users can change Sheet on the fly),
+  // fall back to SHEET_CONFIG defaults
+  const sheetId   = ($('#cfgSheetId')?.value || '').trim()   || SHEET_CONFIG.sheetId;
+  const sheetName = ($('#cfgSheetName')?.value || '').trim() || SHEET_CONFIG.sheetName;
+  SHEET_CONFIG.sheetId       = sheetId;
+  SHEET_CONFIG.sheetName     = sheetName;
+  SHEET_CONFIG.priceTier     = $('#cfgPriceTier')?.value     || SHEET_CONFIG.priceTier;
+  SHEET_CONFIG.salePriceTier = $('#cfgSalePriceTier')?.value ?? SHEET_CONFIG.salePriceTier;
+  SHEET_CONFIG.unitPref      = $('#cfgUnitPref')?.value      || SHEET_CONFIG.unitPref;
+  { const pv = $('#cfgPerPage')?.value;
+    SHEET_CONFIG.perPage = (pv === 'cat12') ? 'cat12' : (parseInt(pv) || SHEET_CONFIG.perPage); }
+  // v4.0: Promo header
+  SHEET_CONFIG.promoTitle    = $('#cfgPromoTitle')?.value    ?? SHEET_CONFIG.promoTitle;
+  SHEET_CONFIG.promoSubtitle = $('#cfgPromoSubtitle')?.value ?? SHEET_CONFIG.promoSubtitle;
+  SHEET_CONFIG.promoStart    = $('#cfgPromoStart')?.value    ?? SHEET_CONFIG.promoStart;
+  SHEET_CONFIG.promoEnd      = $('#cfgPromoEnd')?.value      ?? SHEET_CONFIG.promoEnd;
+  SHEET_CONFIG.promoBg       = $('#cfgPromoBg')?.value       ?? SHEET_CONFIG.promoBg;
+  // v4.0: warehouse + IB filter
+  SHEET_CONFIG.warehouse     = $('#cfgWarehouse')?.value     || SHEET_CONFIG.warehouse;
+  SHEET_CONFIG.ibFilter      = $('#cfgIbFilter')?.checked    ?? SHEET_CONFIG.ibFilter;
+  // Persist
+  safeSetItem(STORAGE.config, JSON.stringify({
+    sheetId, sheetName,
+    priceTier:     SHEET_CONFIG.priceTier,
+    salePriceTier: SHEET_CONFIG.salePriceTier,
+    unitPref:      SHEET_CONFIG.unitPref,
+    perPage:       SHEET_CONFIG.perPage,
+    promoTitle:    SHEET_CONFIG.promoTitle,
+    promoSubtitle: SHEET_CONFIG.promoSubtitle,
+    promoStart:    SHEET_CONFIG.promoStart,
+    promoEnd:      SHEET_CONFIG.promoEnd,
+    promoBg:       SHEET_CONFIG.promoBg,
+    warehouse:     SHEET_CONFIG.warehouse,
+    ibFilter:      SHEET_CONFIG.ibFilter,
+  }));
+
+  if (!silent) {
+    $('#heroSub').textContent = 'กำลังโหลดข้อมูลจาก Google Sheet...';
+    showSkeleton();
+  }
+
+  try {
+    const rows = await loadFromSheets(sheetId, sheetName);
+    if (!rows.length) {
+      $('#heroSub').textContent = 'ไม่พบข้อมูลในแท็บ';
+      showToast('ไม่พบข้อมูลในแท็บ ' + sheetName, 'warning');
+      return;
+    }
+    products = rows.map(r => normalizeProduct(r)).filter(p => p.name);
+    // v4.3 — รวมสินค้าที่ barcode (SKU) ซ้ำให้เหลือรายการเดียว (กันคลิกเลือกแล้วติดพร้อมกัน)
+    const dupRemoved = products.length; products = dedupeBySku(products);
+    if (!silent && products.length < dupRemoved) showToast(`รวมสินค้าบาร์โค้ดซ้ำ ${dupRemoved - products.length} รายการ`, 'info');
+    // v4.0: IB filter — keep only products that have an IB value in the chosen warehouse
+    if (SHEET_CONFIG.ibFilter) {
+      const wh = SHEET_CONFIG.warehouse;
+      const before = products.length;
+      products = products.filter(p => p.ib && p.ib[wh]);
+      if (!silent) showToast(`กรอง IB ${wh}: เหลือ ${products.length} จาก ${before} รายการ`, 'info');
+    }
+    // Cache slimmed products (drops allCodes etc.) — safe against quota limits
+    const saved = safeSetItem(STORAGE.cache, JSON.stringify({ products: products.map(slimProduct), ts: Date.now() }));
+    if (!saved) showToast('ℹ️ ข้อมูลเยอะเกินกว่าจะ cache — จะโหลดใหม่ทุกครั้ง (ใช้งานได้ปกติ)', 'info');
+    selectedSkus.clear();
+    tplOverrides = {};
+    updateStats();
+    renderProducts();
+    $('#heroSub').textContent = `อัพเดทล่าสุด ${formatThaiDate(Date.now())}`;
+    if (!silent) showToast(`โหลดสินค้า ${products.length} รายการ`, 'success');
+  } catch (e) {
+    console.error(e);
+    $('#heroSub').textContent = '❌ ' + (e.message || 'โหลดข้อมูลไม่สำเร็จ');
+    showToast(e.message || 'โหลดข้อมูลไม่สำเร็จ', 'error');
+  }
+}
+async function refreshData() {
+  const b = $('#btnRefresh');
+  b.disabled = true; b.style.transform = 'rotate(360deg)'; b.style.transition = 'transform .6s';
+  await loadProducts();
+  b.disabled = false; setTimeout(()=>{ b.style.transform = ''; b.style.transition = ''; }, 600);
+  showToast('อัพเดทข้อมูลแล้ว ✓', 'success');
+}
+
+/* Skeleton loading state */
+function showSkeleton() {
+  const grid = $('#prodGrid');
+  if (!grid) return;
+  const n = 12;
+  const html = Array.from({length:n}).map(() => `
+    <div class="skel-card">
+      <div class="skel skel-img"></div>
+      <div class="skel-body">
+        <div class="skel skel-line" style="width:40%"></div>
+        <div class="skel skel-line lg"></div>
+        <div class="skel skel-line price"></div>
+      </div>
+    </div>`).join('');
+  grid.innerHTML = html;
+  $('#prodCountInfo').textContent = '';
+}
+
+/* Google Drive URL → browser-displayable.
+   Uses lh3.googleusercontent.com (works for cross-origin img tags + html2canvas) */
+function fixImageUrl(url) {
+  url = String(url||'').trim();
+  if (!url) return '';
+  if (url.includes('drive.google.com') || url.includes('googleusercontent.com')) {
+    const m = url.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+           || url.match(/\/d\/([a-zA-Z0-9_-]+)/)
+           || url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (m) return `https://lh3.googleusercontent.com/d/${m[1]}=w600`;
+  }
+  return url;
+}
+
+/* Normalize row → standard product object */
+function normalizeProduct(r) {
+  // Detect PDDT (Rattana Master) format
+  const isPDDT = ('PRODUCT NAME' in r) && (('CODE EA' in r) || ('CODE CS' in r));
+  if (isPDDT) return normalizePDDT(r);
+
+  // Generic format
+  const get = (...keys) => {
+    for (const k of keys) {
+      if (r[k] != null && String(r[k]).trim() !== '') return String(r[k]).trim();
+    }
+    return '';
+  };
+  const sku   = get('รหัสสินค้า','SKU','sku','รหัส','Code');
+  const name  = get('ชื่อสินค้า','ชื่อ','Name','name','Product');
+  const price = parseFloat(get('ราคา','ราคาขาย','Price','price').replace(/,/g,'')) || 0;
+  const oldPrice = parseFloat(get('ราคาเดิม','ราคาก่อนลด','OldPrice').replace(/,/g,'')) || 0;
+  const unit  = get('หน่วย','Unit','unit') || 'บาท';
+  const size  = get('ขนาด','ปริมาณ','Size','size');
+  const image = fixImageUrl(get('รูปภาพ','รูป','Image','image','URL'));
+  const barcode = get('บาร์โค้ด','Barcode','barcode','EAN');
+  const tagTypeRaw = get('ประเภทป้าย','ประเภท','TagType','Type').toLowerCase();
+  const promo = get('โปรโมชั่น','โปร','Promo','promo');
+  const category = get('หมวดหมู่','หมวด','Category','category');
+
+  let tagType = 'regular';
+  if (/ลด|sale|discount/i.test(tagTypeRaw))           tagType = 'sale';
+  else if (/ใหม่|new|recommend|แนะนำ/i.test(tagTypeRaw)) tagType = 'new';
+  else if (/แถม|bogo|คู่|pair/i.test(tagTypeRaw))     tagType = 'bogo';
+  else if (oldPrice > price)                          tagType = 'sale';
+
+  const prod = { sku, name, price, oldPrice, unit, size, image, barcode, tagType, promo, category, allCodes:[sku,barcode].filter(Boolean) };
+  prod.location = lookupLocation(prod);
+  return prod;
+}
+
+/* Normalize PDDT (Rattana master) row */
+function normalizePDDT(r) {
+  const tier = SHEET_CONFIG.priceTier;
+  const preferred = SHEET_CONFIG.unitPref.split(',').map(s => s.trim()).filter(Boolean);
+
+  // Pick first preferred unit that has BOTH a code AND a price
+  let sku = '', price = 0, unit = 'บาท', usedUnit = '';
+  for (const u of preferred) {
+    const code = String(r[`CODE ${u}`]||'').trim();
+    const priceRaw = String(r[`PRICE ${tier} ${u}`]||'').replace(/,/g,'').trim();
+    const p = parseFloat(priceRaw);
+    if (code && !isNaN(p) && p > 0) {
+      sku = code;
+      price = p;
+      const unitDesc = String(r[`UNIT ${u}`]||'').trim();
+      unit = unitDesc || u;
+      usedUnit = u;
+      break;
+    }
+  }
+  // Fallback: any unit with at least a code (no price)
+  if (!sku) {
+    for (const u of preferred) {
+      const code = String(r[`CODE ${u}`]||'').trim();
+      if (code) {
+        sku = code;
+        unit = String(r[`UNIT ${u}`]||'').trim() || u;
+        usedUnit = u;
+        break;
+      }
+    }
+  }
+
+  const fullName = String(r['PRODUCT NAME']||'').trim();
+  const name = String(r['SHORT NAME']||'').trim() || fullName;
+  const size = String(r['CAT SIZE']||'').trim();
+  const sizeUnit = deriveSizeUnit(size, fullName);   // v4.2 — หน่วยที่จะต่อท้าย CAT SIZE (มล./ก. …)
+  const category = String(r['CAT GROUP']||r['CAT TYPE']||'').trim();
+  const brand = String(r['CAT BRAND']||'').trim();
+  const vendor = String(r['VENDOR NAME']||r['CAT VENDOR']||'').trim();
+  const image = fixImageUrl(r['SKU_USAGE']||'');
+  const barcode = sku; // CODE EA/CS look like barcodes
+  // v4.0 — keep ALL unit codes so location lookup matches whichever the Check sheet uses
+  const allCodes = ['EA','PA','BP','CS']
+    .map(u => String(r[`CODE ${u}`]||'').trim())
+    .filter(Boolean);
+
+  // v4.0 — RANK letter + IB / STOCK / SALES flags per warehouse
+  const WHS = ['W1','W2','W3','W4','C4'];
+  const rank = {};   // {W1:'A', ...}
+  const ib   = {};   // {W1:true/false, ...} — true if IB column has a value
+  const stk  = {};   // {W1:true/false, ...} — true if STOCK > 0
+  const sold = {};   // {W1:true/false, ...} — true if AVERAGE 60D > 0
+  WHS.forEach(w => {
+    rank[w] = String(r[`RANK ${w}`]||'').trim();
+    ib[w]   = String(r[`IB ${w}`]||'').trim() !== '';
+    stk[w]  = (parseFloat(String(r[`STOCK ${w}`]||'').replace(/,/g,'')) || 0) > 0;
+    sold[w] = (parseFloat(String(r[`AVERAGE 60D_${w}`]||'').replace(/,/g,'')) || 0) > 0;
+  });
+  // v4.0 — packaging unit strings for catalog display
+  const units = {
+    EA: String(r['UNIT EA']||'').trim(),
+    PA: String(r['UNIT PA']||'').trim(),
+    BP: String(r['UNIT BP']||'').trim(),
+    CS: String(r['UNIT CS']||'').trim(),
+  };
+
+  // Compute sale price from salePriceTier if set
+  // Note: We keep tagType='regular' (Rattana Mart premium style) by default
+  // even when sale detected — the regular template shows struck-through old price.
+  // User can manually switch to 'sale' template (red circle) via the picker.
+  let finalPrice = price;
+  let oldPrice = 0;
+  let tagType = 'regular';
+  if (SHEET_CONFIG.salePriceTier && usedUnit && price > 0) {
+    const saleRaw = String(r[`PRICE ${SHEET_CONFIG.salePriceTier} ${usedUnit}`]||'').replace(/,/g,'').trim();
+    const sp = parseFloat(saleRaw);
+    if (!isNaN(sp) && sp > 0 && sp < price) {
+      oldPrice = price;        // original price (will be struck through)
+      finalPrice = sp;          // discounted price (shown big)
+      // tagType stays 'regular' — Rattana Mart subtle premium look
+    }
+  }
+
+  const prod = {
+    sku, name, price: finalPrice, oldPrice, unit, size, sizeUnit, image, barcode,
+    tagType, promo: '', category, brand, vendor, usedUnit, allCodes, rank, ib, stk, sold, units,
+  };
+  // v4.0: look up location by any of the product's codes
+  prod.location = lookupLocation(prod);
+  return prod;
+}
+
+/* ============== STATS ============== */
+function updateStats() {
+  // Hero total (formatted with commas)
+  const heroEl = $('#heroTotal');
+  if (heroEl) heroEl.textContent = products.length.toLocaleString('en-US');
+
+  // Setup tab stat cards
+  if ($('#statTotal')) $('#statTotal').textContent = products.length;
+  if ($('#statImage')) $('#statImage').textContent = products.filter(p => p.image).length;
+  if ($('#statSale'))  $('#statSale').textContent  = products.filter(p => p.oldPrice > p.price || p.tagType === 'sale').length;
+  if ($('#statCat'))   $('#statCat').textContent   = new Set(products.map(p => p.category).filter(Boolean)).size;
+  if ($('#cardLoadStatus') && products.length) $('#cardLoadStatus').style.display = 'block';
+  if ($('#lastLoad')) $('#lastLoad').textContent  = formatThaiDate(Date.now());
+
+  // Update category / brand / vendor filters
+  const populate = (id, label, key) => {
+    const el = $(id); if (!el) return;
+    const prev = el.value;
+    const items = [...new Set(products.map(p => p[key]).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));
+    el.innerHTML = `<option value="">${label}</option>` + items.map(c => `<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`).join('');
+    if (prev && items.includes(prev)) el.value = prev;
+  };
+  populate('#filterCat',    'ทุกหมวดหมู่', 'category');
+  populate('#filterBrand',  'ทุกแบรนด์',   'brand');
+  populate('#filterVendor', 'ทุกผู้ขาย',  'vendor');
+}
+
+/* ============== PRODUCT GRID ============== */
+function filterProducts() {
+  const q       = $('#searchBox').value.trim().toLowerCase();
+  const cat     = $('#filterCat').value;
+  const brand   = $('#filterBrand')?.value || '';
+  const vendor  = $('#filterVendor')?.value || '';
+  const type    = $('#filterType').value;
+  // v4.7 — catalog mode: show products with STOCK > 0 OR sales(AVERAGE 60D) > 0 in the chosen warehouse (either one)
+  const catalogMode = SHEET_CONFIG.perPage === 'cat12';
+  const wh = SHEET_CONFIG.warehouse || 'W1';
+  return products.filter(p => {
+    if (catalogMode && !((p.stk && p.stk[wh]) || (p.sold && p.sold[wh]))) return false;
+    if (cat    && p.category !== cat)    return false;
+    if (brand  && p.brand    !== brand)  return false;
+    if (vendor && p.vendor   !== vendor) return false;
+    if (type && (tplOverrides[p.sku] || p.tagType) !== type) return false;
+    if (q) {
+      const hay = (p.name + ' ' + p.sku + ' ' + p.barcode + ' ' + p.category + ' ' + p.brand + ' ' + p.vendor).toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+const RENDER_LIMIT = 300;
+function renderProducts() {
+  if (!products.length) {
+    $('#prodGrid').innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="emoji">📦</div><h3>ยังไม่มีข้อมูล</h3><div class="empty-sub">รอข้อมูลจาก Google Sheet... ถ้าโหลดไม่ขึ้นภายใน 10 วินาที กดปุ่ม ⟳ ที่หัวจอ</div></div>`;
+    $('#prodCountInfo').textContent = '';
+    return;
+  }
+  const list = filterProducts();
+  const capped = list.slice(0, RENDER_LIMIT);
+  const overflow = list.length - capped.length;
+  $('#prodCountInfo').textContent = `(แสดง ${capped.length} จาก ${products.length} รายการ · เลือกแล้ว ${selectedSkus.size})${overflow > 0 ? ' ⚠️ ค้นหาเพิ่มเพื่อดูที่เหลืออีก '+overflow : ''}`;
+  $('#badgeSelected').textContent = selectedSkus.size;
+
+  const html = capped.map(p => {
+    const sel = selectedSkus.has(p.sku) ? 'selected' : '';
+    const type = tplOverrides[p.sku] || p.tagType;
+    const badgeMap = {
+      sale: { txt:'🔥 ลด', bg:'linear-gradient(135deg,#f87171,#dc2626)' },
+      new:  { txt:'✨ ใหม่', bg:'linear-gradient(135deg,#34d399,#059669)' },
+      bogo: { txt:'🎁 1+1', bg:'linear-gradient(135deg,#60a5fa,#2563eb)' },
+    };
+    const badge = badgeMap[type];
+    return `
+      <div class="prod-card ${sel}" onclick="toggleSelect('${escapeAttr(p.sku)}')">
+        ${badge ? `<div class="p-badge" style="background:${badge.bg}">${badge.txt}</div>` : ''}
+        <div class="p-check">✓</div>
+        <div class="p-img">${p.image ? `<img src="${escapeAttr(p.image)}" onerror="this.parentElement.innerHTML='📦'" alt="" loading="lazy">` : '📦'}</div>
+        <div class="p-info">
+          <div class="p-sku">${escapeHtml(p.sku||'-')}</div>
+          <div class="p-name">${escapeHtml(p.name||'-')}</div>
+          <div class="p-price-row">
+            <span class="p-price">฿${fmtThaiBaht(p.price)}</span>
+            ${p.oldPrice > p.price ? `<span class="p-old">฿${fmtThaiBaht(p.oldPrice)}</span>` : ''}
+          </div>
+          ${p.unit ? `<div class="p-unit">${escapeHtml(p.unit)}</div>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+  $('#prodGrid').innerHTML = html || `<div class="empty-state" style="grid-column:1/-1"><div class="emoji">🔍</div><h3>ไม่พบสินค้าตามที่ค้นหา</h3></div>`;
+}
+function toggleSelect(sku) {
+  if (selectedSkus.has(sku)) selectedSkus.delete(sku);
+  else selectedSkus.add(sku);
+  renderProducts();
+}
+const SELECT_CAP = 200;
+function selectAll(on) {
+  const list = filterProducts();
+  if (on) {
+    if (list.length > SELECT_CAP) {
+      if (!confirm(`มีสินค้า ${list.length} รายการ — เลือกได้สูงสุด ${SELECT_CAP} รายการต่อครั้ง\nจะเลือกเฉพาะ ${SELECT_CAP} รายการแรก ตกลงไหม?`)) return;
+    }
+    list.slice(0, SELECT_CAP).forEach(p => selectedSkus.add(p.sku));
+  } else {
+    list.forEach(p => selectedSkus.delete(p.sku));
+  }
+  renderProducts();
+}
+
+/* ============== TAG RENDERING ============== */
+function getTplType(p) { return tplOverrides[p.sku] || p.tagType || 'regular'; }
+
+function renderTag(p, idPrefix='tag', perPage) {
+  const type = getTplType(p);
+  const tagId = `${idPrefix}-${cssId(p.sku)}`;
+  const qrId  = `qr-${idPrefix}-${cssId(p.sku)}`;
+  const bcId  = `bc-${idPrefix}-${cssId(p.sku)}`;
+  const editable = String(idPrefix).startsWith('pdf-p');   // v4.5 — name editable only in print preview
+  const nameHtml = nameCellHtml(p, editable);
+
+  const imgHtml = p.image
+    ? `<img src="${escapeAttr(p.image)}" data-imgsku="${escapeAttr(p.sku)}" onerror="this.style.display='none';this.parentElement.innerHTML='<div class=t-img-empty>📦</div>'" alt="" crossorigin="anonymous">`
+    : `<div class="t-img-empty">📦</div>`;
+
+  // v4.0 — MINI LABEL (Layout 30): image + name + barcode only, no price/location/brand
+  if (perPage === 30) {
+    const html = `
+      <div class="tag tpl-mini" id="${tagId}">
+        <div class="t-img">${imgHtml}</div>
+        ${nameHtml}
+        <div class="t-mini-bc" id="${bcId}"></div>
+        <div class="t-mini-code">${escapeHtml(p.barcode||p.sku||'')}</div>
+      </div>`;
+    return { html, qrId, bcId };
+  }
+
+  // v4.0 — Footer: SKU + Barcode + Location (matches any of the product's codes)
+  const locText = p.location || lookupLocation(p);
+  const footer = `
+    <div class="t-foot">
+      <div class="t-sku">${escapeHtml(p.sku||'')}</div>
+      <div id="${bcId}"></div>
+      ${locText ? `<div class="t-loc"><span class="t-loc-icon">📍</span><span class="t-loc-text">${escapeHtml(locText)}</span></div>` : ''}
+    </div>`;
+  // v4.0 — Brand chip (small Rattana Mart cart icon + name, top-left of every tag)
+  const brandChip = `
+    <div class="t-brand">
+      <svg class="t-brand-icon" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <g fill="#fbbf24">
+          <rect x="19" y="34" width="11" height="6" rx="1.5"/>
+          <path d="M30 42 L80 42 L80 49 L30 49 Z"/>
+          <path d="M32 52 L80 52 L74 71 L43 71 Z"/>
+          <circle cx="48" cy="78" r="5"/>
+          <circle cx="66" cy="78" r="5"/>
+        </g>
+      </svg>
+      <span class="t-brand-text">RATTANA <b>MART</b></span>
+    </div>`;
+
+  const priceStr = fmtThaiBaht(p.price);
+  const escName = escapeHtml(p.name);
+  const escUnit = escapeHtml(p.unit||'บาท');
+  const escSize = p.size ? escapeHtml(p.size) : '';
+
+  let html = '';
+
+  if (type === 'sale') {
+    /* v4.0 SALE — Premium navy+gold with red ribbon + SALE badge on price card */
+    html = `
+      <div class="tag tpl-sale" id="${tagId}">
+        <div class="t-sale-ribbon">★ LIMITED ★</div>
+        <div class="t-img">${imgHtml}</div>
+        <div class="t-info">
+          <div class="t-info-left">
+            ${nameHtml}
+            <div class="t-unit-row"><span class="t-unit-pill">${escUnit}</span></div>
+            ${p.oldPrice > p.price ? `<div class="t-old-line">ราคาปกติ <s>${fmtThaiBaht(p.oldPrice)} บาท</s></div>` : `<div class="t-old-line">★ ลดราคาพิเศษ ★</div>`}
+          </div>
+          <div class="t-price-card">
+            <div class="t-price-label">เพียง</div>
+            <div class="t-price">${priceStr}.-</div>
+          </div>
+        </div>
+        ${footer}
+        ${brandChip}
+      </div>`;
+  } else if (type === 'new') {
+    /* v4.0 NEW — Premium navy+gold with green NEW ribbon + ✦ ใหม่ ✦ badge */
+    html = `
+      <div class="tag tpl-new" id="${tagId}">
+        <div class="t-new-ribbon">✦ NEW ✦</div>
+        <div class="t-img">${imgHtml}</div>
+        <div class="t-info">
+          <div class="t-info-left">
+            ${nameHtml}
+            <div class="t-unit-row"><span class="t-unit-pill">${escUnit}</span></div>
+            ${escSize ? `<div class="t-size">${escSize}</div>` : `<div class="t-size">★ สินค้าใหม่ พรีเซ็นเตอร์ ★</div>`}
+          </div>
+          <div class="t-price-card">
+            <div class="t-price-label">ราคาเปิดตัว</div>
+            <div class="t-price">${priceStr}.-</div>
+          </div>
+        </div>
+        ${footer}
+        ${brandChip}
+      </div>`;
+  } else if (type === 'bogo') {
+    /* v4.0 BOGO — Premium navy+gold + MEGA yellow promo banner + 1+1 badge on price card */
+    const promoText = escapeHtml(p.promo || 'ซื้อ 1 แถม 1 ฟรี');
+    html = `
+      <div class="tag tpl-bogo" id="${tagId}">
+        <div class="t-img">${imgHtml}</div>
+        <div class="t-info">
+          <div class="t-info-left">
+            ${nameHtml}
+            <span class="t-unit-pill">${escUnit}</span>
+            <div class="t-promo-banner">${promoText}</div>
+            ${p.oldPrice > p.price ? `<div class="t-old-line">ปกติ ${fmtThaiBaht(p.oldPrice)} บาท</div>` : ''}
+          </div>
+          <div class="t-price-card">
+            <div class="t-price-label">เพียง</div>
+            <div class="t-price">${priceStr}.-</div>
+          </div>
+        </div>
+        ${footer}
+        ${brandChip}
+      </div>`;
+  } else {
+    /* Regular — v4.0 Rattana Mart navy + gold + black price card */
+    html = `
+      <div class="tag tpl-regular" id="${tagId}">
+        <div class="t-img">${imgHtml}</div>
+        <div class="t-info">
+          <div class="t-info-left">
+            ${nameHtml}
+            ${escSize ? `<div class="t-size">${escSize}</div>` : ''}
+            <div class="t-unit-row"><span class="t-unit-pill">${escUnit}</span></div>
+            ${p.oldPrice > p.price ? `<div class="t-old-line">ราคาปกติ <s>${fmtThaiBaht(p.oldPrice)} บาท</s></div>` : ''}
+          </div>
+          <div class="t-price-card">
+            <div class="t-price-label">ราคาเพียง</div>
+            <div class="t-price">${priceStr}.-</div>
+          </div>
+        </div>
+        ${footer}
+        ${brandChip}
+      </div>`;
+  }
+  return { html, qrId, bcId };
+}
+function attachCodes(p, qrId, bcId) {
+  // v4.0 — Bars only (no number under barcode); code shows separately in the corner.
+  const bcEl = document.getElementById(bcId);
+  if (!bcEl || !p.barcode) return;
+  const code = String(p.barcode).trim();
+  const isMini = !!bcEl.closest('.tpl-mini');
+  const draw = (format) => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    bcEl.innerHTML = '';
+    bcEl.appendChild(svg);
+    JsBarcode(svg, code, {
+      format,
+      width: 1.2,
+      height: 28,
+      displayValue: false,         // bars only — no number under the barcode
+      margin: 0,
+      valid: (v) => { if (!v) throw new Error('invalid'); }
+    });
+    svg.style.maxWidth = isMini ? '32mm' : '24mm';
+    svg.style.height   = '8mm';
+  };
+  // Compact: valid 13-digit → EAN13; otherwise CODE128
+  try {
+    if (/^\d{13}$/.test(code)) {
+      try { draw('EAN13'); }
+      catch { draw('CODE128'); }
+    } else {
+      draw('CODE128');
+    }
+  } catch (e) {
+    bcEl.innerHTML = ''; console.warn('Barcode failed', code, e);
+  }
+}
+
+/* v4.1 — Selected products, SORTED: category → brand → size(CAT SIZE, ตัวเลขมาก→น้อย) → RANK[warehouse] → name */
+// ดึงเลขขนาดตัวสุดท้ายจาก CAT SIZE เช่น "กระทิงแดง 150"→150, "SRL 1000ก."→1000, "OT 150"→150
+function sizeNum(s){
+  const m = String(s||'').match(/(\d+(?:\.\d+)?)(?!.*\d)/);
+  return m ? parseFloat(m[1]) : null;
+}
+// v4.2 — ถ้า CAT SIZE ลงท้ายด้วยตัวเลขล้วน (ไม่มีหน่วย) ให้ดึงหน่วยจากชื่อสินค้าเต็มมาต่อท้าย
+// เช่น CAT SIZE "กาแฟเนสเขียว กป 170" + ชื่อ "เนสกาแฟ เอสเปรสโซเขียว 170มล." → หน่วย "มล."
+const SIZE_UNIT_RE = 'มิลลิลิตร|มล\\.?|ลิตร|ล\\.|กิโลกรัม|กรัม|กก\\.?|ก\\.|ซีซี|cc|ml|kg|g|l|oz';
+function deriveSizeUnit(sizeStr, fullName){
+  const m = String(sizeStr||'').trim().match(/(\d+(?:[.,]\d+)?)\s*([^\d]*)$/);
+  if(!m) return '';                      // ไม่มีเลขท้าย → ข้าม
+  if(m[2] && m[2].trim()) return '';      // CAT SIZE มีหน่วยอยู่แล้ว → ไม่เติมซ้ำ
+  const numEsc = m[1].replace(',','').replace('.','\\.');
+  const mm = String(fullName||'').match(new RegExp('(?:^|[^\\d])'+numEsc+'\\s*('+SIZE_UNIT_RE+')','i'));
+  return mm ? mm[1] : '';
+}
+function getSortedSelection() {
+  const wh = SHEET_CONFIG.warehouse || 'W1';
+  const rankKey = p => {
+    const r = (p.rank && p.rank[wh]) ? String(p.rank[wh]).toUpperCase() : '';
+    return r || 'ZZZ';   // empty rank sorts last
+  };
+  const th = (a,b) => String(a||'').localeCompare(String(b||''),'th',{numeric:true});
+  // ขนาด: มีเลข → เรียงมาก→น้อย (180 170 140 …); เลขเท่ากันหรือไม่มีเลข → เรียงตามข้อความ; มีเลขมาก่อนไม่มีเลข
+  const sizeCmp = (a,b) => {
+    const na = sizeNum(a.size), nb = sizeNum(b.size);
+    if (na != null && nb != null) return (nb - na) || th(a.size, b.size);
+    if (na != null) return -1;
+    if (nb != null) return 1;
+    return th(a.size, b.size);
+  };
+  const rankCmp = (a,b) => rankKey(a).localeCompare(rankKey(b));
+  return products
+    .filter(p => selectedSkus.has(p.sku))
+    .sort((a,b) =>
+      th(a.category, b.category)          // 1. หมวดหมู่ (CAT GROUP)
+      || th(a.brand, b.brand)             // 2. แบรนด์ (CAT BRAND)
+      || rankCmp(a, b)                    // 3. RANK[คลังที่เลือก]
+      || sizeCmp(a, b)                    // 4. ขนาด (CAT SIZE) — เลขมาก→น้อย
+      || rankCmp(a, b)                    // 5. RANK[คลังที่เลือก] (ซ้ำตามที่ระบุ — ปกติจะเท่ากันแล้วจากชั้น 3)
+      || th(a.name, b.name)               // 6. ชื่อสินค้า (PRODUCT NAME)
+    );
+}
+
+/* ============== DESIGN STAGE ============== */
+function renderDesignStage() {
+  const stage = $('#designStage');
+  const sel = getSortedSelection();
+  if (!sel.length) {
+    stage.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="emoji">🎨</div><h3>ยังไม่ได้เลือกสินค้า</h3><div class="empty-sub">กลับไปแท็บ "เลือกสินค้า" แล้วคลิกที่สินค้าที่ต้องการทำป้าย</div></div>`;
+    return;
+  }
+  stage.innerHTML = sel.map((p,i) => {
+    const t = getTplType(p);
+    const sku = escapeAttr(p.sku);
+    const r = renderTag(p, 'design');
+    return `
+      <div class="tag-wrap">
+        <div class="tag-preview-frame">
+          <div class="tag-scale">${r.html}</div>
+        </div>
+        <div class="tag-tpl-pick">
+          <button class="tpl-btn ${t==='regular'?'active':''}" onclick="setTpl('${sku}','regular')">ปกติ</button>
+          <button class="tpl-btn ${t==='sale'?'active':''}"    onclick="setTpl('${sku}','sale')">ลดราคา</button>
+          <button class="tpl-btn ${t==='new'?'active':''}"     onclick="setTpl('${sku}','new')">ใหม่</button>
+          <button class="tpl-btn ${t==='bogo'?'active':''}"    onclick="setTpl('${sku}','bogo')">1+1</button>
+        </div>
+        <div class="tag-price-edit" style="margin-top:8px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+          <button class="btn btn-sm btn-outline" onclick="openPriceEditor('${sku}')" style="font-size:12px">✏️ แก้ราคา</button>
+          ${priceOverrides[p.sku] ? `<button class="btn btn-sm btn-outline" onclick="resetPriceOverride('${sku}')" style="font-size:12px;color:var(--danger)">↻ คืนค่าเดิม</button>` : ''}
+        </div>
+        <div class="txt-center txt-muted" style="font-size:12px;margin-top:8px;font-weight:600">
+          ${escapeHtml(p.name)}
+          ${priceOverrides[p.sku] ? `<span style="color:var(--warning);margin-left:4px;font-size:10px">★ แก้ไขแล้ว</span>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+  // Inject QR + Barcode
+  sel.forEach(p => {
+    const r = { qrId: `qr-design-${cssId(p.sku)}`, bcId: `bc-design-${cssId(p.sku)}` };
+    attachCodes(p, r.qrId, r.bcId);
+  });
+}
+function setTpl(sku, tpl) {
+  tplOverrides[sku] = tpl;
+  renderDesignStage();
+}
+function bulkSetTemplate(tpl) {
+  const sel = getSortedSelection();
+  sel.forEach(p => tplOverrides[p.sku] = tpl);
+  renderDesignStage();
+  showToast(`ตั้ง Template เป็น "${tpl}" ${sel.length} รายการ`, 'success');
+}
+
+/* ============== PDF PREVIEW ============== */
+/* ============== v4.0 — CATALOG MODE (group by CAT SIZE) ============== */
+// Derive the flavor from a product name by stripping brand + size number + unit words
+function deriveFlavor(p) {
+  let f = String(p.name||'');
+  if (p.brand) f = f.split(p.brand).join(' ');
+  // remove "<number><unit>" e.g. 1000มล. / 55ก. / 1กก. / 500 ml
+  f = f.replace(/\d[\d.,]*\s*(มล\.?|ml|ลิตร|ล\.|กรัม|กก\.?|ก\.|g|kg|oz)?/gi, ' ');
+  // remove leftover brand/size words that also appear in CAT SIZE
+  if (p.size) String(p.size).split(/\s+/).forEach(w => { if (w && !/^\d/.test(w)) f = f.split(w).join(' '); });
+  f = f.replace(/\s+/g,' ').trim();
+  return f || String(p.name||'').trim();
+}
+// Available packaging units for a group → e.g. "ลังx12 · แพ็คx6"; note "ไม่ขายชิ้น" if no EA
+function catalogUnitLine(prods) {
+  const u = prods.find(p => p.units && (p.units.EA||p.units.PA||p.units.BP||p.units.CS))?.units || {};
+  const parts = [];
+  if (u.CS) parts.push(escapeHtml(u.CS.replace(/[()]/g,'').replace(/\s+/g,'')));
+  if (u.BP) parts.push(escapeHtml(u.BP.replace(/[()]/g,'').replace(/\s+/g,'')));
+  if (u.PA) parts.push(escapeHtml(u.PA.replace(/[()]/g,'').replace(/\s+/g,'')));
+  const packLine = parts.join(' · ') || '-';
+  const noEA = !u.EA;   // EA empty → not sold by piece
+  return { packLine, noEA };
+}
+function renderCatalogCard(sizeName, prods) {
+  const imgs = prods.filter(p => p.image).slice(0, 6);
+  const imgHtml = imgs.length
+    ? imgs.map(p => `<div class="cat-img"><img src="${escapeAttr(p.image)}" data-imgsku="${escapeAttr(p.sku)}" onerror="this.parentElement.style.display='none'" crossorigin="anonymous"></div>`).join('')
+    : `<div class="cat-img-empty">📦</div>`;
+  // flavors — unique, in selection order
+  const seen = new Set(); const flavors = [];
+  prods.forEach(p => { const f = deriveFlavor(p); if (f && !seen.has(f)) { seen.add(f); flavors.push(f); } });
+  const { packLine, noEA } = catalogUnitLine(prods);
+  // v4.2 — ต่อหน่วย (มล./ก. …) จากชื่อสินค้าเข้าท้าย CAT SIZE ถ้ายังไม่มีหน่วย
+  const unitSuffix = (prods.find(p => p.sizeUnit)?.sizeUnit) || '';
+  const key = String(sizeName||'ไม่ระบุขนาด').trim();       // v4.5 — group key for title override
+  const titleText = catTitleOverrides[key] != null ? catTitleOverrides[key] : (sizeName + unitSuffix);
+  return `
+    <div class="catalog-card">
+      <div class="cat-imgs">${imgHtml}</div>
+      <div class="cat-title editable-name" contenteditable="true" data-cattitle="${escapeAttr(key)}" spellcheck="false" title="คลิกเพื่อพิมพ์แก้ชื่อ">${escapeHtml(titleText)}</div>
+      <div class="cat-flavors">${escapeHtml(flavors.join(' / '))}</div>
+      <div class="cat-units">
+        <div class="cat-unit-row"><span class="cat-unit-label">ขนาดบรรจุ</span><span class="cat-unit-val">${packLine}</span></div>
+        ${noEA ? `<div class="cat-noea">ไม่ขายชิ้น</div>` : ''}
+      </div>
+    </div>`;
+}
+function buildCatalogPreview() {
+  const stage = $('#pdfStage');
+  const wh = SHEET_CONFIG.warehouse || 'W1';
+  // v4.7 — filter selected products → have STOCK > 0 OR sales > 0 in the chosen warehouse (either one)
+  const sel = getSortedSelection().filter(p => (p.stk && p.stk[wh]) || (p.sold && p.sold[wh]));
+  if (!sel.length) {
+    stage.innerHTML = `<div class="empty-state"><div class="emoji">📚</div><h3>ไม่มีสินค้าที่ผ่านเงื่อนไข</h3><div class="empty-sub">โหมดแค็ตตาล็อกแสดงเฉพาะสินค้าที่ <b>มีสต๊อก หรือ มียอดขาย</b> ในคลัง ${wh}<br>ลองเลือกสินค้าเพิ่ม หรือเปลี่ยนคลังในแท็บตั้งค่า</div></div>`;
+    return;
+  }
+  // group by CAT SIZE (keep group order by first appearance in the sorted selection)
+  const groups = new Map();
+  sel.forEach(p => {
+    const key = String(p.size||'ไม่ระบุขนาด').trim();
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(p);
+  });
+  const groupList = Array.from(groups.entries());     // [ [sizeName, prods], ... ]
+  // 12 cards per page (3×4)
+  const pages = [];
+  for (let i = 0; i < groupList.length; i += 12) pages.push(groupList.slice(i, i+12));
+  const w = window.innerWidth;
+  const scale = w <= 880 ? 0.42 : (w <= 1100 ? 0.65 : 0.85);
+  const innerHTML = pages.map((page, pi) => `
+    <div class="pdf-page layout-cat" id="pdf-page-${pi}">
+      <div class="pdf-page-grid">
+        ${page.map(([size, prods]) => renderCatalogCard(size, prods)).join('')}
+      </div>
+    </div>`).join('');
+  const pageH = 1123 * scale + 14;
+  const totalH = pageH * pages.length;
+  stage.innerHTML = `
+    <div class="pdf-wrap" style="width:100%">
+      <div class="pdf-wrap-inner" style="height:${totalH}px">${innerHTML}</div>
+    </div>`;
+  $('#heroSub') && ($('#heroSub').textContent = `แค็ตตาล็อก: ${groupList.length} กลุ่มขนาด · ${sel.length} สินค้า (คลัง ${wh})`);
+  reapplyImgScales();   // v4.0 — restore per-image + page-wide scales
+}
+
+function buildPdfPreview() {
+  const stage = $('#pdfStage');
+  // v4.0 — Catalog mode branches off before the normal tag pipeline
+  if (SHEET_CONFIG.perPage === 'cat12') { buildCatalogPreview(); return; }
+  const sel = getSortedSelection();
+  if (!sel.length) {
+    stage.innerHTML = `<div class="empty-state"><div class="emoji">📄</div><h3>ยังไม่มีสินค้าที่เลือก</h3><div class="empty-sub">เลือกสินค้าที่จะพิมพ์ก่อนนะครับ — สามารถพิมพ์ได้ทีละหลายชิ้น</div></div>`;
+    return;
+  }
+  // Slice products into pages by perPage count
+  const perPage = [1,2,4,6,12,16,30].includes(SHEET_CONFIG.perPage) ? SHEET_CONFIG.perPage : 4;
+  const pages = [];
+  for (let i = 0; i < sel.length; i += perPage) pages.push(sel.slice(i, i+perPage));
+  const w = window.innerWidth;
+  const scale = w <= 880 ? 0.42 : (w <= 1100 ? 0.65 : 0.85);
+  // v4.0: Build promo header (only for layout 12/16)
+  const buildPromoHeader = () => {
+    if (perPage !== 12 && perPage !== 16) return '';
+    const title = escapeHtml(SHEET_CONFIG.promoTitle || 'โปรโมชั่นเด็ดห้ามพลาด!');
+    const sub   = escapeHtml(SHEET_CONFIG.promoSubtitle || '');
+    const ds    = SHEET_CONFIG.promoStart, de = SHEET_CONFIG.promoEnd;
+    let dateRange = '';
+    if (ds || de) {
+      const fmt = d => d ? formatThaiDate(d).split(' ')[0] : '—';
+      dateRange = `${fmt(ds)} → ${fmt(de)}`;
+    }
+    const bg = SHEET_CONFIG.promoBg ? `background-image:url('${escapeAttr(SHEET_CONFIG.promoBg)}');background-size:cover;background-position:center` : '';
+    return `
+      <div class="promo-header" style="${bg}">
+        <div class="promo-header-overlay"></div>
+        ${dateRange ? `<div class="promo-date-badge">📅 ${escapeHtml(dateRange)}</div>` : ''}
+        <div class="promo-brand">
+          <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <rect width="100" height="100" rx="14" fill="#0d1b3e"/>
+            <g fill="#fbbf24">
+              <rect x="19" y="34" width="11" height="6" rx="1.5"/>
+              <path d="M30 42 L80 42 L80 49 L30 49 Z"/>
+              <path d="M32 52 L80 52 L74 71 L43 71 Z"/>
+              <circle cx="48" cy="78" r="5"/>
+              <circle cx="66" cy="78" r="5"/>
+            </g>
+          </svg>
+          <div class="promo-brand-text">
+            <div class="promo-brand-th">รัตน<b>มาร์ท</b></div>
+            <div class="promo-brand-en">RATTANA MART</div>
+          </div>
+        </div>
+        <div class="promo-title-wrap">
+          <div class="promo-title">${title}</div>
+          ${sub ? `<div class="promo-subtitle">${sub}</div>` : ''}
+        </div>
+      </div>`;
+  };
+  const innerHTML = pages.map((page, pi) => `
+    <div class="pdf-page layout-${perPage}" id="pdf-page-${pi}">
+      ${buildPromoHeader()}
+      <div class="pdf-page-grid">
+        ${page.map(p => renderTag(p, 'pdf-p'+pi, perPage).html).join('')}
+      </div>
+    </div>
+  `).join('');
+  // px equivalents (A4 portrait): ≈ 794 × 1123 px @ 96dpi
+  const pageH = 1123 * scale + 14; // include gap
+  const totalH = pageH * pages.length;
+  stage.innerHTML = `
+    <div class="pdf-wrap" style="width:100%">
+      <div class="pdf-wrap-inner" style="height:${totalH}px">
+        ${innerHTML}
+      </div>
+    </div>`;
+  // Inject codes
+  sel.forEach((p, idx) => {
+    const pi = Math.floor(idx / perPage);
+    const qrId = `qr-pdf-p${pi}-${cssId(p.sku)}`;
+    const bcId = `bc-pdf-p${pi}-${cssId(p.sku)}`;
+    attachCodes(p, qrId, bcId);
+  });
+  reapplyImgScales();   // v4.0 — restore per-image + page-wide scales
+}
+
+/* ============== EXPORT PDF ============== */
+/* v4.0 — Export each A4 page as PNG or JPEG (downloads one file per page) */
+/* v4.8 — export helpers: keep memory bounded + never hang on a slow image */
+// Lower the capture scale as page count grows so big jobs (catalog = many images) don't crash the tab.
+function exportScaleFor(n) { return n > 10 ? 1.3 : (n > 5 ? 1.6 : 2); }
+// Wait until every <img> in the page is loaded (or errored/timed-out) before capturing.
+function waitForPageImages(el, timeout = 8000) {
+  const imgs = Array.from(el.querySelectorAll('img'));
+  return Promise.all(imgs.map(img => {
+    if (img.complete && img.naturalWidth) return Promise.resolve();
+    return new Promise(res => {
+      let done = false; const fin = () => { if (!done) { done = true; res(); } };
+      img.addEventListener('load', fin, { once: true });
+      img.addEventListener('error', fin, { once: true });
+      setTimeout(fin, timeout);   // don't wait forever on a stuck Drive image
+    });
+  }));
+}
+// Capture one .pdf-page to a canvas at the given scale, with an image timeout so it can't hang.
+async function capturePageCanvas(pageEl, scale) {
+  await waitForPageImages(pageEl);
+  return html2canvas(pageEl, {
+    scale, useCORS: true, allowTaint: false, backgroundColor: '#ffffff',
+    logging: false, imageTimeout: 12000, removeContainer: true
+  });
+}
+// Free a canvas' backing store (Chrome releases memory when width/height are zeroed).
+function freeCanvas(c) { try { c.width = 0; c.height = 0; } catch {} }
+
+async function exportImage(format) {
+  format = (format === 'jpeg' ? 'jpeg' : 'png');
+  const sel = getSortedSelection();
+  if (!sel.length) { showToast('ยังไม่ได้เลือกสินค้า', 'warning'); return; }
+
+  showSpinner(`กำลังสร้าง ${format.toUpperCase()}...`);
+  buildPdfPreview();
+  await new Promise(r => setTimeout(r, 800));
+
+  const wrapInner = document.querySelector('.pdf-wrap-inner');
+  const prevTransform = wrapInner ? wrapInner.style.transform : '';
+  const prevHeight    = wrapInner ? wrapInner.style.height : '';
+  if (wrapInner) { wrapInner.style.transform = 'none'; wrapInner.style.height = 'auto'; }
+
+  const pages = Array.from(document.querySelectorAll('.pdf-page'));
+  const prevDisplay = pages.map(p => p.style.display);
+  pages.forEach(p => p.style.display = 'none');   // v4.8 — isolate: lay out one page at a time (peak memory ≈ 1 page)
+  try {
+    const today = new Date().toISOString().slice(0,10);
+    const mime  = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+    const ext   = format === 'jpeg' ? 'jpg' : 'png';
+    const scale = exportScaleFor(pages.length);   // v4.8 — adaptive scale
+    for (let i = 0; i < pages.length; i++) {
+      pages[i].style.display = '';
+      $('#spinnerMsg').textContent = `กำลังสร้างหน้า ${i+1}/${pages.length}...`;
+      const canvas = await capturePageCanvas(pages[i], scale);
+      // Trigger download
+      const dataUrl = canvas.toDataURL(mime, format === 'jpeg' ? 0.95 : undefined);
+      freeCanvas(canvas);   // v4.8 — release memory before next page
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `Rattana-PriceTag-${today}-page${i+1}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      pages[i].style.display = 'none';
+      // yield so browser repaints spinner + reclaims memory (also avoids multi-download block)
+      await new Promise(r => setTimeout(r, 200));
+    }
+    showToast(`✅ บันทึก ${format.toUpperCase()} แล้ว (${pages.length} ไฟล์)`, 'success');
+  } catch (e) {
+    console.error(e);
+    showToast(`สร้าง ${format.toUpperCase()} ไม่สำเร็จ: ` + (e.message||''), 'error');
+  } finally {
+    pages.forEach((p, idx) => p.style.display = prevDisplay[idx]);   // v4.8 — restore visibility
+    if (wrapInner) { wrapInner.style.transform = prevTransform; wrapInner.style.height = prevHeight; }
+    hideSpinner();
+  }
+}
+
+async function exportPDF() {
+  const sel = getSortedSelection();
+  if (!sel.length) { showToast('ยังไม่ได้เลือกสินค้า', 'warning'); return; }
+  showSpinner('กำลังสร้าง PDF... (อาจใช้เวลาสักครู่)');
+
+  // Make sure preview is rendered
+  buildPdfPreview();
+  await new Promise(r => setTimeout(r, 800)); // wait for images
+
+  // Reset preview scaling during capture so html2canvas reads native A4 size
+  const wrapInner = document.querySelector('.pdf-wrap-inner');
+  const prevTransform = wrapInner ? wrapInner.style.transform : '';
+  const prevHeight    = wrapInner ? wrapInner.style.height : '';
+  if (wrapInner) { wrapInner.style.transform = 'none'; wrapInner.style.height = 'auto'; }
+
+  const pages = Array.from(document.querySelectorAll('.pdf-page'));
+  const prevDisplay = pages.map(p => p.style.display);
+  pages.forEach(p => p.style.display = 'none');   // v4.8 — isolate: render one page at a time (peak memory ≈ 1 page)
+  try {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const scale = exportScaleFor(pages.length);   // v4.8 — adaptive scale (fewer pages = sharper)
+    for (let i = 0; i < pages.length; i++) {
+      pages[i].style.display = '';
+      $('#spinnerMsg').textContent = `กำลังสร้างหน้า ${i+1}/${pages.length}...`;
+      const canvas = await capturePageCanvas(pages[i], scale);
+      const imgData = canvas.toDataURL('image/jpeg', 0.9);
+      freeCanvas(canvas);   // v4.8 — release memory before next page
+      if (i > 0) pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
+      pages[i].style.display = 'none';
+      // v4.8 — yield between pages so the browser repaints the spinner + reclaims memory (prevents freeze)
+      await new Promise(r => setTimeout(r, 50));
+    }
+    const filename = `Rattana-PriceTag-${new Date().toISOString().slice(0,10)}.pdf`;
+    pdf.save(filename);
+    showToast(`✅ บันทึก PDF แล้ว (${pages.length} หน้า, ${sel.length} ป้าย)`, 'success');
+  } catch (e) {
+    console.error(e);
+    showToast('สร้าง PDF ไม่สำเร็จ: '+(e.message||''), 'error');
+  } finally {
+    pages.forEach((p, idx) => p.style.display = prevDisplay[idx]);   // v4.8 — restore visibility
+    // Restore preview scaling
+    if (wrapInner) { wrapInner.style.transform = prevTransform; wrapInner.style.height = prevHeight; }
+    hideSpinner();
+  }
+}
+
+/* ============== SAMPLE CSV ============== */
+function downloadSampleCSV() {
+  const csv = `รหัสสินค้า,ชื่อสินค้า,ราคา,ราคาเดิม,หน่วย,ขนาด,รูปภาพ,บาร์โค้ด,ประเภทป้าย,โปรโมชั่น,หมวดหมู่
+P001,น้ำดื่ม Crystal,7,,บาท,600ml,,8851234567890,ปกติ,,เครื่องดื่ม
+P002,โค้ก กระป๋อง,15,20,บาท,325ml,,8851234567891,ลดราคา,,เครื่องดื่ม
+P003,มาม่า รสต้มยำกุ้ง,6,,บาท,55g,,8851234567892,ปกติ,,อาหารแห้ง
+P004,น้ำมันพืช ปาล์ม,49,55,บาท,1 ลิตร,,8851234567893,ลดราคา,,เครื่องปรุง
+P005,ผงซักฟอก แอทแทค,89,,บาท,800g,,8851234567894,ใหม่,,ของใช้ในบ้าน
+P006,เลย์ รสครีมชีส,20,,บาท,75g,,8851234567895,แถม,ซื้อ 2 ชิ้น 35 บาท,ขนม
+P007,นมพาสเจอร์ไรซ์,28,,บาท,830ml,,8851234567896,ปกติ,,เครื่องดื่ม
+P008,ขนมปังโฮลวีท,32,40,บาท,450g,,8851234567897,ลดราคา,,อาหาร`;
+  const blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'sample-products.csv'; a.click();
+  URL.revokeObjectURL(url);
+  showToast('ดาวน์โหลดไฟล์ตัวอย่างแล้ว', 'success');
+}
+
+/* ============== ESCAPING ============== */
+function escapeHtml(s) {
+  return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function escapeAttr(s) { return escapeHtml(s).replace(/`/g, '&#96;'); }
+function cssId(s) { return String(s||'').replace(/[^a-zA-Z0-9_-]/g,'_'); }
+
+/* ============== START ============== */
+window.onload = startApp;
+
+// Close modal on backdrop click
+$('#userModal').addEventListener('click', e => {
+  if (e.target.id === 'userModal') closeUserModal();
+});
+</script>
+
+</body>
+</html>

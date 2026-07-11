@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Rattana เทียบสต็อก v1.1</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --navy:#4c1d95; --navy-mid:#6d28d9; --navy-light:#7c3aed;
+  --gold:#f59e0b; --gold-light:#fbbf24;
+  --success:#16a34a; --danger:#dc2626; --warning:#d97706; --info:#7c3aed;
+  --success-bg:#e7f7ee; --danger-bg:#fde8e8; --warning-bg:#fdf3e3;
+  --bg:#f6f4fb; --text:#2e1065; --card-bg:#ffffff; --border:#e6e0f2; --muted:#7c6f93; --row-alt:#faf8fe;
+  --radius-sm:8px; --radius-md:12px; --radius-lg:16px;
+  --shadow-sm:0 1px 4px rgba(76,29,149,.06); --shadow-md:0 2px 10px rgba(76,29,149,.10); --shadow-lg:0 10px 30px rgba(76,29,149,.18);
+}
+body.dark{
+  --bg:#150a2e; --text:#ece7f7; --card-bg:#1e1140; --border:#3a2a63; --muted:#a99bc7; --row-alt:#191033;
+  --success-bg:#16321f; --danger-bg:#3a1717; --warning-bg:#3a2c12;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;min-height:100dvh;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;overflow-x:hidden;transition:background .25s,color .25s;-webkit-text-size-adjust:100%}
+button{font-family:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+select{font-family:inherit;font-size:16px}
+
+#loadingBar{position:fixed;top:0;left:0;height:3px;width:0;background:var(--gold);z-index:9999;transition:width .4s ease}
+
+header{background:var(--navy);color:#fff;padding:12px 14px;position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:10px;border-bottom:3px solid var(--gold);padding-top:max(12px,env(safe-area-inset-top))}
+.logo-text{font-weight:800;letter-spacing:1px;font-size:16px;color:#fff;line-height:1.1;flex:1}
+.logo-text span{color:var(--gold-light)}
+.logo-text small{display:block;font-size:10px;font-weight:500;color:rgba(255,255,255,.7);letter-spacing:.5px;margin-top:2px}
+.icon-btn{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.22);width:36px;height:36px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.icon-btn:hover{background:rgba(255,255,255,.12)}
+.status-dot{width:9px;height:9px;border-radius:50%;background:#888;flex-shrink:0;transition:background .2s}
+.status-dot.ok{background:#34d399}.status-dot.syncing{background:var(--gold-light);animation:pulse 1s infinite}.status-dot.error{background:#f87171}
+@keyframes pulse{50%{opacity:.35}}
+
+.content{max-width:980px;margin:0 auto;width:100%;padding:12px}
+@media(min-width:640px){.content{padding:16px}}
+
+.bar{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);padding:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.wh-pick{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
+.wh-sel{flex:1;min-width:0;height:46px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--card-bg);color:var(--text);font-weight:700;font-size:15px;padding:0 10px;outline:none}
+.wh-sel:focus{border-color:var(--navy-light)}
+.swap-btn{width:42px;height:42px;border-radius:50%;background:var(--navy);color:#fff;font-size:18px;flex-shrink:0;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-sm)}
+.swap-btn:active{transform:scale(.92)}
+.dataStatus{font-size:11.5px;color:var(--muted);width:100%;display:flex;align-items:center;gap:6px}
+
+.stat3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.stat{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px 8px;text-align:center;border-top:3px solid var(--muted)}
+.stat .st-v{font-size:23px;font-weight:800;line-height:1.1}
+.stat .st-l{font-size:11px;color:var(--muted);margin-top:3px;font-weight:600}
+.stat-ok{border-top-color:var(--success)}.stat-ok .st-v{color:var(--success)}
+.stat-over{border-top-color:var(--warning)}.stat-over .st-v{color:var(--warning)}
+.stat-move{border-top-color:var(--info)}.stat-move .st-v{color:var(--info)}
+
+.card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:var(--shadow-md);overflow:hidden}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border);background:linear-gradient(to right,rgba(124,58,237,.08),transparent)}
+.card-head h3{font-size:15px;font-weight:800}
+.card-body{padding:12px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 14px;border-radius:var(--radius-sm);font-size:13px;font-weight:700;border:1px solid transparent;min-height:40px}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--navy);color:#fff}
+.btn-gold{background:var(--gold);color:#3a2200}
+.btn-outline{background:transparent;color:var(--text);border-color:var(--border)}
+.btn-sm{padding:6px 11px;font-size:12px;min-height:32px}
+.exp-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.exp-row .btn{flex:1;min-width:130px}
+
+/* Compare list (ยกมาจากแอป-1) */
+.cmp-list{display:flex;flex-direction:column;gap:6px}
+.cmp-row{background:var(--card-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;cursor:pointer;transition:box-shadow .15s}
+.cmp-row:hover{box-shadow:var(--shadow-sm)}
+.cmp-row.open{box-shadow:var(--shadow-md);border-color:var(--navy-mid)}
+.cmp-head{padding:7px 11px 3px;display:flex;align-items:center;gap:6px}
+.cmp-name{flex:1;font-size:13.5px;font-weight:700;line-height:1.25;overflow-wrap:anywhere;word-break:break-word;color:var(--text)}
+.cmp-chev{color:var(--muted);font-size:12px;margin-left:2px;transition:transform .15s}
+.cmp-row.open .cmp-chev{transform:rotate(90deg)}
+.cmp-sides{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:0 8px 8px}
+.cmp-side{background:var(--row-alt);border:1px solid var(--border);border-left-width:3px;border-radius:7px;padding:5px 8px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.cmp-side-l{font-size:10.5px;font-weight:800;color:var(--muted);letter-spacing:.4px;line-height:1}
+.cmp-side-vals{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted);line-height:1.3}
+.cmp-num b{color:var(--text);font-weight:700}
+.cmp-side-pill{font-size:11px;font-weight:800;padding:2px 8px;border-radius:8px;align-self:flex-start;white-space:nowrap;line-height:1.2}
+.cmp-ok{border-left-color:var(--success);background:var(--success-bg)}
+.cmp-short{border-left-color:var(--danger);background:var(--danger-bg)}
+.cmp-over{border-left-color:var(--warning);background:var(--warning-bg)}
+.cmp-side-pill.p-ok{background:var(--success);color:#fff}
+.cmp-side-pill.p-short{background:var(--danger);color:#fff}
+.cmp-side-pill.p-over{background:var(--warning);color:#fff}
+.cmp-actions{display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px;margin:0 8px 8px;border-radius:9px;background:var(--row-alt);border:1px dashed var(--border)}
+.cmp-act{font-size:12.5px;font-weight:800;padding:5px 11px;border-radius:8px;white-space:nowrap}
+.cmp-act-in{background:#e8f7ee;color:#1e8449}
+.cmp-act-out{background:#fbf1da;color:#a87800}
+.cmp-act-move{background:#ede4fd;color:#6d28d9}
+body.dark .cmp-act-in{background:#1a3a25;color:#7be0a3}
+body.dark .cmp-act-out{background:#3a2e15;color:#e8c86a}
+body.dark .cmp-act-move{background:#2a1a52;color:#c4b5fd}
+.cmp-expand{padding:0 10px 10px;border-top:1px dashed var(--border);background:var(--row-alt);display:flex;flex-direction:column;gap:8px;padding-top:10px}
+.cmp-wh{background:var(--card-bg);border:1px solid var(--border);border-radius:9px;overflow:hidden}
+.cmp-wh-l{padding:6px 10px;font-size:12px;font-weight:700;color:var(--navy-mid);background:rgba(124,58,237,.07);border-bottom:1px solid var(--border)}
+.cmp-person{padding:4px 0;border-bottom:1px dashed var(--border)}
+.cmp-person:last-child{border-bottom:none}
+.cmp-person-name{padding:5px 10px;font-size:12.5px;font-weight:700;color:var(--text)}
+.cmp-lot{display:flex;flex-wrap:wrap;gap:6px 10px;padding:4px 10px 6px 24px;font-size:12px;color:var(--muted)}
+.cmp-lot-bd{color:var(--text);font-weight:700;min-width:80px}
+.cmp-lot-loc{color:var(--navy-light);font-weight:600}
+.cmp-lot-exp{color:var(--warning);font-weight:600}
+@media(max-width:480px){.cmp-sides{grid-template-columns:1fr}}
+
+.muted-box{text-align:center;color:var(--muted);padding:34px 16px;font-size:14px}
+
+/* Modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(46,16,101,.6);z-index:9000;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--card-bg);border-radius:var(--radius-lg);max-width:420px;width:100%;border-top:4px solid var(--gold);box-shadow:var(--shadow-lg)}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
+.modal-head h3{font-size:15px;font-weight:800}
+.modal-close{background:transparent;font-size:22px;color:var(--muted);line-height:1;padding:2px 6px}
+.modal-body{padding:18px}
+.modal-body label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.modal-input{width:100%;height:46px;margin-top:6px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--card-bg);color:var(--text);font-size:16px;font-weight:700;padding:0 12px;outline:none}
+.modal-input:focus{border-color:var(--gold)}
+.modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+
+/* Spinner + toast */
+.spinner-overlay{display:none;position:fixed;inset:0;background:rgba(46,16,101,.5);align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(2px)}
+.spinner-overlay.show{display:flex}
+.spinner-box{background:var(--card-bg);border-radius:var(--radius-lg);padding:28px 36px;text-align:center;border-top:4px solid var(--gold)}
+.spinner-ring{width:44px;height:44px;border:5px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.toast{position:fixed;bottom:max(20px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);padding:12px 20px;border-radius:var(--radius-md);color:#fff;z-index:9999;font-weight:600;box-shadow:var(--shadow-lg);font-size:13px;max-width:92vw;text-align:center}
+.toast-success{background:var(--success)}.toast-error{background:var(--danger)}.toast-warning{background:var(--warning)}.toast-info{background:var(--navy-mid)}
+#backToTop{position:fixed;bottom:max(20px,calc(14px + env(safe-area-inset-bottom)));right:max(14px,calc(12px + env(safe-area-inset-right)));background:var(--gold);color:#3a2200;border-radius:50%;width:44px;height:44px;display:none;align-items:center;justify-content:center;box-shadow:var(--shadow-md);z-index:90;font-size:18px;font-weight:800}
+#backToTop.show{display:flex}
+.ver{font-size:10px;color:var(--muted);text-align:center;padding:14px 0 max(20px,env(safe-area-inset-bottom))}
+</style>
+</head>
+<body lang="th">
+
+<div id="loadingBar"></div>
+
+<div class="spinner-overlay" id="spinner">
+  <div class="spinner-box"><div class="spinner-ring"></div><p id="spinnerMsg" style="font-size:13px;color:var(--muted)">กำลังโหลด...</p></div>
+</div>
+
+<header>
+  <div class="logo-text">RATTANA <span>เทียบสต็อก</span><small>เทียบยอดนับ ↔ สต็อกระบบ</small></div>
+  <span class="status-dot" id="statusDot" title=""></span>
+  <button class="icon-btn" id="btnRefresh" onclick="refreshAll()" title="รีเฟรช">↻</button>
+  <button class="icon-btn" onclick="toggleDark()" title="โหมดมืด">🌙</button>
+</header>
+
+<div class="content">
+
+  <div class="bar">
+    <div class="wh-pick">
+      <select class="wh-sel" id="whA" onchange="onPairChange()"></select>
+      <button class="swap-btn" onclick="swapWh()" title="สลับคลัง">⇄</button>
+      <select class="wh-sel" id="whB" onchange="onPairChange()"></select>
+    </div>
+    <div class="dataStatus"><span id="dataStatus">กำลังโหลดข้อมูลสินค้า...</span></div>
+  </div>
+
+  <div class="stat3">
+    <div class="stat stat-ok"><div class="st-v" id="nIn">0</div><div class="st-l">➕ ปรับเข้า</div></div>
+    <div class="stat stat-over"><div class="st-v" id="nOut">0</div><div class="st-l">➖ ปรับออก</div></div>
+    <div class="stat stat-move"><div class="st-v" id="nMove">0</div><div class="st-l">🔄 โอนย้าย</div></div>
+  </div>
+
+  <div class="exp-row">
+    <button class="btn btn-gold" onclick="openExportDialog('move')">📤 โอนย้าย</button>
+    <button class="btn btn-outline" onclick="openExportDialog('in')">📥 ปรับเข้า</button>
+    <button class="btn btn-outline" onclick="openExportDialog('out')">📤 ปรับออก</button>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h3 id="cmpTitle">🔀 เทียบสต็อก</h3>
+      <button class="btn btn-outline btn-sm" onclick="renderCompare()">↻</button>
+    </div>
+    <div class="card-body" id="compareBody">
+      <div class="muted-box">กำลังเตรียมข้อมูล...</div>
+    </div>
+  </div>
+
+  <div class="ver">Rattana เทียบสต็อก · v1.1 · อ่านสดจากหลังบ้านแอป-1</div>
+</div>
+
+<button id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+<!-- Doc-No modal (export) -->
+<div class="modal-overlay" id="docNoModal">
+  <div class="modal">
+    <div class="modal-head"><h3 id="docNoTitle">Export</h3><button class="modal-close" onclick="closeDocNoModal()">×</button></div>
+    <div class="modal-body">
+      <label>เลขที่เอกสารเริ่มต้น</label>
+      <input class="modal-input" id="docNoInput" placeholder="เช่น DMI46906/00051">
+      <div style="font-size:11.5px;color:var(--muted);margin-top:8px">ระบบจะจองเลขเอกสารต่อเนื่องให้อัตโนมัติ (กันชนกับคนอื่น)</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeDocNoModal()">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="runExport()">ดาวน์โหลด Excel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════ CONFIG ════════
+const SHEET_ID       = '1XkG-8sZZJGk8DfBy3_0r0J6iABPr6fuRyiyD4n3qCqs';   // product master (barcodes + STOCK)
+const COUNT_SAVE_URL = 'https://script.google.com/macros/s/AKfycbw39tCzfOxpg9XayXPlWL1QCw2rjd32FbpofggeErJh-hcjMFa64yEl4cV3UtRoaEVj/exec';  // app-1 GAS (อ่านสด)
+const WH_NAMES = { W4:'นครปฐม', C4:'รัตนมาร์ท', EW4:'คลังของเสีย W4' };
+const WH_LIST  = ['C4','W4','EW4'];
+const UNITS    = ['EA','PA','BP','CS'];
+const CACHE_KEY = 'rattana_compare_products';
+const CACHE_TTL = 60*60*1000;   // 1h (background poll keeps it fresh)
+const POLL_MS   = 60000;
+let pollBackoffUntil = 0;
+
+const NEEDED_COLS = 'A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,BC,BD,BE,BM,BN,BO,BP,BQ,BR,CU';
+
+// ════════ STATE ════════
+let allProducts = [], productByKey = {};
+let cmpLastRows = [];
+const compareOpen = new Set();
+let comparePollTimer = null, dataPollTimer = null;
+let exportKind = 'move';
+
+// ════════ UTILS ════════
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+const showSpinner = m => { document.getElementById('spinnerMsg').textContent=m||'กำลังโหลด...'; document.getElementById('spinner').classList.add('show'); };
+const hideSpinner = () => document.getElementById('spinner').classList.remove('show');
+const setLoadingBar = on => document.getElementById('loadingBar').style.width = on?'85%':'0';
+function showToast(msg, type='info'){ const t=document.createElement('div'); t.className=`toast toast-${type}`; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),3500); }
+function setStatusDot(state){ const el=document.getElementById('statusDot'); if(!el)return; el.className='status-dot '+state; el.title=state==='ok'?'อัปเดตแล้ว':state==='syncing'?'กำลังซิงก์...':'เชื่อมต่อไม่ได้'; }
+function toggleDark(){ document.body.classList.toggle('dark'); try{localStorage.setItem('rattana_compare_dark',document.body.classList.contains('dark')?'1':'0');}catch{} }
+
+// ── Thai date (Asia/Bangkok, พ.ศ.) ──
+function _bkkParts(input){ const d=input instanceof Date?input:new Date(input); if(isNaN(d))return null;
+  const fmt=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
+  const p={}; fmt.formatToParts(d).forEach(x=>{p[x.type]=x.value;}); return p; }
+function formatThaiDate(input){ const p=_bkkParts(input); if(!p)return '-'; return `${p.day}/${p.month}/${(parseInt(p.year,10)+543)}`; }
+function formatThaiTime(input){ if(!input)return '-'; const p=_bkkParts(input); if(!p)return '-'; const hh=p.hour==='24'?'00':p.hour; return `${hh}:${p.minute}`; }
+
+// ════════ PRODUCT DATA ════════
+function parseCsv(text){
+  if(!text)return[]; if(text.charCodeAt(0)===0xFEFF)text=text.slice(1);
+  const rows=[]; let row=[],cell='',inQuote=false;
+  for(let i=0;i<text.length;i++){ const ch=text[i];
+    if(inQuote){ if(ch==='"'){ if(text[i+1]==='"'){cell+='"';i++;}else inQuote=false; } else cell+=ch; }
+    else { if(ch==='"')inQuote=true; else if(ch===','){row.push(cell);cell='';} else if(ch==='\r'){} else if(ch==='\n'){row.push(cell);rows.push(row);row=[];cell='';} else cell+=ch; }
+  }
+  if(cell||row.length){row.push(cell);rows.push(row);}
+  if(!rows.length)return[];
+  const clean=s=>String(s||'').replace(/[​‌‍﻿]/g,'').replace(/ /g,' ').trim();
+  const headers=rows[0].map(clean);
+  return rows.slice(1).filter(r=>r.some(c=>clean(c))).map(r=>Object.fromEntries(headers.map((k,i)=>[k,clean(r[i]||'')])));
+}
+async function fetchSheet(){
+  const tq=encodeURIComponent(`select ${NEEDED_COLS}`);
+  const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&tq=${tq}`;
+  const ctrl=new AbortController(); const timer=setTimeout(()=>ctrl.abort(),20000);
+  try{ const res=await fetch(url,{cache:'no-store',signal:ctrl.signal}); if(!res.ok)throw new Error('HTTP '+res.status); return parseCsv(await res.text()); }
+  finally{ clearTimeout(timer); }
+}
+function productKey(p){ for(const u of ['CS','BP','PA','EA']){ const c=String(p[`CODE ${u}`]||'').trim(); if(c&&c.length>2&&c!=='0'&&c!=='-')return c; } return p['PRODUCT NAME']||'?'; }
+function buildIndex(data){
+  allProducts=data; productByKey={};
+  data.forEach(row=>{ const k=productKey(row); productByKey[k]=row;
+    const alias=String(k).replace(/^0+/,''); if(alias&&alias!==k&&!productByKey[alias])productByKey[alias]=row; });
+}
+function findProduct(key){ if(key==null)return null; return productByKey[key]||productByKey[String(key).replace(/^0+/,'')]||null; }
+function unitFactor(p,u){ if(u==='EA')return 1; const q=parseFloat(p[`QTY ${u}`]); return (!isNaN(q)&&q>0)?q:1; }
+function parseStock(val){
+  const s=String(val||'0').trim(); if(!s||s==='-')return{cs:0,ea:0};
+  const clean=s.replace(/,/g,'').replace(/[^\d.]/g,''); if(!clean||clean==='.')return{cs:0,ea:0};
+  const dot=clean.indexOf('.'); const csStr=dot===-1?clean:clean.slice(0,dot); const eaStr=dot===-1?'':clean.slice(dot+1);
+  const cs=parseInt(csStr,10)||0; const ea=eaStr===''?0:(parseInt(eaStr,10)||0); return{cs,ea};
+}
+
+const getCached=k=>{ try{const i=JSON.parse(localStorage.getItem(k));return i&&Date.now()-i.ts<CACHE_TTL?i.data:null;}catch{return null;} };
+const getCachedAny=k=>{ try{const i=JSON.parse(localStorage.getItem(k));return(i&&i.data&&i.data.length)?i.data:null;}catch{return null;} };
+const setCache=(k,d)=>{ try{localStorage.setItem(k,JSON.stringify({ts:Date.now(),data:d}));}catch{} };
+
+async function loadProducts(force){
+  if(!force){ const c=getCached(CACHE_KEY)||getCachedAny(CACHE_KEY); if(c&&c.length){ buildIndex(c); setStatus(c.length); bgRefresh(); return; } }
+  document.getElementById('dataStatus').textContent='กำลังโหลดข้อมูลสินค้า...'; setStatusDot('syncing'); setLoadingBar(true);
+  try{
+    const data=await fetchSheet();
+    if(data&&data.length){ setCache(CACHE_KEY,data); buildIndex(data); setStatus(data.length); }
+    else if(!fallbackStale()){ document.getElementById('dataStatus').textContent='โหลดไม่ได้ — กด ↻'; setStatusDot('error'); }
+  }catch(e){ if(!fallbackStale()){ document.getElementById('dataStatus').textContent='โหลดไม่ได้ — กด ↻'; setStatusDot('error'); } }
+  finally{ setLoadingBar(false); }
+}
+function fallbackStale(){ const s=getCachedAny(CACHE_KEY); if(s&&s.length){ buildIndex(s); setStatus(s.length,true); return true; } return false; }
+async function bgRefresh(){ setStatusDot('syncing'); const d=await fetchSheet().catch(()=>null); if(d&&d.length){ setCache(CACHE_KEY,d); buildIndex(d); setStatus(d.length); } else setStatusDot('error'); }
+function setStatus(n,stale){ document.getElementById('dataStatus').textContent=(stale?'⚠ ใช้สต็อกล่าสุด · ':'')+`สินค้า ${n.toLocaleString()} รายการ`; setStatusDot(stale?'error':'ok'); }
+
+// ════════ LIVE LOTS (อ่านสดจาก GAS แอป-1) ════════
+async function fetchLiveLotsFor(wh){
+  try{ const r=await fetch(`${COUNT_SAVE_URL}?action=liveLots&warehouse=${encodeURIComponent(wh)}`,{cache:'no-store'});
+    const j=await r.json(); return Array.isArray(j.lots)?j.lots:[]; }catch{ return []; }
+}
+function aggregateLotsByKey(lots){
+  const map=new Map();
+  lots.forEach(lot=>{ const k=lot.key||''; if(!k)return;
+    if(!map.has(k))map.set(k,{key:k,name:lot.productName||lot.name||'',factors:lot.factors||{EA:1,PA:1,BP:1,CS:1},total:{EA:0,PA:0,BP:0,CS:0},lots:[]});
+    const g=map.get(k); if(lot.factors)g.factors=lot.factors;
+    UNITS.forEach(u=>g.total[u]=(g.total[u]||0)+(lot.counts[u]||0)); g.lots.push(lot); });
+  return map;
+}
+
+// ════════ COMPARE LOGIC ════════
+function piecesToCSEA(pieces,factorCS){ const sign=pieces<0?'-':''; const a=Math.abs(pieces); const f=factorCS>0?factorCS:1; const cs=Math.floor(a/f),ea=a-cs*f; return cs>0?`${sign}${cs} CS ${ea} EA`:`${sign}${ea} EA`; }
+function diffCSEA(diff,fcs){ const a=Math.abs(diff),f=fcs>0?fcs:1; const cs=Math.floor(a/f),ea=a-cs*f; return cs>0?`${cs} CS ${ea} EA`:`${ea} EA`; }
+
+function compareDiff(g,wh,key){
+  const prod=findProduct(key||(g&&g.key));
+  const factors=(g&&g.factors)||(prod?{EA:unitFactor(prod,'EA'),PA:unitFactor(prod,'PA'),BP:unitFactor(prod,'BP'),CS:unitFactor(prod,'CS')}:{EA:1,PA:1,BP:1,CS:1});
+  const fcs=factors.CS||1;
+  const counted=g?UNITS.reduce((s,u)=>s+(g.total[u]||0)*(factors[u]||1),0):0;
+  const raw=prod?(prod[`STOCK ${wh}`]||'0'):'0';
+  const {cs,ea}=parseStock(raw); const system=cs*fcs+ea; const diff=counted-system;
+  return {counted,system,diff,status:diff===0?'ok':(diff<0?'short':'over'),factorCS:fcs,raw,hasCount:!!g};
+}
+
+// reconcile across the chosen pair (whA / whB). diff = counted - system.
+function reconcileActions(r){
+  const fcs=(r.a&&r.a.factorCS)||(r.b&&r.b.factorCS)||1;
+  const da=r.a?r.a.diff:0, db=r.b?r.b.diff:0;
+  let aOver=Math.max(0,da),aShort=Math.max(0,-da), bOver=Math.max(0,db),bShort=Math.max(0,-db);
+  // โอนย้ายได้ไม่เกิน "สต็อกที่ระบบมี" ในคลังต้นทาง (from) — กันสต็อกระบบติดลบ/ออกใบโอนไม่ได้
+  // ส่วนเกินที่โอนไม่ได้ จะตกไปเป็นปรับเข้า/ปรับออกแทน
+  let aSys=r.a?Math.max(0,r.a.system):0, bSys=r.b?Math.max(0,r.b.system):0;
+  const acts=[]; const f=p=>piecesToCSEA(p,fcs); const A=r.whA,B=r.whB;
+  if(aOver>0&&bShort>0){const t=Math.min(aOver,bShort,aSys);if(t>0){acts.push({k:'move',from:A,to:B,pieces:t,fcs,text:`🔄 โอนย้าย ${A} → ${B} : ${f(t)}`});aOver-=t;bShort-=t;aSys-=t;}}
+  if(bOver>0&&aShort>0){const t=Math.min(bOver,aShort,bSys);if(t>0){acts.push({k:'move',from:B,to:A,pieces:t,fcs,text:`🔄 โอนย้าย ${B} → ${A} : ${f(t)}`});bOver-=t;aShort-=t;bSys-=t;}}
+  if(aShort>0)acts.push({k:'in',wh:A,pieces:aShort,fcs,text:`➕ ปรับเข้า ${A} : ${f(aShort)}`});
+  if(bShort>0)acts.push({k:'in',wh:B,pieces:bShort,fcs,text:`➕ ปรับเข้า ${B} : ${f(bShort)}`});
+  if(aOver>0)acts.push({k:'out',wh:A,pieces:aOver,fcs,text:`➖ ปรับออก ${A} : ${f(aOver)}`});
+  if(bOver>0)acts.push({k:'out',wh:B,pieces:bOver,fcs,text:`➖ ปรับออก ${B} : ${f(bOver)}`});
+  return acts;
+}
+
+function curPair(){ return { A: document.getElementById('whA').value, B: document.getElementById('whB').value }; }
+
+async function renderCompare(silent){
+  const body=document.getElementById('compareBody'); if(!body)return;
+  const {A,B}=curPair();
+  document.getElementById('cmpTitle').textContent=`🔀 เทียบสต็อก ${A} ↔ ${B}`;
+  if(A===B){ body.innerHTML=`<div class="muted-box">เลือกคลังให้ต่างกัน 2 คลัง</div>`; setStats(0,0,0); cmpLastRows=[]; return; }
+  if(!silent&&!body.dataset.loaded){ body.innerHTML=`<div class="muted-box">กำลังดึงข้อมูล ${A} + ${B}...</div>`; }
+  const [aLots,bLots]=await Promise.all([fetchLiveLotsFor(A),fetchLiveLotsFor(B)]);
+  body.dataset.loaded='1';
+  const aMap=aggregateLotsByKey(aLots), bMap=aggregateLotsByKey(bLots);
+  const keys=new Set([...aMap.keys(),...bMap.keys()]);
+  if(!keys.size){ body.innerHTML=`<div class="muted-box">ยังไม่มีรายการนับใน ${A} หรือ ${B}</div>`; setStats(0,0,0); cmpLastRows=[]; return; }
+  const rows=[...keys].map(k=>{ const ag=aMap.get(k),bg=bMap.get(k);
+    return {key:k,name:(ag&&ag.name)||(bg&&bg.name)||k,whA:A,whB:B,a:compareDiff(ag,A,k),b:compareDiff(bg,B,k),ag,bg}; });
+  rows.sort((x,y)=>(Math.abs(y.a.diff)+Math.abs(y.b.diff))-(Math.abs(x.a.diff)+Math.abs(x.b.diff)));
+  cmpLastRows=rows;
+  let nIn=0,nOut=0,nMove=0;
+  rows.forEach(r=>{ const acts=reconcileActions(r); if(acts.some(a=>a.k==='in'))nIn++; if(acts.some(a=>a.k==='out'))nOut++; if(acts.some(a=>a.k==='move'))nMove++; });
+  setStats(nIn,nOut,nMove);
+
+  const sideHtml=(label,d)=>{
+    const pillCls=d.status==='ok'?'p-ok':(d.status==='short'?'p-short':'p-over');
+    const word=d.status==='ok'?'✓ ตรง':(d.status==='short'?'↓ ขาด':'↑ เกิน');
+    const csea=d.status==='ok'?'':` ${diffCSEA(d.diff,d.factorCS)}`;
+    const notYet=!d.hasCount?` <span style="font-weight:500;color:var(--muted);font-size:10px">· ยังไม่นับ</span>`:'';
+    return `<div class="cmp-side cmp-${d.status}">
+      <div class="cmp-side-l">${label}${notYet}</div>
+      <div class="cmp-side-vals"><span class="cmp-num">นับ <b>${piecesToCSEA(d.counted,d.factorCS)}</b></span><span style="color:var(--border)">·</span><span class="cmp-num">ระบบ <b>${piecesToCSEA(d.system,d.factorCS)}</b></span></div>
+      <span class="cmp-side-pill ${pillCls}">${word}${csea}</span></div>`;
+  };
+  const rowsHtml=rows.map(r=>{
+    const open=compareOpen.has(r.key);
+    const expandHtml=open?`<div class="cmp-expand">${[ [r.whA,r.ag],[r.whB,r.bg] ].map(([wh,g])=>{
+      if(!g)return ''; const byPerson=new Map();
+      (g.lots||[]).forEach(lot=>{ const pk=(lot.empId||lot.userKey||lot.name||'—')+'|'+(lot.name||'');
+        if(!byPerson.has(pk))byPerson.set(pk,{name:lot.name||lot.empId||'—',lots:[]}); byPerson.get(pk).lots.push(lot); });
+      return `<div class="cmp-wh"><div class="cmp-wh-l">${wh} · ${WH_NAMES[wh]||''}</div>
+        ${[...byPerson.values()].map(p=>`<div class="cmp-person"><div class="cmp-person-name">👤 ${esc(p.name)}</div>
+          ${p.lots.map(lot=>{ const bd=UNITS.filter(u=>(lot.counts[u]||0)>0).map(u=>`${lot.counts[u]} ${u}`).join(' + ')||'0';
+            return `<div class="cmp-lot"><span class="cmp-lot-bd">${bd}</span>${lot.location?`<span class="cmp-lot-loc">📍 ${esc(lot.location)}</span>`:''}${lot.expiryDate?`<span class="cmp-lot-exp">📅 ${formatThaiDate(lot.expiryDate)}</span>`:''}</div>`; }).join('')}
+        </div>`).join('')}</div>`;
+    }).join('')}</div>`:'';
+    const acts=reconcileActions(r);
+    const actsHtml=acts.length?`<div class="cmp-actions">${acts.map(a=>`<span class="cmp-act cmp-act-${a.k}">${a.text}</span>`).join('')}</div>`:'';
+    return `<div class="cmp-row ${open?'open':''}" data-cmp-key="${encodeURIComponent(r.key)}">
+      <div class="cmp-head"><div class="cmp-name">${esc(r.name)} <span class="cmp-chev">›</span></div></div>
+      <div class="cmp-sides">${sideHtml(r.whA,r.a)}${sideHtml(r.whB,r.b)}</div>${actsHtml}${expandHtml}</div>`;
+  }).join('');
+  body.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;font-size:13px;color:var(--muted);margin-bottom:12px">
+      <div><b>${rows.length}</b> รายการ · ${A} และ ${B}</div><div style="font-size:11px">📡 ${formatThaiTime(new Date())} น.</div></div>
+    <div class="cmp-list">${rowsHtml}</div>`;
+  if(!body.dataset.delegated){ body.dataset.delegated='1';
+    body.addEventListener('click',e=>{ const row=e.target.closest('[data-cmp-key]'); if(!row)return;
+      const k=decodeURIComponent(row.dataset.cmpKey); if(compareOpen.has(k))compareOpen.delete(k); else compareOpen.add(k); renderCompare(true); }); }
+}
+function setStats(i,o,m){ document.getElementById('nIn').textContent=i; document.getElementById('nOut').textContent=o; document.getElementById('nMove').textContent=m; }
+
+// ════════ EXCEL EXPORT (ยกมาจากแอป-1, ใช้ reserveDocNo ของ GAS แอป-1) ════════
+const EXPORT_CFG={
+  move:{title:'📤 Export โอนย้าย',lsKey:'rattana_doc_move',defNo:'DMI46906/00051',label:'โอนย้าย',fileTag:'โอนย้าย'},
+  in:  {title:'📥 Export ปรับเข้า',lsKey:'rattana_doc_in',  defNo:'IPI16906/00000',label:'ปรับเข้า',fileTag:'ปรับเข้า'},
+  out: {title:'📤 Export ปรับออก',lsKey:'rattana_doc_out', defNo:'DRI16906/00000',label:'ปรับออก',fileTag:'ปรับออก'},
+};
+function nextDocNo(s){ const m=String(s||'').match(/^(.*?)(\d+)(\D*)$/); if(!m)return String(s||''); const w=m[2].length; const n=(parseInt(m[2],10)+1).toString().padStart(w,'0'); return m[1]+n+m[3]; }
+function forceTextColumn(ws,header,colName){ const ci=header.indexOf(colName); if(ci<0||!ws['!ref'])return; const range=XLSX.utils.decode_range(ws['!ref']);
+  for(let R=range.s.r+1;R<=range.e.r;R++){ const addr=XLSX.utils.encode_cell({r:R,c:ci}); const cell=ws[addr]; if(cell){ cell.v=String(cell.v==null?'':cell.v); cell.t='s'; cell.w=cell.v; cell.z='@'; } } }
+function adjUnitLines(prod,pieces,fcs){ fcs=fcs>0?fcs:1; const cs=Math.floor(pieces/fcs),ea=pieces-cs*fcs; const lines=[];
+  if(cs>0)lines.push({code:prod?String(prod['CODE CS']||'').trim():'',qty:cs}); if(ea>0)lines.push({code:prod?String(prod['CODE EA']||'').trim():'',qty:ea}); return lines; }
+
+function openExportDialog(kind){
+  exportKind=kind; const cfg=EXPORT_CFG[kind];
+  if(!cmpLastRows.length){ showToast('ยังไม่มีข้อมูลเทียบ — รอโหลดสักครู่','warning'); return; }
+  if(!cmpLastRows.some(r=>reconcileActions(r).some(a=>a.k===kind))){ showToast(`ไม่มีรายการที่ต้อง${cfg.label}`,'info'); return; }
+  document.getElementById('docNoTitle').textContent=cfg.title;
+  const inp=document.getElementById('docNoInput'); if(inp)inp.value=localStorage.getItem(cfg.lsKey)||cfg.defNo;
+  document.getElementById('docNoModal').classList.add('open');
+  setTimeout(()=>{ if(inp){inp.focus();inp.select();} },50);
+}
+function closeDocNoModal(){ document.getElementById('docNoModal').classList.remove('open'); }
+
+async function runExport(){
+  if(typeof XLSX==='undefined'){ showToast('โหลด Excel library ไม่ได้','error'); return; }
+  const cfg=EXPORT_CFG[exportKind];
+  const startDoc=String(document.getElementById('docNoInput')?.value||'').trim();
+  if(!startDoc){ showToast('กรุณาใส่เลขที่เอกสาร','warning'); return; }
+  const DOC_DATE=formatThaiDate(new Date());
+  const groups={};
+  cmpLastRows.forEach(r=>{ const prod=findProduct(r.key);
+    reconcileActions(r).filter(a=>a.k===exportKind).forEach(a=>{ const gk=exportKind==='move'?(a.from+'>'+a.to):a.wh;
+      if(!groups[gk])groups[gk]=[]; adjUnitLines(prod,a.pieces,a.fcs).forEach(ln=>{ groups[gk].push({code:ln.code||r.key,qty:ln.qty,from:a.from,to:a.to,wh:a.wh}); }); }); });
+  const gkeys=Object.keys(groups);
+  if(!gkeys.length){ showToast(`ไม่มีรายการที่ต้อง${cfg.label}`,'info'); return; }
+  let firstDoc; showSpinner('กำลังขอเลขเอกสาร...');
+  try{
+    const res=await fetch(COUNT_SAVE_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'reserveDocNo',kind:exportKind,current:startDoc,count:gkeys.length})});
+    const j=await res.json(); if(!j||!j.ok||!j.first)throw new Error('reserve failed'); firstDoc=j.first;
+  }catch(e){ hideSpinner(); showToast('ขอเลขเอกสารไม่สำเร็จ — เช็คเน็ตแล้วลองใหม่','error'); return; }
+  hideSpinner();
+  const out=[]; let docNo=firstDoc;
+  gkeys.forEach((gk,gi)=>{ if(gi>0)docNo=nextDocNo(docNo);
+    groups[gk].forEach(ln=>{
+      if(exportKind==='move'){ const [from,to]=gk.split('>');
+        out.push({'วันที่เอกสาร':DOC_DATE,'เลขที่เอกสาร':docNo,'รหัสสาขา':0,'รหัสแผนก':'SP01','รหัสโครงการ':0,'ราคาที่แสดง':0,'หมายเหตุ':`โอนย้ายจาก ${from} ไป ${to}`,'รหัสซื้อขาย':ln.code,'จำนวน':ln.qty,'ราคาต่อหน่วย':0,'น้ำหนักต่อหน่วย':'','เลขล็อต':'','เลขกำกับ':'','ตำแหน่งเก็บ':from,'ย้ายไปตำแหน่งเก็บ':to}); }
+      else if(exportKind==='in'){ out.push({'วันที่เอกสาร':DOC_DATE,'เลขที่เอกสาร':docNo,'รหัสสาขา':0,'รหัสแผนก':'SP01','รหัสโครงการ':0,'ราคาที่แสดง':1,'หมายเหตุ':'','รหัสซื้อขาย':ln.code,'จำนวน':ln.qty,'ราคาต่อหน่วย':0,'น้ำหนักต่อหน่วย':'','เลขล็อต':'','เลขกำกับ':'','ตำแหน่งเก็บ':gk,'วันที่ผลิต':DOC_DATE,'วันที่หมดอายุ':DOC_DATE}); }
+      else { out.push({'วันที่เอกสาร':DOC_DATE,'เลขที่เอกสาร':docNo,'รหัสสาขา':0,'รหัสแผนก':'SP01','รหัสโครงการ':0,'เบิกไปสำหรับ':1,'ราคาที่แสดง':1,'หมายเหตุ':'','รหัสซื้อขาย':ln.code,'จำนวน':ln.qty,'ราคาต่อหน่วย':0,'น้ำหนักต่อหน่วย':'','เลขล็อต':'','เลขกำกับ':'','ตำแหน่งเก็บ':gk}); }
+    });
+  });
+  try{ localStorage.setItem(cfg.lsKey,docNo); }catch{}
+  const header=exportKind==='move'
+    ? ['วันที่เอกสาร','เลขที่เอกสาร','รหัสสาขา','รหัสแผนก','รหัสโครงการ','ราคาที่แสดง','หมายเหตุ','รหัสซื้อขาย','จำนวน','ราคาต่อหน่วย','น้ำหนักต่อหน่วย','เลขล็อต','เลขกำกับ','ตำแหน่งเก็บ','ย้ายไปตำแหน่งเก็บ']
+    : exportKind==='in'
+    ? ['วันที่เอกสาร','เลขที่เอกสาร','รหัสสาขา','รหัสแผนก','รหัสโครงการ','ราคาที่แสดง','หมายเหตุ','รหัสซื้อขาย','จำนวน','ราคาต่อหน่วย','น้ำหนักต่อหน่วย','เลขล็อต','เลขกำกับ','ตำแหน่งเก็บ','วันที่ผลิต','วันที่หมดอายุ']
+    : ['วันที่เอกสาร','เลขที่เอกสาร','รหัสสาขา','รหัสแผนก','รหัสโครงการ','เบิกไปสำหรับ','ราคาที่แสดง','หมายเหตุ','รหัสซื้อขาย','จำนวน','ราคาต่อหน่วย','น้ำหนักต่อหน่วย','เลขล็อต','เลขกำกับ','ตำแหน่งเก็บ'];
+  const ws=XLSX.utils.json_to_sheet(out,{header}); forceTextColumn(ws,header,'รหัสซื้อขาย');
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'BplusData');
+  const stamp=formatThaiDate(new Date()).replace(/\//g,'-');
+  XLSX.writeFile(wb,`${cfg.fileTag}_${stamp}.xlsx`);
+  closeDocNoModal();
+  showToast(`ดาวน์โหลด${cfg.label} ${out.length} แถว · ${gkeys.length} เอกสาร ✓`,'success');
+}
+
+// ════════ WAREHOUSE PICKER ════════
+function buildWhSelectors(){
+  const optsHtml=WH_LIST.map(w=>`<option value="${w}">${w} · ${WH_NAMES[w]||''}</option>`).join('');
+  const selA=document.getElementById('whA'), selB=document.getElementById('whB');
+  selA.innerHTML=optsHtml; selB.innerHTML=optsHtml;
+  selA.value=localStorage.getItem('rattana_compare_whA')||'C4';
+  selB.value=localStorage.getItem('rattana_compare_whB')||'W4';
+  if(selA.value===selB.value){ selA.value='C4'; selB.value='W4'; }
+}
+function onPairChange(){
+  const {A,B}=curPair();
+  try{ localStorage.setItem('rattana_compare_whA',A); localStorage.setItem('rattana_compare_whB',B); }catch{}
+  compareOpen.clear();
+  document.getElementById('compareBody').dataset.loaded='';
+  renderCompare();
+}
+function swapWh(){ const selA=document.getElementById('whA'),selB=document.getElementById('whB'); const t=selA.value; selA.value=selB.value; selB.value=t; onPairChange(); }
+
+// ════════ POLLING + REFRESH ════════
+function startComparePoll(){ stopComparePoll(); comparePollTimer=setInterval(()=>{ if(!document.hidden&&navigator.onLine!==false&&Date.now()>=pollBackoffUntil)renderCompare(true); },POLL_MS); }
+function stopComparePoll(){ if(comparePollTimer){clearInterval(comparePollTimer);comparePollTimer=null;} }
+function startDataPoll(){ if(dataPollTimer)clearInterval(dataPollTimer); dataPollTimer=setInterval(()=>{ if(!document.hidden&&navigator.onLine!==false)bgRefresh(); },POLL_MS); }
+async function refreshAll(){
+  const b=document.getElementById('btnRefresh'); b.disabled=true; b.style.transform='rotate(360deg)'; b.style.transition='transform .6s';
+  await loadProducts(true); await renderCompare();
+  b.disabled=false; setTimeout(()=>{b.style.transform='';b.style.transition='';},650);
+  showToast('อัปเดตแล้ว ✓','success');
+}
+
+// ════════ INIT ════════
+(async function init(){
+  try{ if(localStorage.getItem('rattana_compare_dark')==='1')document.body.classList.add('dark'); }catch{}
+  buildWhSelectors();
+  window.addEventListener('scroll',()=>{ document.getElementById('backToTop').classList.toggle('show',window.scrollY>300); });
+  await loadProducts(false);
+  await renderCompare();
+  startComparePoll(); startDataPoll();
+})();
+</script>
+</body>
+</html>
