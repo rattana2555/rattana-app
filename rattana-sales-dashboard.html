@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Sales Dashboard v9.7</title>
+<title>Rattana Sales Dashboard v9.8</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -276,7 +276,7 @@ body.dark .pvol{color:var(--gold-light)}
     </div>
     <div id="loginError"></div>
   </div>
-  <p style="color:rgba(255,255,255,.4);font-size:12px">v9.7 · 2026-07-11</p>
+  <p style="color:rgba(255,255,255,.4);font-size:12px">v9.8 · 2026-07-11</p>
 </div>
 
 <!-- APP SCREEN -->
@@ -285,7 +285,7 @@ body.dark .pvol{color:var(--gold-light)}
     <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
       <div>
         <div class="logo-text">RATTANA <span>SALES</span></div>
-        <div style="font-size:11px;color:rgba(255,255,255,.5)">ยอดขายของฉัน <span style="color:var(--gold);font-weight:600">v9.7</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.5)">ยอดขายของฉัน <span style="color:var(--gold);font-weight:600">v9.8</span></div>
       </div>
     </div>
     <button class="icon-btn" onclick="refreshData()" id="btnRefresh" title="รีเฟรช">↻</button>
@@ -803,12 +803,20 @@ async function loadData(showSpin=true) {
       }
     } catch(e) { console.warn('[PDDT eager] failed:', e.message); }
 
-    // โหลด ALL_SALES history ใน background ไม่บล็อก UI
+    // โหลด ALL_SALES history ใน background — cache 60 นาที
     if (!allSalesHistRows.length) {
-      fetchSheet(ALL_SALES_SHEET_ID, ALL_SALES_SHEET_NAME).then(rows => {
-        allSalesHistRows = rows;
-        console.log(`[AllSales eager] rows=${rows.length}`);
-      }).catch(e => console.warn('[AllSales eager] failed:', e.message));
+      const _asc = (() => { try { const i=JSON.parse(localStorage.getItem('allSalesHist')); return i&&Date.now()-i.ts<3600000?i.data:null; }catch{return null} })();
+      const allSalesCache = _asc;
+      if (allSalesCache) {
+        allSalesHistRows = allSalesCache;
+        console.log(`[AllSales] from cache rows=${allSalesHistRows.length}`);
+      } else {
+        fetchSheet(ALL_SALES_SHEET_ID, ALL_SALES_SHEET_NAME).then(rows => {
+          allSalesHistRows = rows;
+          try { localStorage.setItem('allSalesHist', JSON.stringify({ts:Date.now(), data:rows})); } catch{}
+          console.log(`[AllSales eager] rows=${rows.length}`);
+        }).catch(e => console.warn('[AllSales eager] failed:', e.message));
+      }
     }
 
     applyFilters();
@@ -1842,4 +1850,4 @@ function closeProdModal() {
 </script>
 </body>
 </html>
-<!-- v9.7 -->
+<!-- v9.8 -->
