@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Sales Dashboard v9.8</title>
+<title>Rattana Sales Dashboard v9.5</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -276,7 +276,7 @@ body.dark .pvol{color:var(--gold-light)}
     </div>
     <div id="loginError"></div>
   </div>
-  <p style="color:rgba(255,255,255,.4);font-size:12px">v9.8 · 2026-07-11</p>
+  <p style="color:rgba(255,255,255,.4);font-size:12px">v9.5 · 2026-07-11</p>
 </div>
 
 <!-- APP SCREEN -->
@@ -285,7 +285,7 @@ body.dark .pvol{color:var(--gold-light)}
     <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
       <div>
         <div class="logo-text">RATTANA <span>SALES</span></div>
-        <div style="font-size:11px;color:rgba(255,255,255,.5)">ยอดขายของฉัน <span style="color:var(--gold);font-weight:600">v9.8</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.5)">ยอดขายของฉัน <span style="color:var(--gold);font-weight:600">v9.5</span></div>
       </div>
     </div>
     <button class="icon-btn" onclick="refreshData()" id="btnRefresh" title="รีเฟรช">↻</button>
@@ -803,22 +803,6 @@ async function loadData(showSpin=true) {
       }
     } catch(e) { console.warn('[PDDT eager] failed:', e.message); }
 
-    // โหลด ALL_SALES history ใน background — cache 60 นาที
-    if (!allSalesHistRows.length) {
-      const _asc = (() => { try { const i=JSON.parse(localStorage.getItem('allSalesHist')); return i&&Date.now()-i.ts<3600000?i.data:null; }catch{return null} })();
-      const allSalesCache = _asc;
-      if (allSalesCache) {
-        allSalesHistRows = allSalesCache;
-        console.log(`[AllSales] from cache rows=${allSalesHistRows.length}`);
-      } else {
-        fetchSheet(ALL_SALES_SHEET_ID, ALL_SALES_SHEET_NAME).then(rows => {
-          allSalesHistRows = rows;
-          try { localStorage.setItem('allSalesHist', JSON.stringify({ts:Date.now(), data:rows})); } catch{}
-          console.log(`[AllSales eager] rows=${rows.length}`);
-        }).catch(e => console.warn('[AllSales eager] failed:', e.message));
-      }
-    }
-
     applyFilters();
     populateBUFilter();
   } catch(e) {
@@ -1335,47 +1319,7 @@ function showStoreDetail(storeName, storeCode) {
           </div>`;
         }).join('')}
       </div>
-    </div>` : `<div style="text-align:center;padding:32px;color:var(--muted)">🔍 ไม่พบข้อมูลยอดขายร้านนี้</div>`}
-
-    ${(() => {
-      // ตารางประวัติ 3 เดือนจาก ALL_SALES sheet
-      if (!allSalesHistRows.length) return '<div style="text-align:center;padding:20px;color:var(--muted);font-size:13px">⏳ กำลังโหลดประวัติ — ลองรีเฟรชอีกครั้ง</div>';
-      const hist = allSalesHistRows.filter(r => (r['Customer_Code']||'').trim() === storeCode);
-      if (!hist.length) return '';
-      // หา 3 เดือนล่าสุด
-      const months = [...new Set(hist.map(r=>(r['Month_Year']||'').trim()).filter(Boolean))].sort().slice(-3);
-      const histFiltered = hist.filter(r => months.includes((r['Month_Year']||'').trim()));
-      // group by Month_Year
-      const byMonth = {};
-      histFiltered.forEach(r => {
-        const m = (r['Month_Year']||'').trim();
-        if (!byMonth[m]) byMonth[m] = [];
-        byMonth[m].push(r);
-      });
-      const monthKeys = Object.keys(byMonth).sort().reverse();
-      return `<div class="card mt-16">
-        <div class="card-head"><strong>📅 ประวัติสั่งซื้อ 3 เดือนล่าสุด</strong><span class="badge badge-gold">${histFiltered.length} รายการ</span></div>
-        <div class="tbl-wrap">
-          <table class="tbl" style="min-width:460px">
-            <thead><tr>
-              <th style="width:100px">เดือน</th>
-              <th>สินค้า</th>
-              <th style="text-align:right;width:60px">CS</th>
-              <th style="text-align:right;width:90px">ยอด</th>
-            </tr></thead>
-            <tbody>
-              ${monthKeys.map(m => byMonth[m].map((r,i) => `
-                <tr>
-                  <td style="font-size:12px;color:var(--muted)">${i===0?escH(m):''}</td>
-                  <td style="font-size:12px">${escH(r['Product_Name']||'-')}</td>
-                  <td class="num" style="font-size:12px">${parseNum(r['Sales_CS'])>0?parseNum(r['Sales_CS']).toFixed(1):'-'}</td>
-                  <td class="num" style="font-size:12px;font-weight:600">${fmt(parseNum(r['Exvat']||r['EXVat']||0))}</td>
-                </tr>`).join('')).join('')}
-            </tbody>
-          </table>
-        </div>
-      </div>`;
-    })()}`;
+    </div>` : `<div style="text-align:center;padding:32px;color:var(--muted)">🔍 ไม่พบข้อมูลยอดขายร้านนี้</div>`}`;
 }
 
 function showCustList() {
@@ -1584,7 +1528,6 @@ let lowStoreLoaded    = false;
 let lowCustomerRows   = [];
 let lowHistByCode     = {}; // { Customer_Code: [ {Product_Name, avg_cs, img}, ... ] } top 5
 let productImageMap   = {}; // { Product_Name: imageUrl }
-let allSalesHistRows  = []; // raw ALL_SALES rows for store detail history
 
 async function loadLowStoreData() {
   showSpinner('กำลังโหลดข้อมูลร้านค้า…');
@@ -1611,7 +1554,6 @@ async function loadLowStoreData() {
     showSpinner('กำลังโหลดประวัติสินค้า…');
     try {
       const allSalesRows = await fetchSheet(ALL_SALES_SHEET_ID, ALL_SALES_SHEET_NAME);
-      allSalesHistRows = allSalesRows; // เก็บ raw rows ไว้ใช้ใน store detail
       // รวม Sales_CS ต่อ Customer_Code + Product_Name
       const sumByCodeProd = {};
       for (const r of allSalesRows) {
@@ -1850,4 +1792,4 @@ function closeProdModal() {
 </script>
 </body>
 </html>
-<!-- v9.8 -->
+<!-- v9.5 -->
