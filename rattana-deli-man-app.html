@@ -741,7 +741,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.39';
+const APP_VERSION='3.40';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -2970,7 +2970,13 @@ function renderDriverHome(){
     if(availIds.has(j.id)) return false; // นับซ้ำ
     // เช็คว่าเป็นวันนี้ไหม (มีบิลที่ docDate ตรงกับวันนี้ หรือมี startedAt วันนี้)
     const startedToday=j.startedAt&&new Date(j.startedAt).toDateString()===new Date().toDateString();
-    const hasBillsToday=(j.bills||[]).some(b=>{ const d=b.docDate?new Date(b.docDate).toDateString():''; return d===new Date().toDateString(); });
+    const hasBillsToday=(j.bills||[]).some(b=>{
+      const s=String(b.docDate||'').trim(); if(!s) return false;
+      const mm=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);   // v3.40: parse dd/mm/yyyy ให้ถูก (เดิม new Date สลับวัน/เดือน + วันเกิน 12 พัง)
+      let y=mm?parseInt(mm[3],10):0; if(y>2400) y-=543;
+      const dt=mm?new Date(y,parseInt(mm[2],10)-1,parseInt(mm[1],10)):new Date(s);
+      return !isNaN(dt.getTime())&&dt.toDateString()===new Date().toDateString();
+    });
     return startedToday||hasBillsToday;
   });
   // v3.00: ผู้ช่วย/ทะเบียน — เอาทั้งหมด ไม่กรอง warehouse (user request)
@@ -5646,7 +5652,7 @@ async function syncJobsFromSheet(opts){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.38 (ยกเลิกงาน → ลบ CN ตามเลขที่บิล DS ด้วย เผื่อ CN ที่ รหัสใบคุม ว่าง/ไม่ตรง) */
+const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.40 (แก้ Doc_Date: parse dd/mm/yyyy ให้ถูก + เครื่องมือซ่อมแถวเก่าที่สลับวัน/เดือน) */
 const SHEET_INPUT='บันทึกเที่ยวส่ง';
 const SHEET_CIN='บันทึกบิลและการชำระ';
 const SHEET_CN='CN';
@@ -5691,7 +5697,7 @@ const HEADERS_CIN=['เลขใบคุม','Doc_Date','Doc_No','Customer_Code
 function doGet(e){
   let drive='unknown';
   try{ DriveApp.getRootFolder().getName(); drive='OK'; }catch(err){ drive='NOT_AUTHORIZED'; }
-  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.38',drive:drive}))
+  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.40',drive:drive}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -5726,7 +5732,7 @@ function doPost(e){
         fmtColsOpen_(sh,['รหัสร้าน','เลขใบคุม','Doc_No'],'@');   // v3.35: เปิดปลาย คลุมแถวใหม่
         fmtColsOpen_(sh,['Lat','Lng'],'0.000000');
         fmtColsOpen_(sh,['วันเวลา'],'yyyy-mm-dd hh:mm:ss');
-        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.38'})).setMimeType(ContentService.MimeType.JSON);
+        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.40'})).setMimeType(ContentService.MimeType.JSON);
       }finally{ lock.releaseLock(); }
     }
 
@@ -5983,7 +5989,7 @@ function doPost(e){
         const slip2Url=uploadPaymentPhoto_(p.transfer2Photo,'SLIP2_'+data.jobId+'_'+b.doc+'.jpg');
         const chequeUrl=uploadPaymentPhoto_(p.chequePhoto,'CHEQUE_'+data.jobId+'_'+b.doc+'.jpg');
         // v3.8: Doc_Date จากชีทใบคุม (parse เป็นวันที่ ถ้าไม่ได้เก็บข้อความเดิม)
-        let docDateVal=''; if(b.docDate){ const dd=new Date(b.docDate); docDateVal=isNaN(dd.getTime())?b.docDate:dd; }
+        let docDateVal=parseDocDate_(b.docDate);   // v3.40: parse dd/mm/yyyy ให้ถูก (เดิม new Date ตีความ m/d/y → สลับวัน/เดือน + วันเกิน 12 พังเป็น text)
         // v3.11: รวม วัน/เดือน/ปี(พ.ศ.) ของเช็ค เป็นวันที่เดียว
         let chequeDateVal='';
         if(p.chequeDay&&p.chequeMonth&&p.chequeYear){
@@ -6050,7 +6056,7 @@ function doPost(e){
       fmtColsOpen_(cinSh,['วัน+เวลา ที่ส่งสินค้า','U_ADD','วันที่โอนครั้งที่1','วันที่โอนครั้งที่2','แก้ไขเมื่อ','วันที่','วันเวลาอนุมัติ'],'yyyy-mm-dd hh:mm:ss');
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.38'}))
+    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.40'}))
       .setMimeType(ContentService.MimeType.JSON);
   }catch(err){
     return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err)}))
@@ -6310,6 +6316,23 @@ function fmtThai_(ts){
   var d=new Date(ts); if(isNaN(d.getTime())) return String(ts);
   var p=function(x){ return (x<10?'0':'')+x; };
   return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+((d.getFullYear()+543)%100)+' '+p(d.getHours())+'.'+p(d.getMinutes());
+}
+
+/* v3.40: แปลง Doc_Date ให้เป็น Date ที่ถูกต้อง — ต้นทาง (ชีท Jobs/ใบคุม) เป็น dd/mm/yyyy
+   ห้ามใช้ new Date() ตรงๆ เพราะมันตีความ m/d/y → 10/07 กลายเป็น Oct 7, 13/07 พังทั้งหมด */
+function parseDocDate_(v){
+  if(v===''||v===null||v===undefined) return '';
+  if(Object.prototype.toString.call(v)==='[object Date]') return isNaN(v.getTime())?'':v;
+  var s=String(v).trim(); if(!s) return '';
+  var m=s.match(/^([0-9]{1,2})[/.-]([0-9]{1,2})[/.-]([0-9]{4})$/);   // dd/mm/yyyy (ใช้ [0-9]/[/.-] เลี่ยง backslash ที่โดน strip ใน template literal)
+  if(m){
+    var d=parseInt(m[1],10), mo=parseInt(m[2],10), y=parseInt(m[3],10);
+    if(y>2400) y-=543;   // เผื่อปี พ.ศ. → ค.ศ.
+    if(mo>=1&&mo<=12&&d>=1&&d<=31){ var dt=new Date(y,mo-1,d); return isNaN(dt.getTime())?s:dt; }
+  }
+  var m2=s.match(/^([0-9]{4})[/.-]([0-9]{1,2})[/.-]([0-9]{1,2})$/);   // yyyy-mm-dd (อยู่แล้ว)
+  if(m2){ var dt2=new Date(parseInt(m2[1],10),parseInt(m2[2],10)-1,parseInt(m2[3],10)); return isNaN(dt2.getTime())?s:dt2; }
+  var dd=new Date(s); return isNaN(dd.getTime())?s:dd;
 }
 
 /* Index ด้วย 1 คอลัมน์ (col index 0-based → rowNum) */
@@ -6608,6 +6631,47 @@ function fixPlateColumnFormat(){
   SpreadsheetApp.getUi().alert('✓ แก้ format คอลัมน์ทะเบียนเป็น text + convert '+touched+' แถว เรียบร้อย');
 }
 
+/* v3.40: ซ่อม Doc_Date แถวเก่าใน Cin ที่ผิด (สลับวัน/เดือน หรือ text วันเกิน 12)
+   - ดึงค่าที่ถูกต้องจากชีทต้นทาง ใบคุม + Jobs (Doc_No → Doc_Date) มาเขียนทับ = แม่นสุด
+   - แถวที่หาต้นทางไม่เจอ: ถ้าเป็น text dd/mm/yyyy แปลงเป็น Date ให้ format ตรง */
+function fixDocDateColumn(){
+  const ss=SpreadsheetApp.getActiveSpreadsheet();
+  const cin=ss.getSheetByName(SHEET_CIN);
+  if(!cin){ SpreadsheetApp.getUi().alert('ไม่พบชีท '+SHEET_CIN); return; }
+  const srcMap={};
+  ['ใบคุม','Jobs'].forEach(function(nm){
+    const sh=ss.getSheetByName(nm); if(!sh) return;
+    const hm=headerMap_(sh);
+    const cD=hm['Doc_No']?hm['Doc_No'][0]:-1, cDt=hm['Doc_Date']?hm['Doc_Date'][0]:-1;
+    if(cD<0||cDt<0) return;
+    const data=sh.getDataRange().getValues();
+    for(var i=1;i<data.length;i++){
+      const doc=String(data[i][cD]||'').trim(); if(!doc) continue;
+      const dt=parseDocDate_(data[i][cDt]);
+      if(dt instanceof Date) srcMap[doc]=dt;
+    }
+  });
+  const hmap=headerMap_(cin);
+  const cDoc=hmap['Doc_No']?hmap['Doc_No'][0]:-1, cDate=hmap['Doc_Date']?hmap['Doc_Date'][0]:-1;
+  if(cDoc<0||cDate<0){ SpreadsheetApp.getUi().alert('ไม่พบคอลัมน์ Doc_No / Doc_Date ในชีท '+SHEET_CIN); return; }
+  const last=cin.getLastRow(); if(last<2){ SpreadsheetApp.getUi().alert('ไม่มีข้อมูล'); return; }
+  const docCol=cin.getRange(2,cDoc+1,last-1,1).getValues();
+  const dateCol=cin.getRange(2,cDate+1,last-1,1).getValues();
+  var fixedSrc=0, fixedText=0;
+  for(var r=0;r<dateCol.length;r++){
+    const doc=String(docCol[r][0]||'').trim();
+    const cur=dateCol[r][0];
+    if(doc&&srcMap[doc]){ dateCol[r][0]=srcMap[doc]; fixedSrc++; continue; }
+    if(cur&&Object.prototype.toString.call(cur)!=='[object Date]'){
+      const dt=parseDocDate_(cur);
+      if(dt instanceof Date){ dateCol[r][0]=dt; fixedText++; }
+    }
+  }
+  cin.getRange(2,cDate+1,dateCol.length,1).setValues(dateCol);
+  setFmtByHeader_(cin,'Doc_Date','yyyy-mm-dd');
+  SpreadsheetApp.getUi().alert('✓ แก้ Doc_Date เรียบร้อย\\n- ดึงจากต้นทาง (ถูก 100%): '+fixedSrc+' แถว\\n- แปลง text วันเกิน 12: '+fixedText+' แถว');
+}
+
 function onOpen(){
   try{
     SpreadsheetApp.getUi().createMenu('🚚 D-Man')
@@ -6620,6 +6684,7 @@ function onOpen(){
       .addSeparator()
       .addItem('🩹 Backfill Status columns (Cin เก่า)','backfillStatusColumns')
       .addItem('🔧 แก้ทะเบียนแถวเก่าเป็น text','fixPlateColumnFormat')
+      .addItem('📅 แก้ Doc_Date แถวเก่า (สลับวัน/เดือน)','fixDocDateColumn')
       .addToUi();
   }catch(e){}
 }`;
