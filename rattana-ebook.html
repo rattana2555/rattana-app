@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Rattana E-Book v1.1</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<!-- Google sign-in ปิดชั่วคราว v1.1 (origin_mismatch) — เปิดใช้ใหม่: คืนบรรทัด GSI ด้านล่าง -->
+<!-- <script src="https://accounts.google.com/gsi/client" async defer></script> -->
+<style>
+:root{
+  --navy:#0d1b3e; --navy-mid:#1a2f5e; --navy-light:#243b73;
+  --gold:#c9a84c; --gold-light:#e8c86a;
+  --success:#2ecc71; --danger:#e74c3c; --warning:#f39c12; --info:#3498db;
+  --bg:#f4f6fb; --text:#0d1b3e; --card-bg:#ffffff; --border:#dde3f0; --muted:#6b7896; --row-alt:#fafbfd;
+  --paper:#fbf8f1; --paper-edge:#efe9db;
+  --radius-sm:6px; --radius-md:12px; --radius-lg:16px; --radius-xl:20px;
+  --shadow-sm:0 1px 4px rgba(0,0,0,.06); --shadow-md:0 2px 8px rgba(0,0,0,.08);
+  --shadow-lg:0 8px 24px rgba(13,27,62,.12); --shadow-gold:0 4px 12px rgba(201,168,76,.35);
+}
+body.dark{
+  --bg:#0a1020; --text:#e8eaf0; --card-bg:#111c35; --border:#243b73; --muted:#8a98b8; --row-alt:#0f1830;
+  --paper:#16223e; --paper-edge:#0d1730;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;min-height:100dvh;overflow-x:hidden;background:var(--bg);color:var(--text);transition:background .25s,color .25s}
+button{font-family:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+input{font-family:inherit;font-size:16px}
+img{max-width:100%}
+
+/* Header */
+header{background:var(--navy);color:#fff;padding:10px 14px;position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:10px;border-bottom:3px solid var(--gold);padding-top:max(10px,env(safe-area-inset-top))}
+.logo-text{font-weight:700;letter-spacing:1px;font-size:16px;color:#fff;white-space:nowrap}
+.logo-text span{color:var(--gold)}
+.grow{flex:1}
+.icon-btn{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.2);min-width:38px;height:38px;padding:0 10px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;gap:6px;font-size:16px;font-weight:600;transition:background .15s}
+.icon-btn:hover{background:rgba(255,255,255,.12)}
+.icon-btn .lbl{font-size:12px}
+@media(max-width:560px){.icon-btn .lbl{display:none}}
+
+/* Login */
+#loginScreen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100dvh;padding:24px;background:radial-gradient(1200px 600px at 50% -10%,rgba(201,168,76,.12),transparent),var(--navy)}
+.login-card{background:var(--card-bg);border-radius:var(--radius-lg);border-top:4px solid var(--gold);box-shadow:var(--shadow-lg);padding:34px 30px;max-width:400px;width:100%;text-align:center}
+.login-card .book-emoji{font-size:52px;margin-bottom:8px}
+.login-card h1{font-size:22px;font-weight:700;color:var(--text);margin-bottom:4px}
+.login-card h1 span{color:var(--gold)}
+.login-card p{color:var(--muted);font-size:13px;margin-bottom:22px}
+#gbtn{display:flex;justify-content:center;min-height:44px}
+.login-err{color:var(--danger);font-size:13px;margin-top:14px;min-height:18px;font-weight:600}
+.login-foot{margin-top:20px;color:var(--muted);font-size:11px}
+
+/* App shell */
+#appScreen{display:none;flex-direction:column;min-height:100dvh}
+.reader{flex:1;display:flex;flex-direction:column;min-height:0}
+
+/* Book stage */
+.book-stage{flex:1;display:flex;align-items:center;justify-content:center;perspective:2400px;padding:18px 14px;min-height:0;
+  background:radial-gradient(1000px 500px at 50% 0%,rgba(13,27,62,.05),transparent)}
+body.dark .book-stage{background:radial-gradient(1000px 500px at 50% 0%,rgba(0,0,0,.35),transparent)}
+.book{position:relative;width:min(90vw,440px);aspect-ratio:3/4;max-height:78dvh;transform-style:preserve-3d}
+.book::before{content:"";position:absolute;left:-6px;top:2%;height:96%;width:12px;background:linear-gradient(to right,rgba(0,0,0,.28),rgba(0,0,0,0));border-radius:6px;filter:blur(1px);z-index:0}
+.page{position:absolute;inset:0;transform-origin:left center;transform-style:preserve-3d;transition:transform .8s cubic-bezier(.35,.08,.2,1);will-change:transform}
+.page.flipped{transform:rotateY(-180deg)}
+.face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;overflow:hidden;border-radius:3px 10px 10px 3px;background:var(--paper);color:var(--text);box-shadow:var(--shadow-lg)}
+.face.back{transform:rotateY(180deg);background:var(--paper);
+  background-image:linear-gradient(to left,var(--paper-edge),transparent 22%)}
+/* spine shading on front */
+.face.front::before{content:"";position:absolute;left:0;top:0;bottom:0;width:26px;background:linear-gradient(to right,rgba(0,0,0,.16),transparent);pointer-events:none;z-index:3}
+.face.front::after{content:"";position:absolute;inset:0;background:linear-gradient(to right,rgba(0,0,0,.18),transparent 12%);opacity:0;transition:opacity .4s;pointer-events:none}
+.page.flipping .face.front::after{opacity:1}
+
+/* page content variants */
+.pg{position:absolute;inset:0;display:flex;flex-direction:column;padding:30px 26px 44px}
+.pg-img{padding:0}
+.pg-img img{width:100%;height:100%;object-fit:contain;background:var(--paper)}
+.pg-num{position:absolute;bottom:12px;left:0;right:0;text-align:center;font-size:12px;color:var(--muted);letter-spacing:1px}
+.pg-cover{align-items:center;justify-content:center;text-align:center;
+  background:radial-gradient(700px 500px at 50% 18%,rgba(201,168,76,.18),transparent),linear-gradient(160deg,var(--navy),#060e22);color:#fff}
+.pg-cover .brand{font-size:11px;letter-spacing:4px;color:var(--gold);margin-bottom:auto;padding-top:12px;text-transform:uppercase}
+.pg-cover .h{font-size:30px;font-weight:700;line-height:1.25;margin-bottom:10px}
+.pg-cover .s{font-size:14px;color:rgba(255,255,255,.8)}
+.pg-cover .rule{width:60px;height:3px;background:var(--gold);border-radius:2px;margin:16px auto}
+.pg-cover .foot{margin-top:auto;font-size:11px;color:rgba(255,255,255,.55);letter-spacing:1px}
+.pg-back{align-items:center;justify-content:center;text-align:center;background:linear-gradient(160deg,var(--navy-mid),var(--navy));color:#fff}
+.pg-back .h{font-size:22px;font-weight:700}
+.pg-back .s{font-size:13px;color:rgba(255,255,255,.7);margin-top:8px}
+.pg h2{font-size:19px;font-weight:700;color:var(--text);margin-bottom:4px;line-height:1.3}
+.pg .kicker{font-size:11px;letter-spacing:2px;color:var(--gold);font-weight:700;text-transform:uppercase;margin-bottom:12px}
+.pg p{font-size:13.5px;line-height:1.7;color:var(--text);margin-bottom:10px;text-indent:1.4em;opacity:.92}
+.pg .hr{height:1px;background:var(--border);margin:10px 0}
+
+/* TOC page (inside book) */
+.pg-toc{padding:28px 22px 44px}
+.pg-toc .kicker{text-align:center}
+.pg-toc h2{text-align:center;margin-bottom:16px}
+.toc-list{list-style:none;overflow-y:auto;flex:1;margin:0;padding:0}
+.toc-row{width:100%;display:flex;align-items:baseline;gap:8px;background:transparent;border:none;padding:9px 4px;text-align:left;color:var(--text);font-family:inherit;border-radius:6px;cursor:pointer}
+.toc-row:hover{background:rgba(201,168,76,.12)}
+.toc-row .t{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.toc-row .dots{flex:1;border-bottom:1.5px dotted var(--border);transform:translateY(-4px)}
+.toc-row .n{font-size:13px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums}
+.toc-row.active{background:rgba(201,168,76,.16)}
+.toc-empty{color:var(--muted);font-size:13px;text-align:center;margin-top:20px}
+
+/* controls */
+.controls{background:var(--card-bg);border-top:1px solid var(--border);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px}
+.ctrl-row{display:flex;align-items:center;gap:10px}
+.nav-btn{background:var(--navy);color:#fff;border-radius:var(--radius-sm);min-width:46px;height:44px;font-size:18px;display:flex;align-items:center;justify-content:center;font-weight:700}
+.nav-btn:disabled{opacity:.35;cursor:not-allowed}
+.page-ind{flex:1;text-align:center;font-size:13px;font-weight:600;color:var(--text)}
+.page-ind b{color:var(--gold);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--gold);height:26px}
+
+/* TOC overlay */
+.sheet-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.6);z-index:9000;backdrop-filter:blur(4px)}
+.sheet-overlay.open{display:block}
+.sheet{position:absolute;top:0;right:0;bottom:0;width:min(88vw,360px);background:var(--card-bg);border-left:4px solid var(--gold);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;animation:slideL .25s ease}
+@keyframes slideL{from{transform:translateX(100%)}to{transform:translateX(0)}}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid var(--border)}
+.sheet-head h3{font-size:16px;font-weight:700}
+.sheet-body{flex:1;overflow-y:auto;padding:8px}
+.modal-close{background:transparent;border:none;font-size:26px;color:var(--muted);cursor:pointer;line-height:1;padding:2px 8px}
+
+/* Manage modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.65);z-index:9100;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px);overflow-y:auto}
+.modal-overlay.open{display:flex}
+.modal{background:var(--card-bg);border-radius:var(--radius-lg);max-width:520px;width:100%;max-height:92dvh;overflow-y:auto;border-top:4px solid var(--gold);animation:slideUp .22s ease}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+.modal-head h3{font-size:16px;font-weight:700}
+.modal-body{padding:16px 20px}
+.modal-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.field label{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.3px;text-transform:uppercase}
+.input{height:44px;padding:0 12px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:16px;outline:none;width:100%}
+.input:focus{border-color:var(--gold)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 15px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;border:1px solid transparent;min-height:40px;transition:opacity .15s,transform .1s}
+.btn:hover{opacity:.9}.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--navy);color:#fff}
+.btn-gold{background:var(--gold);color:var(--navy)}
+.btn-outline{background:transparent;color:var(--text);border-color:var(--border)}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-sm{padding:5px 9px;font-size:12px;min-height:32px}
+.mng-list{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.mng-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--row-alt)}
+.mng-item .thumb{width:34px;height:44px;border-radius:4px;object-fit:cover;background:var(--navy-light);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px}
+.mng-item .meta{flex:1;min-width:0}
+.mng-item .meta .ttl{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mng-item .meta .sub{font-size:11px;color:var(--muted)}
+.mng-item .acts{display:flex;gap:4px}
+.mng-item .acts button{width:28px;height:28px;border-radius:6px;background:var(--card-bg);border:1px solid var(--border);font-size:13px;display:flex;align-items:center;justify-content:center}
+.seg{display:flex;gap:6px;margin-bottom:12px}
+.seg button{flex:1;padding:8px;border:1.5px solid var(--border);background:transparent;color:var(--text);border-radius:var(--radius-sm);font-weight:600;font-size:13px}
+.seg button.on{background:var(--gold);color:var(--navy);border-color:var(--gold)}
+.hint{font-size:11px;color:var(--muted);margin-top:-6px;margin-bottom:12px}
+
+/* spinner + toast */
+#spinner{display:none;position:fixed;inset:0;background:rgba(13,27,62,.6);align-items:center;justify-content:center;z-index:99999;backdrop-filter:blur(3px)}
+#spinner.show{display:flex}
+.spin-box{background:var(--card-bg);border-radius:16px;padding:30px 40px;text-align:center;border-top:4px solid var(--gold)}
+.ring{width:48px;height:48px;border:5px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.toast{position:fixed;bottom:max(80px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);padding:11px 20px;border-radius:var(--radius-md);color:#fff;z-index:99999;font-weight:500;font-size:13px;box-shadow:var(--shadow-lg);animation:fadeUp .3s ease;max-width:92vw;text-align:center}
+@keyframes fadeUp{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+.toast-success{background:var(--success)}.toast-error{background:var(--danger)}.toast-warning{background:var(--warning);color:var(--navy)}.toast-info{background:var(--navy-mid);border-left:3px solid var(--gold)}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<!-- ══ LOGIN ══ -->
+<div id="loginScreen" style="display:none"><!-- ปิดล็อกอินชั่วคราว v1.1 -->
+  <div class="login-card">
+    <div class="book-emoji">📖</div>
+    <h1>Rattana <span>E-Book</span></h1>
+    <p>ห้องสมุดอิเล็กทรอนิกส์ · รัตนไพบูลย์</p>
+    <div id="gbtn">
+      <div id="g_id_onload"
+        data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com"
+        data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
+      <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with" data-shape="pill"></div>
+    </div>
+    <div class="login-err" id="loginErr"></div>
+    <div class="login-foot">v1.0 · เฉพาะพนักงานที่ได้รับสิทธิ์</div>
+  </div>
+</div>
+
+<!-- ══ APP ══ -->
+<div id="appScreen">
+  <header>
+    <span class="logo-text">RATTANA <span>E-BOOK</span></span>
+    <span class="grow"></span>
+    <button class="icon-btn" id="btnToc" onclick="openToc()" title="สารบัญ">☰<span class="lbl">สารบัญ</span></button>
+    <button class="icon-btn hidden" id="btnManage" onclick="openManage()" title="จัดการหน้า">✎<span class="lbl">จัดการ</span></button>
+    <button class="icon-btn" id="btnDark" onclick="toggleDark()" title="โหมดมืด">🌙</button>
+  </header>
+
+  <div class="reader">
+    <div class="book-stage" id="bookStage">
+      <div class="book" id="book"></div>
+    </div>
+
+    <div class="controls">
+      <div class="ctrl-row">
+        <button class="nav-btn" id="btnPrev" onclick="step(-1)">‹</button>
+        <div class="page-ind">หน้า <b id="pgCur">1</b> / <span id="pgTot">1</span></div>
+        <button class="nav-btn" id="btnNext" onclick="step(1)">›</button>
+      </div>
+      <input type="range" id="pgSlider" min="1" max="1" value="1" oninput="jumpTo(this.value-1)">
+    </div>
+  </div>
+</div>
+
+<!-- TOC overlay -->
+<div class="sheet-overlay" id="tocOverlay" onclick="if(event.target===this)closeToc()">
+  <div class="sheet">
+    <div class="sheet-head"><h3>สารบัญ</h3><button class="modal-close" onclick="closeToc()">&times;</button></div>
+    <div class="sheet-body"><ul class="toc-list" id="tocOverlayList"></ul></div>
+  </div>
+</div>
+
+<!-- Manage modal -->
+<div class="modal-overlay" id="manageOverlay" onclick="if(event.target===this)closeManage()">
+  <div class="modal">
+    <div class="modal-head"><h3>จัดการหน้าหนังสือ</h3><button class="modal-close" onclick="closeManage()">&times;</button></div>
+    <div class="modal-body">
+      <div class="seg">
+        <button id="segUrl" class="on" onclick="setAddMode('url')">🔗 ลิงก์รูป</button>
+        <button id="segFile" onclick="setAddMode('file')">📁 อัปโหลด</button>
+      </div>
+      <div class="field" id="fieldUrl">
+        <label>URL รูปภาพหน้า</label>
+        <input class="input" id="inpUrl" placeholder="https://...jpg / .png">
+      </div>
+      <div class="field hidden" id="fieldFile">
+        <label>เลือกไฟล์รูป (เก็บในเครื่อง)</label>
+        <input class="input" id="inpFile" type="file" accept="image/*" style="padding:9px 12px;height:auto">
+      </div>
+      <div class="field">
+        <label>ชื่อบท (แสดงในสารบัญ — เว้นว่างได้)</label>
+        <input class="input" id="inpChap" placeholder="เช่น บทที่ 5 — ...">
+      </div>
+      <button class="btn btn-gold w-full" style="width:100%;justify-content:center" onclick="addPage()">+ เพิ่มหน้า</button>
+      <ul class="mng-list" id="mngList"></ul>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="resetBook()">↺ รีเซ็ตค่าเริ่มต้น</button>
+      <button class="btn btn-primary" onclick="closeManage()">เสร็จสิ้น</button>
+    </div>
+  </div>
+</div>
+
+<!-- spinner -->
+<div id="spinner"><div class="spin-box"><div class="ring"></div><p id="spinMsg">กำลังโหลด...</p></div></div>
+
+<script>
+/* ════════ CONFIG ════════ */
+const AUTH_CONFIG = {
+  usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
+  usersSheetName:'Rattana Users for apps',
+};
+const EDIT_MIN_ROLE = 5;            // role >= 5 จัดการหน้าได้
+const STORE_KEY = 'rattanaEbookPages_v1';
+
+/* ════════ DEFAULT BOOK ════════ */
+const DEFAULT_PAGES = [
+  {type:'cover', heading:'คู่มือพนักงาน', sub:'บริษัท รัตนไพบูลย์ จำกัด'},
+  {type:'toc'},
+  {type:'demo', chapter:'บทที่ 1 — บทนำ', kicker:'ยินดีต้อนรับ',
+   body:['หนังสือเล่มนี้เป็นตัวอย่างการแสดงผลแบบหนังสือจริง สามารถพลิกหน้าไป-มาได้เหมือนเปิดหนังสือเล่มจริง โดยกดปุ่มลูกศร ปัดหน้าจอ หรือใช้แถบเลื่อนด้านล่าง',
+          'หน้าสารบัญสามารถกดที่ชื่อบทหรือเลขหน้าเพื่อกระโดดไปยังหน้านั้นได้ทันที ทั้งจากสารบัญในเล่มและปุ่มสารบัญ (☰) ด้านบน']},
+  {type:'demo', chapter:'', kicker:'บทที่ 1 (ต่อ)',
+   body:['ผู้ที่มีสิทธิ์ระดับผู้จัดการขึ้นไปสามารถกดปุ่ม “จัดการ” (✎) เพื่อเพิ่มรูปภาพแต่ละหน้าจากลิงก์หรืออัปโหลดจากเครื่อง ตั้งชื่อบท จัดลำดับ และลบหน้าได้',
+          'เนื้อหาทั้งหมดจะถูกบันทึกไว้ในเครื่องของผู้ใช้โดยอัตโนมัติ']},
+  {type:'demo', chapter:'บทที่ 2 — กฎระเบียบบริษัท', kicker:'ระเบียบปฏิบัติ',
+   body:['พนักงานทุกคนพึงปฏิบัติตามระเบียบของบริษัทอย่างเคร่งครัด เพื่อความเป็นระเบียบเรียบร้อยและประสิทธิภาพในการทำงานร่วมกัน',
+          'การเข้างาน การลา และการแต่งกาย ให้เป็นไปตามที่ฝ่ายบุคคลกำหนด']},
+  {type:'demo', chapter:'บทที่ 3 — สวัสดิการพนักงาน', kicker:'สิทธิประโยชน์',
+   body:['บริษัทจัดสวัสดิการเพื่อดูแลคุณภาพชีวิตของพนักงาน อาทิ ประกันสุขภาพ กองทุนสำรองเลี้ยงชีพ และเงินช่วยเหลือในโอกาสต่าง ๆ',
+          'รายละเอียดและเงื่อนไขสามารถสอบถามได้ที่ฝ่ายทรัพยากรบุคคล']},
+  {type:'demo', chapter:'บทที่ 4 — ความปลอดภัยในการทำงาน', kicker:'Safety First',
+   body:['ความปลอดภัยเป็นสิ่งสำคัญสูงสุด พนักงานต้องสวมใส่อุปกรณ์ป้องกันตามที่กำหนด และปฏิบัติตามขั้นตอนความปลอดภัยของแต่ละพื้นที่',
+          'หากพบเหตุผิดปกติหรืออุบัติเหตุ ให้รายงานผู้บังคับบัญชาทันที']},
+  {type:'back', heading:'จบเล่ม', sub:'ขอบคุณที่อ่านจนจบ · รัตนไพบูลย์'},
+];
+
+/* ════════ STATE ════════ */
+let currentUser=null;
+let PAGES=[];
+let pageEls=[];
+let currentIndex=0;
+let N=0;
+let addMode='url';
+
+/* ════════ AUTH ════════ */
+function decodeJwtPayload(token){
+  const parts=String(token||'').split('.');
+  if(parts.length<2) throw new Error('JWT invalid');
+  let b64=parts[1].replace(/-/g,'+').replace(/_/g,'/');
+  const pad=(4-b64.length%4)%4; if(pad) b64+='='.repeat(pad);
+  const bin=atob(b64), bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  return JSON.parse(new TextDecoder('utf-8').decode(bytes));
+}
+const normalizeEmail=s=>String(s||'').replace(/[​‌‍﻿]/g,'').replace(/\s+/g,'').toLowerCase();
+
+function parseCsv(text){
+  if(!text) return [];
+  if(text.charCodeAt(0)===0xFEFF) text=text.slice(1);
+  const rows=[]; let row=[],cell='',q=false;
+  for(let i=0;i<text.length;i++){const ch=text[i];
+    if(q){ if(ch==='"'){ if(text[i+1]==='"'){cell+='"';i++;}else q=false;} else cell+=ch; }
+    else{ if(ch==='"')q=true; else if(ch===',')row.push(cell),cell=''; else if(ch==='\r'){} else if(ch==='\n'){row.push(cell);rows.push(row);row=[];cell='';} else cell+=ch; }
+  }
+  if(cell.length||row.length){row.push(cell);rows.push(row);}
+  if(!rows.length) return [];
+  const clean=s=>String(s||'').replace(/[​‌‍﻿]/g,'').replace(/ /g,' ').trim();
+  const headers=rows[0].map(clean);
+  return rows.slice(1).filter(r=>r.some(c=>clean(c))).map(r=>Object.fromEntries(headers.map((k,i)=>[k,clean(r[i])])));
+}
+async function loadFromSheets(id,name){
+  const url=`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(name)}`;
+  const res=await fetch(url); if(!res.ok) throw new Error('fetch failed');
+  return parseCsv(await res.text());
+}
+
+async function handleGoogleLogin(r){
+  showSpinner('กำลังตรวจสอบสิทธิ์...');
+  try{
+    const email=normalizeEmail(decodeJwtPayload(r.credential).email);
+    const users=await loadFromSheets(AUTH_CONFIG.usersSheetId,AUTH_CONFIG.usersSheetName);
+    const u=users.find(x=>normalizeEmail(x['E-mail'])===email);
+    if(!u){ loginErr('ไม่พบอีเมลนี้ในระบบ ติดต่อผู้ดูแล'); return; }
+    if(String(u['Status']||'').trim().toLowerCase()!=='active'){ loginErr('บัญชีถูกระงับ ติดต่อผู้ดูแล'); return; }
+    currentUser={ email, name:u['ชื่อ - สกุล'], nickname:u['ชื่อเล่น'],
+      role:parseInt(u['User Role'])||1, dept:u['แผนก'], company:u['บริษัท'], warehouse:u['W'], empId:u['รหัสพนักงาน'] };
+    localStorage.setItem('rattanaUser',JSON.stringify({data:currentUser,exp:Date.now()+30*24*60*60*1000}));
+    enterApp();
+  }catch(e){ loginErr('เกิดข้อผิดพลาด ลองใหม่อีกครั้ง'); }
+  finally{ hideSpinner(); }
+}
+function loginErr(m){ document.getElementById('loginErr').textContent=m; }
+function checkSession(){
+  try{
+    const raw=localStorage.getItem('rattanaUser'); if(!raw) return;
+    const {data,exp}=JSON.parse(raw);
+    if(Date.now()>exp){ localStorage.removeItem('rattanaUser'); return; }
+    currentUser=data; enterApp();
+  }catch{ localStorage.removeItem('rattanaUser'); }
+}
+function logout(){ localStorage.removeItem('rattanaUser'); location.reload(); }
+
+function enterApp(){
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('appScreen').style.display='flex';
+  document.getElementById('btnManage').classList.toggle('hidden',!(currentUser && currentUser.role>=EDIT_MIN_ROLE));
+  loadBook(); buildBook(); jumpTo(0,false);
+}
+
+/* ════════ BOOK DATA ════════ */
+function loadBook(){
+  try{ const s=JSON.parse(localStorage.getItem(STORE_KEY)); PAGES=(Array.isArray(s)&&s.length)?s:JSON.parse(JSON.stringify(DEFAULT_PAGES)); }
+  catch{ PAGES=JSON.parse(JSON.stringify(DEFAULT_PAGES)); }
+}
+function saveBook(){ localStorage.setItem(STORE_KEY,JSON.stringify(PAGES)); }
+
+/* ---- render one page face ---- */
+function esc(s){ return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function faceHTML(p,i){
+  const num=`<div class="pg-num">${i+1}</div>`;
+  if(p.type==='cover'){
+    return `<div class="pg pg-cover"><div class="brand">RATTANA</div>
+      <div class="h">${esc(p.heading)}</div><div class="rule"></div>
+      <div class="s">${esc(p.sub)}</div><div class="foot">แตะ › เพื่อเปิดอ่าน · v1.1</div></div>`;
+  }
+  if(p.type==='back'){
+    return `<div class="pg pg-back"><div class="h">${esc(p.heading)}</div><div class="s">${esc(p.sub)}</div></div>${num}`;
+  }
+  if(p.type==='toc'){
+    return `<div class="pg pg-toc"><div class="kicker">Table of Contents</div><h2>สารบัญ</h2>
+      <ul class="toc-list" id="tocInBook"></ul></div>${num}`;
+  }
+  if(p.type==='image'){
+    return `<div class="pg pg-img"><img src="${esc(p.img)}" alt="page ${i+1}" loading="lazy"
+       onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','<div style=&quot;padding:30px;text-align:center;color:var(--muted)&quot;>โหลดรูปไม่สำเร็จ</div>')"></div>${num}`;
+  }
+  // demo
+  const body=(p.body||[]).map(t=>`<p>${esc(t)}</p>`).join('');
+  return `<div class="pg">${p.kicker?`<div class="kicker">${esc(p.kicker)}</div>`:''}
+    ${p.chapter?`<h2>${esc(p.chapter)}</h2><div class="hr"></div>`:''}${body}</div>${num}`;
+}
+
+function buildBook(){
+  const book=document.getElementById('book');
+  N=PAGES.length;
+  book.innerHTML='';
+  pageEls=[];
+  PAGES.forEach((p,i)=>{
+    const el=document.createElement('div');
+    el.className='page';
+    el.innerHTML=`<div class="face front">${faceHTML(p,i)}</div><div class="face back"></div>`;
+    book.appendChild(el);
+    pageEls.push(el);
+  });
+  document.getElementById('pgTot').textContent=N;
+  const sl=document.getElementById('pgSlider'); sl.min=1; sl.max=N;
+  buildTocLists();
+}
+
+/* ---- TOC (chapters) ---- */
+function tocEntries(){
+  const out=[];
+  PAGES.forEach((p,i)=>{ if(p.chapter && p.type!=='cover' && p.type!=='toc') out.push({title:p.chapter,index:i}); });
+  return out;
+}
+function tocRowsHTML(){
+  const e=tocEntries();
+  if(!e.length) return `<li class="toc-empty">ยังไม่มีบท — เพิ่มชื่อบทได้ที่ปุ่มจัดการ</li>`;
+  return e.map(x=>`<li><button class="toc-row" data-idx="${x.index}" onclick="jumpTo(${x.index});closeToc()">
+      <span class="t">${esc(x.title)}</span><span class="dots"></span><span class="n">${x.index+1}</span></button></li>`).join('');
+}
+function buildTocLists(){
+  const html=tocRowsHTML();
+  const inBook=document.getElementById('tocInBook');
+  if(inBook) inBook.innerHTML=html;
+  document.getElementById('tocOverlayList').innerHTML=html;
+}
+function highlightToc(){
+  document.querySelectorAll('.toc-row').forEach(r=>{
+    r.classList.toggle('active', +r.dataset.idx===currentIndex);
+  });
+}
+
+/* ════════ FLIP ENGINE ════════ */
+function applyZ(){
+  pageEls.forEach((el,i)=>{ el.style.zIndex = i<currentIndex ? i : (2*N-i); });
+}
+function step(dir){
+  const target=currentIndex+dir;
+  if(target<0||target>=N) return;
+  const movingIdx = dir>0 ? currentIndex : currentIndex-1;
+  const moving=pageEls[movingIdx];
+  currentIndex=target;
+  pageEls.forEach((el,i)=>el.classList.toggle('flipped', i<currentIndex));
+  applyZ();
+  if(moving){
+    moving.style.zIndex=3*N;                 // keep the turning sheet on top
+    moving.classList.add('flipping');
+    clearTimeout(moving._t);
+    moving._t=setTimeout(()=>{ applyZ(); moving.classList.remove('flipping'); },820);
+  }
+  updateUI();
+}
+function jumpTo(idx,animate=true){
+  idx=Math.max(0,Math.min(N-1,+idx));
+  currentIndex=idx;
+  pageEls.forEach((el,i)=>{
+    if(!animate) el.style.transition='none';
+    el.classList.toggle('flipped', i<currentIndex);
+  });
+  applyZ();
+  if(!animate) requestAnimationFrame(()=>pageEls.forEach(el=>el.style.transition=''));
+  updateUI();
+}
+function updateUI(){
+  document.getElementById('pgCur').textContent=currentIndex+1;
+  document.getElementById('pgSlider').value=currentIndex+1;
+  document.getElementById('btnPrev').disabled=currentIndex<=0;
+  document.getElementById('btnNext').disabled=currentIndex>=N-1;
+  highlightToc();
+}
+
+/* ════════ TOC OVERLAY ════════ */
+function openToc(){ buildTocLists(); highlightToc(); document.getElementById('tocOverlay').classList.add('open'); }
+function closeToc(){ document.getElementById('tocOverlay').classList.remove('open'); }
+
+/* ════════ MANAGE ════════ */
+function openManage(){ if(!(currentUser&&currentUser.role>=EDIT_MIN_ROLE)){showToast('ไม่มีสิทธิ์แก้ไข','warning');return;} renderMngList(); document.getElementById('manageOverlay').classList.add('open'); }
+function closeManage(){ document.getElementById('manageOverlay').classList.remove('open'); }
+function setAddMode(m){
+  addMode=m;
+  document.getElementById('segUrl').classList.toggle('on',m==='url');
+  document.getElementById('segFile').classList.toggle('on',m==='file');
+  document.getElementById('fieldUrl').classList.toggle('hidden',m!=='url');
+  document.getElementById('fieldFile').classList.toggle('hidden',m!=='file');
+}
+function commitAdd(img,chap){
+  PAGES.push({type:'image',img,chapter:chap||''});
+  saveBook(); buildBook(); jumpTo(N-1); renderMngList();
+  showToast('เพิ่มหน้าแล้ว ✓','success');
+}
+function addPage(){
+  const chap=document.getElementById('inpChap').value.trim();
+  if(addMode==='url'){
+    const url=document.getElementById('inpUrl').value.trim();
+    if(!url){ showToast('ใส่ลิงก์รูปก่อน','warning'); return; }
+    commitAdd(url,chap);
+    document.getElementById('inpUrl').value=''; document.getElementById('inpChap').value='';
+  }else{
+    const f=document.getElementById('inpFile').files[0];
+    if(!f){ showToast('เลือกไฟล์ก่อน','warning'); return; }
+    const rd=new FileReader();
+    rd.onload=()=>{ commitAdd(rd.result,chap); document.getElementById('inpFile').value=''; document.getElementById('inpChap').value=''; };
+    rd.readAsDataURL(f);
+  }
+}
+function renderMngList(){
+  const box=document.getElementById('mngList');
+  box.innerHTML=PAGES.map((p,i)=>{
+    const label = p.type==='image' ? (p.chapter||`รูปหน้า ${i+1}`)
+                : p.type==='cover' ? 'ปกหน้า'
+                : p.type==='back'  ? 'ปกหลัง'
+                : p.type==='toc'   ? 'สารบัญ (อัตโนมัติ)'
+                : (p.chapter||p.kicker||`หน้า ${i+1}`);
+    const thumb = p.type==='image'
+        ? `<img class="thumb" src="${esc(p.img)}" alt="">`
+        : `<div class="thumb">${p.type==='cover'?'📕':p.type==='back'?'📗':p.type==='toc'?'☰':'📄'}</div>`;
+    const locked = p.type==='cover'||p.type==='back'||p.type==='toc';
+    return `<li class="mng-item">${thumb}
+      <div class="meta"><div class="ttl">${esc(label)}</div><div class="sub">หน้า ${i+1} · ${p.type}</div></div>
+      <div class="acts">
+        <button onclick="movePage(${i},-1)" title="ขึ้น">▲</button>
+        <button onclick="movePage(${i},1)" title="ลง">▼</button>
+        <button onclick="delPage(${i})" title="ลบ" ${locked?'disabled style="opacity:.3"':''}>🗑</button>
+      </div></li>`;
+  }).join('');
+}
+function movePage(i,dir){
+  const j=i+dir; if(j<0||j>=PAGES.length) return;
+  [PAGES[i],PAGES[j]]=[PAGES[j],PAGES[i]];
+  saveBook(); buildBook(); renderMngList(); jumpTo(Math.min(currentIndex,N-1),false);
+}
+function delPage(i){
+  const p=PAGES[i];
+  if(p.type==='cover'||p.type==='back'||p.type==='toc'){ showToast('หน้านี้ลบไม่ได้','warning'); return; }
+  PAGES.splice(i,1); saveBook(); buildBook(); renderMngList(); jumpTo(Math.min(currentIndex,N-1),false);
+  showToast('ลบหน้าแล้ว','info');
+}
+function resetBook(){
+  if(!confirm('รีเซ็ตหนังสือกลับเป็นค่าเริ่มต้น? เนื้อหาที่เพิ่มไว้จะหายทั้งหมด')) return;
+  PAGES=JSON.parse(JSON.stringify(DEFAULT_PAGES));
+  saveBook(); buildBook(); renderMngList(); jumpTo(0,false);
+  showToast('รีเซ็ตแล้ว','success');
+}
+
+/* ════════ INPUT: keyboard + swipe ════════ */
+document.addEventListener('keydown',e=>{
+  if(document.getElementById('appScreen').style.display==='none') return;
+  if(e.key==='ArrowRight') step(1);
+  else if(e.key==='ArrowLeft') step(-1);
+});
+let tsx=0,tsy=0;
+const stage=document.getElementById('bookStage');
+stage.addEventListener('touchstart',e=>{ tsx=e.changedTouches[0].clientX; tsy=e.changedTouches[0].clientY; },{passive:true});
+stage.addEventListener('touchend',e=>{
+  const dx=e.changedTouches[0].clientX-tsx, dy=e.changedTouches[0].clientY-tsy;
+  if(Math.abs(dx)>50 && Math.abs(dx)>Math.abs(dy)) step(dx<0?1:-1);
+},{passive:true});
+
+/* ════════ MISC UI ════════ */
+function toggleDark(){
+  document.body.classList.toggle('dark');
+  document.getElementById('btnDark').textContent=document.body.classList.contains('dark')?'☀️':'🌙';
+  localStorage.setItem('rattanaEbookDark',document.body.classList.contains('dark')?'1':'0');
+}
+function showSpinner(m){ document.getElementById('spinMsg').textContent=m||'กำลังโหลด...'; document.getElementById('spinner').classList.add('show'); }
+function hideSpinner(){ document.getElementById('spinner').classList.remove('show'); }
+function showToast(msg,type='info'){
+  const t=document.createElement('div'); t.className='toast toast-'+type; t.textContent=msg;
+  document.body.appendChild(t); setTimeout(()=>t.remove(),3000);
+}
+
+/* ════════ BOOT ════════ */
+if(localStorage.getItem('rattanaEbookDark')==='1'){ document.body.classList.add('dark'); }
+/* login ปิดชั่วคราว v1.1 — เข้าอ่านตรง ๆ (guest role 8 = จัดการหน้าได้)
+   เปิดใช้ login ใหม่: เปลี่ยน enterApp() กลับเป็น checkSession() + คืน GSI script + ลบ style display:none ที่ #loginScreen */
+window.onload=()=>{
+  document.getElementById('btnDark').textContent=document.body.classList.contains('dark')?'☀️':'🌙';
+  currentUser={ name:'ผู้อ่าน', nickname:'ผู้อ่าน', role:8 };
+  enterApp();
+};
+</script>
+</body>
+</html>
