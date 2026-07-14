@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Price Tag v5.5</title>
+<title>Rattana Price Tag v5.6</title>
 <meta name="description" content="ระบบสร้างป้ายราคาสินค้าสำหรับร้านค้ารัตน — ดึงข้อมูลจาก Google Sheet พิมพ์ PDF A4 4 ป้าย/หน้า">
 <meta name="theme-color" content="#0d1b3e">
 <meta name="apple-mobile-web-app-title" content="Rattana Price Tag">
@@ -1775,7 +1775,7 @@ body.dark .pdf-stage{background-color:#0a1226}
 
   <header>
     <svg class="logo-img" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="Rattana Mart"><rect width="100" height="100" rx="14" fill="#0d1b3e"/><g fill="#fbbf24"><rect x="19" y="34" width="11" height="6" rx="1.5"/><path d="M30 42 L80 42 L80 49 L30 49 Z"/><path d="M32 52 L80 52 L74 71 L43 71 Z"/><circle cx="48" cy="78" r="5"/><circle cx="66" cy="78" r="5"/></g></svg>
-    <div class="logo-text">RATTANA <span style="color:var(--gold)">PRICE TAG</span><small>ระบบทำป้ายราคาสินค้า v5.5</small></div>
+    <div class="logo-text">RATTANA <span style="color:var(--gold)">PRICE TAG</span><small>ระบบทำป้ายราคาสินค้า v5.6</small></div>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="โหลดข้อมูลใหม่">⟳</button>
     <button class="icon-btn" onclick="toggleDark()" title="โหมดมืด">🌙</button>
     <button class="icon-btn" onclick="openUserModal()" title="ผู้ใช้">👤</button>
@@ -2464,12 +2464,16 @@ function initApp() {
       const txt = el.textContent.replace(/\s*\n\s*/g,' ');
       const sku = el.getAttribute('data-namesku');
       const cat = el.getAttribute('data-cattitle');
+      const flav = el.getAttribute('data-catflavor');
       if (sku != null) {
         if (txt.trim() === '') delete nameOverrides[sku]; else nameOverrides[sku] = txt;
         saveNameOverrides();
       } else if (cat != null) {
         if (txt.trim() === '') delete catTitleOverrides[cat]; else catTitleOverrides[cat] = txt;
         saveCatTitleOverrides();
+      } else if (flav != null) {
+        if (txt.trim() === '') delete catFlavorOverrides[flav]; else catFlavorOverrides[flav] = txt;
+        saveCatFlavorOverrides();
       }
     });
     stage.addEventListener('keydown', (e) => {
@@ -2796,12 +2800,15 @@ function restoreImgScale() {
 /* v4.5 — Editable names in the PRINT preview (type over the name/title, font Anuphan) */
 let nameOverrides = {};       // sku → custom product name (tags)
 let catTitleOverrides = {};   // catalog group key (CAT SIZE) → custom title
+let catFlavorOverrides = {};  // v5.6 — catalog group key → custom sub-line (gray text under title)
 function restoreNameOverrides() {
   try { nameOverrides = JSON.parse(localStorage.getItem('rattanaPriceTag_nameOv') || '{}'); } catch { nameOverrides = {}; }
   try { catTitleOverrides = JSON.parse(localStorage.getItem('rattanaPriceTag_catTitleOv') || '{}'); } catch { catTitleOverrides = {}; }
+  try { catFlavorOverrides = JSON.parse(localStorage.getItem('rattanaPriceTag_catFlavorOv') || '{}'); } catch { catFlavorOverrides = {}; }
 }
 function saveNameOverrides() { safeSetItem('rattanaPriceTag_nameOv', JSON.stringify(nameOverrides)); }
 function saveCatTitleOverrides() { safeSetItem('rattanaPriceTag_catTitleOv', JSON.stringify(catTitleOverrides)); }
+function saveCatFlavorOverrides() { safeSetItem('rattanaPriceTag_catFlavorOv', JSON.stringify(catFlavorOverrides)); }
 // Product name cell — editable only in the print preview (idPrefix starts with 'pdf-p')
 function nameCellHtml(p, editable) {
   const shown = nameOverrides[p.sku] != null ? nameOverrides[p.sku] : (p.name || '');
@@ -3588,11 +3595,12 @@ function renderCatalogCard(sizeName, prods) {
   const unitSuffix = (prods.find(p => p.sizeUnit)?.sizeUnit) || '';
   const key = String(sizeName||'ไม่ระบุขนาด').trim();       // v4.5 — group key for title override
   const titleText = catTitleOverrides[key] != null ? catTitleOverrides[key] : (sizeName + unitSuffix);
+  const flavorText = catFlavorOverrides[key] != null ? catFlavorOverrides[key] : flavors.join(' / ');   // v5.6 — editable sub-line
   return `
     <div class="catalog-card">
       <div class="cat-imgs">${imgHtml}</div>
       <div class="cat-title editable-name" contenteditable="true" data-cattitle="${escapeAttr(key)}" spellcheck="false" title="คลิกเพื่อพิมพ์แก้ชื่อ">${escapeHtml(titleText)}</div>
-      <div class="cat-flavors">${escapeHtml(flavors.join(' / '))}</div>
+      <div class="cat-flavors editable-name" contenteditable="true" data-catflavor="${escapeAttr(key)}" spellcheck="false" title="คลิกเพื่อพิมพ์แก้ข้อความ">${escapeHtml(flavorText)}</div>
       <div class="cat-units">
         <div class="cat-unit-row"><span class="cat-unit-label">ขนาดบรรจุ</span><span class="cat-unit-val">${packLine}</span></div>
       </div>
