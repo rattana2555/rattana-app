@@ -741,7 +741,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.40';
+const APP_VERSION='3.42';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -4456,7 +4456,8 @@ function openCannot(idx){
     <div id="cnBanner"><div class="banner-gold">⚠️ บิลนี้จะถูกบันทึกลงชีท CN อัตโนมัติ — ไม่ต้องเก็บเงิน</div></div>
     <div class="field hidden" id="nextRespWrap">
       <label>ชื่อ - สกุล (ผู้รับผิดชอบส่งวันถัดไป)<span class="req">*</span></label>
-      ${buildDD('ddNext',drivers.map(d=>({v:cleanCell(d['ชื่อเล่น']),l:cleanCell(d['ชื่อเล่น'])+' — '+cleanCell(d['ชื่อ - สกุล']||d['ชื่อ-สกุล']||'')})),'-- เลือก --')}
+      ${buildDD('ddNext',drivers.map(d=>{ const nk=cleanCell(d['ชื่อเล่น']); const fn=cleanCell(d['ชื่อ - สกุล']||d['ชื่อ-สกุล']||''); const full=fn&&nk?`${fn} (${nk})`:(nk||fn); return {v:full,l:full}; }),'-- เลือก --')}
+      <!-- v3.42: value ของ dropdown เป็น "ชื่อ-สกุล (ชื่อเล่น)" เต็มรูปแบบเลย เหมือนช่องคนขับ -->
     </div>
     <div class="field">
       <label>สาเหตุ<span class="req">*</span></label>
@@ -4527,7 +4528,7 @@ async function confirmCannot(idx){
   b.status=isCN?'cn':'failed';
   b.isCN=isCN;
   b.failReason=action+' · '+reason;   // เก็บทั้งหัวข้อ+สาเหตุ ลงคอลัมน์ สาเหตุไม่ส่ง เดิม
-  b.nextResp=next;
+  b.nextResp=expandPersonName_(next);   // v3.42: ลงชื่อผู้รับผิดชอบส่งวันถัดไปแบบ "ชื่อ-สกุล (ชื่อเล่น)" เหมือนคนขับ (เดิมลงแค่ชื่อเล่น)
   b.note=note;
   b.savedAt=Date.now();
   persistJobs();
@@ -4614,13 +4615,17 @@ async function submitForApproval(){
     showToast(`ยังมี ${shortBills.length} บิลจ่ายไม่ครบ (${preview}${more}) — ตรวจสอบและกรอกให้ครบก่อน`,'warning');
     return;
   }
+  if(j._submitting) return;   // v3.41: กันกดขออนุมัติซ้ำ (แจ้งเตือน + เขียนชีท 2 รอบ)
+  j._submitting=true;
   j.status='pending_approval';
   j.submittedAt=Date.now();
+  j._notifiedSubmit=0;        // v3.41: reset ให้ยิงแจ้งเตือนรอบนี้ได้ (การส่งใหม่)
   persistJobs();
   showToast('ส่งหัวหน้าอนุมัติแล้ว ✓','success');
   // POST ไป Apps Script (ถ้ามี URL)
   await syncToSheets(j).catch(e=>console.warn('sync:',e));
   notifyApprovalDiscord(j);   // v1.94: เด้งแจ้ง Discord แยกตามคลัง
+  j._submitting=false;        // v3.41: ปลดล็อกหลังส่งเสร็จ
   // v1.45: กลับไป list view หน้างานของฉัน — งานจะไปอยู่กล่อง "รออนุมัติ"
   state.activeJobId=null;
   state.driverJobView='list';
@@ -4629,6 +4634,9 @@ async function submitForApproval(){
 /* v1.94: ส่งแจ้งเตือนเข้า Discord (ผ่าน GAS → เลือกห้องตามคลัง) ตอนกดขออนุมัติ */
 function notifyApprovalDiscord(j){
   const url=getAppsUrl(); if(!url||!j) return;
+  // v3.41: กันยิงซ้ำ (แจ้งเตือนขึ้น 2 รอบ) — ยิงได้ครั้งเดียวต่อ 1 การส่งอนุมัติ (ตาม submittedAt)
+  if(j._notifiedSubmit&&j._notifiedSubmit===(j.submittedAt||0)) return;
+  j._notifiedSubmit=j.submittedAt||Date.now();
   let total=0;
   (j.bills||[]).forEach(b=>{ total+=payTotal(b.payment); });
   const payload={
@@ -5652,7 +5660,7 @@ async function syncJobsFromSheet(opts){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.40 (แก้ Doc_Date: parse dd/mm/yyyy ให้ถูก + เครื่องมือซ่อมแถวเก่าที่สลับวัน/เดือน) */
+const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.41 (Discord ขึ้นบรรทัดใหม่ด้วย char(10) กัน \\n เพี้ยน + Doc_Date parse dd/mm/yyyy) */
 const SHEET_INPUT='บันทึกเที่ยวส่ง';
 const SHEET_CIN='บันทึกบิลและการชำระ';
 const SHEET_CN='CN';
@@ -5697,7 +5705,7 @@ const HEADERS_CIN=['เลขใบคุม','Doc_Date','Doc_No','Customer_Code
 function doGet(e){
   let drive='unknown';
   try{ DriveApp.getRootFolder().getName(); drive='OK'; }catch(err){ drive='NOT_AUTHORIZED'; }
-  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.40',drive:drive}))
+  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.41',drive:drive}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -5732,7 +5740,7 @@ function doPost(e){
         fmtColsOpen_(sh,['รหัสร้าน','เลขใบคุม','Doc_No'],'@');   // v3.35: เปิดปลาย คลุมแถวใหม่
         fmtColsOpen_(sh,['Lat','Lng'],'0.000000');
         fmtColsOpen_(sh,['วันเวลา'],'yyyy-mm-dd hh:mm:ss');
-        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.40'})).setMimeType(ContentService.MimeType.JSON);
+        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.41'})).setMimeType(ContentService.MimeType.JSON);
       }finally{ lock.releaseLock(); }
     }
 
@@ -5809,7 +5817,7 @@ function doPost(e){
         'ทะเบียน: '+(data.plate||'-')+' · คลัง: '+(data.warehouse||'-'),
         'จำนวนบิล: '+(data.billCount||0)+' · ยอดรวม: '+fmtBaht_(data.total)+' ฿',
         '⏰ '+fmtThai_(data.submittedAt)
-      ].join('\\n');
+      ].join(String.fromCharCode(10));   // v3.41: ใช้ char(10) กัน \\n เพี้ยนเป็นตัวอักษรใน Discord
       var embedJob={title:'📥 ขออนุมัติงานใหม่',description:descJob,color:0x3B82F6};
       var sent=sendDiscord_(data.warehouse,{embeds:[embedJob]});
       return ContentService.createTextOutput(JSON.stringify({ok:true,sent:sent})).setMimeType(ContentService.MimeType.JSON);
@@ -5825,7 +5833,7 @@ function doPost(e){
         reasonLine||'-',
         'จำนวน: '+(data.itemCount||0)+' รายการ · ยอด: '+fmtBaht_(data.total)+' ฿',
         '⏰ '+fmtThai_(data.ts||new Date())
-      ].join('\\n');
+      ].join(String.fromCharCode(10));   // v3.41: ใช้ char(10) กัน \\n เพี้ยนเป็นตัวอักษรใน Discord
       var embedCN={title:'📦 ขออนุมัติ CN (รับคืนสินค้า)',description:descCN,color:0xF59E0B};
       var sentc=sendDiscord_(data.warehouse,{embeds:[embedCN]});
       return ContentService.createTextOutput(JSON.stringify({ok:true,sent:sentc})).setMimeType(ContentService.MimeType.JSON);
@@ -6056,7 +6064,7 @@ function doPost(e){
       fmtColsOpen_(cinSh,['วัน+เวลา ที่ส่งสินค้า','U_ADD','วันที่โอนครั้งที่1','วันที่โอนครั้งที่2','แก้ไขเมื่อ','วันที่','วันเวลาอนุมัติ'],'yyyy-mm-dd hh:mm:ss');
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.40'}))
+    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.41'}))
       .setMimeType(ContentService.MimeType.JSON);
   }catch(err){
     return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err)}))
