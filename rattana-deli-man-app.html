@@ -741,7 +741,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.43';
+const APP_VERSION='3.44';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -4652,9 +4652,9 @@ async function confirmCannot(idx){
 /* v3.43: ส่งบิลเข้าคิว "ส่งซ้ำ" (ชีท ส่งซ้ำ) — ยิงเบื้องหลัง */
 function queueRedelivery_(j,b,reason){
   const url=getAppsUrl(); if(!url||!j||!b) return;
-  const payload={ action:'queue_redelivery', jobId:baseJobId_(j.id), warehouse:j.warehouse||'', markedBy:currentUserName_(),
-    bills:[{ doc:b.doc, code:b.code||'', name:b.name||'', amount:b.amount||0,
-      salesmanCode:b.salesmanCode||'', salesman:b.salesman||'', reason:reason||'', nextResp:b.nextResp||'' }] };
+  const payload={ action:'queue_redelivery', redelivJobId:baseJobId_(j.id), warehouse:j.warehouse||'', markedBy:currentUserName_(),
+    redelivBills:[{ doc:b.doc, code:b.code||'', name:b.name||'', amount:b.amount||0,
+      salesmanCode:b.salesmanCode||'', salesman:b.salesman||'', reason:reason||'', nextResp:b.nextResp||'' }] };   // v3.44: key เฉพาะ กัน GAS เก่า fall-through เขียนทับงานจริง
   fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)})
     .catch(e=>console.warn('queue_redelivery',e));
 }
@@ -4664,7 +4664,7 @@ function baseJobId_(id){ return String(id||'').replace(/·ส่งซ้ำ$/,'
 async function claimRedelivery_(baseId,by){
   const url=getAppsUrl(); if(!url) return {ok:true};
   try{ await fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},
-    body:JSON.stringify({action:'claim_redelivery',jobId:baseId,claimedBy:by})}); }
+    body:JSON.stringify({action:'claim_redelivery',redelivJobId:baseId,claimedBy:by})}); }
   catch(e){ console.warn('claim_redelivery',e); }
   await new Promise(r=>setTimeout(r,800));   // รอ GAS เขียนเสร็จก่อน verify
   try{
@@ -4681,7 +4681,7 @@ function doneRedelivery_(j){
   const docs=(j.bills||[]).filter(b=>b.status==='done'||b.status==='cn').map(b=>b.doc);
   if(!docs.length) return;
   fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},
-    body:JSON.stringify({action:'done_redelivery',jobId:j.baseId,docs})}).catch(e=>console.warn('done_redelivery',e));
+    body:JSON.stringify({action:'done_redelivery',redelivJobId:j.baseId,docs})}).catch(e=>console.warn('done_redelivery',e));
 }
 /* v3.43: กด "รับงานส่งซ้ำนี้" บนการ์ด → เลือกใน dropdown ให้เลย แล้วเลื่อนไปกรอกทะเบียน/คนขับ */
 function selectRedeliveryForPickup(id){
@@ -5772,7 +5772,7 @@ async function syncJobsFromSheet(opts){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.43 (คิวงานส่งซ้ำ: queue/claim/done_redelivery + Discord char(10) + Doc_Date dd/mm/yyyy) */
+const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.44 (คิวงานส่งซ้ำ ใช้ key redelivJobId/redelivBills กัน GAS เก่า fall-through เขียนทับงานจริง) */
 const SHEET_INPUT='บันทึกเที่ยวส่ง';
 const SHEET_CIN='บันทึกบิลและการชำระ';
 const SHEET_CN='CN';
@@ -5820,7 +5820,7 @@ const HEADERS_CIN=['เลขใบคุม','Doc_Date','Doc_No','Customer_Code
 function doGet(e){
   let drive='unknown';
   try{ DriveApp.getRootFolder().getName(); drive='OK'; }catch(err){ drive='NOT_AUTHORIZED'; }
-  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.43',drive:drive}))
+  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.44',drive:drive}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -5855,7 +5855,7 @@ function doPost(e){
         fmtColsOpen_(sh,['รหัสร้าน','เลขใบคุม','Doc_No'],'@');   // v3.35: เปิดปลาย คลุมแถวใหม่
         fmtColsOpen_(sh,['Lat','Lng'],'0.000000');
         fmtColsOpen_(sh,['วันเวลา'],'yyyy-mm-dd hh:mm:ss');
-        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.43'})).setMimeType(ContentService.MimeType.JSON);
+        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.44'})).setMimeType(ContentService.MimeType.JSON);
       }finally{ lock.releaseLock(); }
     }
 
@@ -5920,7 +5920,7 @@ function doPost(e){
       const lock=LockService.getScriptLock(); lock.waitLock(30000);
       try{
         const sh=ensureSheet_(ss,SHEET_REDELIVERY,HEADERS_REDELIVERY);
-        const jobId=String(data.jobId||''); const bills=Array.isArray(data.bills)?data.bills:[];
+        const jobId=String(data.redelivJobId||''); const bills=Array.isArray(data.redelivBills)?data.redelivBills:[];   // v3.44: key เฉพาะ
         bills.forEach(function(b){
           const obj={};
           obj['วันเวลาที่มาร์ค']=new Date();
@@ -5942,7 +5942,7 @@ function doPost(e){
       try{
         const sh=ss.getSheetByName(SHEET_REDELIVERY);
         if(!sh) return ContentService.createTextOutput(JSON.stringify({ok:true,claimed:0})).setMimeType(ContentService.MimeType.JSON);
-        const jobId=String(data.jobId||''); const by=String(data.claimedBy||'');
+        const jobId=String(data.redelivJobId||''); const by=String(data.claimedBy||'');   // v3.44: key เฉพาะ
         const hmap=headerMap_(sh);
         const cJob=hmap['เลขใบคุมเดิม']?hmap['เลขใบคุมเดิม'][0]:-1, cSt=hmap['สถานะ']?hmap['สถานะ'][0]:-1;
         const cBy=hmap['คนรับส่งซ้ำ']?hmap['คนรับส่งซ้ำ'][0]:-1, cAt=hmap['วันเวลารับ']?hmap['วันเวลารับ'][0]:-1;
@@ -5965,7 +5965,7 @@ function doPost(e){
       try{
         const sh=ss.getSheetByName(SHEET_REDELIVERY);
         if(!sh) return ContentService.createTextOutput(JSON.stringify({ok:true,done:0})).setMimeType(ContentService.MimeType.JSON);
-        const jobId=String(data.jobId||''); const docs=Array.isArray(data.docs)?data.docs.map(function(d){return String(d).trim();}):[];
+        const jobId=String(data.redelivJobId||''); const docs=Array.isArray(data.docs)?data.docs.map(function(d){return String(d).trim();}):[];   // v3.44: key เฉพาะ
         const hmap=headerMap_(sh);
         const cJob=hmap['เลขใบคุมเดิม']?hmap['เลขใบคุมเดิม'][0]:-1, cDoc=hmap['Doc_No']?hmap['Doc_No'][0]:-1;
         const cSt=hmap['สถานะ']?hmap['สถานะ'][0]:-1, cFin=hmap['วันเวลาเสร็จ']?hmap['วันเวลาเสร็จ'][0]:-1;
@@ -6248,7 +6248,7 @@ function doPost(e){
       fmtColsOpen_(cinSh,['วัน+เวลา ที่ส่งสินค้า','U_ADD','วันที่โอนครั้งที่1','วันที่โอนครั้งที่2','แก้ไขเมื่อ','วันที่','วันเวลาอนุมัติ'],'yyyy-mm-dd hh:mm:ss');
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.43'}))
+    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.44'}))
       .setMimeType(ContentService.MimeType.JSON);
   }catch(err){
     return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err)}))
