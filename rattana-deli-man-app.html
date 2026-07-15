@@ -741,7 +741,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.44';
+const APP_VERSION='3.33';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -939,8 +939,6 @@ async function fetchSheet(sheetId,sheetName,opts){
 const SHEET_CACHE_TTL=5*60*1000;          // default 5 นาที
 const CACHE_TTL_LONG=24*60*60*1000;       // 24 ชม. — ลูกค้า/สินค้า/รายละเอียดบิล (ไม่ค่อยเปลี่ยน)
 const CACHE_TTL_SYNC=30*1000;             // 30 วิ — งานอนุมัติ (ต้อง fresh บ่อย แต่ throttle กันโหลดถี่)
-// v3.36: bump คีย์ cache รายละเอียดบิล → ทิ้ง cache เก่าที่ค้าง/ว่างทุกเครื่อง โหลดใหม่รอบเดียว (แก้ CN ไม่ดึงรายการสินค้าในบิล)
-const BILLDETAILS_CACHE_KEY='billDetails_v336';
 function cacheKey(key){ return 'rdm_cache_'+key; }
 function getCachedSheet(key,ttl){
   try{
@@ -1159,13 +1157,7 @@ async function loadProducts(){
 }
 
 function afterBillDetailsLoaded_(){   // v2.15: โหลดรายละเอียดเสร็จ → เติมตัวเลือกเลขที่เอกสาร
-  try{
-    if(state.currentTab==='sec-returns'){
-      returnState._docOptions=docOptionsFor(returnState.customerCode);
-      // v3.36: ถ้าฟอร์มคืนบางส่วนเปิดอยู่ → re-render รายการสินค้า ให้ picker ผูกกับบิลทันทีที่ข้อมูลมาถึง (ไม่ต้องรอผู้ใช้พิมพ์)
-      if(typeof renderReturnItems==='function' && document.getElementById('returnItems')) renderReturnItems();
-    }
-  }catch(e){}
+  try{ if(state.currentTab==='sec-returns') returnState._docOptions=docOptionsFor(returnState.customerCode); }catch(e){}
 }
 /* v2.15: ตัวเลือกเลขที่เอกสารของร้าน — รวมจากใบคุมที่รับมา + ชีทรายละเอียด (จับตาม AR_CODE) + กรอง DS/DC */
 function docOptionsFor(code){
@@ -1178,17 +1170,14 @@ function docOptionsFor(code){
   });
   return [...fromBills,...fromDetail].filter((v,i,a)=>v&&a.indexOf(v)===i);
 }
-async function loadBillDetails(force){
-  if(state._loadingBD) return;   // v2.17: กันโหลดซ้อน (เคยทำให้ข้อมูลเบิ้ล)
-  if(!force && Object.keys(state.billDetails).length) return;
-  // v2.53: 24h cache — v3.36: cache ว่าง ({}) ถือว่า miss จะได้ fetch ใหม่ (กันค้างว่าง 24 ชม. → CN ไม่ดึงรายการสินค้าในบิล)
-  if(!force){
-    const cached=getCachedSheet(BILLDETAILS_CACHE_KEY,CACHE_TTL_LONG);
-    if(cached && Object.keys(cached).length){ state.billDetails=cached; afterBillDetailsLoaded_(); return; }
-  }
+async function loadBillDetails(){
+  if(Object.keys(state.billDetails).length||state._loadingBD) return;   // v2.17: กันโหลดซ้อน (เคยทำให้ข้อมูลเบิ้ล)
+  // v2.53: 24h cache
+  const cached=getCachedSheet('billDetails',CACHE_TTL_LONG);
+  if(cached){ state.billDetails=cached; afterBillDetailsLoaded_(); return; }
   state._loadingBD=true;
   try{
-    const rows=await fetchSheet(CFG.jobsSheetId,CFG.billDetailSheetName,force?{fresh:true}:undefined);
+    const rows=await fetchSheet(CFG.jobsSheetId,CFG.billDetailSheetName);
     const acc={};   // v2.17: สร้างก้อนใหม่แล้วค่อย assign — กัน push เบิ้ลถาวร
     rows.forEach(r=>{
       const doc=cleanCell(r['DI_REF']); if(!doc) return;
@@ -1205,7 +1194,7 @@ async function loadBillDetails(force){
       });
     });
     state.billDetails=acc;
-    if(Object.keys(acc).length) setCachedSheet(BILLDETAILS_CACHE_KEY,state.billDetails);   // v3.36: อย่า cache ก้อนว่าง (กันค้างว่าง)
+    setCachedSheet('billDetails',state.billDetails);
     afterBillDetailsLoaded_();
   }catch(e){ console.warn('loadBillDetails failed:',e); }
   finally{ state._loadingBD=false; }
@@ -1360,39 +1349,6 @@ async function loadAvailableJobs(){
   }catch(e){ console.warn('loadAvailableJobs failed:',e); return []; }
 }
 
-/* v3.43: อ่านคิว "ส่งซ้ำ" → สร้างงานว่างส่งซ้ำ (เฉพาะสถานะ 'รอส่งซ้ำ') group ตามเลขใบคุมเดิม
-   เก็บใน state.redeliveryJobs แยกจาก state.jobs (กันกระทบ sync หลัก) — โผล่เป็นการ์ด + ใน dropdown รับงาน */
-async function loadRedeliveryJobs(){
-  try{
-    const rows=await fetchSheet(CFG.jobsSheetId,'ส่งซ้ำ',{fresh:true});
-    const custByCode={}; state.customers.forEach(c=>{ if(c.code) custByCode[c.code]=c; });
-    const byJob={};
-    (rows||[]).forEach(r=>{
-      if(cleanCell(r['สถานะ'])!=='รอส่งซ้ำ') return;
-      const base=cleanCell(r['เลขใบคุมเดิม']); const doc=cleanCell(r['Doc_No']); if(!base||!doc) return;
-      if(!byJob[base]) byJob[base]={base,warehouse:cleanCell(r['คลัง'])||'',bills:[]};
-      const code=cleanCell(r['รหัสร้าน']); const cust=custByCode[code]||{};
-      byJob[base].bills.push({
-        doc, code, name:cleanCell(r['ชื่อร้าน']),
-        amount:parseFloat(cleanCell(r['ยอดบิล']||'0').replace(/,/g,''))||0,
-        salesman:cleanCell(r['Salesman_Name']), salesmanCode:cleanCell(r['Salesman_Code']),
-        markedBy:cleanCell(r['คนที่มาร์ค']), redeliverReason:cleanCell(r['สาเหตุ']),
-        lat:cust.lat||null, lng:cust.lng||null, address:cust.address||'', phone:cust.phone||'',
-        creditDays:cust.creditDays||0, creditLimit:cust.creditLimit||0, photoUrl:cust.photoUrl||'',
-        status:'pending', payment:{}
-      });
-    });
-    state.redeliveryJobs=Object.values(byJob).map(g=>{
-      const m=g.base.match(/W(\d)/i); const wh=g.warehouse||(m?'W'+m[1]:'W1');
-      return { id:g.base+'·ส่งซ้ำ', baseId:g.base, isRedelivery:true, team:null, driver:'', helper:'', plate:'', pickup:'',
-        warehouse:wh, status:'available', createdAt:Date.now(), docDate:'', bills:g.bills,
-        _redeliveryDocs:g.bills.map(b=>b.doc) };
-    });
-  }catch(e){ console.warn('loadRedeliveryJobs',e); if(!Array.isArray(state.redeliveryJobs)) state.redeliveryJobs=[]; }
-  try{ if(state.currentTab==='sec-driver-home') renderDriverHome(); }catch(e){}   // v3.43: โผล่การ์ดทันทีเมื่อโหลดเสร็จ
-  return state.redeliveryJobs||[];
-}
-
 /* เติมข้อมูลร้าน (coords, address, phone) ให้บิลทุกตัวจาก state.customers
    เรียกหลังจาก loadJobs / syncJobsFromSheet — backfill ให้บิลที่ถูกบันทึก
    ไว้ใน localStorage ก่อน v1.15 (ตอน custByCode ผิด) ก็ได้พิกัดด้วย */
@@ -1420,7 +1376,6 @@ function enrichBills(){
 async function loadJobs(){
   // โหลดงานว่างจากชีท Jobs
   const fresh=await loadAvailableJobs();
-  loadRedeliveryJobs().catch(()=>{});   // v3.43: โหลดคิวส่งซ้ำ (แยก state, ไม่บล็อก)
   const localJobs=loadStore().jobs||[];
   // จัด state.jobs = งานว่างจากชีท + งานที่อยู่ระหว่างทำ/ส่งแล้วใน local
   state.jobs=fresh;
@@ -2121,14 +2076,8 @@ function renderCNRefPanel(){
     const unit=esc(String(r['หน่วย']||''));
     const reason=esc(String(r['เหตุผล']||''));
     const seller=esc(String(r['ชื่อ-สกุล']||r['รหัสเซลล์']||''));
-    // v3.39: วันที่-เวลาที่เซลล์บันทึกมา (คอลัมน์ "วัน" + "เวลา" ในชีท CN ไฟล์ลูกค้า) เช่น 2026/06/08 → 08/06/2026
-    const dRaw=String(r['วัน']||'').trim(); const tRaw=String(r['เวลา']||'').trim();
-    const dm=dRaw.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
-    const dShow=dm?`${dm[3].padStart(2,'0')}/${dm[2].padStart(2,'0')}/${dm[1]}`:dRaw;
-    const madeStr=esc(dShow?(dShow+(tRaw?(' '+tRaw+' น.'):'')):'');
-    const byLine=(seller||madeStr)?`<br><span class="txt-muted txt-xs">โดย ${seller}${madeStr?` · 📅 ${madeStr}`:''}</span>`:'';
     return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;padding:6px 0;border-top:1px dashed rgba(231,76,60,.25)">
-      <span>${nm}${reason?`<br><span class="txt-xs" style="color:#c0392b;font-weight:600">เหตุผล: ${reason}</span>`:''}${byLine}</span>
+      <span>${nm}${reason?`<br><span class="txt-xs" style="color:#c0392b;font-weight:600">เหตุผล: ${reason}</span>`:''}${seller?`<br><span class="txt-muted txt-xs">โดย ${seller}</span>`:''}</span>
       <span style="display:flex;align-items:center;gap:6px;white-space:nowrap">
         <span class="num" style="background:#e74c3c;color:#fff;padding:4px 12px;border-radius:8px;font-weight:800;font-size:15px;box-shadow:0 1px 4px rgba(231,76,60,.4)">×${qty} ${unit}</span>
         ${canAdd?`<button type="button" class="btn btn-sm" style="background:#fff;color:#c0392b;border:1px solid #e74c3c;font-weight:700" onclick="addCNRefItem(${i})">+ เพิ่ม</button>`:''}
@@ -2990,6 +2939,8 @@ function driverWarehouse_(name){
   const wh=cleanCell(drv['W']);
   return /^W[1-4]$/.test(wh)?wh:'';
 }
+// v3.45: จำค่าผู้ช่วยที่เลือกไว้ กัน auto-refresh/re-render ล้างชื่อทิ้ง (เหมือน loadDriverName_/saveDriverName_)
+const pickupHelperState={helper1:'',helper2:'',helperExtra:''};
 function renderDriverHome(){
   const wh=state.user.warehouse||'W1';
   // ถ้าผู้ใช้ไม่มีคลัง (HQ หรืออื่นๆ) ใช้ W1 เป็นค่าเริ่มต้น
@@ -2997,24 +2948,6 @@ function renderDriverHome(){
   const myNick=state.user.nickname||state.user.name;
   const myDisplay=state.user.displayName||myNick;
   const avail=state.jobs.filter(j=>j.status==='available'&&!j.team);
-  const redeliv=(state.redeliveryJobs||[]).filter(j=>j.status==='available');   // v3.43: งานส่งซ้ำ
-  const redelivCards=redeliv.length?`
-    <div class="field">
-      <label style="color:#c0392b">🔁 งานส่งซ้ำ (${redeliv.length}) <span class="txt-xs txt-muted">— บิลที่ต้องส่งซ้ำ ใครก็รับได้</span></label>
-      ${redeliv.map(j=>{
-        const tot=j.bills.reduce((s,b)=>s+(b.amount||0),0);
-        return `<div class="card" style="border:1px solid #f4c893;box-shadow:0 2px 8px #f0871e22;margin-bottom:10px;padding:11px 12px">
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:12px;background:#f0871e;color:#fff;padding:3px 10px;border-radius:9px;font-weight:700">🔁 ส่งซ้ำ</span>
-            <span class="txt-bold" style="color:#0a1b3e">${esc(j.baseId)}</span>
-            <span class="txt-xs" style="margin-left:auto;background:#eaf1ff;color:#1c50b8;padding:2px 8px;border-radius:8px;font-weight:700">${esc(j.warehouse)}</span>
-          </div>
-          <div class="txt-xs txt-muted" style="margin:6px 0 3px">${j.bills.length} บิล · รวม ${fmt(tot)} ฿ · มาร์คโดย ${esc((j.bills[0]||{}).markedBy||'-')}</div>
-          ${j.bills.slice(0,5).map(b=>`<div class="txt-xs" style="padding:2px 0;color:#374151">• ${esc(b.doc)} ${esc(b.name)} <span style="color:#9ca3af">${fmt(b.amount)}</span></div>`).join('')}
-          <button type="button" class="btn btn-sm" style="margin-top:8px;width:100%;background:#f0871e;color:#fff;border:none;font-weight:700" onclick="selectRedeliveryForPickup('${esc(j.id).replace(/'/g,"\\'")}')">✋ รับงานส่งซ้ำนี้</button>
-        </div>`;
-      }).join('')}
-    </div>`:'';
   // v2.62: งานที่ถูกจอง/เลือกไปแล้ววันนี้ — โชว์ใน dropdown เป็น disabled ให้คนขับเห็นสถานะจริง
   const availIds=new Set(avail.map(j=>j.id));
   const takenToday=state.jobs.filter(j=>{
@@ -3022,13 +2955,7 @@ function renderDriverHome(){
     if(availIds.has(j.id)) return false; // นับซ้ำ
     // เช็คว่าเป็นวันนี้ไหม (มีบิลที่ docDate ตรงกับวันนี้ หรือมี startedAt วันนี้)
     const startedToday=j.startedAt&&new Date(j.startedAt).toDateString()===new Date().toDateString();
-    const hasBillsToday=(j.bills||[]).some(b=>{
-      const s=String(b.docDate||'').trim(); if(!s) return false;
-      const mm=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);   // v3.40: parse dd/mm/yyyy ให้ถูก (เดิม new Date สลับวัน/เดือน + วันเกิน 12 พัง)
-      let y=mm?parseInt(mm[3],10):0; if(y>2400) y-=543;
-      const dt=mm?new Date(y,parseInt(mm[2],10)-1,parseInt(mm[1],10)):new Date(s);
-      return !isNaN(dt.getTime())&&dt.toDateString()===new Date().toDateString();
-    });
+    const hasBillsToday=(j.bills||[]).some(b=>{ const d=b.docDate?new Date(b.docDate).toDateString():''; return d===new Date().toDateString(); });
     return startedToday||hasBillsToday;
   });
   // v3.00: ผู้ช่วย/ทะเบียน — เอาทั้งหมด ไม่กรอง warehouse (user request)
@@ -3050,13 +2977,12 @@ function renderDriverHome(){
   }).sort((a,b)=>a.l.localeCompare(b.l,'th'));
 
   const todayLabel=$('todayLabel'); if(todayLabel) todayLabel.textContent=`— ส่งวันที่ ${todayDisplayStr()}`;
-  $('pickupFormBody').innerHTML=redelivCards+`
+  $('pickupFormBody').innerHTML=`
     <div class="field">
       <label>เลขที่ใบคุม<span class="req">*</span> <span class="txt-xs txt-muted">(เฉพาะงานวันนี้ ${todayDisplayStr()})</span></label>
       ${(() => {
         // v2.62: รวม avail + taken → dropdown เรียง avail ก่อน taken (disabled ล่าง)
-        const availItems=redeliv.map(j=>({v:j.id,l:`🔁 ส่งซ้ำ ${j.baseId} — ${j.bills.length} บิล · ${fmt(j.bills.reduce((s,b)=>s+b.amount,0))} ฿`}))   // v3.43: งานส่งซ้ำขึ้นก่อน
-          .concat(avail.map(j=>({v:j.id,l:`${j.id} — ${j.bills.length} ร้าน · ${fmt(j.bills.reduce((s,b)=>s+b.amount,0))} ฿`})));
+        const availItems=avail.map(j=>({v:j.id,l:`${j.id} — ${j.bills.length} ร้าน · ${fmt(j.bills.reduce((s,b)=>s+b.amount,0))} ฿`}));
         const takenItems=takenToday.map(j=>{
           const drv=(j.team&&j.team.driver)||j.driver||'?';
           const stLbl=j.status==='in_progress'?'กำลังส่ง':j.status==='pending_approval'?'รออนุมัติ':j.status==='approved'?'อนุมัติแล้ว':j.status;
@@ -3119,6 +3045,20 @@ function renderDriverHome(){
       const orig=li.onclick; li.onclick=(e)=>{ if(orig) orig.call(li,e); saveDriverName_(li.dataset.v); };
     });
   }
+  // v3.45: กู้ค่าผู้ช่วยที่เลือกไว้ก่อนหน้า (กันหายตอน auto-refresh/re-render)
+  if(pickupHelperState.helper1) ddPick('ddHelper1',pickupHelperState.helper1,pickupHelperState.helper1);
+  if(pickupHelperState.helper2) ddPick('ddHelper2',pickupHelperState.helper2,pickupHelperState.helper2);
+  const heEl=$('helperExtra'); if(heEl) heEl.value=pickupHelperState.helperExtra||'';
+  // v3.45: จับการเลือก/พิมพ์ผู้ช่วย → เก็บลง pickupHelperState ทันที
+  const h1Panel=document.getElementById('ddHelper1_panel');
+  if(h1Panel) h1Panel.querySelectorAll('li[data-v]').forEach(li=>{
+    const orig=li.onclick; li.onclick=(e)=>{ if(orig) orig.call(li,e); pickupHelperState.helper1=li.dataset.v; };
+  });
+  const h2Panel=document.getElementById('ddHelper2_panel');
+  if(h2Panel) h2Panel.querySelectorAll('li[data-v]').forEach(li=>{
+    const orig=li.onclick; li.onclick=(e)=>{ if(orig) orig.call(li,e); pickupHelperState.helper2=li.dataset.v; };
+  });
+  if(heEl) heEl.oninput=()=>{ pickupHelperState.helperExtra=heEl.value; };
   previewPickupBills();
 }
 
@@ -3151,6 +3091,9 @@ function previewPickupBills(){
 }
 
 function resetPickupForm(){
+  pickupHelperState.helper1='';
+  pickupHelperState.helper2='';
+  pickupHelperState.helperExtra='';
   renderDriverHome();
   showToast('ล้างข้อมูลแล้ว','info');
 }
@@ -3235,24 +3178,12 @@ function expandPersonName_(val){
   }
   return s;   // ไม่พบใน users = คงตามที่พิมพ์
 }
-async function confirmPickup(){   // v3.43: async — งานส่งซ้ำต้อง await claim ก่อน
+function confirmPickup(){
   const jid=ddValue('ddJob');
-  const j=state.jobs.find(x=>x.id===jid) || (state.redeliveryJobs||[]).find(x=>x.id===jid);   // v3.43: รวมงานส่งซ้ำ
+  const j=state.jobs.find(x=>x.id===jid);
   if(!j){ showToast('กรุณาเลือกเลขใบคุม','warning'); return; }
   const plate=ddValue('ddPlate');
   if(!plate){ showToast('กรุณาเลือกทะเบียนรถ','warning'); return; }
-  // v3.43: งานส่งซ้ำ — จองก่อน (กันคนอื่นรับซ้ำข้ามเครื่อง) แล้วย้ายเข้า state.jobs เป็นงานจริง
-  if(j.isRedelivery){
-    showToast('กำลังรับงานส่งซ้ำ…','info');
-    const cr=await claimRedelivery_(j.baseId,currentUserName_());
-    if(!cr.ok){
-      showToast(`งานส่งซ้ำนี้ถูกรับไปแล้ว${cr.takenBy?' โดย '+cr.takenBy:''}`,'warning');
-      loadRedeliveryJobs().then(()=>{ if(state.currentTab==='sec-driver-home') renderDriverHome(); });
-      return;
-    }
-    state.redeliveryJobs=(state.redeliveryJobs||[]).filter(x=>x.id!==j.id);
-    if(!state.jobs.some(x=>x.id===j.id)) state.jobs.push(j);
-  }
   // v3.31: ผู้ช่วยทุกช่อง (dropdown + พิมพ์เอง) → normalize เป็น "ชื่อ-สกุล (ชื่อเล่น)" เหมือนคนขับ
   const h1=expandPersonName_(ddValue('ddHelper1'));
   const h2=expandPersonName_(ddValue('ddHelper2'));
@@ -3278,40 +3209,30 @@ async function confirmPickup(){   // v3.43: async — งานส่งซ้�
 
 async function cancelPickup(){
   const j=findMyActiveJob(); if(!j) return;
-  const jobId=j.id;
   const billsDone=j.bills.filter(b=>b.status!=='pending').length;
-  // v3.38: จับ CN ที่ผูกกับงานนี้ = ตามใบคุม (รหัสใบคุม) หรือ ตามเลขบิลของงานนี้ (เผื่อ CN ที่ รหัสใบคุม ว่าง/ไม่ตรง)
-  const _billDocs=new Set((j.bills||[]).map(b=>String(b.doc||'').trim().toUpperCase()).filter(Boolean));
-  const _isCNofJob=c=>normJobId(c.jobId)===normJobId(jobId)||_billDocs.has(String(c.docNo||'').trim().toUpperCase());
-  const cnCount=(state.cnHistory||[]).filter(_isCNofJob).length;
-  const warn=[];
-  if(billsDone>0) warn.push(`• บันทึกเก็บเงิน ${billsDone} บิล`);
-  if(cnCount>0)   warn.push(`• รายการ CN (รับคืน) ${cnCount} ใบ`);
-  const msg=warn.length
-    ? `⚠️ ยกเลิกงาน ${jobId} จะลบทุกอย่างที่เกี่ยวกับงานนี้ออก:\n${warn.join('\n')}\n• พิกัดร้านที่จับไว้\n\nลบทั้งหมดแล้วคืนเป็นงานว่าง?`
-    : `ยกเลิกการรับงาน ${jobId} และคืนเป็นงานว่าง?`;
-  if(!await showConfirm(msg,{title:'ยกเลิก + ลบข้อมูลงาน?',danger:warn.length>0,okLabel:'ลบทั้งหมด',icon:warn.length>0?'⚠️':'❓'})) return;
+  const msg=billsDone>0
+    ? `⚠️ มี ${billsDone} บิลที่บันทึกไว้แล้ว\nถ้ายกเลิก ข้อมูลการเก็บเงินจะหายทั้งหมด\n\nต้องการยกเลิกการรับงาน ${j.id} หรือไม่?`
+    : `ยกเลิกการรับงาน ${j.id} และคืนเป็นงานว่าง?`;
+  if(!await showConfirm(msg,{title:'ยกเลิกรับงาน?',danger:billsDone>0,okLabel:'ยกเลิกงาน',icon:billsDone>0?'⚠️':'❓'})) return;
+  const jobId=j.id;
   // คืนสถานะเป็น available + ล้าง team + ล้าง payment ทุกบิล
   j.team=null; j.driver=''; j.helper=''; j.plate=''; j.pickup='';
   j.status='available';
   j.startedAt=null;
   j.submittedAt=null;
   j.bills.forEach(b=>{ b.status='pending'; b.payment={}; b.isCN=false; b.failReason=''; b.nextResp=''; b.note=''; b.savedAt=null; });
-  // v3.34/v3.38: ล้าง CN ของงานนี้ออกจาก local ด้วย (ตามใบคุม หรือ เลขบิล) กันค้างในประวัติ CN จนกว่าจะ refresh
-  if(cnCount>0){ state.cnHistory=(state.cnHistory||[]).filter(c=>!_isCNofJob(c)); }
   state.activeJobId=null;
   state.driverJobView='list';
   // v1.66: กันงานเด้งกลับตอน auto-refresh จนกว่าชีทจะลบเสร็จ
   _cancelledJobs[normJobId(jobId)]=Date.now();
   persistJobs();
-  // v1.66/v3.34: สั่งลบงานนี้ออกจากทุกชีท (INPUT + Cin + CN + พิกัดร้าน) ไม่งั้น sync จะดึงกลับมา
+  // v1.66: สั่งลบงานนี้ออกจากชีท (INPUT + Cin) ไม่งั้น sync จะดึงกลับมา
   const url=getAppsUrl();
   if(url){
-    const docNos=(j.bills||[]).map(b=>String(b.doc||'').trim()).filter(Boolean);   // v3.38: ส่งเลขบิลไปลบ CN ที่ รหัสใบคุม ว่าง/ไม่ตรงด้วย
-    fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'cancel_job',jobId,docNos})})
+    fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'cancel_job',jobId})})
       .catch(e=>console.warn('cancel_job sync:',e));
   }
-  showToast(`ยกเลิก + ลบข้อมูลงาน ${jobId} แล้ว`,'info');
+  showToast(`ยกเลิกการรับงาน ${jobId} แล้ว`,'info');
   switchTab('sec-driver-home');
 }
 
@@ -3906,16 +3827,13 @@ function openBillForm(idx){
   applyCNCredit(idx);   // v2.11: ถ้ามี CN ตรงเลขบิลนี้ → เติมยอดใบลดหนี้ให้ (แก้ได้)
 }
 /* v2.24: CN ที่ match บิลเก็บเงินนี้ — ตรงเลขบิล หรือ ร้านเดียวกัน (เมื่อเลขบิล CN ไม่ใช่บิลอื่นในงาน) */
-function cnMatchesForBill(b,jobDocs,allowStore,jobId){
+function cnMatchesForBill(b,jobDocs,allowStore){
   const doc=String(b.doc||'').trim().toUpperCase();
   const code=String(b.code||'').trim();
-  const jid=normJobId(jobId||'');
   return (state.cnHistory||[]).filter(c=>{
     const cdoc=String(c.docNo||'').trim().toUpperCase();
     if(cdoc&&cdoc===doc) return true;                                             // ตรงเลขบิล
-    // v3.37: fallback ร้านเดียวกัน — จำกัดเฉพาะ CN ในใบคุม (งาน) เดียวกันเท่านั้น
-    //   กันบั๊ก: บิลที่ทำคืนบางส่วน ไปจับ CN "คืนทั้งบิล" ของบิลเก่าคนละวัน (ร้านเดียวกัน) → เหมาว่าไม่ต้องเก็บเงิน
-    if(allowStore&&code&&String(c.customerCode||'').trim()===code&&!jobDocs.has(cdoc)&&jid&&normJobId(c.jobId||'')===jid) return true;
+    if(allowStore&&code&&String(c.customerCode||'').trim()===code&&!jobDocs.has(cdoc)) return true; // ร้านเดียวกัน + CN ไม่ใช่บิลอื่นในงาน
     return false;
   });
 }
@@ -3931,18 +3849,13 @@ function applyCNCredit(idx){
   const paint=()=>{
     if(_billIdx!==idx) return;            // ออกจากบิลนี้ไปแล้ว
     const note=$('cnLinkNote'); if(!note) return;
-    const matches=cnMatchesForBill(b,jobDocs,allowStore,j.id);   // v3.37: จับเฉพาะ CN ในใบคุมเดียวกัน
+    const matches=cnMatchesForBill(b,jobDocs,allowStore);
     if(matches.some(c=>c.returnType==='คืนเต็มทั้งบิล')){   // v2.22: คืนทั้งบิล → มาร์คบิลเป็น CN ไม่ต้องเก็บเงิน
       if(!ro&&b.status!=='cn'){
         b.status='cn'; b.isCN=true; b.failReason='คืนทั้งบิล (CN)'; b.nextResp=''; b.savedAt=Date.now(); persistJobs();
       }
       note.innerHTML=`🔗 บิลนี้ <b>คืนทั้งบิล (CN)</b> — ไม่ต้องเก็บเงิน`;
       return;
-    }
-    // v3.37: ไม่มี CN "คืนทั้งบิล" ของบิลนี้แล้ว — ถ้าเคยถูกมาร์คอัตโนมัติจาก CN-linkage (บั๊กจับข้ามงาน) → คืนสถานะให้เก็บเงินได้ตามปกติ
-    if(!ro && b.isCN && b.failReason==='คืนทั้งบิล (CN)'){
-      b.status='pending'; b.isCN=false; b.failReason=''; b.nextResp=''; b.savedAt=null; persistJobs();
-      if(typeof openBillForm==='function' && _billIdx===idx){ openBillForm(idx); return; }   // re-render ปลดล็อกฟอร์มเก็บเงิน
     }
     const credit=matches.filter(c=>c.returnType!=='คืนเต็มทั้งบิล').reduce((s,c)=>s+(parseFloat(c.total)||0),0);
     if(credit>0){
@@ -4521,8 +4434,7 @@ function openCannot(idx){
     <div id="cnBanner"><div class="banner-gold">⚠️ บิลนี้จะถูกบันทึกลงชีท CN อัตโนมัติ — ไม่ต้องเก็บเงิน</div></div>
     <div class="field hidden" id="nextRespWrap">
       <label>ชื่อ - สกุล (ผู้รับผิดชอบส่งวันถัดไป)<span class="req">*</span></label>
-      ${buildDD('ddNext',drivers.map(d=>{ const nk=cleanCell(d['ชื่อเล่น']); const fn=cleanCell(d['ชื่อ - สกุล']||d['ชื่อ-สกุล']||''); const full=fn&&nk?`${fn} (${nk})`:(nk||fn); return {v:full,l:full}; }),'-- เลือก --')}
-      <!-- v3.42: value ของ dropdown เป็น "ชื่อ-สกุล (ชื่อเล่น)" เต็มรูปแบบเลย เหมือนช่องคนขับ -->
+      ${buildDD('ddNext',drivers.map(d=>({v:cleanCell(d['ชื่อเล่น']),l:cleanCell(d['ชื่อเล่น'])+' — '+cleanCell(d['ชื่อ - สกุล']||d['ชื่อ-สกุล']||'')})),'-- เลือก --')}
     </div>
     <div class="field">
       <label>สาเหตุ<span class="req">*</span></label>
@@ -4593,7 +4505,7 @@ async function confirmCannot(idx){
   b.status=isCN?'cn':'failed';
   b.isCN=isCN;
   b.failReason=action+' · '+reason;   // เก็บทั้งหัวข้อ+สาเหตุ ลงคอลัมน์ สาเหตุไม่ส่ง เดิม
-  b.nextResp=expandPersonName_(next);   // v3.42: ลงชื่อผู้รับผิดชอบส่งวันถัดไปแบบ "ชื่อ-สกุล (ชื่อเล่น)" เหมือนคนขับ (เดิมลงแค่ชื่อเล่น)
+  b.nextResp=next;
   b.note=note;
   b.savedAt=Date.now();
   persistJobs();
@@ -4642,54 +4554,9 @@ async function confirmCannot(idx){
     switchTab('sec-driver-job');
     return;
   }
-  // v3.43: "เปลี่ยนคนไปส่ง" → เข้าคิวส่งซ้ำ (ให้คนอื่นรับไปส่งได้) ทันที
-  if(action==='เปลี่ยนคนไปส่ง'){ queueRedelivery_(j,b,reason); }
   closeModal('modalCannot');
   showToast(`บันทึก: ส่งไม่ได้ ${b.doc}`,'success');
   switchTab('sec-driver-job');
-}
-
-/* v3.43: ส่งบิลเข้าคิว "ส่งซ้ำ" (ชีท ส่งซ้ำ) — ยิงเบื้องหลัง */
-function queueRedelivery_(j,b,reason){
-  const url=getAppsUrl(); if(!url||!j||!b) return;
-  const payload={ action:'queue_redelivery', redelivJobId:baseJobId_(j.id), warehouse:j.warehouse||'', markedBy:currentUserName_(),
-    redelivBills:[{ doc:b.doc, code:b.code||'', name:b.name||'', amount:b.amount||0,
-      salesmanCode:b.salesmanCode||'', salesman:b.salesman||'', reason:reason||'', nextResp:b.nextResp||'' }] };   // v3.44: key เฉพาะ กัน GAS เก่า fall-through เขียนทับงานจริง
-  fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)})
-    .catch(e=>console.warn('queue_redelivery',e));
-}
-/* v3.43: id ฐานของงาน (ตัด suffix ·ส่งซ้ำ ออก) — คิวส่งซ้ำอ้างเลขใบคุมเดิมเสมอ */
-function baseJobId_(id){ return String(id||'').replace(/·ส่งซ้ำ$/,''); }
-/* v3.43: จองงานส่งซ้ำ (POST claim + verify จากชีท กันรับซ้ำ) → {ok, takenBy?} */
-async function claimRedelivery_(baseId,by){
-  const url=getAppsUrl(); if(!url) return {ok:true};
-  try{ await fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},
-    body:JSON.stringify({action:'claim_redelivery',redelivJobId:baseId,claimedBy:by})}); }
-  catch(e){ console.warn('claim_redelivery',e); }
-  await new Promise(r=>setTimeout(r,800));   // รอ GAS เขียนเสร็จก่อน verify
-  try{
-    const rows=await fetchSheet(CFG.jobsSheetId,'ส่งซ้ำ',{fresh:true});
-    const mine=(rows||[]).filter(r=>cleanCell(r['เลขใบคุมเดิม'])===baseId);
-    const other=mine.find(r=>cleanCell(r['สถานะ'])==='กำลังส่งซ้ำ'&&cleanCell(r['คนรับส่งซ้ำ'])&&cleanCell(r['คนรับส่งซ้ำ'])!==by);
-    if(other) return {ok:false,takenBy:cleanCell(other['คนรับส่งซ้ำ'])};
-    return {ok:true};
-  }catch(e){ return {ok:true}; }   // อ่านไม่ได้ → ปล่อยผ่าน (optimistic)
-}
-/* v3.43: ปิดคิวส่งซ้ำ (บิลที่ส่งสำเร็จ/CN แล้ว) */
-function doneRedelivery_(j){
-  const url=getAppsUrl(); if(!url||!j||!j.isRedelivery) return;
-  const docs=(j.bills||[]).filter(b=>b.status==='done'||b.status==='cn').map(b=>b.doc);
-  if(!docs.length) return;
-  fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},
-    body:JSON.stringify({action:'done_redelivery',redelivJobId:j.baseId,docs})}).catch(e=>console.warn('done_redelivery',e));
-}
-/* v3.43: กด "รับงานส่งซ้ำนี้" บนการ์ด → เลือกใน dropdown ให้เลย แล้วเลื่อนไปกรอกทะเบียน/คนขับ */
-function selectRedeliveryForPickup(id){
-  const j=(state.redeliveryJobs||[]).find(x=>x.id===id); if(!j) return;
-  const tot=j.bills.reduce((s,b)=>s+(b.amount||0),0);
-  try{ ddPick('ddJob',id,`🔁 ส่งซ้ำ ${j.baseId} — ${j.bills.length} บิล · ${fmt(tot)} ฿`); }catch(e){}
-  showToast('เลือกงานส่งซ้ำแล้ว — เลือกทะเบียน/คนขับ แล้วกด "รับงาน"','info');
-  const el=document.getElementById('pickupFormBody'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
 /* ========== SUBMIT FOR APPROVAL ========== */
@@ -4725,18 +4592,13 @@ async function submitForApproval(){
     showToast(`ยังมี ${shortBills.length} บิลจ่ายไม่ครบ (${preview}${more}) — ตรวจสอบและกรอกให้ครบก่อน`,'warning');
     return;
   }
-  if(j._submitting) return;   // v3.41: กันกดขออนุมัติซ้ำ (แจ้งเตือน + เขียนชีท 2 รอบ)
-  j._submitting=true;
   j.status='pending_approval';
   j.submittedAt=Date.now();
-  j._notifiedSubmit=0;        // v3.41: reset ให้ยิงแจ้งเตือนรอบนี้ได้ (การส่งใหม่)
   persistJobs();
   showToast('ส่งหัวหน้าอนุมัติแล้ว ✓','success');
   // POST ไป Apps Script (ถ้ามี URL)
   await syncToSheets(j).catch(e=>console.warn('sync:',e));
   notifyApprovalDiscord(j);   // v1.94: เด้งแจ้ง Discord แยกตามคลัง
-  if(j.isRedelivery) doneRedelivery_(j);   // v3.43: ปิดคิวส่งซ้ำ (บิลที่ส่งสำเร็จ/CN)
-  j._submitting=false;        // v3.41: ปลดล็อกหลังส่งเสร็จ
   // v1.45: กลับไป list view หน้างานของฉัน — งานจะไปอยู่กล่อง "รออนุมัติ"
   state.activeJobId=null;
   state.driverJobView='list';
@@ -4745,9 +4607,6 @@ async function submitForApproval(){
 /* v1.94: ส่งแจ้งเตือนเข้า Discord (ผ่าน GAS → เลือกห้องตามคลัง) ตอนกดขออนุมัติ */
 function notifyApprovalDiscord(j){
   const url=getAppsUrl(); if(!url||!j) return;
-  // v3.41: กันยิงซ้ำ (แจ้งเตือนขึ้น 2 รอบ) — ยิงได้ครั้งเดียวต่อ 1 การส่งอนุมัติ (ตาม submittedAt)
-  if(j._notifiedSubmit&&j._notifiedSubmit===(j.submittedAt||0)) return;
-  j._notifiedSubmit=j.submittedAt||Date.now();
   let total=0;
   (j.bills||[]).forEach(b=>{ total+=payTotal(b.payment); });
   const payload={
@@ -5337,8 +5196,6 @@ async function manualSyncJadRot(){
       const dc=(r.resp&&r.resp.dsDc)||0;
       showToast(`✓ Sync สำเร็จ · ใบคุม ${jr} แถว · รายละเอียด ${dc} แถว`,'success');
       try{ await syncJobsFromSheet(); }catch(e){}
-      // v3.36: sync รายละเอียด ใหม่แล้ว → ล้าง cache + โหลด billDetails ใหม่ (force) ให้ CN ดึงรายการสินค้าในบิลได้ทันที
-      try{ state.billDetails={}; try{ localStorage.removeItem(cacheKey(BILLDETAILS_CACHE_KEY)); }catch(_){} await loadBillDetails(true); }catch(e){}
     } else {
       showToast('✗ Sync ไม่สำเร็จ: '+(r.error||'-'),'error');
     }
@@ -5681,7 +5538,6 @@ async function syncJobsFromSheet(opts){
   const now=Date.now();
   if(!force&&(now-_lastJobsSync)<CACHE_TTL_SYNC) return 0;
   _lastJobsSync=now;
-  loadRedeliveryJobs().catch(()=>{});   // v3.43: รีเฟรชคิวส่งซ้ำทุกรอบ (แยก state ไม่กระทบ merge หลัก)
   const sheetJobs=await loadJobsFromSheet();
   if(sheetJobs===null) return 0; // v1.67: โหลดชีทไม่สำเร็จ — อย่าแตะ local
   // v2.23: บิลของงานที่เพิ่งรับยังไม่ลง Cin → backfill จากชีท Jobs (งานว่าง) ตาม Trans_Code กันบิลหาย
@@ -5772,13 +5628,10 @@ async function syncJobsFromSheet(opts){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.44 (คิวงานส่งซ้ำ ใช้ key redelivJobId/redelivBills กัน GAS เก่า fall-through เขียนทับงานจริง) */
+const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.33 (SPEED: batch Cin upsert อ่านชีทรอบเดียว + format ครั้งเดียว + cache โฟลเดอร์ Drive) */
 const SHEET_INPUT='บันทึกเที่ยวส่ง';
 const SHEET_CIN='บันทึกบิลและการชำระ';
 const SHEET_CN='CN';
-const SHEET_REDELIVERY='ส่งซ้ำ';   // v3.43: คิวงานส่งซ้ำ (เปลี่ยนคนไปส่ง)
-const HEADERS_REDELIVERY=['วันเวลาที่มาร์ค','เลขใบคุมเดิม','Doc_No','รหัสร้าน','ชื่อร้าน','ยอดบิล','คลัง',
-  'Salesman_Code','Salesman_Name','คนที่มาร์ค','สาเหตุ','ผู้รับผิดชอบ','สถานะ','คนรับส่งซ้ำ','วันเวลารับ','วันเวลาเสร็จ'];
 
 /* ===== v3.13: Discord webhook แยกตามคลัง — เด้งแจ้งหัวหน้าตอนคนขับกดขออนุมัติ =====
    เพิ่มคลังใหม่: ใส่ 'ชื่อคลัง(ตัวพิมพ์ใหญ่)':'webhook url' (ชื่อคลังต้องตรงกับช่อง "คลัง" ของงาน) */
@@ -5820,7 +5673,7 @@ const HEADERS_CIN=['เลขใบคุม','Doc_Date','Doc_No','Customer_Code
 function doGet(e){
   let drive='unknown';
   try{ DriveApp.getRootFolder().getName(); drive='OK'; }catch(err){ drive='NOT_AUTHORIZED'; }
-  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.44',drive:drive}))
+  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.33',drive:drive}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -5852,10 +5705,13 @@ function doPost(e){
           parseFloat(data.lat)||'',parseFloat(data.lng)||'',parseInt(data.accuracy)||'',
           data.recordedBy||'',data.jobId||'',data.docNo||'',
           (data.lat&&data.lng)?(data.lat+','+data.lng):'']);
-        fmtColsOpen_(sh,['รหัสร้าน','เลขใบคุม','Doc_No'],'@');   // v3.35: เปิดปลาย คลุมแถวใหม่
-        fmtColsOpen_(sh,['Lat','Lng'],'0.000000');
-        fmtColsOpen_(sh,['วันเวลา'],'yyyy-mm-dd hh:mm:ss');
-        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.44'})).setMimeType(ContentService.MimeType.JSON);
+        setFmtByHeader_(sh,'รหัสร้าน','@');
+        setFmtByHeader_(sh,'เลขใบคุม','@');
+        setFmtByHeader_(sh,'Doc_No','@');
+        setFmtByHeader_(sh,'Lat','0.000000');
+        setFmtByHeader_(sh,'Lng','0.000000');
+        setFmtByHeader_(sh,'วันเวลา','yyyy-mm-dd hh:mm:ss');
+        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.33'})).setMimeType(ContentService.MimeType.JSON);
       }finally{ lock.releaseLock(); }
     }
 
@@ -5895,90 +5751,17 @@ function doPost(e){
       }
     }
 
-    // ===== v3.7/v3.34: ยกเลิกการรับงาน → ลบทุกชีทที่เกี่ยวกับงานนั้น (INPUT + Cin + CN + พิกัดร้าน) =====
+    // ===== v3.7: ยกเลิกการรับงาน → ลบงานออกจาก INPUT + Cin =====
     if(data.action==='cancel_job'){
       const lock=LockService.getScriptLock();
       lock.waitLock(30000);
       try{
         const jobId=String(data.jobId||'');
-        const removed={};
-        removed.input=delRowsByHeader_(ss,SHEET_INPUT,'รหัสใบคุม',jobId)+delRowsByHeader_(ss,SHEET_INPUT,'🔒 Row ID',jobId);
-        removed.cin=delRowsByHeader_(ss,SHEET_CIN,'เลขใบคุม',jobId);                 // บันทึกบิล/การชำระ
-        removed.cn=delRowsByHeader_(ss,SHEET_CN,'รหัสใบคุม',jobId);                  // v3.34: CN (รับคืน) ของงานนี้ (ตามใบคุม)
-        // v3.38: เผื่อ CN ที่ 'รหัสใบคุม' ว่าง/ไม่ตรง → ลบตาม 'เลขที่บิล DS' ของบิลในงานนี้ด้วย
-        var _cnDocs=Array.isArray(data.docNos)?data.docNos:[];
-        _cnDocs.forEach(function(dn){ dn=String(dn||'').trim(); if(dn) removed.cn+=delRowsByHeader_(ss,SHEET_CN,'เลขที่บิล DS',dn); });
-        removed.coords=delRowsByHeader_(ss,'พิกัดร้าน','เลขใบคุม',jobId);            // v3.34: พิกัดร้านที่จับตอนงานนี้
-        removed.redeliv=delRowsByHeader_(ss,SHEET_REDELIVERY,'เลขใบคุมเดิม',jobId);   // v3.43: ลบคิวส่งซ้ำของใบคุมนี้ด้วย
-        return ContentService.createTextOutput(JSON.stringify({ok:true,cancelled:jobId,removed:removed})).setMimeType(ContentService.MimeType.JSON);
-      } finally { lock.releaseLock(); }
-    }
-
-    // ===== v3.43: คิวงานส่งซ้ำ (เปลี่ยนคนไปส่ง) =====
-    // มาร์ค "เปลี่ยนคนไปส่ง" → เขียน/อัปเดตแถวคิว สถานะ='รอส่งซ้ำ' (คีย์ เลขใบคุมเดิม+Doc_No)
-    if(data.action==='queue_redelivery'){
-      const lock=LockService.getScriptLock(); lock.waitLock(30000);
-      try{
-        const sh=ensureSheet_(ss,SHEET_REDELIVERY,HEADERS_REDELIVERY);
-        const jobId=String(data.redelivJobId||''); const bills=Array.isArray(data.redelivBills)?data.redelivBills:[];   // v3.44: key เฉพาะ
-        bills.forEach(function(b){
-          const obj={};
-          obj['วันเวลาที่มาร์ค']=new Date();
-          obj['เลขใบคุมเดิม']=jobId; obj['Doc_No']=String(b.doc||'');
-          obj['รหัสร้าน']=String(b.code||''); obj['ชื่อร้าน']=b.name||''; obj['ยอดบิล']=parseFloat(b.amount)||0;
-          obj['คลัง']=data.warehouse||''; obj['Salesman_Code']=b.salesmanCode||''; obj['Salesman_Name']=b.salesman||'';
-          obj['คนที่มาร์ค']=data.markedBy||''; obj['สาเหตุ']=b.reason||''; obj['ผู้รับผิดชอบ']=b.nextResp||'';
-          obj['สถานะ']='รอส่งซ้ำ'; obj['คนรับส่งซ้ำ']=''; obj['วันเวลารับ']=''; obj['วันเวลาเสร็จ']='';
-          upsertByHeader_(sh,['เลขใบคุมเดิม','Doc_No'],[jobId,String(b.doc||'')],obj);
-        });
-        fmtColsOpen_(sh,['เลขใบคุมเดิม','Doc_No','รหัสร้าน'],'@');
-        fmtColsOpen_(sh,['วันเวลาที่มาร์ค','วันเวลารับ','วันเวลาเสร็จ'],'yyyy-mm-dd hh:mm:ss');
-        return ContentService.createTextOutput(JSON.stringify({ok:true,queued:bills.length})).setMimeType(ContentService.MimeType.JSON);
-      } finally { lock.releaseLock(); }
-    }
-    // กดรับงานส่งซ้ำ → เปลี่ยนแถว 'รอส่งซ้ำ' ของใบคุมนี้เป็น 'กำลังส่งซ้ำ' + คนรับ (กันรับซ้ำด้วย Lock)
-    if(data.action==='claim_redelivery'){
-      const lock=LockService.getScriptLock(); lock.waitLock(30000);
-      try{
-        const sh=ss.getSheetByName(SHEET_REDELIVERY);
-        if(!sh) return ContentService.createTextOutput(JSON.stringify({ok:true,claimed:0})).setMimeType(ContentService.MimeType.JSON);
-        const jobId=String(data.redelivJobId||''); const by=String(data.claimedBy||'');   // v3.44: key เฉพาะ
-        const hmap=headerMap_(sh);
-        const cJob=hmap['เลขใบคุมเดิม']?hmap['เลขใบคุมเดิม'][0]:-1, cSt=hmap['สถานะ']?hmap['สถานะ'][0]:-1;
-        const cBy=hmap['คนรับส่งซ้ำ']?hmap['คนรับส่งซ้ำ'][0]:-1, cAt=hmap['วันเวลารับ']?hmap['วันเวลารับ'][0]:-1;
-        if(cJob<0||cSt<0) return ContentService.createTextOutput(JSON.stringify({ok:false,error:'no cols'})).setMimeType(ContentService.MimeType.JSON);
-        const data2=sh.getDataRange().getValues(); let claimed=0; const now=new Date();
-        for(var i=1;i<data2.length;i++){
-          if(String(data2[i][cJob]).trim()===jobId && String(data2[i][cSt]).trim()==='รอส่งซ้ำ'){
-            sh.getRange(i+1,cSt+1).setValue('กำลังส่งซ้ำ');
-            if(cBy>=0) sh.getRange(i+1,cBy+1).setValue(by);
-            if(cAt>=0) sh.getRange(i+1,cAt+1).setValue(now);
-            claimed++;
-          }
-        }
-        return ContentService.createTextOutput(JSON.stringify({ok:true,claimed:claimed,claimedBy:by})).setMimeType(ContentService.MimeType.JSON);
-      } finally { lock.releaseLock(); }
-    }
-    // ส่งซ้ำเสร็จ (บิลที่ส่งสำเร็จ) → เปลี่ยนเป็น 'ส่งซ้ำแล้ว' (หลุดจากคิว)
-    if(data.action==='done_redelivery'){
-      const lock=LockService.getScriptLock(); lock.waitLock(30000);
-      try{
-        const sh=ss.getSheetByName(SHEET_REDELIVERY);
-        if(!sh) return ContentService.createTextOutput(JSON.stringify({ok:true,done:0})).setMimeType(ContentService.MimeType.JSON);
-        const jobId=String(data.redelivJobId||''); const docs=Array.isArray(data.docs)?data.docs.map(function(d){return String(d).trim();}):[];   // v3.44: key เฉพาะ
-        const hmap=headerMap_(sh);
-        const cJob=hmap['เลขใบคุมเดิม']?hmap['เลขใบคุมเดิม'][0]:-1, cDoc=hmap['Doc_No']?hmap['Doc_No'][0]:-1;
-        const cSt=hmap['สถานะ']?hmap['สถานะ'][0]:-1, cFin=hmap['วันเวลาเสร็จ']?hmap['วันเวลาเสร็จ'][0]:-1;
-        if(cJob<0||cDoc<0||cSt<0) return ContentService.createTextOutput(JSON.stringify({ok:false})).setMimeType(ContentService.MimeType.JSON);
-        const data3=sh.getDataRange().getValues(); let done=0; const now=new Date();
-        for(var j2=1;j2<data3.length;j2++){
-          if(String(data3[j2][cJob]).trim()===jobId && docs.indexOf(String(data3[j2][cDoc]).trim())>=0 && String(data3[j2][cSt]).trim()!=='ส่งซ้ำแล้ว'){
-            sh.getRange(j2+1,cSt+1).setValue('ส่งซ้ำแล้ว');
-            if(cFin>=0) sh.getRange(j2+1,cFin+1).setValue(now);
-            done++;
-          }
-        }
-        return ContentService.createTextOutput(JSON.stringify({ok:true,done:done})).setMimeType(ContentService.MimeType.JSON);
+        let removed=0;
+        removed+=delRowsByHeader_(ss,SHEET_INPUT,'รหัสใบคุม',jobId);   // ตามชื่อคอลัมน์
+        removed+=delRowsByHeader_(ss,SHEET_INPUT,'🔒 Row ID',jobId);  // เผื่อ
+        removed+=delRowsByHeader_(ss,SHEET_CIN,'เลขใบคุม',jobId);
+        return ContentService.createTextOutput(JSON.stringify({ok:true,cancelled:jobId,removed})).setMimeType(ContentService.MimeType.JSON);
       } finally { lock.releaseLock(); }
     }
 
@@ -6001,7 +5784,7 @@ function doPost(e){
         'ทะเบียน: '+(data.plate||'-')+' · คลัง: '+(data.warehouse||'-'),
         'จำนวนบิล: '+(data.billCount||0)+' · ยอดรวม: '+fmtBaht_(data.total)+' ฿',
         '⏰ '+fmtThai_(data.submittedAt)
-      ].join(String.fromCharCode(10));   // v3.41: ใช้ char(10) กัน \\n เพี้ยนเป็นตัวอักษรใน Discord
+      ].join('\\n');
       var embedJob={title:'📥 ขออนุมัติงานใหม่',description:descJob,color:0x3B82F6};
       var sent=sendDiscord_(data.warehouse,{embeds:[embedJob]});
       return ContentService.createTextOutput(JSON.stringify({ok:true,sent:sent})).setMimeType(ContentService.MimeType.JSON);
@@ -6017,7 +5800,7 @@ function doPost(e){
         reasonLine||'-',
         'จำนวน: '+(data.itemCount||0)+' รายการ · ยอด: '+fmtBaht_(data.total)+' ฿',
         '⏰ '+fmtThai_(data.ts||new Date())
-      ].join(String.fromCharCode(10));   // v3.41: ใช้ char(10) กัน \\n เพี้ยนเป็นตัวอักษรใน Discord
+      ].join('\\n');
       var embedCN={title:'📦 ขออนุมัติ CN (รับคืนสินค้า)',description:descCN,color:0xF59E0B};
       var sentc=sendDiscord_(data.warehouse,{embeds:[embedCN]});
       return ContentService.createTextOutput(JSON.stringify({ok:true,sent:sentc})).setMimeType(ContentService.MimeType.JSON);
@@ -6083,9 +5866,10 @@ function doPost(e){
           data.reason||'',data.errorFrom||'',data.note||'',total,photoUrl,'รออนุมัติ','','','','',data.driver||'',data.loader||''];
       });
       if(cnRows.length) cnSh.getRange(cnSh.getLastRow()+1,1,cnRows.length,cnRows[0].length).setValues(cnRows);
-      // v3.35: format แบบเปิดปลาย (คลุมแถวใหม่เสมอ)
-      fmtColsOpen_(cnSh,['รหัสใบคุม','เลขที่บิล DS','บาร์โค้ด','รหัสร้าน'],'@');
-      fmtColsOpen_(cnSh,['วัน เวลา','วันที่คืน','วันอนุมัติ'],'yyyy-mm-dd hh:mm:ss');
+      fmtOnce_('cn_v33',function(){
+        cnSh.getRange('D:D').setNumberFormat('@'); cnSh.getRange('J:J').setNumberFormat('@'); cnSh.getRange('M:M').setNumberFormat('@');
+        ['วัน เวลา','วันที่คืน','วันอนุมัติ'].forEach(function(col){ setFmtByHeader_(cnSh,col,'yyyy-mm-dd hh:mm:ss'); });
+      });
       return ContentService.createTextOutput(JSON.stringify({ok:true,rows:items.length,photoUrl})).setMimeType(ContentService.MimeType.JSON);
       } finally { lock.releaseLock(); }
     }
@@ -6128,16 +5912,15 @@ function doPost(e){
     inObj['วันเวลาอนุมัติ']=data.approvedAt?new Date(data.approvedAt):'';
     inObj['ถังนำไป']=data.tankOut||'';
     inObj['วันเวลาที่รับงาน']=data.startedAt?new Date(data.startedAt):'';   // v3.16: เวลากดรับงาน
+    fmtOnce_('input_v33',function(){ applyInputFormats_(inSh); });   // v3.33: ตั้ง format ครั้งเดียว (ก่อนเขียน)
     upsertByHeader_(inSh,['🔒 Row ID'],[String(data.jobId)],inObj);
-    forceTextByHeader_(inSh,'🔒 Row ID',String(data.jobId),'ทะเบียน',team.plate||'');   // v3.32: ทะเบียน text แน่นอน
-    // v3.35: format คอลัมน์แบบเปิดปลาย (คลุมแถวใหม่เสมอ) — 2 call, กันวันที่เป็น m/d/yyyy
-    fmtColsOpen_(inSh,['🔒 Row ID','รหัสใบคุม'],'@');
-    fmtColsOpen_(inSh,['วันเวลาปิดงาน','วันเวลาอนุมัติ','วันเวลาที่รับงาน'],'yyyy-mm-dd hh:mm:ss');
+    forceTextByHeader_(inSh,'🔒 Row ID',String(data.jobId),'ทะเบียน',team.plate||'');   // v3.32: ทะเบียน text แน่นอน (กัน gviz ตัดทะเบียนตัวอักษร)
 
     // ===== Cin — 1 แถวต่อ 1 บิล (เขียนตามชื่อหัวคอลัมน์จริง v3.12) =====
     if(Array.isArray(data.bills)){
       // v3.24: เพิ่ม 3 คอลัมน์สถานะอนุมัติงานท้ายชีท Cin (ต่อบิล) — ถ้ายังไม่มีให้สร้างต่อท้าย
       ensureHeaders_(cinSh,['สถานะอนุมัติงาน','ผู้อนุมัติปิดงาน','วันเวลาอนุมัติ']);
+      fmtOnce_('cin_v33',function(){ applyCinFormats_(cinSh); });   // v3.33: ตั้ง format ครั้งเดียว (ก่อนเขียน → ทะเบียน/วันที่ถูกต้อง)
       const cinBatch=[];
       // สรุปสถานะอนุมัติของทั้งใบคุม (ใช้เขียนทุกแถวบิลใต้ใบคุมนี้)
       var jobApprovalStatus='';
@@ -6181,7 +5964,7 @@ function doPost(e){
         const slip2Url=uploadPaymentPhoto_(p.transfer2Photo,'SLIP2_'+data.jobId+'_'+b.doc+'.jpg');
         const chequeUrl=uploadPaymentPhoto_(p.chequePhoto,'CHEQUE_'+data.jobId+'_'+b.doc+'.jpg');
         // v3.8: Doc_Date จากชีทใบคุม (parse เป็นวันที่ ถ้าไม่ได้เก็บข้อความเดิม)
-        let docDateVal=parseDocDate_(b.docDate);   // v3.40: parse dd/mm/yyyy ให้ถูก (เดิม new Date ตีความ m/d/y → สลับวัน/เดือน + วันเกิน 12 พังเป็น text)
+        let docDateVal=''; if(b.docDate){ const dd=new Date(b.docDate); docDateVal=isNaN(dd.getTime())?b.docDate:dd; }
         // v3.11: รวม วัน/เดือน/ปี(พ.ศ.) ของเช็ค เป็นวันที่เดียว
         let chequeDateVal='';
         if(p.chequeDay&&p.chequeMonth&&p.chequeYear){
@@ -6242,13 +6025,9 @@ function doPost(e){
         cinBatch.push({keys:[String(data.jobId),String(b.doc)],obj:cinObj});   // v3.33: สะสมไว้ batch เขียนทีเดียว
       });
       batchUpsertByHeader_(cinSh,['เลขใบคุม','Doc_No'],cinBatch);   // v3.33: อ่านชีทรอบเดียว + เขียนเป็นก้อน
-      // v3.35: format คอลัมน์แบบเปิดปลาย (คลุมแถวใหม่เสมอ) — 3 call
-      fmtColsOpen_(cinSh,['เลขใบคุม','Doc_No','ทะเบียนรถ'],'@');
-      fmtColsOpen_(cinSh,['Doc_Date','วัน-เดือน-ปี ของเช็ค'],'yyyy-mm-dd');
-      fmtColsOpen_(cinSh,['วัน+เวลา ที่ส่งสินค้า','U_ADD','วันที่โอนครั้งที่1','วันที่โอนครั้งที่2','แก้ไขเมื่อ','วันที่','วันเวลาอนุมัติ'],'yyyy-mm-dd hh:mm:ss');
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.44'}))
+    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.33'}))
       .setMimeType(ContentService.MimeType.JSON);
   }catch(err){
     return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err)}))
@@ -6421,14 +6200,6 @@ function setFmtByHeader_(sh,name,fmt){
   const rows=sh.getMaxRows();
   cols.forEach(function(ci){ sh.getRange(1,ci+1,rows,1).setNumberFormat(fmt); });
 }
-/* v3.35: format หลายคอลัมน์ในครั้งเดียว แบบเปิดปลาย (คลุมแถวที่ append ใหม่เสมอ) — เร็ว + ถูกต้อง
-   ใช้ getRangeList → 1 API call ต่อ 1 format (แทน setFmtByHeader_ ทีละคอลัมน์ + กันแถวใหม่ได้ format เริ่มต้น) */
-function colLetter_(col){ let s=''; while(col>0){ const m=(col-1)%26; s=String.fromCharCode(65+m)+s; col=Math.floor((col-1)/26); } return s; }
-function fmtColsOpen_(sh,names,fmt){
-  const hmap=headerMap_(sh); const a1=[];
-  names.forEach(function(n){ const c=hmap[n]?hmap[n][0]:-1; if(c>=0){ const L=colLetter_(c+1); a1.push(L+'2:'+L); } });
-  if(a1.length) sh.getRangeList(a1).setNumberFormat(fmt);
-}
 /* v3.32: บังคับเซลล์เป็น text แน่นอน (set format '@' ก่อน แล้ว setValue เป็น string)
    ใช้กับ "ทะเบียน" — กัน gviz ตัดทะเบียนตัวอักษร (บฉ1693) หายเมื่อคอลัมน์ปนเลข */
 function forceTextByHeader_(sh,keyName,keyVal,colName,value){
@@ -6508,23 +6279,6 @@ function fmtThai_(ts){
   var d=new Date(ts); if(isNaN(d.getTime())) return String(ts);
   var p=function(x){ return (x<10?'0':'')+x; };
   return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+((d.getFullYear()+543)%100)+' '+p(d.getHours())+'.'+p(d.getMinutes());
-}
-
-/* v3.40: แปลง Doc_Date ให้เป็น Date ที่ถูกต้อง — ต้นทาง (ชีท Jobs/ใบคุม) เป็น dd/mm/yyyy
-   ห้ามใช้ new Date() ตรงๆ เพราะมันตีความ m/d/y → 10/07 กลายเป็น Oct 7, 13/07 พังทั้งหมด */
-function parseDocDate_(v){
-  if(v===''||v===null||v===undefined) return '';
-  if(Object.prototype.toString.call(v)==='[object Date]') return isNaN(v.getTime())?'':v;
-  var s=String(v).trim(); if(!s) return '';
-  var m=s.match(/^([0-9]{1,2})[/.-]([0-9]{1,2})[/.-]([0-9]{4})$/);   // dd/mm/yyyy (ใช้ [0-9]/[/.-] เลี่ยง backslash ที่โดน strip ใน template literal)
-  if(m){
-    var d=parseInt(m[1],10), mo=parseInt(m[2],10), y=parseInt(m[3],10);
-    if(y>2400) y-=543;   // เผื่อปี พ.ศ. → ค.ศ.
-    if(mo>=1&&mo<=12&&d>=1&&d<=31){ var dt=new Date(y,mo-1,d); return isNaN(dt.getTime())?s:dt; }
-  }
-  var m2=s.match(/^([0-9]{4})[/.-]([0-9]{1,2})[/.-]([0-9]{1,2})$/);   // yyyy-mm-dd (อยู่แล้ว)
-  if(m2){ var dt2=new Date(parseInt(m2[1],10),parseInt(m2[2],10)-1,parseInt(m2[3],10)); return isNaN(dt2.getTime())?s:dt2; }
-  var dd=new Date(s); return isNaN(dd.getTime())?s:dd;
 }
 
 /* Index ด้วย 1 คอลัมน์ (col index 0-based → rowNum) */
@@ -6823,47 +6577,6 @@ function fixPlateColumnFormat(){
   SpreadsheetApp.getUi().alert('✓ แก้ format คอลัมน์ทะเบียนเป็น text + convert '+touched+' แถว เรียบร้อย');
 }
 
-/* v3.40: ซ่อม Doc_Date แถวเก่าใน Cin ที่ผิด (สลับวัน/เดือน หรือ text วันเกิน 12)
-   - ดึงค่าที่ถูกต้องจากชีทต้นทาง ใบคุม + Jobs (Doc_No → Doc_Date) มาเขียนทับ = แม่นสุด
-   - แถวที่หาต้นทางไม่เจอ: ถ้าเป็น text dd/mm/yyyy แปลงเป็น Date ให้ format ตรง */
-function fixDocDateColumn(){
-  const ss=SpreadsheetApp.getActiveSpreadsheet();
-  const cin=ss.getSheetByName(SHEET_CIN);
-  if(!cin){ SpreadsheetApp.getUi().alert('ไม่พบชีท '+SHEET_CIN); return; }
-  const srcMap={};
-  ['ใบคุม','Jobs'].forEach(function(nm){
-    const sh=ss.getSheetByName(nm); if(!sh) return;
-    const hm=headerMap_(sh);
-    const cD=hm['Doc_No']?hm['Doc_No'][0]:-1, cDt=hm['Doc_Date']?hm['Doc_Date'][0]:-1;
-    if(cD<0||cDt<0) return;
-    const data=sh.getDataRange().getValues();
-    for(var i=1;i<data.length;i++){
-      const doc=String(data[i][cD]||'').trim(); if(!doc) continue;
-      const dt=parseDocDate_(data[i][cDt]);
-      if(dt instanceof Date) srcMap[doc]=dt;
-    }
-  });
-  const hmap=headerMap_(cin);
-  const cDoc=hmap['Doc_No']?hmap['Doc_No'][0]:-1, cDate=hmap['Doc_Date']?hmap['Doc_Date'][0]:-1;
-  if(cDoc<0||cDate<0){ SpreadsheetApp.getUi().alert('ไม่พบคอลัมน์ Doc_No / Doc_Date ในชีท '+SHEET_CIN); return; }
-  const last=cin.getLastRow(); if(last<2){ SpreadsheetApp.getUi().alert('ไม่มีข้อมูล'); return; }
-  const docCol=cin.getRange(2,cDoc+1,last-1,1).getValues();
-  const dateCol=cin.getRange(2,cDate+1,last-1,1).getValues();
-  var fixedSrc=0, fixedText=0;
-  for(var r=0;r<dateCol.length;r++){
-    const doc=String(docCol[r][0]||'').trim();
-    const cur=dateCol[r][0];
-    if(doc&&srcMap[doc]){ dateCol[r][0]=srcMap[doc]; fixedSrc++; continue; }
-    if(cur&&Object.prototype.toString.call(cur)!=='[object Date]'){
-      const dt=parseDocDate_(cur);
-      if(dt instanceof Date){ dateCol[r][0]=dt; fixedText++; }
-    }
-  }
-  cin.getRange(2,cDate+1,dateCol.length,1).setValues(dateCol);
-  setFmtByHeader_(cin,'Doc_Date','yyyy-mm-dd');
-  SpreadsheetApp.getUi().alert('✓ แก้ Doc_Date เรียบร้อย\\n- ดึงจากต้นทาง (ถูก 100%): '+fixedSrc+' แถว\\n- แปลง text วันเกิน 12: '+fixedText+' แถว');
-}
-
 function onOpen(){
   try{
     SpreadsheetApp.getUi().createMenu('🚚 D-Man')
@@ -6876,7 +6589,6 @@ function onOpen(){
       .addSeparator()
       .addItem('🩹 Backfill Status columns (Cin เก่า)','backfillStatusColumns')
       .addItem('🔧 แก้ทะเบียนแถวเก่าเป็น text','fixPlateColumnFormat')
-      .addItem('📅 แก้ Doc_Date แถวเก่า (สลับวัน/เดือน)','fixDocDateColumn')
       .addToUi();
   }catch(e){}
 }`;
@@ -6986,8 +6698,8 @@ async function bootApp(){
     if(cachedCust) state.customers=cachedCust;
     const cachedProd=getCachedSheet('products',CACHE_TTL_LONG);
     if(cachedProd){ state.products=cachedProd; }
-    const cachedBD=getCachedSheet(BILLDETAILS_CACHE_KEY,CACHE_TTL_LONG);
-    if(cachedBD && Object.keys(cachedBD).length) state.billDetails=cachedBD;   // v3.36: ข้าม cache ว่าง
+    const cachedBD=getCachedSheet('billDetails',CACHE_TTL_LONG);
+    if(cachedBD) state.billDetails=cachedBD;
     // render ทันทีด้วยข้อมูลที่มีอยู่ในเครื่อง
     if(dataDepTabs.includes(state.currentTab)) renderCurrent();
     updateOutboxBadge();                        // v3.28: โชว์จำนวนที่ค้างจาก session ก่อน (ถ้ามี)
