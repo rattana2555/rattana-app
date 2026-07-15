@@ -741,7 +741,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.42';
+const APP_VERSION='3.43';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -1360,6 +1360,39 @@ async function loadAvailableJobs(){
   }catch(e){ console.warn('loadAvailableJobs failed:',e); return []; }
 }
 
+/* v3.43: อ่านคิว "ส่งซ้ำ" → สร้างงานว่างส่งซ้ำ (เฉพาะสถานะ 'รอส่งซ้ำ') group ตามเลขใบคุมเดิม
+   เก็บใน state.redeliveryJobs แยกจาก state.jobs (กันกระทบ sync หลัก) — โผล่เป็นการ์ด + ใน dropdown รับงาน */
+async function loadRedeliveryJobs(){
+  try{
+    const rows=await fetchSheet(CFG.jobsSheetId,'ส่งซ้ำ',{fresh:true});
+    const custByCode={}; state.customers.forEach(c=>{ if(c.code) custByCode[c.code]=c; });
+    const byJob={};
+    (rows||[]).forEach(r=>{
+      if(cleanCell(r['สถานะ'])!=='รอส่งซ้ำ') return;
+      const base=cleanCell(r['เลขใบคุมเดิม']); const doc=cleanCell(r['Doc_No']); if(!base||!doc) return;
+      if(!byJob[base]) byJob[base]={base,warehouse:cleanCell(r['คลัง'])||'',bills:[]};
+      const code=cleanCell(r['รหัสร้าน']); const cust=custByCode[code]||{};
+      byJob[base].bills.push({
+        doc, code, name:cleanCell(r['ชื่อร้าน']),
+        amount:parseFloat(cleanCell(r['ยอดบิล']||'0').replace(/,/g,''))||0,
+        salesman:cleanCell(r['Salesman_Name']), salesmanCode:cleanCell(r['Salesman_Code']),
+        markedBy:cleanCell(r['คนที่มาร์ค']), redeliverReason:cleanCell(r['สาเหตุ']),
+        lat:cust.lat||null, lng:cust.lng||null, address:cust.address||'', phone:cust.phone||'',
+        creditDays:cust.creditDays||0, creditLimit:cust.creditLimit||0, photoUrl:cust.photoUrl||'',
+        status:'pending', payment:{}
+      });
+    });
+    state.redeliveryJobs=Object.values(byJob).map(g=>{
+      const m=g.base.match(/W(\d)/i); const wh=g.warehouse||(m?'W'+m[1]:'W1');
+      return { id:g.base+'·ส่งซ้ำ', baseId:g.base, isRedelivery:true, team:null, driver:'', helper:'', plate:'', pickup:'',
+        warehouse:wh, status:'available', createdAt:Date.now(), docDate:'', bills:g.bills,
+        _redeliveryDocs:g.bills.map(b=>b.doc) };
+    });
+  }catch(e){ console.warn('loadRedeliveryJobs',e); if(!Array.isArray(state.redeliveryJobs)) state.redeliveryJobs=[]; }
+  try{ if(state.currentTab==='sec-driver-home') renderDriverHome(); }catch(e){}   // v3.43: โผล่การ์ดทันทีเมื่อโหลดเสร็จ
+  return state.redeliveryJobs||[];
+}
+
 /* เติมข้อมูลร้าน (coords, address, phone) ให้บิลทุกตัวจาก state.customers
    เรียกหลังจาก loadJobs / syncJobsFromSheet — backfill ให้บิลที่ถูกบันทึก
    ไว้ใน localStorage ก่อน v1.15 (ตอน custByCode ผิด) ก็ได้พิกัดด้วย */
@@ -1387,6 +1420,7 @@ function enrichBills(){
 async function loadJobs(){
   // โหลดงานว่างจากชีท Jobs
   const fresh=await loadAvailableJobs();
+  loadRedeliveryJobs().catch(()=>{});   // v3.43: โหลดคิวส่งซ้ำ (แยก state, ไม่บล็อก)
   const localJobs=loadStore().jobs||[];
   // จัด state.jobs = งานว่างจากชีท + งานที่อยู่ระหว่างทำ/ส่งแล้วใน local
   state.jobs=fresh;
@@ -2963,6 +2997,24 @@ function renderDriverHome(){
   const myNick=state.user.nickname||state.user.name;
   const myDisplay=state.user.displayName||myNick;
   const avail=state.jobs.filter(j=>j.status==='available'&&!j.team);
+  const redeliv=(state.redeliveryJobs||[]).filter(j=>j.status==='available');   // v3.43: งานส่งซ้ำ
+  const redelivCards=redeliv.length?`
+    <div class="field">
+      <label style="color:#c0392b">🔁 งานส่งซ้ำ (${redeliv.length}) <span class="txt-xs txt-muted">— บิลที่ต้องส่งซ้ำ ใครก็รับได้</span></label>
+      ${redeliv.map(j=>{
+        const tot=j.bills.reduce((s,b)=>s+(b.amount||0),0);
+        return `<div class="card" style="border:1px solid #f4c893;box-shadow:0 2px 8px #f0871e22;margin-bottom:10px;padding:11px 12px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12px;background:#f0871e;color:#fff;padding:3px 10px;border-radius:9px;font-weight:700">🔁 ส่งซ้ำ</span>
+            <span class="txt-bold" style="color:#0a1b3e">${esc(j.baseId)}</span>
+            <span class="txt-xs" style="margin-left:auto;background:#eaf1ff;color:#1c50b8;padding:2px 8px;border-radius:8px;font-weight:700">${esc(j.warehouse)}</span>
+          </div>
+          <div class="txt-xs txt-muted" style="margin:6px 0 3px">${j.bills.length} บิล · รวม ${fmt(tot)} ฿ · มาร์คโดย ${esc((j.bills[0]||{}).markedBy||'-')}</div>
+          ${j.bills.slice(0,5).map(b=>`<div class="txt-xs" style="padding:2px 0;color:#374151">• ${esc(b.doc)} ${esc(b.name)} <span style="color:#9ca3af">${fmt(b.amount)}</span></div>`).join('')}
+          <button type="button" class="btn btn-sm" style="margin-top:8px;width:100%;background:#f0871e;color:#fff;border:none;font-weight:700" onclick="selectRedeliveryForPickup('${esc(j.id).replace(/'/g,"\\'")}')">✋ รับงานส่งซ้ำนี้</button>
+        </div>`;
+      }).join('')}
+    </div>`:'';
   // v2.62: งานที่ถูกจอง/เลือกไปแล้ววันนี้ — โชว์ใน dropdown เป็น disabled ให้คนขับเห็นสถานะจริง
   const availIds=new Set(avail.map(j=>j.id));
   const takenToday=state.jobs.filter(j=>{
@@ -2998,12 +3050,13 @@ function renderDriverHome(){
   }).sort((a,b)=>a.l.localeCompare(b.l,'th'));
 
   const todayLabel=$('todayLabel'); if(todayLabel) todayLabel.textContent=`— ส่งวันที่ ${todayDisplayStr()}`;
-  $('pickupFormBody').innerHTML=`
+  $('pickupFormBody').innerHTML=redelivCards+`
     <div class="field">
       <label>เลขที่ใบคุม<span class="req">*</span> <span class="txt-xs txt-muted">(เฉพาะงานวันนี้ ${todayDisplayStr()})</span></label>
       ${(() => {
         // v2.62: รวม avail + taken → dropdown เรียง avail ก่อน taken (disabled ล่าง)
-        const availItems=avail.map(j=>({v:j.id,l:`${j.id} — ${j.bills.length} ร้าน · ${fmt(j.bills.reduce((s,b)=>s+b.amount,0))} ฿`}));
+        const availItems=redeliv.map(j=>({v:j.id,l:`🔁 ส่งซ้ำ ${j.baseId} — ${j.bills.length} บิล · ${fmt(j.bills.reduce((s,b)=>s+b.amount,0))} ฿`}))   // v3.43: งานส่งซ้ำขึ้นก่อน
+          .concat(avail.map(j=>({v:j.id,l:`${j.id} — ${j.bills.length} ร้าน · ${fmt(j.bills.reduce((s,b)=>s+b.amount,0))} ฿`})));
         const takenItems=takenToday.map(j=>{
           const drv=(j.team&&j.team.driver)||j.driver||'?';
           const stLbl=j.status==='in_progress'?'กำลังส่ง':j.status==='pending_approval'?'รออนุมัติ':j.status==='approved'?'อนุมัติแล้ว':j.status;
@@ -3182,12 +3235,24 @@ function expandPersonName_(val){
   }
   return s;   // ไม่พบใน users = คงตามที่พิมพ์
 }
-function confirmPickup(){
+async function confirmPickup(){   // v3.43: async — งานส่งซ้ำต้อง await claim ก่อน
   const jid=ddValue('ddJob');
-  const j=state.jobs.find(x=>x.id===jid);
+  const j=state.jobs.find(x=>x.id===jid) || (state.redeliveryJobs||[]).find(x=>x.id===jid);   // v3.43: รวมงานส่งซ้ำ
   if(!j){ showToast('กรุณาเลือกเลขใบคุม','warning'); return; }
   const plate=ddValue('ddPlate');
   if(!plate){ showToast('กรุณาเลือกทะเบียนรถ','warning'); return; }
+  // v3.43: งานส่งซ้ำ — จองก่อน (กันคนอื่นรับซ้ำข้ามเครื่อง) แล้วย้ายเข้า state.jobs เป็นงานจริง
+  if(j.isRedelivery){
+    showToast('กำลังรับงานส่งซ้ำ…','info');
+    const cr=await claimRedelivery_(j.baseId,currentUserName_());
+    if(!cr.ok){
+      showToast(`งานส่งซ้ำนี้ถูกรับไปแล้ว${cr.takenBy?' โดย '+cr.takenBy:''}`,'warning');
+      loadRedeliveryJobs().then(()=>{ if(state.currentTab==='sec-driver-home') renderDriverHome(); });
+      return;
+    }
+    state.redeliveryJobs=(state.redeliveryJobs||[]).filter(x=>x.id!==j.id);
+    if(!state.jobs.some(x=>x.id===j.id)) state.jobs.push(j);
+  }
   // v3.31: ผู้ช่วยทุกช่อง (dropdown + พิมพ์เอง) → normalize เป็น "ชื่อ-สกุล (ชื่อเล่น)" เหมือนคนขับ
   const h1=expandPersonName_(ddValue('ddHelper1'));
   const h2=expandPersonName_(ddValue('ddHelper2'));
@@ -4577,9 +4642,54 @@ async function confirmCannot(idx){
     switchTab('sec-driver-job');
     return;
   }
+  // v3.43: "เปลี่ยนคนไปส่ง" → เข้าคิวส่งซ้ำ (ให้คนอื่นรับไปส่งได้) ทันที
+  if(action==='เปลี่ยนคนไปส่ง'){ queueRedelivery_(j,b,reason); }
   closeModal('modalCannot');
   showToast(`บันทึก: ส่งไม่ได้ ${b.doc}`,'success');
   switchTab('sec-driver-job');
+}
+
+/* v3.43: ส่งบิลเข้าคิว "ส่งซ้ำ" (ชีท ส่งซ้ำ) — ยิงเบื้องหลัง */
+function queueRedelivery_(j,b,reason){
+  const url=getAppsUrl(); if(!url||!j||!b) return;
+  const payload={ action:'queue_redelivery', jobId:baseJobId_(j.id), warehouse:j.warehouse||'', markedBy:currentUserName_(),
+    bills:[{ doc:b.doc, code:b.code||'', name:b.name||'', amount:b.amount||0,
+      salesmanCode:b.salesmanCode||'', salesman:b.salesman||'', reason:reason||'', nextResp:b.nextResp||'' }] };
+  fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)})
+    .catch(e=>console.warn('queue_redelivery',e));
+}
+/* v3.43: id ฐานของงาน (ตัด suffix ·ส่งซ้ำ ออก) — คิวส่งซ้ำอ้างเลขใบคุมเดิมเสมอ */
+function baseJobId_(id){ return String(id||'').replace(/·ส่งซ้ำ$/,''); }
+/* v3.43: จองงานส่งซ้ำ (POST claim + verify จากชีท กันรับซ้ำ) → {ok, takenBy?} */
+async function claimRedelivery_(baseId,by){
+  const url=getAppsUrl(); if(!url) return {ok:true};
+  try{ await fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({action:'claim_redelivery',jobId:baseId,claimedBy:by})}); }
+  catch(e){ console.warn('claim_redelivery',e); }
+  await new Promise(r=>setTimeout(r,800));   // รอ GAS เขียนเสร็จก่อน verify
+  try{
+    const rows=await fetchSheet(CFG.jobsSheetId,'ส่งซ้ำ',{fresh:true});
+    const mine=(rows||[]).filter(r=>cleanCell(r['เลขใบคุมเดิม'])===baseId);
+    const other=mine.find(r=>cleanCell(r['สถานะ'])==='กำลังส่งซ้ำ'&&cleanCell(r['คนรับส่งซ้ำ'])&&cleanCell(r['คนรับส่งซ้ำ'])!==by);
+    if(other) return {ok:false,takenBy:cleanCell(other['คนรับส่งซ้ำ'])};
+    return {ok:true};
+  }catch(e){ return {ok:true}; }   // อ่านไม่ได้ → ปล่อยผ่าน (optimistic)
+}
+/* v3.43: ปิดคิวส่งซ้ำ (บิลที่ส่งสำเร็จ/CN แล้ว) */
+function doneRedelivery_(j){
+  const url=getAppsUrl(); if(!url||!j||!j.isRedelivery) return;
+  const docs=(j.bills||[]).filter(b=>b.status==='done'||b.status==='cn').map(b=>b.doc);
+  if(!docs.length) return;
+  fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({action:'done_redelivery',jobId:j.baseId,docs})}).catch(e=>console.warn('done_redelivery',e));
+}
+/* v3.43: กด "รับงานส่งซ้ำนี้" บนการ์ด → เลือกใน dropdown ให้เลย แล้วเลื่อนไปกรอกทะเบียน/คนขับ */
+function selectRedeliveryForPickup(id){
+  const j=(state.redeliveryJobs||[]).find(x=>x.id===id); if(!j) return;
+  const tot=j.bills.reduce((s,b)=>s+(b.amount||0),0);
+  try{ ddPick('ddJob',id,`🔁 ส่งซ้ำ ${j.baseId} — ${j.bills.length} บิล · ${fmt(tot)} ฿`); }catch(e){}
+  showToast('เลือกงานส่งซ้ำแล้ว — เลือกทะเบียน/คนขับ แล้วกด "รับงาน"','info');
+  const el=document.getElementById('pickupFormBody'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
 /* ========== SUBMIT FOR APPROVAL ========== */
@@ -4625,6 +4735,7 @@ async function submitForApproval(){
   // POST ไป Apps Script (ถ้ามี URL)
   await syncToSheets(j).catch(e=>console.warn('sync:',e));
   notifyApprovalDiscord(j);   // v1.94: เด้งแจ้ง Discord แยกตามคลัง
+  if(j.isRedelivery) doneRedelivery_(j);   // v3.43: ปิดคิวส่งซ้ำ (บิลที่ส่งสำเร็จ/CN)
   j._submitting=false;        // v3.41: ปลดล็อกหลังส่งเสร็จ
   // v1.45: กลับไป list view หน้างานของฉัน — งานจะไปอยู่กล่อง "รออนุมัติ"
   state.activeJobId=null;
@@ -5570,6 +5681,7 @@ async function syncJobsFromSheet(opts){
   const now=Date.now();
   if(!force&&(now-_lastJobsSync)<CACHE_TTL_SYNC) return 0;
   _lastJobsSync=now;
+  loadRedeliveryJobs().catch(()=>{});   // v3.43: รีเฟรชคิวส่งซ้ำทุกรอบ (แยก state ไม่กระทบ merge หลัก)
   const sheetJobs=await loadJobsFromSheet();
   if(sheetJobs===null) return 0; // v1.67: โหลดชีทไม่สำเร็จ — อย่าแตะ local
   // v2.23: บิลของงานที่เพิ่งรับยังไม่ลง Cin → backfill จากชีท Jobs (งานว่าง) ตาม Trans_Code กันบิลหาย
@@ -5660,10 +5772,13 @@ async function syncJobsFromSheet(opts){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.41 (Discord ขึ้นบรรทัดใหม่ด้วย char(10) กัน \\n เพี้ยน + Doc_Date parse dd/mm/yyyy) */
+const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.43 (คิวงานส่งซ้ำ: queue/claim/done_redelivery + Discord char(10) + Doc_Date dd/mm/yyyy) */
 const SHEET_INPUT='บันทึกเที่ยวส่ง';
 const SHEET_CIN='บันทึกบิลและการชำระ';
 const SHEET_CN='CN';
+const SHEET_REDELIVERY='ส่งซ้ำ';   // v3.43: คิวงานส่งซ้ำ (เปลี่ยนคนไปส่ง)
+const HEADERS_REDELIVERY=['วันเวลาที่มาร์ค','เลขใบคุมเดิม','Doc_No','รหัสร้าน','ชื่อร้าน','ยอดบิล','คลัง',
+  'Salesman_Code','Salesman_Name','คนที่มาร์ค','สาเหตุ','ผู้รับผิดชอบ','สถานะ','คนรับส่งซ้ำ','วันเวลารับ','วันเวลาเสร็จ'];
 
 /* ===== v3.13: Discord webhook แยกตามคลัง — เด้งแจ้งหัวหน้าตอนคนขับกดขออนุมัติ =====
    เพิ่มคลังใหม่: ใส่ 'ชื่อคลัง(ตัวพิมพ์ใหญ่)':'webhook url' (ชื่อคลังต้องตรงกับช่อง "คลัง" ของงาน) */
@@ -5705,7 +5820,7 @@ const HEADERS_CIN=['เลขใบคุม','Doc_Date','Doc_No','Customer_Code
 function doGet(e){
   let drive='unknown';
   try{ DriveApp.getRootFolder().getName(); drive='OK'; }catch(err){ drive='NOT_AUTHORIZED'; }
-  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.41',drive:drive}))
+  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.43',drive:drive}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -5740,7 +5855,7 @@ function doPost(e){
         fmtColsOpen_(sh,['รหัสร้าน','เลขใบคุม','Doc_No'],'@');   // v3.35: เปิดปลาย คลุมแถวใหม่
         fmtColsOpen_(sh,['Lat','Lng'],'0.000000');
         fmtColsOpen_(sh,['วันเวลา'],'yyyy-mm-dd hh:mm:ss');
-        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.41'})).setMimeType(ContentService.MimeType.JSON);
+        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.43'})).setMimeType(ContentService.MimeType.JSON);
       }finally{ lock.releaseLock(); }
     }
 
@@ -5794,7 +5909,76 @@ function doPost(e){
         var _cnDocs=Array.isArray(data.docNos)?data.docNos:[];
         _cnDocs.forEach(function(dn){ dn=String(dn||'').trim(); if(dn) removed.cn+=delRowsByHeader_(ss,SHEET_CN,'เลขที่บิล DS',dn); });
         removed.coords=delRowsByHeader_(ss,'พิกัดร้าน','เลขใบคุม',jobId);            // v3.34: พิกัดร้านที่จับตอนงานนี้
+        removed.redeliv=delRowsByHeader_(ss,SHEET_REDELIVERY,'เลขใบคุมเดิม',jobId);   // v3.43: ลบคิวส่งซ้ำของใบคุมนี้ด้วย
         return ContentService.createTextOutput(JSON.stringify({ok:true,cancelled:jobId,removed:removed})).setMimeType(ContentService.MimeType.JSON);
+      } finally { lock.releaseLock(); }
+    }
+
+    // ===== v3.43: คิวงานส่งซ้ำ (เปลี่ยนคนไปส่ง) =====
+    // มาร์ค "เปลี่ยนคนไปส่ง" → เขียน/อัปเดตแถวคิว สถานะ='รอส่งซ้ำ' (คีย์ เลขใบคุมเดิม+Doc_No)
+    if(data.action==='queue_redelivery'){
+      const lock=LockService.getScriptLock(); lock.waitLock(30000);
+      try{
+        const sh=ensureSheet_(ss,SHEET_REDELIVERY,HEADERS_REDELIVERY);
+        const jobId=String(data.jobId||''); const bills=Array.isArray(data.bills)?data.bills:[];
+        bills.forEach(function(b){
+          const obj={};
+          obj['วันเวลาที่มาร์ค']=new Date();
+          obj['เลขใบคุมเดิม']=jobId; obj['Doc_No']=String(b.doc||'');
+          obj['รหัสร้าน']=String(b.code||''); obj['ชื่อร้าน']=b.name||''; obj['ยอดบิล']=parseFloat(b.amount)||0;
+          obj['คลัง']=data.warehouse||''; obj['Salesman_Code']=b.salesmanCode||''; obj['Salesman_Name']=b.salesman||'';
+          obj['คนที่มาร์ค']=data.markedBy||''; obj['สาเหตุ']=b.reason||''; obj['ผู้รับผิดชอบ']=b.nextResp||'';
+          obj['สถานะ']='รอส่งซ้ำ'; obj['คนรับส่งซ้ำ']=''; obj['วันเวลารับ']=''; obj['วันเวลาเสร็จ']='';
+          upsertByHeader_(sh,['เลขใบคุมเดิม','Doc_No'],[jobId,String(b.doc||'')],obj);
+        });
+        fmtColsOpen_(sh,['เลขใบคุมเดิม','Doc_No','รหัสร้าน'],'@');
+        fmtColsOpen_(sh,['วันเวลาที่มาร์ค','วันเวลารับ','วันเวลาเสร็จ'],'yyyy-mm-dd hh:mm:ss');
+        return ContentService.createTextOutput(JSON.stringify({ok:true,queued:bills.length})).setMimeType(ContentService.MimeType.JSON);
+      } finally { lock.releaseLock(); }
+    }
+    // กดรับงานส่งซ้ำ → เปลี่ยนแถว 'รอส่งซ้ำ' ของใบคุมนี้เป็น 'กำลังส่งซ้ำ' + คนรับ (กันรับซ้ำด้วย Lock)
+    if(data.action==='claim_redelivery'){
+      const lock=LockService.getScriptLock(); lock.waitLock(30000);
+      try{
+        const sh=ss.getSheetByName(SHEET_REDELIVERY);
+        if(!sh) return ContentService.createTextOutput(JSON.stringify({ok:true,claimed:0})).setMimeType(ContentService.MimeType.JSON);
+        const jobId=String(data.jobId||''); const by=String(data.claimedBy||'');
+        const hmap=headerMap_(sh);
+        const cJob=hmap['เลขใบคุมเดิม']?hmap['เลขใบคุมเดิม'][0]:-1, cSt=hmap['สถานะ']?hmap['สถานะ'][0]:-1;
+        const cBy=hmap['คนรับส่งซ้ำ']?hmap['คนรับส่งซ้ำ'][0]:-1, cAt=hmap['วันเวลารับ']?hmap['วันเวลารับ'][0]:-1;
+        if(cJob<0||cSt<0) return ContentService.createTextOutput(JSON.stringify({ok:false,error:'no cols'})).setMimeType(ContentService.MimeType.JSON);
+        const data2=sh.getDataRange().getValues(); let claimed=0; const now=new Date();
+        for(var i=1;i<data2.length;i++){
+          if(String(data2[i][cJob]).trim()===jobId && String(data2[i][cSt]).trim()==='รอส่งซ้ำ'){
+            sh.getRange(i+1,cSt+1).setValue('กำลังส่งซ้ำ');
+            if(cBy>=0) sh.getRange(i+1,cBy+1).setValue(by);
+            if(cAt>=0) sh.getRange(i+1,cAt+1).setValue(now);
+            claimed++;
+          }
+        }
+        return ContentService.createTextOutput(JSON.stringify({ok:true,claimed:claimed,claimedBy:by})).setMimeType(ContentService.MimeType.JSON);
+      } finally { lock.releaseLock(); }
+    }
+    // ส่งซ้ำเสร็จ (บิลที่ส่งสำเร็จ) → เปลี่ยนเป็น 'ส่งซ้ำแล้ว' (หลุดจากคิว)
+    if(data.action==='done_redelivery'){
+      const lock=LockService.getScriptLock(); lock.waitLock(30000);
+      try{
+        const sh=ss.getSheetByName(SHEET_REDELIVERY);
+        if(!sh) return ContentService.createTextOutput(JSON.stringify({ok:true,done:0})).setMimeType(ContentService.MimeType.JSON);
+        const jobId=String(data.jobId||''); const docs=Array.isArray(data.docs)?data.docs.map(function(d){return String(d).trim();}):[];
+        const hmap=headerMap_(sh);
+        const cJob=hmap['เลขใบคุมเดิม']?hmap['เลขใบคุมเดิม'][0]:-1, cDoc=hmap['Doc_No']?hmap['Doc_No'][0]:-1;
+        const cSt=hmap['สถานะ']?hmap['สถานะ'][0]:-1, cFin=hmap['วันเวลาเสร็จ']?hmap['วันเวลาเสร็จ'][0]:-1;
+        if(cJob<0||cDoc<0||cSt<0) return ContentService.createTextOutput(JSON.stringify({ok:false})).setMimeType(ContentService.MimeType.JSON);
+        const data3=sh.getDataRange().getValues(); let done=0; const now=new Date();
+        for(var j2=1;j2<data3.length;j2++){
+          if(String(data3[j2][cJob]).trim()===jobId && docs.indexOf(String(data3[j2][cDoc]).trim())>=0 && String(data3[j2][cSt]).trim()!=='ส่งซ้ำแล้ว'){
+            sh.getRange(j2+1,cSt+1).setValue('ส่งซ้ำแล้ว');
+            if(cFin>=0) sh.getRange(j2+1,cFin+1).setValue(now);
+            done++;
+          }
+        }
+        return ContentService.createTextOutput(JSON.stringify({ok:true,done:done})).setMimeType(ContentService.MimeType.JSON);
       } finally { lock.releaseLock(); }
     }
 
@@ -6064,7 +6248,7 @@ function doPost(e){
       fmtColsOpen_(cinSh,['วัน+เวลา ที่ส่งสินค้า','U_ADD','วันที่โอนครั้งที่1','วันที่โอนครั้งที่2','แก้ไขเมื่อ','วันที่','วันเวลาอนุมัติ'],'yyyy-mm-dd hh:mm:ss');
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.41'}))
+    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.43'}))
       .setMimeType(ContentService.MimeType.JSON);
   }catch(err){
     return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err)}))
