@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Rattana ยอดขายเทียบเป้าหมาย</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --navy:        #0d1b3e;
+  --navy-mid:    #1a2f5e;
+  --navy-light:  #243b73;
+  --gold:        #c9a84c;
+  --gold-light:  #e8c86a;
+  --success:  #2ecc71;
+  --danger:   #e74c3c;
+  --warning:  #f39c12;
+  --info:     #3498db;
+  --bg:       #f4f6fb;
+  --text:     #0d1b3e;
+  --card-bg:  #ffffff;
+  --border:   #dde3f0;
+  --muted:    #6b7896;
+  --row-alt:  #fafbfd;
+  --space-xs:  4px; --space-sm:  8px; --space-md:  16px; --space-lg:  24px; --space-xl:  32px;
+  --radius-sm:  6px; --radius-md:  12px; --radius-lg:  16px; --radius-xl:  20px;
+  --shadow-sm:  0 1px 4px rgba(0,0,0,.06);
+  --shadow-md:  0 2px 8px rgba(0,0,0,.08);
+  --shadow-lg:  0 8px 24px rgba(13,27,62,.12);
+  --shadow-gold: 0 4px 12px rgba(201,168,76,.35);
+}
+body.dark {
+  --bg:       #0a1020;
+  --text:     #e8eaf0;
+  --card-bg:  #111c35;
+  --border:   #243b73;
+  --muted:    #8a98b8;
+  --row-alt:  #0f1830;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;font-size:14px;line-height:1.5;min-height:100dvh;overflow-x:hidden;background-color:var(--bg);color:var(--text);transition:background-color .25s,color .25s}
+button{font-family:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+input,select,textarea{font-family:inherit;font-size:16px}
+
+header{background:var(--navy);color:#fff;padding:12px 16px;position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:12px;border-bottom:3px solid var(--gold);padding-top:max(12px,env(safe-area-inset-top))}
+.logo-text{font-weight:700;letter-spacing:1px;font-size:16px;color:#fff;line-height:1.25}
+.logo-text span{color:var(--gold)}
+.logo-text small{display:block;font-weight:400;font-size:11px;color:rgba(255,255,255,.65);letter-spacing:.3px}
+.icon-btn{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.2);width:38px;height:38px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:18px;transition:background .15s;flex-shrink:0}
+.icon-btn:hover{background:rgba(255,255,255,.12)}
+
+.tab-nav{display:flex;background:var(--navy);border-bottom:3px solid var(--gold);padding:0 8px;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.tab-nav::-webkit-scrollbar{display:none}
+.tab-btn{background:transparent;border:none;color:rgba(255,255,255,.6);padding:12px 18px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;flex-shrink:0;transition:all .18s;margin-bottom:-3px;border-radius:var(--radius-sm) var(--radius-sm) 0 0}
+.tab-btn:hover{color:#fff;background:rgba(255,255,255,.06)}
+.tab-btn.active{color:var(--navy);background:var(--gold);border-bottom-color:var(--gold);font-weight:700;box-shadow:0 -2px 8px rgba(201,168,76,.3)}
+
+.card{background:var(--card-bg);border-radius:var(--radius-md);border:1px solid var(--border);box-shadow:var(--shadow-md)}
+.card-gold{border-top:3px solid var(--gold)}
+.card-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);background:linear-gradient(to right,rgba(201,168,76,.07),transparent);gap:8px;flex-wrap:wrap}
+.card-head h3{font-size:15px;font-weight:700}
+.card-body{padding:16px}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid transparent;min-height:40px;transition:opacity .15s,transform .1s;-webkit-tap-highlight-color:transparent}
+.btn:hover{opacity:.88}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--navy);color:#fff;border-color:var(--navy)}
+.btn-gold{background:var(--gold);color:var(--navy);border-color:var(--gold)}
+.btn-gold:hover{background:var(--gold-light)}
+.btn-outline{background:transparent;color:var(--text);border-color:var(--border)}
+.btn-sm{padding:5px 10px;font-size:12px;min-height:30px}
+
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap}
+.badge-ok{background:#e8f7ee;color:#1e8449}
+.badge-warn{background:#fef3d7;color:#a87800}
+.badge-danger{background:#ffd5d0;color:#c0392b}
+.badge-info{background:#e3f0fd;color:#1a6fb8}
+.badge-gold{background:rgba(201,168,76,.18);color:var(--navy);border:1px solid rgba(201,168,76,.4)}
+.badge-muted{background:rgba(107,120,150,.15);color:var(--muted)}
+body.dark .badge-ok{background:#1a3a25;color:#7be0a3}
+body.dark .badge-warn{background:#3a2e15;color:#e8c86a}
+body.dark .badge-danger{background:#3a1a17;color:#ff8a7e}
+body.dark .badge-info{background:#132a42;color:#7fc4f7}
+
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tbl{width:100%;border-collapse:collapse;min-width:820px}
+.tbl thead{background:var(--navy);color:#fff;position:sticky;top:0;z-index:5}
+.tbl thead th{padding:10px 10px;text-align:left;font-size:12px;font-weight:600;letter-spacing:.3px;white-space:nowrap;border-bottom:2px solid var(--gold);cursor:pointer;user-select:none}
+.tbl thead th:hover{background:var(--navy-mid)}
+.tbl thead th .sort-ind{font-size:10px;color:var(--gold);margin-left:4px;font-weight:700}
+.tbl tbody tr{border-bottom:1px solid var(--border);transition:background .12s}
+.tbl tbody tr:nth-child(even){background:var(--row-alt)}
+.tbl tbody tr:hover{background:rgba(201,168,76,.07)}
+.tbl td{padding:9px 10px;font-size:13px;vertical-align:middle}
+.tbl td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:500}
+.tbl .empty-row td{text-align:center;padding:48px 20px;color:var(--muted);font-size:14px}
+
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.3px;text-transform:uppercase}
+.input{height:44px;padding:0 14px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:16px;font-family:inherit;outline:none;width:100%;transition:border-color .15s}
+.input:focus{border-color:var(--gold)}
+
+.toast{position:fixed;bottom:max(24px,env(safe-area-inset-bottom));right:16px;padding:12px 20px;border-radius:var(--radius-md);color:#fff;z-index:9999;animation:slideIn .3s ease;font-weight:500;box-shadow:var(--shadow-lg);max-width:90vw;font-size:13px}
+.toast-success{background:var(--success)}
+.toast-error{background:var(--danger)}
+.toast-warning{background:var(--warning);color:var(--navy)}
+.toast-info{background:var(--navy-mid);border-left:3px solid var(--gold)}
+
+.spinner-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.55);align-items:center;justify-content:center;z-index:99999;backdrop-filter:blur(3px)}
+.spinner-overlay.show{display:flex}
+.spinner-box{background:#fff;border-radius:var(--radius-lg);padding:32px 40px;text-align:center;border-top:4px solid var(--gold);min-width:240px}
+.spinner-ring{width:48px;height:48px;border:5px solid #dde3f0;border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px}
+body.dark .spinner-box{background:var(--card-bg)}
+#loadingBar{position:fixed;top:0;left:0;height:3px;background:var(--gold);width:0;transition:width .4s;z-index:10000}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+.flex{display:flex}.flex-center{display:flex;align-items:center;justify-content:center}.flex-between{display:flex;align-items:center;justify-content:space-between}.gap-4{gap:4px}.gap-8{gap:8px}.gap-12{gap:12px}.gap-16{gap:16px}
+.mt-8{margin-top:8px}.mt-12{margin-top:12px}.mt-16{margin-top:16px}.mb-8{margin-bottom:8px}.mb-12{margin-bottom:12px}.mb-16{margin-bottom:16px}
+.txt-sm{font-size:12px}.txt-muted{color:var(--muted)}.txt-gold{color:var(--gold)}.txt-danger{color:var(--danger)}.txt-success{color:var(--success)}.txt-bold{font-weight:700}.txt-center{text-align:center}.txt-right{text-align:right}
+.num{font-variant-numeric:tabular-nums;font-weight:500}
+.w-full{width:100%}.rounded{border-radius:var(--radius-md)}.hidden{display:none !important}
+.flex-wrap{flex-wrap:wrap}
+
+.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(min-width:640px){.stat-grid{grid-template-columns:repeat(4,1fr);gap:14px}}
+.stat-card{background:var(--card-bg);border-radius:var(--radius-md);padding:16px;border:1px solid var(--border);border-top:3px solid var(--gold)}
+.stat-card .s-label{font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin-bottom:6px}
+.stat-card .s-value{font-size:22px;font-weight:700;line-height:1.2}
+.stat-card .s-sub{font-size:11px;color:var(--muted);margin-top:4px}
+.stat-card.danger{border-top-color:var(--danger)}.stat-card.danger .s-value{color:var(--danger)}
+.stat-card.success{border-top-color:var(--success)}.stat-card.success .s-value{color:var(--success)}
+@media(min-width:640px){.stat-card .s-value{font-size:26px}}
+
+.page{min-height:100dvh;display:flex;flex-direction:column}
+.content{flex:1;padding:12px;max-width:1200px;margin:0 auto;width:100%}
+@media(min-width:640px){.content{padding:16px}}
+@media(min-width:1024px){.content{padding:20px}}
+
+.filter-bar{position:sticky;top:0;z-index:60;background:var(--bg);padding:10px 0;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+
+.chip-group{display:flex;gap:6px;flex-wrap:wrap}
+.chip{padding:7px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;min-height:36px}
+.chip:hover{border-color:var(--gold)}
+.chip.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+
+.dd-wrap{position:relative;min-width:220px;flex:1}
+.dd-trigger{width:100%;min-height:44px;padding:10px 14px;background:var(--card-bg);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-family:'Sarabun',sans-serif;font-size:14px;text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:6px}
+.dd-panel{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--card-bg);border:1.5px solid var(--border);border-radius:10px;z-index:500;box-shadow:0 8px 24px rgba(0,0,0,.15);max-height:280px;display:none;flex-direction:column}
+.dd-panel.open{display:flex}
+.dd-search{padding:10px 14px;font-size:16px;border:none;border-bottom:1px solid var(--border);background:transparent;color:var(--text);outline:none;border-radius:10px 10px 0 0;font-family:'Sarabun',sans-serif}
+.dd-list{overflow-y:auto;flex:1;list-style:none;padding:4px 0;margin:0}
+.dd-list li{padding:10px 14px;cursor:pointer;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dd-list li:hover{background:var(--navy-light);color:#fff}
+.dd-list li.no-result{color:#999;cursor:default;font-style:italic}
+
+.perf-row{display:grid;grid-template-columns:1fr;gap:6px;padding:12px 0;border-bottom:1px solid var(--border)}
+.perf-row:last-child{border-bottom:none}
+.perf-top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.perf-name{font-weight:600;font-size:13px}
+.perf-bar-track{height:10px;border-radius:5px;background:var(--border);overflow:hidden;width:100%}
+.perf-bar-fill{height:100%;border-radius:5px;transition:width .5s ease}
+.perf-nums{font-size:11px;color:var(--muted)}
+
+#backToTop{position:fixed;bottom:max(24px,calc(16px + env(safe-area-inset-bottom)));right:max(16px,calc(12px + env(safe-area-inset-right)));background:var(--gold);color:var(--navy);border:none;border-radius:50%;width:46px;height:46px;display:none;align-items:center;justify-content:center;box-shadow:var(--shadow-gold);z-index:90;font-size:18px;font-weight:700;cursor:pointer}
+#backToTop.show{display:flex}
+
+#loginScreen{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(160deg,var(--navy) 0%,#152449 60%,var(--navy-mid) 100%)}
+.login-card{background:var(--card-bg);border-radius:var(--radius-xl);padding:36px 30px;max-width:380px;width:100%;text-align:center;border-top:4px solid var(--gold);box-shadow:var(--shadow-lg)}
+.login-card h1{font-size:19px;margin:16px 0 4px;color:var(--text)}
+.login-card p{font-size:13px;color:var(--muted);margin-bottom:22px}
+#loginErr{color:var(--danger);font-size:12px;margin-top:14px;display:none}
+</style>
+</head>
+<body>
+
+<div id="loadingBar"></div>
+<div class="spinner-overlay" id="spinner">
+  <div class="spinner-box">
+    <div class="spinner-ring"></div>
+    <p id="spinnerMsg">กำลังโหลด...</p>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div style="width:64px;height:64px;margin:0 auto;border-radius:50%;background:var(--navy);border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--gold);font-size:20px;letter-spacing:1px">RP</div>
+    <h1>Rattana ยอดขายเทียบเป้าหมาย</h1>
+    <p>เข้าสู่ระบบด้วยบัญชี Google ของบริษัท</p>
+    <div id="g_id_onload"
+      data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com"
+      data-callback="handleGoogleLogin"
+      data-auto_prompt="false">
+    </div>
+    <div class="g_id_signin flex-center" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div>
+    <p id="loginErr"></p>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="page hidden" id="appScreen">
+  <header>
+    <div class="logo-text">RATTANA<span>·</span>SALES
+      <small>ยอดขายเทียบเป้าหมาย v1.0</small>
+    </div>
+    <div class="flex gap-8" style="margin-left:auto">
+      <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">⟳</button>
+      <button class="icon-btn" onclick="toggleDark()" title="โหมดมืด">🌙</button>
+      <button class="icon-btn" onclick="logout()" title="ออกจากระบบ">⏻</button>
+    </div>
+  </header>
+
+  <div class="tab-nav">
+    <button class="tab-btn active" data-tab="overview" onclick="switchTab('overview')">ภาพรวม</button>
+    <button class="tab-btn" data-tab="detail" onclick="switchTab('detail')">รายละเอียดเป้าหมาย</button>
+  </div>
+
+  <div class="content">
+    <div class="filter-bar">
+      <div class="field" style="min-width:170px">
+        <label>คลัง</label>
+        <div class="chip-group" id="whChips"></div>
+      </div>
+      <div class="field" style="flex:1;min-width:220px">
+        <label>ชื่อ สกุล (เซลล์)</label>
+        <div class="dd-wrap" id="nameDDWrap">
+          <button class="dd-trigger" type="button" onclick="toggleDD('nameDDWrap')">
+            <span id="nameDDLabel">ทั้งหมด</span> <span>▾</span>
+          </button>
+          <div class="dd-panel" id="nameDDPanel">
+            <input class="dd-search" type="text" placeholder="🔍 ค้นหาชื่อ..." oninput="filterDD(this,'nameDDList')" autocomplete="off">
+            <ul class="dd-list" id="nameDDList"></ul>
+          </div>
+        </div>
+      </div>
+      <div class="txt-sm txt-muted" id="dataMonthLabel" style="align-self:center;padding-bottom:10px"></div>
+    </div>
+
+    <!-- OVERVIEW TAB -->
+    <div id="tab-overview">
+      <div class="stat-grid mb-16" id="statGrid"></div>
+      <div class="card card-gold mb-16">
+        <div class="card-head"><h3>เป้าหมายรายบุคคล (กลุ่มธุรกิจ BU · หน่วยบาท)</h3><span class="txt-sm txt-muted">เรียงจาก % ต่ำสุดก่อน</span></div>
+        <div class="card-body" id="perfList"></div>
+      </div>
+    </div>
+
+    <!-- DETAIL TAB -->
+    <div id="tab-detail" class="hidden">
+      <div class="card card-gold mb-16">
+        <div class="card-head">
+          <h3>ตารางเป้าหมายรายละเอียด</h3>
+          <button class="btn btn-outline btn-sm" onclick="exportDetailExcel()">⭳ Excel</button>
+        </div>
+        <div class="tbl-wrap">
+          <table class="tbl" id="detailTbl">
+            <thead>
+              <tr>
+                <th data-key="wh" data-type="str">คลัง <span class="sort-ind"></span></th>
+                <th data-key="name" data-type="str">ชื่อ สกุล <span class="sort-ind"></span></th>
+                <th data-key="dimLabel" data-type="str">มิติ <span class="sort-ind"></span></th>
+                <th data-key="value" data-type="str">รายการ <span class="sort-ind"></span></th>
+                <th data-key="unit" data-type="str">หน่วย <span class="sort-ind"></span></th>
+                <th data-key="target" data-type="num">เป้าหมาย <span class="sort-ind"></span></th>
+                <th data-key="actual" data-type="num">ทำได้จริง <span class="sort-ind"></span></th>
+                <th data-key="pct" data-type="num">% ทำได้ <span class="sort-ind"></span></th>
+                <th data-key="statusLabel" data-type="str">สถานะ <span class="sort-ind"></span></th>
+              </tr>
+            </thead>
+            <tbody id="detailTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<button id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+<script>
+/* ================= CONFIG ================= */
+const TARGET_SHEET_ID = '1dAxF4Mz-zhJIVbuJ_Ql126gt08qvVS1wndJD50pqCZI';
+const TARGET_SHEET_NAME = 'Target';
+const BP_SHEET_ID = '1NxFkxiQev0xxGir93-qt0flNfzHz848-KuE7jDRSxQE';
+const BP_SHEET_NAME = 'BP';
+
+const AUTH_CONFIG = {
+  clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
+  usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
+  usersSheetName: 'Rattana Users for apps',
+};
+
+const DIM_MAP = {
+  'CAT BU': 'Cat_BU',
+  'CAT TYPE': 'Cat_Type',
+  'CAT BRAND': 'Cat_Brand',
+  'VENDOR NAME': 'Vendor_Name',
+  'CAT GROUP': 'Cat_3',
+  'CAT VENDOR': 'Cat_Vendor',
+};
+const DIM_LABEL = {
+  'CAT BU': 'กลุ่มธุรกิจ (BU)',
+  'CAT TYPE': 'ประเภทสินค้า',
+  'CAT BRAND': 'แบรนด์',
+  'VENDOR NAME': 'คู่ค้า (Vendor)',
+  'CAT GROUP': 'กลุ่มสินค้า',
+  'CAT VENDOR': 'ผู้จำหน่าย',
+};
+const THAI_MONTHS = {'มกราคม':1,'กุมภาพันธ์':2,'มีนาคม':3,'เมษายน':4,'พฤษภาคม':5,'มิถุนายน':6,'กรกฎาคม':7,'สิงหาคม':8,'กันยายน':9,'ตุลาคม':10,'พฤศจิกายน':11,'ธันวาคม':12};
+
+let currentUser = null;
+const state = { targetRaw: [], bpRaw: [], rows: [], filters: { wh: 'ALL', name: '' }, autoTimer: null };
+
+/* ================= CSV / SHEETS ================= */
+function parseCsv(text) {
+  if (!text) return [];
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const rows = []; let row = [], cell = '', inQuote = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuote) {
+      if (ch === '"') { if (text[i+1]==='"'){cell+='"';i++;}else inQuote=false; }
+      else cell += ch;
+    } else {
+      if (ch==='"') inQuote=true;
+      else if (ch===',') { row.push(cell); cell=''; }
+      else if (ch==='\r') { /* skip */ }
+      else if (ch==='\n') { row.push(cell); rows.push(row); row=[]; cell=''; }
+      else cell += ch;
+    }
+  }
+  if (cell.length||row.length) { row.push(cell); rows.push(row); }
+  if (!rows.length) return [];
+  const clean = s => String(s||'').replace(/[​‌‍﻿]/g,'').replace(/ /g,' ').trim();
+  const headers = rows[0].map(clean);
+  return rows.slice(1).filter(r=>r.some(c=>clean(c))).map(r=>{
+    const obj = {};
+    headers.forEach((k,i)=>{ if(!(k in obj)) obj[k]=clean(r[i]); });
+    return obj;
+  });
+}
+
+async function loadFromSheets(sheetId, sheetName) {
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('fetch failed: ' + sheetName);
+  return parseCsv(await res.text());
+}
+
+const TTL = 5*60*1000;
+const getCached = k => { try{ const i=JSON.parse(localStorage.getItem(k)); return i&&Date.now()-i.ts<TTL?i.data:null; }catch{return null} };
+const setCache  = (k,d) => { try{ localStorage.setItem(k, JSON.stringify({ts:Date.now(),data:d})); }catch(e){ /* quota - skip caching large payload */ } };
+
+/* ================= AUTH ================= */
+function decodeJwtPayload(token) {
+  const parts = String(token||'').split('.');
+  if (parts.length < 2) throw new Error('JWT format invalid');
+  let b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+  const pad = (4 - b64.length % 4) % 4;
+  if (pad) b64 += '='.repeat(pad);
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return JSON.parse(new TextDecoder('utf-8').decode(bytes));
+}
+const normalizeEmail = s => String(s||'').replace(/[​‌‍﻿]/g,'').replace(/\s+/g,'').toLowerCase();
+
+function showLoginError(msg) { const el=document.getElementById('loginErr'); el.textContent=msg; el.style.display='block'; }
+
+async function handleGoogleLogin(r) {
+  showSpinner('กำลังตรวจสอบสิทธิ์...');
+  try {
+    const email = normalizeEmail(decodeJwtPayload(r.credential).email);
+    const users = await loadFromSheets(AUTH_CONFIG.usersSheetId, AUTH_CONFIG.usersSheetName);
+    const user  = users.find(u => normalizeEmail(u['E-mail']) === email);
+    if (!user) { showLoginError('ไม่พบอีเมลนี้ในระบบ กรุณาติดต่อ Admin'); return; }
+    if (String(user['Status']||'').trim().toLowerCase() !== 'active') { showLoginError('บัญชีถูกระงับ กรุณาติดต่อ Admin'); return; }
+    currentUser = {
+      email, name:user['ชื่อ - สกุล'], nickname:user['ชื่อเล่น'],
+      role:parseInt(user['User Role'])||1, dept:user['แผนก'],
+      company:user['บริษัท'], warehouse:user['W'], empId:user['รหัสพนักงาน'],
+    };
+    localStorage.setItem('rattanaUser', JSON.stringify({ data: currentUser, exp: Date.now() + 30*24*60*60*1000 }));
+    document.getElementById('loginScreen').style.display='none';
+    document.getElementById('appScreen').classList.remove('hidden');
+    initApp();
+  } catch(e) { console.error(e); showLoginError('เกิดข้อผิดพลาด กรุณาลองใหม่'); }
+  finally { hideSpinner(); }
+}
+function checkSession() {
+  try {
+    const raw = localStorage.getItem('rattanaUser');
+    if (!raw) return;
+    const { data, exp } = JSON.parse(raw);
+    if (Date.now() > exp) { localStorage.removeItem('rattanaUser'); return; }
+    currentUser = data;
+    document.getElementById('loginScreen').style.display='none';
+    document.getElementById('appScreen').classList.remove('hidden');
+    initApp();
+  } catch { localStorage.removeItem('rattanaUser'); }
+}
+function logout() { localStorage.removeItem('rattanaUser'); location.reload(); }
+window.onload = checkSession;
+
+/* ================= HELPERS ================= */
+const parseNum = s => { const n = parseFloat(String(s||'').replace(/,/g,'')); return isNaN(n)?0:n; };
+const normalizeText = s => String(s||'').replace(/\s+/g,' ').trim();
+const normalizeName = s => normalizeText(String(s||'').replace(/^คุณ\s*/,''));
+const fmtNum = (n, digits=0) => Number(n||0).toLocaleString('th-TH', {minimumFractionDigits:digits, maximumFractionDigits:digits});
+
+function parseTargetName(name) {
+  const parts = String(name||'').split('-');
+  if (parts.length < 3) return null;
+  return { dim: parts[0].trim(), value: parts.slice(1,-1).join('-').trim(), unit: parts[parts.length-1].trim() };
+}
+function parseThaiMonthYear(s) {
+  const m = normalizeText(s).match(/^(\S+)\s+(\d{4})$/);
+  if (!m) return null;
+  const mm = THAI_MONTHS[m[1]];
+  if (!mm) return null;
+  return { mm, yyyy: parseInt(m[2],10) - 543 };
+}
+function bpMonthYear(dateStr) {
+  const p = String(dateStr||'').split('/');
+  if (p.length !== 3) return null;
+  const mm = parseInt(p[1],10), yyyy = parseInt(p[2],10);
+  if (!mm || !yyyy) return null;
+  return { mm, yyyy };
+}
+function statusOf(pct, supported) {
+  if (!supported || pct === null) return { label: 'ไม่รองรับการคำนวณ', cls: 'badge-muted' };
+  if (pct >= 100) return { label: 'ผ่านเป้า', cls: 'badge-ok' };
+  if (pct >= 80)  return { label: 'ใกล้เป้า', cls: 'badge-warn' };
+  return { label: 'ต่ำกว่าเป้า', cls: 'badge-danger' };
+}
+function colorOf(pct) {
+  if (pct >= 100) return 'var(--success)';
+  if (pct >= 80) return 'var(--warning)';
+  return 'var(--danger)';
+}
+
+/* ================= DATA PIPELINE ================= */
+function buildBpIndex(bpRaw) {
+  const idx = new Map();
+  bpRaw.forEach(r => {
+    const my = bpMonthYear(r['Doc_Date']);
+    if (!my) return;
+    const normName = normalizeName(r['Sale NO ROO']);
+    const ws = normalizeText(r['WS']);
+    if (!normName) return;
+    const key = normName + '||' + ws + '||' + my.mm + '/' + my.yyyy;
+    r._exvatcn2 = parseNum(r['EXVat+CN*2']);
+    r._csx = parseNum(r['Sales_CSxValue']);
+    if (!idx.has(key)) idx.set(key, []);
+    idx.get(key).push(r);
+  });
+  return idx;
+}
+
+function computeAll(targetRaw, bpRaw) {
+  const bpIndex = buildBpIndex(bpRaw);
+  const rows = [];
+  targetRaw.forEach(t => {
+    const name = t['ชื่อ สกุล'];
+    const goalName = t['ชื่อเป้าหมาย'];
+    const targetValRaw = t['เป้าหมายขาย'];
+    if (!name || !goalName || !targetValRaw) return;
+    const parsed = parseTargetName(goalName);
+    if (!parsed) return;
+    const dimKey = parsed.dim.toUpperCase();
+    const bpCol = DIM_MAP[dimKey];
+    const targetVal = parseNum(targetValRaw);
+    const monthInfo = parseThaiMonthYear(t['เดือน']);
+    const wh = normalizeText(t['คลัง']);
+    const normName = normalizeName(name);
+
+    let actual = null, supported = !!(bpCol && monthInfo);
+    if (supported) {
+      const key = normName + '||' + wh + '||' + monthInfo.mm + '/' + monthInfo.yyyy;
+      const bucket = bpIndex.get(key) || [];
+      const wantVal = normalizeText(parsed.value).toUpperCase();
+      const matches = bucket.filter(r => normalizeText(r[bpCol]).toUpperCase() === wantVal);
+      if (parsed.unit === 'บาท') actual = matches.reduce((s,r)=>s+r._exvatcn2, 0);
+      else if (parsed.unit === 'ตัน') actual = matches.reduce((s,r)=>s+r._csx, 0) / 1000;
+      else if (parsed.unit === 'ลัง') actual = matches.reduce((s,r)=>s+r._csx, 0);
+      else if (parsed.unit === 'ร้าน') actual = new Set(matches.map(r=>r['Customer_Code'])).size;
+      else supported = false;
+    }
+    const pct = (supported && targetVal > 0) ? (actual/targetVal*100) : null;
+    const st = statusOf(pct, supported);
+    rows.push({
+      wh, name, nickname: t['ชื่อเล่น']||'', month: t['เดือน']||'',
+      dim: parsed.dim, dimLabel: DIM_LABEL[dimKey] || parsed.dim,
+      value: parsed.value, unit: parsed.unit,
+      target: targetVal, actual, pct, supported,
+      statusLabel: st.label, statusCls: st.cls,
+    });
+  });
+  return rows;
+}
+
+/* ================= LOAD ================= */
+async function loadData(showSpin) {
+  if (showSpin) showSpinner('กำลังโหลดข้อมูลยอดขาย...');
+  setLoading(true);
+  try {
+    const [targetRaw, bpRaw] = await Promise.all([
+      loadFromSheets(TARGET_SHEET_ID, TARGET_SHEET_NAME),
+      loadFromSheets(BP_SHEET_ID, BP_SHEET_NAME),
+    ]);
+    state.targetRaw = targetRaw;
+    state.bpRaw = bpRaw;
+    setCache('targetCache', targetRaw);
+    state.rows = computeAll(targetRaw, bpRaw);
+    buildFilterControls();
+    renderAll();
+  } catch (e) {
+    console.error(e);
+    showToast('โหลดข้อมูลไม่สำเร็จ ลองรีเฟรชอีกครั้ง', 'error');
+  } finally {
+    setLoading(false);
+    if (showSpin) hideSpinner();
+  }
+}
+
+async function refreshData() {
+  const b = document.getElementById('btnRefresh');
+  b.disabled = true; b.style.transform = 'rotate(360deg)'; b.style.transition = 'transform .6s';
+  showSpinner('กำลังรีเฟรชข้อมูล...');
+  await loadData(false);
+  hideSpinner();
+  b.disabled = false; setTimeout(() => { b.style.transform = ''; b.style.transition = ''; }, 600);
+  showToast('อัพเดทเรียบร้อย ✓', 'success');
+}
+
+function startAutoRefresh(sec=600) {
+  if (state.autoTimer) clearInterval(state.autoTimer);
+  state.autoTimer = setInterval(async () => { await loadData(false); }, sec*1000);
+}
+
+function initApp() {
+  const cachedTarget = getCached('targetCache');
+  if (cachedTarget) { state.targetRaw = cachedTarget; }
+  loadData(true);
+  startAutoRefresh(600);
+}
+
+/* ================= FILTERS ================= */
+function buildFilterControls() {
+  const whs = ['ALL', ...Array.from(new Set(state.rows.map(r=>r.wh))).filter(Boolean).sort()];
+  const whChips = document.getElementById('whChips');
+  whChips.innerHTML = whs.map(w => `<button class="chip ${state.filters.wh===w?'active':''}" onclick="setWhFilter('${w}')">${w==='ALL'?'ทั้งหมด':w}</button>`).join('');
+
+  const names = Array.from(new Set(state.rows.map(r=>r.name))).filter(Boolean).sort((a,b)=>a.localeCompare(b,'th'));
+  const list = document.getElementById('nameDDList');
+  list.innerHTML = '<li onclick="setNameFilter(\'\')">ทั้งหมด</li>' + names.map(n=>`<li onclick="setNameFilter('${n.replace(/'/g,"\\'")}')">${n}</li>`).join('');
+}
+function setWhFilter(w) { state.filters.wh = w; buildFilterControls(); renderAll(); }
+function setNameFilter(n) {
+  state.filters.name = n;
+  document.getElementById('nameDDLabel').textContent = n || 'ทั้งหมด';
+  document.getElementById('nameDDPanel').classList.remove('open');
+  renderAll();
+}
+function toggleDD(wrapId) {
+  const p = document.querySelector(`#${wrapId} .dd-panel`);
+  const willOpen = !p.classList.contains('open');
+  document.querySelectorAll('.dd-panel').forEach(x=>x.classList.remove('open'));
+  if (willOpen) { p.classList.add('open'); p.querySelector('.dd-search').focus(); }
+}
+function filterDD(inp, listId) {
+  const q = inp.value.toLowerCase();
+  document.querySelectorAll(`#${listId} li`).forEach(li => {
+    li.style.display = li.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.dd-wrap')) document.querySelectorAll('.dd-panel').forEach(x=>x.classList.remove('open'));
+});
+
+function filteredRows() {
+  return state.rows.filter(r =>
+    (state.filters.wh === 'ALL' || r.wh === state.filters.wh) &&
+    (!state.filters.name || r.name === state.filters.name)
+  );
+}
+
+/* ================= RENDER: OVERVIEW ================= */
+function renderOverview() {
+  const rows = filteredRows();
+  const buBaht = rows.filter(r => r.dim.toUpperCase()==='CAT BU' && r.unit==='บาท' && r.supported);
+  const targetSum = buBaht.reduce((s,r)=>s+r.target,0);
+  const actualSum = buBaht.reduce((s,r)=>s+(r.actual||0),0);
+  const overallPct = targetSum>0 ? (actualSum/targetSum*100) : 0;
+  const supportedAll = rows.filter(r=>r.supported);
+  const passCount = supportedAll.filter(r=>r.pct>=100).length;
+
+  const grid = document.getElementById('statGrid');
+  const pctClass = overallPct>=100?'success':(overallPct<80?'danger':'');
+  grid.innerHTML = `
+    <div class="stat-card"><div class="s-label">เป้าหมายรวม (BU · บาท)</div><div class="s-value">${fmtNum(targetSum)}</div><div class="s-sub">บาท</div></div>
+    <div class="stat-card"><div class="s-label">ยอดขายจริงรวม (BU · บาท)</div><div class="s-value">${fmtNum(actualSum)}</div><div class="s-sub">บาท</div></div>
+    <div class="stat-card ${pctClass}"><div class="s-label">% ทำได้จริง (รวม BU)</div><div class="s-value">${fmtNum(overallPct,1)}%</div><div class="s-sub">${overallPct>=100?'ผ่านเป้า':'ยังไม่ถึงเป้า'}</div></div>
+    <div class="stat-card"><div class="s-label">เป้าหมายที่ผ่าน (ทุกหน่วย)</div><div class="s-value">${passCount}/${supportedAll.length}</div><div class="s-sub">รายการที่คำนวณได้</div></div>
+  `;
+
+  const perNameMap = new Map();
+  buBaht.forEach(r => {
+    if (!perNameMap.has(r.name)) perNameMap.set(r.name, {name:r.name, target:0, actual:0});
+    const o = perNameMap.get(r.name); o.target += r.target; o.actual += (r.actual||0);
+  });
+  const perf = Array.from(perNameMap.values()).map(o => ({...o, pct: o.target>0 ? o.actual/o.target*100 : 0}));
+  perf.sort((a,b)=>a.pct-b.pct);
+
+  const list = document.getElementById('perfList');
+  list.innerHTML = perf.length ? perf.map(o => `
+    <div class="perf-row">
+      <div class="perf-top">
+        <div class="perf-name">${o.name}</div>
+        <span class="badge ${o.pct>=100?'badge-ok':(o.pct>=80?'badge-warn':'badge-danger')}">${fmtNum(o.pct,1)}%</span>
+      </div>
+      <div class="perf-bar-track"><div class="perf-bar-fill" style="width:${Math.min(o.pct,100)}%;background:${colorOf(o.pct)}"></div></div>
+      <div class="perf-nums">${fmtNum(o.actual)} / ${fmtNum(o.target)} บาท</div>
+    </div>
+  `).join('') : '<div class="txt-muted txt-center" style="padding:24px">ไม่มีข้อมูลในตัวกรองนี้</div>';
+
+  const months = Array.from(new Set(state.rows.map(r=>r.month))).filter(Boolean);
+  document.getElementById('dataMonthLabel').textContent = months.length ? 'ข้อมูลเดือน: ' + months.join(', ') : '';
+}
+
+/* ================= RENDER: DETAIL TABLE ================= */
+const sortState = { key: 'pct', dir: 'asc' };
+function sortRows(rows, key, type, dir) {
+  const m = dir==='asc'?1:-1;
+  return [...rows].sort((a,b) => {
+    let va = a[key], vb = b[key];
+    if (key==='pct') {
+      const na = (va===null||va===undefined) ? Infinity : va;
+      const nb = (vb===null||vb===undefined) ? Infinity : vb;
+      return (na-nb)*m;
+    }
+    if (type==='num') return ((parseFloat(va)||0)-(parseFloat(vb)||0))*m;
+    return String(va||'').localeCompare(String(vb||''),'th')*m;
+  });
+}
+function updateSortIndicators() {
+  document.querySelectorAll('#detailTbl thead th').forEach(th=>{
+    const ind = th.querySelector('.sort-ind'); if(!ind) return;
+    ind.textContent = th.dataset.key===sortState.key ? (sortState.dir==='asc'?'▲':'▼') : '';
+  });
+}
+document.querySelectorAll('#detailTbl thead th').forEach(th=>{
+  if (!th.dataset.key) return;
+  th.addEventListener('click', () => {
+    const key=th.dataset.key, type=th.dataset.type||'str';
+    if (sortState.key===key) sortState.dir = sortState.dir==='asc'?'desc':'asc';
+    else { sortState.key=key; sortState.dir = type==='num' ? 'asc' : 'asc'; }
+    renderDetail(); updateSortIndicators();
+  });
+});
+
+function renderDetail() {
+  const rows = filteredRows();
+  const th = document.querySelector(`#detailTbl th[data-key="${sortState.key}"]`);
+  const type = th ? th.dataset.type : 'str';
+  const sorted = sortRows(rows, sortState.key, type, sortState.dir);
+  const tbody = document.getElementById('detailTbody');
+  tbody.innerHTML = sorted.length ? sorted.map(r => `
+    <tr>
+      <td class="code">${r.wh}</td>
+      <td>${r.name}</td>
+      <td>${r.dimLabel}</td>
+      <td>${r.value}</td>
+      <td>${r.unit}</td>
+      <td class="num">${fmtNum(r.target)}</td>
+      <td class="num">${r.supported ? fmtNum(r.actual) : '-'}</td>
+      <td class="num">${r.pct!==null ? fmtNum(r.pct,1)+'%' : '-'}</td>
+      <td><span class="badge ${r.statusCls}">${r.statusLabel}</span></td>
+    </tr>
+  `).join('') : '<tr class="empty-row"><td colspan="9">ไม่พบข้อมูลตามตัวกรอง</td></tr>';
+  updateSortIndicators();
+}
+
+function exportDetailExcel() {
+  const rows = filteredRows().map(r => ({
+    'คลัง': r.wh, 'ชื่อ สกุล': r.name, 'เดือน': r.month, 'มิติ': r.dimLabel, 'รายการ': r.value, 'หน่วย': r.unit,
+    'เป้าหมาย': r.target, 'ทำได้จริง': r.supported ? r.actual : '', '% ทำได้จริง': r.pct!==null ? Math.round(r.pct*10)/10 : '',
+    'สถานะ': r.statusLabel,
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows), wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'เป้าหมาย');
+  XLSX.writeFile(wb, 'rattana-sales-target-' + Date.now() + '.xlsx');
+}
+
+function renderAll() { renderOverview(); renderDetail(); }
+
+/* ================= TABS / UI ================= */
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  document.getElementById('tab-overview').classList.toggle('hidden', tab!=='overview');
+  document.getElementById('tab-detail').classList.toggle('hidden', tab!=='detail');
+}
+function toggleDark() {
+  document.body.classList.toggle('dark');
+  localStorage.setItem('rattanaDark', document.body.classList.contains('dark') ? '1':'0');
+}
+if (localStorage.getItem('rattanaDark')==='1') document.body.classList.add('dark');
+
+const showSpinner = (m='กำลังโหลด...') => { document.getElementById('spinnerMsg').textContent=m; document.getElementById('spinner').classList.add('show'); };
+const hideSpinner = () => document.getElementById('spinner').classList.remove('show');
+const setLoading  = on => document.getElementById('loadingBar').style.width = on?'85%':'0';
+function showToast(msg, type='info') {
+  const t=document.createElement('div'); t.className=`toast toast-${type}`; t.textContent=msg;
+  document.body.appendChild(t); setTimeout(()=>t.remove(),3500);
+}
+window.addEventListener('scroll', () => {
+  document.getElementById('backToTop').classList.toggle('show', window.scrollY > 300);
+});
+</script>
+</body>
+</html>
