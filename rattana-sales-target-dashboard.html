@@ -238,7 +238,7 @@ body.dark .ptbl-td{border-color:var(--border)}
 <div class="page hidden" id="appScreen">
   <header>
     <div class="logo-text">RATTANA<span>·</span>SALES
-      <small>ยอดขายเทียบเป้าหมาย v1.14</small>
+      <small>ยอดขายเทียบเป้าหมาย v1.15</small>
     </div>
     <div class="flex gap-8" style="margin-left:auto">
       <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">⟳</button>
@@ -292,6 +292,8 @@ const TARGET_SHEET_ID = '1dAxF4Mz-zhJIVbuJ_Ql126gt08qvVS1wndJD50pqCZI';
 const TARGET_SHEET_NAME = 'Target';
 const BP_SHEET_ID = '1NxFkxiQev0xxGir93-qt0flNfzHz848-KuE7jDRSxQE';
 const BP_SHEET_NAME = 'BP';
+const CN_SHEET_ID = '1WNJFRUTMZg4lGftUJRLyTuLczhobmFb6jsOrm9l_TYg';
+const CN_SHEET_NAME = 'incentive CN';
 
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
@@ -484,8 +486,21 @@ function buildDebtorActualIndex(targetRaw) {
   return idx;
 }
 
-function computeAll(targetRaw, bpRaw) {
+function buildCnIndex(cnRaw) {
+  const idx = new Map();
+  (cnRaw || []).forEach(r => {
+    const rawName = String(r['Sale no Roo'] || '').trim();
+    const v = parseNum(r['COUNTUNIQUE ของ เลขที่บิลรับคืน']);
+    if (!rawName || !v) return;
+    const key = normalizeName(rawName);
+    if (!idx.has(key)) idx.set(key, v);
+  });
+  return idx;
+}
+
+function computeAll(targetRaw, bpRaw, cnRaw) {
   const bpIndex = buildBpIndex(bpRaw);
+  const cnIndex = buildCnIndex(cnRaw);
   const debtorActualIndex = buildDebtorActualIndex(targetRaw);
   const rows = [];
   targetRaw.forEach(t => {
@@ -521,6 +536,10 @@ function computeAll(targetRaw, bpRaw) {
         actual = debtorActualIndex.get(normName) ?? null;
         supported = actual !== null;
       }
+    } else if (parsed.dim.toUpperCase() === 'KPI' && parsed.value === 'CN' && parsed.unit === 'บิล') {
+      const cnVal = cnIndex.get(normName) ?? null;
+      actual = cnVal;
+      supported = actual !== null;
     } else if (bpCol && monthInfo) {
       supported = true;
       const key = normName + '||' + monthInfo.mm + '/' + monthInfo.yyyy;
@@ -552,14 +571,16 @@ async function loadData(showSpin) {
   if (showSpin) showSpinner('กำลังโหลดข้อมูลยอดขาย...');
   setLoading(true);
   try {
-    const [targetRaw, bpRaw] = await Promise.all([
+    const [targetRaw, bpRaw, cnRaw] = await Promise.all([
       loadFromSheets(TARGET_SHEET_ID, TARGET_SHEET_NAME),
       loadFromSheets(BP_SHEET_ID, BP_SHEET_NAME),
+      loadFromSheets(CN_SHEET_ID, CN_SHEET_NAME),
     ]);
     state.targetRaw = targetRaw;
     state.bpRaw = bpRaw;
+    state.cnRaw = cnRaw;
     setCache('targetCache', targetRaw);
-    state.rows = computeAll(targetRaw, bpRaw);
+    state.rows = computeAll(targetRaw, bpRaw, cnRaw);
     buildFilterControls();
     renderAll();
   } catch (e) {
