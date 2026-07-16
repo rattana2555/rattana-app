@@ -238,7 +238,7 @@ body.dark .ptbl-td{border-color:var(--border)}
 <div class="page hidden" id="appScreen">
   <header>
     <div class="logo-text">RATTANA<span>·</span>SALES
-      <small>ยอดขายเทียบเป้าหมาย v1.21</small>
+      <small>ยอดขายเทียบเป้าหมาย v1.22</small>
     </div>
     <div class="flex gap-8" style="margin-left:auto">
       <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">⟳</button>
@@ -294,6 +294,8 @@ const BP_SHEET_ID = '1NxFkxiQev0xxGir93-qt0flNfzHz848-KuE7jDRSxQE';
 const BP_SHEET_NAME = 'BP';
 const CN_SHEET_ID = '1WNJFRUTMZg4lGftUJRLyTuLczhobmFb6jsOrm9l_TYg';
 const CN_SHEET_NAME = 'incentive CN หัวข้อเซลล์';
+const BUDGET_SHEET_ID = '1ww64IJdFJk8z8CDCCoFYZyE8FNzuH9W6sFDO6K44gWw';
+const BUDGET_SHEET_NAME = 'Budget Incentive';
 
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
@@ -499,10 +501,22 @@ function buildCnIndex(cnRaw) {
   return idx;
 }
 
-function computeAll(targetRaw, bpRaw, cnRaw) {
+function buildBudgetIndex(budgetRaw) {
+  const idx = new Map();
+  (budgetRaw || []).forEach(r => {
+    const code = normalizeText(String(r['SLMN_CODE'] || ''));
+    const v = parseNum(r['Budget']);
+    if (!code || !v) return;
+    if (!idx.has(code)) idx.set(code, v);
+  });
+  return idx;
+}
+
+function computeAll(targetRaw, bpRaw, cnRaw, budgetRaw) {
   const bpIndex = buildBpIndex(bpRaw);
   const debtorActualIndex = buildDebtorActualIndex(targetRaw);
   const cnIndex = buildCnIndex(cnRaw);
+  const budgetIndex = buildBudgetIndex(budgetRaw);
   const rows = [];
   targetRaw.forEach(t => {
     const name = t['ชื่อ สกุล'];
@@ -561,6 +575,8 @@ function computeAll(targetRaw, bpRaw, cnRaw) {
       const filtered = bucket.filter(r => !r['Budget'] || String(r['Budget']).trim() === '');
       const sumExvat = filtered.reduce((s, r) => s + r._exvatcn2, 0);
       targetVal = sumExvat * 0.002;
+      actual = budgetIndex.get(empCode) ?? null;
+      supported = actual !== null;
     } else if (parsed.dim.toUpperCase() === 'KPI' && normalizeText(parsed.value).toUpperCase() === 'ALL SKU' && monthInfo) {
       const key = normName + '||' + monthInfo.mm + '/' + monthInfo.yyyy;
       const bucket = bpIndex.get(key) || [];
@@ -597,16 +613,18 @@ async function loadData(showSpin) {
   if (showSpin) showSpinner('กำลังโหลดข้อมูลยอดขาย...');
   setLoading(true);
   try {
-    const [targetRaw, bpRaw, cnRaw] = await Promise.all([
+    const [targetRaw, bpRaw, cnRaw, budgetRaw] = await Promise.all([
       loadFromSheets(TARGET_SHEET_ID, TARGET_SHEET_NAME),
       loadFromSheets(BP_SHEET_ID, BP_SHEET_NAME),
       loadFromSheets(CN_SHEET_ID, CN_SHEET_NAME),
+      loadFromSheets(BUDGET_SHEET_ID, BUDGET_SHEET_NAME),
     ]);
     state.targetRaw = targetRaw;
     state.bpRaw = bpRaw;
     state.cnRaw = cnRaw;
+    state.budgetRaw = budgetRaw;
     setCache('targetCache', targetRaw);
-    state.rows = computeAll(targetRaw, bpRaw, cnRaw);
+    state.rows = computeAll(targetRaw, bpRaw, cnRaw, budgetRaw);
     buildFilterControls();
     renderAll();
   } catch (e) {
