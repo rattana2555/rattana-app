@@ -238,7 +238,7 @@ body.dark .ptbl-td{border-color:var(--border)}
 <div class="page hidden" id="appScreen">
   <header>
     <div class="logo-text">RATTANA<span>·</span>SALES
-      <small>ยอดขายเทียบเป้าหมาย v1.16</small>
+      <small>ยอดขายเทียบเป้าหมาย v1.17</small>
     </div>
     <div class="flex gap-8" style="margin-left:auto">
       <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">⟳</button>
@@ -540,6 +540,16 @@ function computeAll(targetRaw, bpRaw, cnRaw) {
     } else if (parsed.dim.toUpperCase() === 'KPI' && normalizeText(parsed.value).toUpperCase() === 'CN') {
       actual = cnIndex.get(normName) ?? null;
       supported = actual !== null;
+    } else if (parsed.dim.toUpperCase() === 'KPI' && normalizeText(parsed.value).toUpperCase() === 'EFFECTIVE OUTLET' && monthInfo) {
+      const thresh = debtorThreshold(empCode);
+      if (thresh !== null) {
+        const key = normName + '||' + monthInfo.mm + '/' + monthInfo.yyyy;
+        const bucket = bpIndex.get(key) || [];
+        const custMap = new Map();
+        bucket.forEach(r => { if (r['Customer_Code']) custMap.set(r['Customer_Code'], (custMap.get(r['Customer_Code'])||0) + r._exvatcn2); });
+        actual = [...custMap.values()].filter(s => s >= thresh).length;
+        supported = true;
+      }
     } else if (parsed.dim.toUpperCase() === 'KPI' && normalizeText(parsed.value).toUpperCase() === 'ALL SKU' && monthInfo) {
       const key = normName + '||' + monthInfo.mm + '/' + monthInfo.yyyy;
       const bucket = bpIndex.get(key) || [];
