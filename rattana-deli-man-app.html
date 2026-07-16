@@ -14,7 +14,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
-<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiRC1NQU4iLCJzaG9ydF9uYW1lIjoiRC1NQU4iLCJzdGFydF91cmwiOiIuLyIsImRpc3BsYXkiOiJzdGFuZGFsb25lIiwiYmFja2dyb3VuZF9jb2xvciI6IiMwQTFCM0UiLCJ0aGVtZV9jb2xvciI6IiMwQTFCM0UiLCJpY29ucyI6W3sic3JjIjoiaHR0cHM6Ly9yYXR0YW5hMjU1NS5naXRodWIuaW8vcmF0dGFuYS1hcHAvZC1tYW4taWNvbi5wbmciLCJzaXplcyI6IjI1NngyNTYiLCJ0eXBlIjoiaW1hZ2UvcG5nIiwicHVycG9zZSI6ImFueSBtYXNrYWJsZSJ9XX0=">
+<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiRC1NQU4iLCJzaG9ydF9uYW1lIjoiRC1NQU4iLCJpZCI6Ii9yYXR0YW5hLWFwcC9yYXR0YW5hLWRlbGktbWFuLWFwcC5odG1sIiwic3RhcnRfdXJsIjoiaHR0cHM6Ly9yYXR0YW5hMjU1NS5naXRodWIuaW8vcmF0dGFuYS1hcHAvcmF0dGFuYS1kZWxpLW1hbi1hcHAuaHRtbCIsInNjb3BlIjoiaHR0cHM6Ly9yYXR0YW5hMjU1NS5naXRodWIuaW8vcmF0dGFuYS1hcHAvIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiIzBBMUIzRSIsInRoZW1lX2NvbG9yIjoiIzBBMUIzRSIsImljb25zIjpbeyJzcmMiOiJodHRwczovL3JhdHRhbmEyNTU1LmdpdGh1Yi5pby9yYXR0YW5hLWFwcC9kLW1hbi1pY29uLnBuZyIsInNpemVzIjoiMjU2eDI1NiIsInR5cGUiOiJpbWFnZS9wbmciLCJwdXJwb3NlIjoiYW55IG1hc2thYmxlIn1dfQ==">
 
 <style>
 :root{
@@ -741,7 +741,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.44';
+const APP_VERSION='3.46';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -4328,7 +4328,9 @@ function saveBillWithVerify_(j,b,saveBtn,changedDocs){
   const billFilter=changedDocs
     ? (x=>x.status&&x.status!=='pending'&&changedDocs.has(x.doc))
     : (x=>x.status&&x.status!=='pending');
-  const payload={action:'save_job',jobId:j.id,status:j.status,team:j.team,warehouse:j.warehouse||'W1',special:j.special||null,
+  const payload={action:'save_job',jobId:j.id,status:j.status,team:j.team,
+    helperList:(j.team&&Array.isArray(j.team.helperList)&&j.team.helperList.length)?j.team.helperList:(j.team?[j.team.helper1,j.team.helper2,j.team.helperExtra].filter(Boolean):[]),   // v3.45: ส่งชื่อผู้ช่วยชัดเจน กันถูกลบตอนบันทึกบิล
+    warehouse:j.warehouse||'W1',special:j.special||null,
     startedAt:j.startedAt,submittedAt:j.submittedAt,approvedAt:j.approvedAt,approvedBy:j.approvedBy,rejectedAt:j.rejectedAt,rejectedBy:j.rejectedBy,rejectReason:j.rejectReason,
     bills:j.bills.filter(billFilter).map(x=>({doc:x.doc,docDate:x.docDate,code:x.code,name:x.name,salesman:x.salesman,salesmanCode:x.salesmanCode,amount:x.amount,status:x.status,isCN:!!x.isCN,failReason:x.failReason||'',nextResp:x.nextResp||'',note:x.note||'',creditDays:x.creditDays||0,payment:x.payment,total:payTotal(x.payment),savedAt:x.savedAt}))};
   _lastQueuedDoc=b.doc;
@@ -5150,7 +5152,9 @@ async function approveJob(id){
     j.approvedBy=currentUserName_()||'(ผู้อนุมัติไม่ระบุชื่อ)'; // v2.46: fallback ครบ (displayName→nickname→name→email→placeholder) กัน field ว่าง
     persistJobs();
     // v2.42: verify sheet write ก่อนสลับหน้า
-    const payload={action:'save_job',jobId:j.id,status:j.status,team:j.team,warehouse:j.warehouse||'W1',special:j.special||null,
+    const payload={action:'save_job',jobId:j.id,status:j.status,team:j.team,
+      helperList:(j.team&&Array.isArray(j.team.helperList)&&j.team.helperList.length)?j.team.helperList:(j.team?[j.team.helper1,j.team.helper2,j.team.helperExtra].filter(Boolean):[]),   // v3.45: ส่งชื่อผู้ช่วยชัดเจน กันถูกลบตอนอนุมัติ
+      warehouse:j.warehouse||'W1',special:j.special||null,
       startedAt:j.startedAt,submittedAt:j.submittedAt,approvedAt:j.approvedAt,approvedBy:j.approvedBy,rejectedAt:j.rejectedAt,rejectedBy:j.rejectedBy,rejectReason:j.rejectReason,
       bills:j.bills.filter(x=>x.status&&x.status!=='pending').map(x=>({doc:x.doc,docDate:x.docDate,code:x.code,name:x.name,salesman:x.salesman,salesmanCode:x.salesmanCode,amount:x.amount,status:x.status,isCN:!!x.isCN,failReason:x.failReason||'',nextResp:x.nextResp||'',note:x.note||'',creditDays:x.creditDays||0,payment:x.payment,total:payTotal(x.payment),savedAt:x.savedAt}))};
     console.log('[approveJob] sending payload',{jobId:payload.jobId,status:payload.status,approvedBy:payload.approvedBy,approvedAt:payload.approvedAt,billCount:payload.bills.length});   // v2.58: debug
@@ -5519,6 +5523,7 @@ async function syncToSheets(job){
     jobId:job.id,
     status:job.status,
     team:job.team,
+    helperList:(job.team&&Array.isArray(job.team.helperList)&&job.team.helperList.length)?job.team.helperList:(job.team?[job.team.helper1,job.team.helper2,job.team.helperExtra].filter(Boolean):[]),   // v3.45: ส่งชื่อผู้ช่วยชัดเจน กันถูกลบ
     warehouse:job.warehouse||'W1',
     special:job.special||null,
     startedAt:job.startedAt,
@@ -5638,6 +5643,11 @@ async function loadJobsFromSheet(){
         team:{
           driver:cleanCell(inRow['ชื่อคนขับ']),
           helper:[1,2,3,4,5,6].map(i=>cleanCell(inRow['ผู้ช่วย'+i])).filter(Boolean).join(', '),
+          // v3.45: อ่านผู้ช่วยรายช่อง + helperList กลับมาด้วย → ตอน re-save (บันทึกบิล/อนุมัติ) จะส่งชื่อผู้ช่วยกลับไป ไม่ถูกเขียนทับเป็นค่าว่าง (แก้ชื่อผู้ช่วยในชีทหายตลอด)
+          helper1:cleanCell(inRow['ผู้ช่วย1']),
+          helper2:cleanCell(inRow['ผู้ช่วย2']),
+          helperExtra:cleanCell(inRow['ผู้ช่วย3']),
+          helperList:[1,2,3,4,5,6].map(i=>cleanCell(inRow['ผู้ช่วย'+i])).filter(Boolean),
           plate:cleanCell(inRow['ทะเบียน']),
           pattern:cleanCell(inRow['การส่ง']),
         },
@@ -5772,7 +5782,7 @@ async function syncJobsFromSheet(opts){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.44 (คิวงานส่งซ้ำ ใช้ key redelivJobId/redelivBills กัน GAS เก่า fall-through เขียนทับงานจริง) */
+const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.45 (กันชื่อผู้ช่วยในชีทถูกลบตอน re-save/อนุมัติ — เขียนคอลัมน์ผู้ช่วยเฉพาะเมื่อมีข้อมูลส่งมา) */
 const SHEET_INPUT='บันทึกเที่ยวส่ง';
 const SHEET_CIN='บันทึกบิลและการชำระ';
 const SHEET_CN='CN';
@@ -5820,7 +5830,7 @@ const HEADERS_CIN=['เลขใบคุม','Doc_Date','Doc_No','Customer_Code
 function doGet(e){
   let drive='unknown';
   try{ DriveApp.getRootFolder().getName(); drive='OK'; }catch(err){ drive='NOT_AUTHORIZED'; }
-  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.44',drive:drive}))
+  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.45',drive:drive}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -5855,7 +5865,7 @@ function doPost(e){
         fmtColsOpen_(sh,['รหัสร้าน','เลขใบคุม','Doc_No'],'@');   // v3.35: เปิดปลาย คลุมแถวใหม่
         fmtColsOpen_(sh,['Lat','Lng'],'0.000000');
         fmtColsOpen_(sh,['วันเวลา'],'yyyy-mm-dd hh:mm:ss');
-        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.44'})).setMimeType(ContentService.MimeType.JSON);
+        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.45'})).setMimeType(ContentService.MimeType.JSON);
       }finally{ lock.releaseLock(); }
     }
 
@@ -6097,6 +6107,8 @@ function doPost(e){
     // ===== INPUT — 1 แถวต่อ 1 รหัสใบคุม (เขียนตามชื่อหัวคอลัมน์จริง v3.12) =====
     const helpers=Array.isArray(data.helperList)?data.helperList:
       [team.helper1,team.helper2,team.helperExtra].filter(Boolean);
+    // v3.45: มีชื่อผู้ช่วยส่งมาจริงหรือไม่ — ถ้าไม่มี "อย่า" เขียนทับคอลัมน์ผู้ช่วยเดิม (กันชื่อผู้ช่วยในชีทถูกลบตอน re-save/อนุมัติ)
+    const hasHelperData=helpers.some(function(x){ return String(x||'').trim(); });
     const h=[];
     for(let i=0;i<6;i++) h.push(helpers[i]||'');
     // v3.16: เปลี่ยนชื่อหัวคอลัมน์ "วันเวลาส่งงาน" → "วันเวลาที่รับงาน" อัตโนมัติ (ครั้งเดียว)
@@ -6109,8 +6121,11 @@ function doPost(e){
     inObj['ลังนำไป']=data.cratesOut||'';
     inObj['รหัสใบคุม']=String(data.jobId);
     inObj['ชื่อคนขับ']=team.driver||'';
-    inObj['ผู้ช่วย1']=h[0]; inObj['ผู้ช่วย2']=h[1]; inObj['ผู้ช่วย3']=h[2];
-    inObj['ผู้ช่วย4']=h[3]; inObj['ผู้ช่วย5']=h[4]; inObj['ผู้ช่วย6']=h[5];
+    // v3.45: เขียนผู้ช่วยเฉพาะเมื่อมีข้อมูลผู้ช่วยส่งมา — ถ้าไม่มี เว้นคีย์นี้ไว้ (upsertByHeader_ จะคงค่าเดิมในชีท ไม่ถูกลบ)
+    if(hasHelperData){
+      inObj['ผู้ช่วย1']=h[0]; inObj['ผู้ช่วย2']=h[1]; inObj['ผู้ช่วย3']=h[2];
+      inObj['ผู้ช่วย4']=h[3]; inObj['ผู้ช่วย5']=h[4]; inObj['ผู้ช่วย6']=h[5];
+    }
     inObj['พนง.ใหม่']=data.newStaff||'';
     inObj['การส่ง']=team.pattern||'';
     inObj['ส่งพิเศษ']=sp.type||'';
@@ -6248,7 +6263,7 @@ function doPost(e){
       fmtColsOpen_(cinSh,['วัน+เวลา ที่ส่งสินค้า','U_ADD','วันที่โอนครั้งที่1','วันที่โอนครั้งที่2','แก้ไขเมื่อ','วันที่','วันเวลาอนุมัติ'],'yyyy-mm-dd hh:mm:ss');
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.44'}))
+    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.45'}))
       .setMimeType(ContentService.MimeType.JSON);
   }catch(err){
     return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err)}))
