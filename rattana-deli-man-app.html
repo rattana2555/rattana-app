@@ -741,7 +741,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.49';
+const APP_VERSION='3.50';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -3975,6 +3975,22 @@ function openBillForm(idx){
           <div id="cnLinkNote" class="txt-xs txt-gold" style="margin-top:4px"></div>
         </div>
 
+        <!-- v3.50: กรณีตักพาเลท — พับได้ / บันทึกเพิ่มเฉยๆ ไม่กระทบยอดที่ต้องเก็บ -->
+        <div class="pay-row" style="margin-top:8px">
+          <button type="button" class="btn btn-outline btn-block" id="palletToggle" onclick="togglePalletBox()">📦 กรณีตักพาเลท ${(b.palletCount||b.amountPerPallet)?'▴':'▾'}</button>
+          <div id="palletBox" style="display:${(b.palletCount||b.amountPerPallet)?'block':'none'};margin-top:10px">
+            <div class="field">
+              <label>จำนวนพาเลท</label>
+              <input class="input input-num" type="number" inputmode="decimal" step="any" min="0" value="${esc(b.palletCount||'')}" ${ro?'disabled':''} oninput="onPalletInput(${idx},'palletCount',this.value)" placeholder="0">
+            </div>
+            <div class="field" style="margin-bottom:0">
+              <label>ราคาต่อพาเลท</label>
+              <input class="input input-num" type="number" inputmode="decimal" step="any" min="0" value="${esc(b.amountPerPallet||'')}" ${ro?'disabled':''} oninput="onPalletInput(${idx},'amountPerPallet',this.value)" placeholder="0.00">
+            </div>
+            <div class="txt-right txt-sm txt-muted mt-8">รวม <span class="num txt-gold txt-bold" id="palletSum">${fmt((parseFloat(b.palletCount)||0)*(parseFloat(b.amountPerPallet)||0))}</span> <span class="txt-xs">(บันทึกเพิ่ม ไม่รวมในยอดเก็บเงิน)</span></div>
+          </div>
+        </div>
+
         <div class="sticky-foot">
           <div class="foot-total">
             <span class="txt-xs txt-muted">รวมทั้งหมด</span>
@@ -3998,6 +4014,22 @@ function openBillForm(idx){
   renderPayBox();
   recalcPayTotal();
   applyCNCredit(idx);   // v2.11: ถ้ามี CN ตรงเลขบิลนี้ → เติมยอดใบลดหนี้ให้ (แก้ได้)
+}
+/* v3.50: กรณีตักพาเลท — พับ/เปิดช่องกรอก */
+function togglePalletBox(){
+  const box=$('palletBox'); if(!box) return;
+  const willOpen=box.style.display==='none';
+  box.style.display=willOpen?'block':'none';
+  const t=$('palletToggle'); if(t) t.innerHTML='📦 กรณีตักพาเลท '+(willOpen?'▴':'▾');
+}
+/* v3.50: เก็บค่าพาเลท (จำนวน/ราคาต่อพาเลท) — คำนวณจำนวนเงินรวม ไว้บันทึกอย่างเดียว ไม่กระทบยอดที่ต้องเก็บ */
+function onPalletInput(idx,field,val){
+  const j=state.jobs.find(x=>x.id===state.activeJobId); if(!j) return;
+  const b=j.bills[idx]; if(!b) return;
+  b[field]=val;
+  b.amountTotal=(parseFloat(b.palletCount)||0)*(parseFloat(b.amountPerPallet)||0);
+  const sum=$('palletSum'); if(sum) sum.textContent=fmt(b.amountTotal);
+  persistJobs();
 }
 /* v2.24: CN ที่ match บิลเก็บเงินนี้ — ตรงเลขบิล หรือ ร้านเดียวกัน (เมื่อเลขบิล CN ไม่ใช่บิลอื่นในงาน) */
 function cnMatchesForBill(b,jobDocs,allowStore,jobId){
@@ -4426,7 +4458,7 @@ function saveBillWithVerify_(j,b,saveBtn,changedDocs){
     helperList:(j.team&&Array.isArray(j.team.helperList)&&j.team.helperList.length)?j.team.helperList:(j.team?[j.team.helper1,j.team.helper2,j.team.helperExtra].filter(Boolean):[]),   // v3.45: ส่งชื่อผู้ช่วยชัดเจน กันถูกลบตอนบันทึกบิล
     warehouse:j.warehouse||'W1',special:j.special||null,
     startedAt:j.startedAt,submittedAt:j.submittedAt,approvedAt:j.approvedAt,approvedBy:j.approvedBy,rejectedAt:j.rejectedAt,rejectedBy:j.rejectedBy,rejectReason:j.rejectReason,
-    bills:j.bills.filter(billFilter).map(x=>({doc:x.doc,docDate:x.docDate,code:x.code,name:x.name,salesman:x.salesman,salesmanCode:x.salesmanCode,amount:x.amount,status:x.status,isCN:!!x.isCN,failReason:x.failReason||'',nextResp:x.nextResp||'',note:x.note||'',creditDays:x.creditDays||0,payment:x.payment,total:payTotal(x.payment),savedAt:x.savedAt}))};
+    bills:j.bills.filter(billFilter).map(x=>({doc:x.doc,docDate:x.docDate,code:x.code,name:x.name,salesman:x.salesman,salesmanCode:x.salesmanCode,amount:x.amount,status:x.status,isCN:!!x.isCN,failReason:x.failReason||'',nextResp:x.nextResp||'',note:x.note||'',creditDays:x.creditDays||0,payment:x.payment,total:payTotal(x.payment),palletCount:x.palletCount||'',amountPerPallet:x.amountPerPallet||'',amountTotal:x.amountTotal||'',savedAt:x.savedAt}))};
   _lastQueuedDoc=b.doc;
   queueSync(payload,'save_job|'+j.id+'|'+[...(changedDocs||[b.doc])].join(','));   // ส่งเข้าคิว → flush เบื้องหลัง
   _restoreSaveBtn_(saveBtn);
@@ -5250,7 +5282,7 @@ async function approveJob(id){
       helperList:(j.team&&Array.isArray(j.team.helperList)&&j.team.helperList.length)?j.team.helperList:(j.team?[j.team.helper1,j.team.helper2,j.team.helperExtra].filter(Boolean):[]),   // v3.45: ส่งชื่อผู้ช่วยชัดเจน กันถูกลบตอนอนุมัติ
       warehouse:j.warehouse||'W1',special:j.special||null,
       startedAt:j.startedAt,submittedAt:j.submittedAt,approvedAt:j.approvedAt,approvedBy:j.approvedBy,rejectedAt:j.rejectedAt,rejectedBy:j.rejectedBy,rejectReason:j.rejectReason,
-      bills:j.bills.filter(x=>x.status&&x.status!=='pending').map(x=>({doc:x.doc,docDate:x.docDate,code:x.code,name:x.name,salesman:x.salesman,salesmanCode:x.salesmanCode,amount:x.amount,status:x.status,isCN:!!x.isCN,failReason:x.failReason||'',nextResp:x.nextResp||'',note:x.note||'',creditDays:x.creditDays||0,payment:x.payment,total:payTotal(x.payment),savedAt:x.savedAt}))};
+      bills:j.bills.filter(x=>x.status&&x.status!=='pending').map(x=>({doc:x.doc,docDate:x.docDate,code:x.code,name:x.name,salesman:x.salesman,salesmanCode:x.salesmanCode,amount:x.amount,status:x.status,isCN:!!x.isCN,failReason:x.failReason||'',nextResp:x.nextResp||'',note:x.note||'',creditDays:x.creditDays||0,payment:x.payment,total:payTotal(x.payment),palletCount:x.palletCount||'',amountPerPallet:x.amountPerPallet||'',amountTotal:x.amountTotal||'',savedAt:x.savedAt}))};
     console.log('[approveJob] sending payload',{jobId:payload.jobId,status:payload.status,approvedBy:payload.approvedBy,approvedAt:payload.approvedAt,billCount:payload.bills.length});   // v2.58: debug
     const r=await postSyncGAS_(payload);
     console.log('[approveJob] postSyncGAS_ result',r);   // v2.58: debug
@@ -5637,6 +5669,7 @@ async function syncToSheets(job){
       failReason:b.failReason||'', nextResp:b.nextResp||'', note:b.note||'',
       creditDays:b.creditDays||0,
       payment:b.payment, total:payTotal(b.payment),
+      palletCount:b.palletCount||'', amountPerPallet:b.amountPerPallet||'', amountTotal:b.amountTotal||'',   // v3.50
       savedAt:b.savedAt,
     })),
   };
@@ -5708,6 +5741,10 @@ async function loadJobsFromSheet(){
           failReason:cleanCell(r['สาเหตุไม่ส่ง']),
           nextResp:cleanCell(r['ผู้รับผิดชอบส่งวันถัดไป']),
           note:cleanCell(r['หมายเหตุ']),
+          // v3.50: อ่านค่าพาเลทกลับมาด้วย → re-save/อนุมัติแล้วไม่ถูกลบ
+          palletCount:cleanCell(r['จำนวนพาเลท']),
+          amountPerPallet:cleanCell(r['จำนวนเงินต่อเลท']),
+          amountTotal:cleanCell(r['จำนวนเงินรวม']),
           payment:{banknotes,coins,transfer1,transfer2,cheque,creditNote,
             transfer1Bank:cleanCell(r['แบงค์1']),
             transfer1Date:cleanCell(r['วันที่โอนครั้งที่1']),
