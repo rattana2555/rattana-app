@@ -741,7 +741,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.52';
+const APP_VERSION='3.53';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -1939,18 +1939,37 @@ function tryRestoreReturnDraft(){
   }catch{ return false; }
 }
 
-/* v3.52: ชื่อเซลล์ของบิลนี้จากชีทรายละเอียด (SLMN_NAME) — ไม่มีก็คืนค่าว่างให้คนขับกรอกเอง */
+/* v3.53: รายชื่อพนักงาน "แผนกขาย" (ไฟล์เดียวกับคนขับ) → {full:"ชื่อ-สกุล (ชื่อเล่น)", code, fullname} */
+function salesStaff_(){
+  return (state.users||[])
+    .filter(r=>cleanCell(r['แผนก'])==='ขาย'&&String(r['Status']||'').trim().toLowerCase()==='active')
+    .map(d=>{ const nk=cleanCell(d['ชื่อเล่น']); const fn=cleanCell(d['ชื่อ - สกุล']||d['ชื่อ-สกุล']||'');
+      return {full:(fn?`${fn} (${nk})`:nk), code:cleanCell(d['รหัสขาย Bplus']), fullname:fn}; });
+}
+function _normNm_(s){ return String(s||'').replace(/^คุณ\s*/,'').replace(/\s+/g,' ').trim(); }
+/* v3.52/v3.53: ชื่อเซลล์ของบิลนี้ — จับกับพนักงานแผนกขาย (รหัสก่อน → ชื่อ) แล้วคืนชื่อแบบมาตรฐาน; ไม่เจอคืนชื่อดิบจากรายละเอียด */
 function salesmanForDoc_(doc){
   const arr=doc?state.billDetails[doc]:null;
   if(!arr||!arr.length) return '';
-  const hit=arr.find(x=>x&&x.salesman);
-  return hit?hit.salesman:'';
+  const hit=arr.find(x=>x&&(x.salesman||x.salesmanCode)); if(!hit) return '';
+  const rawName=String(hit.salesman||'').trim(), code=String(hit.salesmanCode||'').trim();
+  const sales=salesStaff_();
+  if(code){ const byCode=sales.find(s=>s.code&&s.code===code); if(byCode) return byCode.full; }
+  const rn=_normNm_(rawName);
+  if(rn){ const byName=sales.find(s=>_normNm_(s.fullname)===rn); if(byName) return byName.full; }
+  return rawName;
 }
-/* v3.52: เติมช่องเซลล์อัตโนมัติจากรายละเอียด (เฉพาะตอนยังว่าง — ไม่ทับที่คนขับพิมพ์เอง) */
+/* v3.53: ตั้งค่าเซลล์ + อัปเดต dropdown (ถ้า render แล้ว) */
+function setSalesmanDD_(name){
+  returnState.salesman=name||'';
+  const w=$('ddReturnSalesman_wrap'); if(w) ddPick('ddReturnSalesman',name||'',name||'');
+  saveReturnDraft();
+}
+/* v3.52: เติมเซลล์อัตโนมัติจากรายละเอียด (เฉพาะตอนยังว่าง — ไม่ทับที่เลือกเอง) */
 function autofillSalesman_(){
   if(returnState.salesman) return;
   const sm=salesmanForDoc_(returnState.docNo);
-  if(sm){ returnState.salesman=sm; const el=$('returnSalesman'); if(el) el.value=sm; }
+  if(sm) setSalesmanDD_(sm);
 }
 function returnGrandTotal(){
   return returnState.items.reduce((s,it)=>s+(parseFloat(it.qty)||0)*(parseFloat(it.price)||0),0);
@@ -1974,6 +1993,7 @@ function renderReturn(){
     const nk=cleanCell(d['ชื่อเล่น']); const fn=cleanCell(d['ชื่อ - สกุล']||d['ชื่อ-สกุล']||'');
     const full=fn?`${fn} (${nk})`:nk; return {v:full,l:full};
   });
+  const salespeople=salesStaff_().map(s=>({v:s.full,l:s.full}));   // v3.53: ตัวเลือกเซลล์ (แผนกขาย จากไฟล์พนักงานเดียวกับคนขับ)
   // v2.1: CN ทำได้เฉพาะร้านในใบคุมที่รับงานมา → ดึงร้านจากบิลของงานที่ตัวเองรับ
   const myBills=listMyJobs().flatMap(j=>j.bills||[]);
   const _seenC={}; const customers=[];
@@ -2050,8 +2070,8 @@ function renderReturn(){
     </div>
 
     <div class="field">
-      <label>เซลล์ผู้ดูแล <span class="txt-xs txt-muted">(ดึงจากรายละเอียดอัตโนมัติ — แก้/กรอกเองได้)</span></label>
-      <input class="input" id="returnSalesman" value="${esc(returnState.salesman||'')}" placeholder="ชื่อเซลล์" autocomplete="off" oninput="returnState.salesman=this.value;saveReturnDraft()">
+      <label>เซลล์ผู้ดูแล <span class="txt-xs txt-muted">(ดึงจากรายละเอียดอัตโนมัติ — เลือกจากรายชื่อฝ่ายขายได้)</span></label>
+      ${buildDD('ddReturnSalesman',salespeople,'-- เลือกเซลล์ --')}
     </div>
 
     <div class="field">
@@ -2088,6 +2108,7 @@ function renderReturn(){
     returnState.driverName=state.user.displayName;
     ddPick('ddReturnDriver',state.user.displayName,state.user.displayName);
   }
+  if(returnState.salesman) ddPick('ddReturnSalesman',returnState.salesman,returnState.salesman);   // v3.53: pre-select เซลล์
   if(returnState.reasonCategory) ddPick('ddReturnReasonCat',returnState.reasonCategory,returnState.reasonCategory);
   if(returnState.reasonSub) ddPick('ddReturnReasonSub',returnState.reasonSub,returnState.reasonSub);
   document.querySelectorAll('#ddReturnCust_list li').forEach(li=>{
@@ -2102,6 +2123,9 @@ function renderReturn(){
   });
   document.querySelectorAll('#ddReturnDriver_list li').forEach(li=>{
     li.addEventListener('click',()=>{ returnState.driverName=li.dataset.v; saveReturnDraft(); });
+  });
+  document.querySelectorAll('#ddReturnSalesman_list li').forEach(li=>{   // v3.53: เลือกเซลล์เอง
+    li.addEventListener('click',()=>{ returnState.salesman=li.dataset.v; saveReturnDraft(); });
   });
   document.querySelectorAll('#ddReturnReasonCat_list li').forEach(li=>{
     li.addEventListener('click',()=>{
@@ -2500,9 +2524,9 @@ function pickDocNo(d){
   returnState.docNo=d;
   $('returnDocNo').value=d;
   $('docOptionsList').style.display='none';
-  // v3.52: เลือกบิลแล้ว → เติมชื่อเซลล์จากรายละเอียดของบิลนั้น (ทับให้ตรงบิล; ไม่มีก็คงค่าที่กรอกไว้)
+  // v3.52/v3.53: เลือกบิลแล้ว → เติมชื่อเซลล์จากรายละเอียดของบิลนั้น (ทับให้ตรงบิล; ไม่มีก็คงค่าที่เลือกไว้)
   const sm=salesmanForDoc_(d);
-  if(sm){ returnState.salesman=sm; const el=$('returnSalesman'); if(el) el.value=sm; }
+  if(sm) setSalesmanDD_(sm);
   saveReturnDraft();
   renderReturnItems();
 }
