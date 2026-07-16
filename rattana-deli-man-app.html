@@ -741,7 +741,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.54';
+const APP_VERSION='3.55';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -1371,27 +1371,55 @@ async function loadAvailableJobs(){
 
 /* v3.43: อ่านคิว "ส่งซ้ำ" → สร้างงานว่างส่งซ้ำ (เฉพาะสถานะ 'รอส่งซ้ำ') group ตามเลขใบคุมเดิม
    เก็บใน state.redeliveryJobs แยกจาก state.jobs (กันกระทบ sync หลัก) — โผล่เป็นการ์ด + ใน dropdown รับงาน */
-async function loadRedeliveryJobs(){
+/* v3.55: อ่านชีท "ส่งซ้ำ" แบบปลอดภัย — gviz จะคืน "ชีทแรก" (ใบคุม) เงียบๆ ถ้าชีทที่ขอยังไม่มีจริง
+   → ตรวจหัวคอลัมน์ก่อน ถ้าไม่ใช่ชีทส่งซ้ำ = ถือว่ายังไม่มีคิว (คืน []) กันเอาข้อมูลผิดชีทมาใช้ */
+async function fetchRedeliverySheet_(){
   try{
     const rows=await fetchSheet(CFG.jobsSheetId,'ส่งซ้ำ',{fresh:true});
+    if(!rows||!rows.length) return [];
+    if(!('เลขใบคุมเดิม' in rows[0])) return [];
+    return rows;
+  }catch(e){ return []; }
+}
+/* v3.55: คิวส่งซ้ำ = อ่านจาก "บิลที่มาร์ค เปลี่ยนคนไปส่ง" ในชีทบิลจริง (Cin) โดยตรง
+   — ไม่ต้องรอให้ชีท "ส่งซ้ำ" ถูกเขียนก่อน → บิลที่มาร์คไว้ตอน GAS ยังเก่า ก็โผล่ให้รับได้
+   — ใช้ชีท "ส่งซ้ำ" แค่ตัดบิลที่ถูกรับไปแล้ว/ส่งซ้ำเสร็จแล้วออก */
+async function loadRedeliveryJobs(){
+  try{
+    const rows=await fetchRedeliverySheet_();
+    const taken={};
+    rows.forEach(r=>{
+      const st=cleanCell(r['สถานะ']);
+      if(st==='กำลังส่งซ้ำ'||st==='ส่งซ้ำแล้ว') taken[cleanCell(r['เลขใบคุมเดิม'])+'|'+cleanCell(r['Doc_No'])]=st;
+    });
+    // งานส่งซ้ำที่รับไว้แล้วในเครื่องนี้ → ไม่ต้องโชว์ซ้ำ
+    const claimedLocal=new Set((state.jobs||[]).filter(j=>j&&(j.isRedelivery||/·ส่งซ้ำ$/.test(String(j.id||'')))).map(j=>baseJobId_(j.id)));
     const custByCode={}; state.customers.forEach(c=>{ if(c.code) custByCode[c.code]=c; });
     const byJob={};
-    (rows||[]).forEach(r=>{
-      if(cleanCell(r['สถานะ'])!=='รอส่งซ้ำ') return;
-      const base=cleanCell(r['เลขใบคุมเดิม']); const doc=cleanCell(r['Doc_No']); if(!base||!doc) return;
-      if(!byJob[base]) byJob[base]={base,warehouse:cleanCell(r['คลัง'])||'',bills:[]};
-      const code=cleanCell(r['รหัสร้าน']); const cust=custByCode[code]||{};
-      byJob[base].bills.push({
-        doc, code, name:cleanCell(r['ชื่อร้าน']),
-        amount:parseFloat(cleanCell(r['ยอดบิล']||'0').replace(/,/g,''))||0,
-        salesman:cleanCell(r['Salesman_Name']), salesmanCode:cleanCell(r['Salesman_Code']),
-        markedBy:cleanCell(r['คนที่มาร์ค']), redeliverReason:cleanCell(r['สาเหตุ']),
-        lat:cust.lat||null, lng:cust.lng||null, address:cust.address||'', phone:cust.phone||'',
-        creditDays:cust.creditDays||0, creditLimit:cust.creditLimit||0, photoUrl:cust.photoUrl||'',
-        status:'pending', payment:{}
+    (state.jobs||[]).forEach(j=>{
+      if(!j||j.isRedelivery||/·ส่งซ้ำ$/.test(String(j.id||''))) return;
+      const base=baseJobId_(j.id);
+      if(claimedLocal.has(base)) return;
+      (j.bills||[]).forEach(b=>{
+        if(!b||b.isCN||b.status!=='failed') return;
+        if(String(b.failReason||'').split(' · ')[0]!=='เปลี่ยนคนไปส่ง') return;
+        if(taken[base+'|'+String(b.doc||'')]) return;
+        if(!byJob[base]) byJob[base]={base,warehouse:j.warehouse||'',bills:[]};
+        const cust=custByCode[b.code]||{};
+        byJob[base].bills.push({
+          doc:b.doc, code:b.code||'', name:b.name||'',
+          amount:b.amount||0, docDate:b.docDate||'',
+          salesman:b.salesman||'', salesmanCode:b.salesmanCode||'',
+          redeliverReason:b.failReason||'',
+          lat:b.lat||cust.lat||null, lng:b.lng||cust.lng||null,
+          address:b.address||cust.address||'', phone:b.phone||cust.phone||'',
+          creditDays:b.creditDays||cust.creditDays||0, creditLimit:b.creditLimit||cust.creditLimit||0,
+          photoUrl:b.photoUrl||cust.photoUrl||'',
+          status:'pending', payment:{}
+        });
       });
     });
-    state.redeliveryJobs=Object.values(byJob).map(g=>{
+    state.redeliveryJobs=Object.values(byJob).filter(g=>g.bills.length).map(g=>{
       const m=g.base.match(/W(\d)/i); const wh=g.warehouse||(m?'W'+m[1]:'W1');
       return { id:g.base+'·ส่งซ้ำ', baseId:g.base, isRedelivery:true, team:null, driver:'', helper:'', plate:'', pickup:'',
         warehouse:wh, status:'available', createdAt:Date.now(), docDate:'', bills:g.bills,
@@ -1430,7 +1458,6 @@ function enrichBills(){
 async function loadJobs(){
   // โหลดงานว่างจากชีท Jobs
   const fresh=await loadAvailableJobs();
-  loadRedeliveryJobs().catch(()=>{});   // v3.43: โหลดคิวส่งซ้ำ (แยก state, ไม่บล็อก)
   const localJobs=loadStore().jobs||[];
   // จัด state.jobs = งานว่างจากชีท + งานที่อยู่ระหว่างทำ/ส่งแล้วใน local
   state.jobs=fresh;
@@ -1445,6 +1472,7 @@ async function loadJobs(){
   if(!state.jobs.length){ state.jobs=seedJobs(); }
   enrichBills();
   persistJobs();
+  loadRedeliveryJobs().catch(()=>{});   // v3.55: หลัง state.jobs พร้อม (คิวส่งซ้ำ derive จากบิลใน state.jobs)
 }
 
 /* ========== TABS / NAV ========== */
@@ -3391,6 +3419,7 @@ async function confirmPickup(){   // v3.43: async — งานส่งซ้�
   // v3.43: งานส่งซ้ำ — จองก่อน (กันคนอื่นรับซ้ำข้ามเครื่อง) แล้วย้ายเข้า state.jobs เป็นงานจริง
   if(j.isRedelivery){
     showToast('กำลังรับงานส่งซ้ำ…','info');
+    await queueRedeliveryJob_(j);   // v3.55: เขียนคิวก่อน (เผื่อบิลมาร์คตอน GAS เก่า → ยังไม่มีแถวคิว) แล้วค่อยจอง
     const cr=await claimRedelivery_(j.baseId,currentUserName_());
     if(!cr.ok){
       showToast(`งานส่งซ้ำนี้ถูกรับไปแล้ว${cr.takenBy?' โดย '+cr.takenBy:''}`,'warning');
@@ -4848,6 +4877,17 @@ function queueRedelivery_(j,b,reason){
 /* v3.43: id ฐานของงาน (ตัด suffix ·ส่งซ้ำ ออก) — คิวส่งซ้ำอ้างเลขใบคุมเดิมเสมอ */
 function baseJobId_(id){ return String(id||'').replace(/·ส่งซ้ำ$/,''); }
 /* v3.43: จองงานส่งซ้ำ (POST claim + verify จากชีท กันรับซ้ำ) → {ok, takenBy?} */
+/* v3.55: เขียนคิวส่งซ้ำของงานนี้ "ก่อนจอง" — idempotent (GAS upsert ตาม เลขใบคุมเดิม+Doc_No)
+   จำเป็นเมื่อบิลถูกมาร์คตอน GAS ยังไม่มี handler → ยังไม่มีแถวคิวให้ claim (และชีทยังไม่ถูกสร้าง) */
+async function queueRedeliveryJob_(j){
+  const url=getAppsUrl(); if(!url||!j||!(j.bills||[]).length) return;
+  const payload={ action:'queue_redelivery', redelivJobId:j.baseId, warehouse:j.warehouse||'', markedBy:currentUserName_(),
+    redelivBills:(j.bills||[]).map(b=>({ doc:b.doc, code:b.code||'', name:b.name||'', amount:b.amount||0,
+      salesmanCode:b.salesmanCode||'', salesman:b.salesman||'', reason:b.redeliverReason||'', nextResp:b.nextResp||'' })) };
+  try{ await fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)}); }
+  catch(e){ console.warn('queue_redelivery(pre-claim)',e); }
+  await new Promise(r=>setTimeout(r,700));   // รอ GAS สร้างชีท/เขียนแถวให้เสร็จก่อน claim
+}
 async function claimRedelivery_(baseId,by){
   const url=getAppsUrl(); if(!url) return {ok:true};
   try{ await fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},
@@ -4855,7 +4895,7 @@ async function claimRedelivery_(baseId,by){
   catch(e){ console.warn('claim_redelivery',e); }
   await new Promise(r=>setTimeout(r,800));   // รอ GAS เขียนเสร็จก่อน verify
   try{
-    const rows=await fetchSheet(CFG.jobsSheetId,'ส่งซ้ำ',{fresh:true});
+    const rows=await fetchRedeliverySheet_();   // v3.55: guard ชีทผิด
     const mine=(rows||[]).filter(r=>cleanCell(r['เลขใบคุมเดิม'])===baseId);
     const other=mine.find(r=>cleanCell(r['สถานะ'])==='กำลังส่งซ้ำ'&&cleanCell(r['คนรับส่งซ้ำ'])&&cleanCell(r['คนรับส่งซ้ำ'])!==by);
     if(other) return {ok:false,takenBy:cleanCell(other['คนรับส่งซ้ำ'])};
@@ -5881,7 +5921,6 @@ async function syncJobsFromSheet(opts){
   const now=Date.now();
   if(!force&&(now-_lastJobsSync)<CACHE_TTL_SYNC) return 0;
   _lastJobsSync=now;
-  loadRedeliveryJobs().catch(()=>{});   // v3.43: รีเฟรชคิวส่งซ้ำทุกรอบ (แยก state ไม่กระทบ merge หลัก)
   const sheetJobs=await loadJobsFromSheet();
   if(sheetJobs===null) return 0; // v1.67: โหลดชีทไม่สำเร็จ — อย่าแตะ local
   // v2.23: บิลของงานที่เพิ่งรับยังไม่ลง Cin → backfill จากชีท Jobs (งานว่าง) ตาม Trans_Code กันบิลหาย
@@ -5969,6 +6008,7 @@ async function syncJobsFromSheet(opts){
   });
   enrichBills();
   persistJobs();
+  loadRedeliveryJobs().catch(()=>{});   // v3.55: หลัง merge เสร็จ (คิวส่งซ้ำ derive จากบิลใน state.jobs)
   return sheetJobs.length;
 }
 
