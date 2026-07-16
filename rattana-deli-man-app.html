@@ -741,7 +741,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.55';
+const APP_VERSION='3.56';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -3172,24 +3172,8 @@ function renderDriverHome(){
   const myNick=state.user.nickname||state.user.name;
   const myDisplay=state.user.displayName||myNick;
   const avail=state.jobs.filter(j=>j.status==='available'&&!j.team);
-  const redeliv=(state.redeliveryJobs||[]).filter(j=>j.status==='available');   // v3.43: งานส่งซ้ำ
-  const redelivCards=redeliv.length?`
-    <div class="field">
-      <label style="color:#c0392b">🔁 งานส่งซ้ำ (${redeliv.length}) <span class="txt-xs txt-muted">— บิลที่ต้องส่งซ้ำ ใครก็รับได้</span></label>
-      ${redeliv.map(j=>{
-        const tot=j.bills.reduce((s,b)=>s+(b.amount||0),0);
-        return `<div class="card" style="border:1px solid #f4c893;box-shadow:0 2px 8px #f0871e22;margin-bottom:10px;padding:11px 12px">
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:12px;background:#f0871e;color:#fff;padding:3px 10px;border-radius:9px;font-weight:700">🔁 ส่งซ้ำ</span>
-            <span class="txt-bold" style="color:#0a1b3e">${esc(j.baseId)}</span>
-            <span class="txt-xs" style="margin-left:auto;background:#eaf1ff;color:#1c50b8;padding:2px 8px;border-radius:8px;font-weight:700">${esc(j.warehouse)}</span>
-          </div>
-          <div class="txt-xs txt-muted" style="margin:6px 0 3px">${j.bills.length} บิล · รวม ${fmt(tot)} ฿ · มาร์คโดย ${esc((j.bills[0]||{}).markedBy||'-')}</div>
-          ${j.bills.slice(0,5).map(b=>`<div class="txt-xs" style="padding:2px 0;color:#374151">• ${esc(b.doc)} ${esc(b.name)} <span style="color:#9ca3af">${fmt(b.amount)}</span></div>`).join('')}
-          <button type="button" class="btn btn-sm" style="margin-top:8px;width:100%;background:#f0871e;color:#fff;border:none;font-weight:700" onclick="selectRedeliveryForPickup('${esc(j.id).replace(/'/g,"\\'")}')">✋ รับงานส่งซ้ำนี้</button>
-        </div>`;
-      }).join('')}
-    </div>`:'';
+  // v3.43/v3.56: งานส่งซ้ำ — ไม่โชว์การ์ดแยกแล้ว ให้เลือกจาก dropdown "เลือกชุดงาน" อย่างเดียว
+  const redeliv=(state.redeliveryJobs||[]).filter(j=>j.status==='available');
   // v2.62: งานที่ถูกจอง/เลือกไปแล้ววันนี้ — โชว์ใน dropdown เป็น disabled ให้คนขับเห็นสถานะจริง
   const availIds=new Set(avail.map(j=>j.id));
   const takenToday=state.jobs.filter(j=>{
@@ -3225,7 +3209,7 @@ function renderDriverHome(){
   }).sort((a,b)=>a.l.localeCompare(b.l,'th'));
 
   const todayLabel=$('todayLabel'); if(todayLabel) todayLabel.textContent=`— ส่งวันที่ ${todayDisplayStr()}`;
-  $('pickupFormBody').innerHTML=redelivCards+`
+  $('pickupFormBody').innerHTML=`
     <div class="field">
       <label>เลขที่ใบคุม<span class="req">*</span> <span class="txt-xs txt-muted">(เฉพาะงานวันนี้ ${todayDisplayStr()})</span></label>
       ${(() => {
@@ -4909,14 +4893,6 @@ function doneRedelivery_(j){
   if(!docs.length) return;
   fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},
     body:JSON.stringify({action:'done_redelivery',redelivJobId:j.baseId,docs})}).catch(e=>console.warn('done_redelivery',e));
-}
-/* v3.43: กด "รับงานส่งซ้ำนี้" บนการ์ด → เลือกใน dropdown ให้เลย แล้วเลื่อนไปกรอกทะเบียน/คนขับ */
-function selectRedeliveryForPickup(id){
-  const j=(state.redeliveryJobs||[]).find(x=>x.id===id); if(!j) return;
-  const tot=j.bills.reduce((s,b)=>s+(b.amount||0),0);
-  try{ ddPick('ddJob',id,`🔁 ส่งซ้ำ ${j.baseId} — ${j.bills.length} บิล · ${fmt(tot)} ฿`); }catch(e){}
-  showToast('เลือกงานส่งซ้ำแล้ว — เลือกทะเบียน/คนขับ แล้วกด "รับงาน"','info');
-  const el=document.getElementById('pickupFormBody'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
 /* ========== SUBMIT FOR APPROVAL ========== */
