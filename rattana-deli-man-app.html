@@ -741,7 +741,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.51';
+const APP_VERSION='3.52';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -1166,6 +1166,7 @@ function afterBillDetailsLoaded_(){   // v2.15: โหลดรายละเ�
   try{
     if(state.currentTab==='sec-returns'){
       returnState._docOptions=docOptionsFor(returnState.customerCode);
+      if(typeof autofillSalesman_==='function') autofillSalesman_();   // v3.52: เติมชื่อเซลล์เมื่อรายละเอียดมาถึง
       // v3.36: ถ้าฟอร์มคืนบางส่วนเปิดอยู่ → re-render รายการสินค้า ให้ picker ผูกกับบิลทันทีที่ข้อมูลมาถึง (ไม่ต้องรอผู้ใช้พิมพ์)
       if(typeof renderReturnItems==='function' && document.getElementById('returnItems')) renderReturnItems();
     }
@@ -1200,6 +1201,8 @@ async function loadBillDetails(force){
       acc[doc].push({
         code:cleanCell(r['AR_CODE']||''),     // v2.15: รหัสร้าน (ใช้จับตัวเลือกเลขที่เอกสาร)
         wh:cleanCell(r['WL_CODE']||''),       // v2.18: คลังของบิล (ใช้เป็น fallback ตอนหา job ไม่เจอ)
+        salesman:cleanCell(r['SLMN_NAME']||''),      // v3.52: ชื่อเซลล์ (ดึงมาเติมในหน้าทำ CN)
+        salesmanCode:cleanCell(r['SLMN_CODE']||''),  // v3.52
         barcode:cleanCell(r['TRD_SH_CODE']),
         sku:cleanCell(r['SKU_NAME']),
         unit:cleanCell(r['TRD_UTQNAME']),
@@ -1903,6 +1906,7 @@ const returnState={
   customerCode:'', customerName:'',
   docNo:'',
   driverName:'',
+  salesman:'',   // v3.52: ชื่อเซลล์ (ดึงจากรายละเอียดอัตโนมัติ / คนขับกรอกได้)
   reasonCategory:'', reasonSub:'',
   note:'',
   items:[{productId:'',productName:'',unit:'ชิ้น(EA)',qty:'',price:''}],
@@ -1910,8 +1914,8 @@ const returnState={
 
 function saveReturnDraft(){
   try{
-    const {photo,returnType,billType,customerCode,customerName,docNo,driverName,reasonCategory,reasonSub,note,items}=returnState;
-    localStorage.setItem(RETURN_DRAFT_KEY,JSON.stringify({photo,returnType,billType,customerCode,customerName,docNo,driverName,reasonCategory,reasonSub,note,items,_ts:Date.now()}));
+    const {photo,returnType,billType,customerCode,customerName,docNo,driverName,salesman,reasonCategory,reasonSub,note,items}=returnState;
+    localStorage.setItem(RETURN_DRAFT_KEY,JSON.stringify({photo,returnType,billType,customerCode,customerName,docNo,driverName,salesman,reasonCategory,reasonSub,note,items,_ts:Date.now()}));
   }catch(e){}
 }
 function clearReturnDraft(){ localStorage.removeItem(RETURN_DRAFT_KEY); }
@@ -1926,6 +1930,7 @@ function tryRestoreReturnDraft(){
       photo:saved.photo||'', returnType:saved.returnType||'', billType:saved.billType||'',
       customerCode:saved.customerCode||'', customerName:saved.customerName||'',
       docNo:saved.docNo||'', driverName:saved.driverName||'',
+      salesman:saved.salesman||'',   // v3.52
       reasonCategory:saved.reasonCategory||'', reasonSub:saved.reasonSub||'',
       note:saved.note||'',
       items:saved.items||[{productId:'',productName:'',unit:'ชิ้น(EA)',qty:'',price:''}],
@@ -1934,6 +1939,19 @@ function tryRestoreReturnDraft(){
   }catch{ return false; }
 }
 
+/* v3.52: ชื่อเซลล์ของบิลนี้จากชีทรายละเอียด (SLMN_NAME) — ไม่มีก็คืนค่าว่างให้คนขับกรอกเอง */
+function salesmanForDoc_(doc){
+  const arr=doc?state.billDetails[doc]:null;
+  if(!arr||!arr.length) return '';
+  const hit=arr.find(x=>x&&x.salesman);
+  return hit?hit.salesman:'';
+}
+/* v3.52: เติมช่องเซลล์อัตโนมัติจากรายละเอียด (เฉพาะตอนยังว่าง — ไม่ทับที่คนขับพิมพ์เอง) */
+function autofillSalesman_(){
+  if(returnState.salesman) return;
+  const sm=salesmanForDoc_(returnState.docNo);
+  if(sm){ returnState.salesman=sm; const el=$('returnSalesman'); if(el) el.value=sm; }
+}
 function returnGrandTotal(){
   return returnState.items.reduce((s,it)=>s+(parseFloat(it.qty)||0)*(parseFloat(it.price)||0),0);
 }
@@ -1967,6 +1985,7 @@ function renderReturn(){
   // v2.15: เลขที่เอกสาร — รวมจากใบคุมที่รับมา + ชีทรายละเอียด (จับตามรหัสร้าน) + กรอง DS/DC
   const docOptions=docOptionsFor(returnState.customerCode);
   returnState._docOptions=docOptions;
+  autofillSalesman_();   // v3.52: เติมชื่อเซลล์จากรายละเอียด (ถ้ายังว่าง)
 
   // v2.10: คืนเต็มทั้งบิล → ไม่ต้องระบุสินค้า / คืนบางส่วน → เลือกสินค้า
   const isPartialReturn=returnState.returnType==='คืนบางส่วน';
@@ -2028,6 +2047,11 @@ function renderReturn(){
                oninput="onDocInput(this.value)" onfocus="onDocInput(this.value)">
         <ul class="product-results" id="docOptionsList" style="display:none"></ul>
       </div>
+    </div>
+
+    <div class="field">
+      <label>เซลล์ผู้ดูแล <span class="txt-xs txt-muted">(ดึงจากรายละเอียดอัตโนมัติ — แก้/กรอกเองได้)</span></label>
+      <input class="input" id="returnSalesman" value="${esc(returnState.salesman||'')}" placeholder="ชื่อเซลล์" autocomplete="off" oninput="returnState.salesman=this.value;saveReturnDraft()">
     </div>
 
     <div class="field">
@@ -2476,6 +2500,9 @@ function pickDocNo(d){
   returnState.docNo=d;
   $('returnDocNo').value=d;
   $('docOptionsList').style.display='none';
+  // v3.52: เลือกบิลแล้ว → เติมชื่อเซลล์จากรายละเอียดของบิลนั้น (ทับให้ตรงบิล; ไม่มีก็คงค่าที่กรอกไว้)
+  const sm=salesmanForDoc_(d);
+  if(sm){ returnState.salesman=sm; const el=$('returnSalesman'); if(el) el.value=sm; }
   saveReturnDraft();
   renderReturnItems();
 }
@@ -2692,6 +2719,7 @@ function startCNFromBill(idx){
     customerCode:b.code||'',
     customerName:b.name||'',
     docNo:b.doc||'',
+    salesman:salesmanForDoc_(b.doc)||b.salesman||'',   // v3.52: เติมชื่อเซลล์จากรายละเอียด/บิล
     driverName:(state.user&&(state.user.displayName||state.user.name))||'',
     reasonCategory:'', reasonSub:'', note:'',
     items:[{productId:'',productName:'',unit:'ชิ้น(EA)',qty:'',price:''}],
@@ -2719,6 +2747,7 @@ function editCN(i){
   Object.assign(returnState,{
     photo:c.photo||'', returnType:c.returnType||'', billType:c.billType||'',
     customerCode:c.customerCode||'', customerName:c.customerName||'', docNo:c.docNo||'',
+    salesman:c.salesman||salesmanForDoc_(c.docNo)||'',   // v3.52
     driverName:c.driver||'', reasonCategory:c.errorFrom||'', reasonSub:c.reason||'',
     note:c.note||'',
     items:(c.items&&c.items.length)
@@ -2903,7 +2932,8 @@ async function confirmReturn(){
     note:returnState.note,
     photo:returnState.photo,
     driver:returnState.driverName||state.user.displayName||state.user.nickname,
-    loader:'',
+    salesman:returnState.salesman||'',   // v3.52: ชื่อเซลล์ → ลงคอลัมน์ ชื่อเซลล์
+    loader:returnState.salesman||'',     // v3.52: ส่งซ้ำในช่อง loader ด้วย → GAS เก่า (คอลัมน์ 30) ก็ลงชื่อเซลล์ได้โดยไม่ต้อง redeploy
     submittedAt:Date.now(),
   };
   returnState._submitting=true;
@@ -4757,7 +4787,8 @@ async function confirmCannot(idx){
       note:note,
       photo:_cannotPhoto||'',   // v2.52: รูปที่คนขับแนบใน modal ส่งไม่ได้
       driver:driverName,
-      loader:'',
+      salesman:salesmanForDoc_(b.doc)||b.salesman||'',   // v3.52: ชื่อเซลล์จากรายละเอียด/บิล
+      loader:salesmanForDoc_(b.doc)||b.salesman||'',     // v3.52: GAS เก่า (คอลัมน์ 30) ก็ลงชื่อเซลล์ได้
       submittedAt:Date.now(),
     };
     closeModal('modalCannot');
@@ -5917,7 +5948,7 @@ async function syncJobsFromSheet(opts){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.45 (กันชื่อผู้ช่วยในชีทถูกลบตอน re-save/อนุมัติ — เขียนคอลัมน์ผู้ช่วยเฉพาะเมื่อมีข้อมูลส่งมา) */
+const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.52 (CN: คอลัมน์ 30 = ชื่อเซลล์ (เดิม พนักงานขนของ) เขียนจาก data.salesman) */
 const SHEET_INPUT='บันทึกเที่ยวส่ง';
 const SHEET_CIN='บันทึกบิลและการชำระ';
 const SHEET_CN='CN';
@@ -5942,7 +5973,7 @@ const HEADERS_CN=['วัน เวลา','วันที่คืน','ชื
   'สาเหตุรับคืน','ผิดพลาดจาก',
   'หมายเหตุการคืน','ยอดรวมทั้งใบ','ภาพคืน',
   'สถานะคืน','อนุมัติคืน','ผู้อนุมัติ','วันอนุมัติ','หมายเหตุอนุมัติ',
-  'ผู้ขับ','พนักงานขนของ','เลขที่เอกสาร CN','ภาพอนุมัติ CN'];
+  'ผู้ขับ','ชื่อเซลล์','เลขที่เอกสาร CN','ภาพอนุมัติ CN'];   // v3.52: คอลัมน์ 30 = ชื่อเซลล์ (เดิม พนักงานขนของ)
 
 const HEADERS_INPUT=['🔒 Row ID','วันเวลาปิดงาน','จำนวนพาเลทนำขึ้นรถ','ทะเบียน','ลังนำไป',
   'รหัสใบคุม','ชื่อคนขับ','ผู้ช่วย1','ผู้ช่วย2','ผู้ช่วย3','ผู้ช่วย4','ผู้ช่วย5','ผู้ช่วย6',
@@ -5965,7 +5996,7 @@ const HEADERS_CIN=['เลขใบคุม','Doc_Date','Doc_No','Customer_Code
 function doGet(e){
   let drive='unknown';
   try{ DriveApp.getRootFolder().getName(); drive='OK'; }catch(err){ drive='NOT_AUTHORIZED'; }
-  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.45',drive:drive}))
+  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.52',drive:drive}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -6000,7 +6031,7 @@ function doPost(e){
         fmtColsOpen_(sh,['รหัสร้าน','เลขใบคุม','Doc_No'],'@');   // v3.35: เปิดปลาย คลุมแถวใหม่
         fmtColsOpen_(sh,['Lat','Lng'],'0.000000');
         fmtColsOpen_(sh,['วันเวลา'],'yyyy-mm-dd hh:mm:ss');
-        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.45'})).setMimeType(ContentService.MimeType.JSON);
+        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.52'})).setMimeType(ContentService.MimeType.JSON);
       }finally{ lock.releaseLock(); }
     }
 
@@ -6225,7 +6256,7 @@ function doPost(e){
         const qty=parseFloat(it.qty)||0; const price=parseFloat(it.price)||0;
         return [now,now,data.driver||'',jobId,data.warehouse||'',data.customerName||'',String(data.customerCode||''),
           data.returnType||'',data.billType||'',docNo,idx+1,items.length,String(it.barcode||''),it.name||'',qty,price,it.unit||'',qty*price,
-          data.reason||'',data.errorFrom||'',data.note||'',total,photoUrl,'รออนุมัติ','','','','',data.driver||'',data.loader||''];
+          data.reason||'',data.errorFrom||'',data.note||'',total,photoUrl,'รออนุมัติ','','','','',data.driver||'',data.salesman||data.loader||''];   // v3.52: คอลัมน์ 30 = ชื่อเซลล์
       });
       if(cnRows.length) cnSh.getRange(cnSh.getLastRow()+1,1,cnRows.length,cnRows[0].length).setValues(cnRows);
       // v3.35: format แบบเปิดปลาย (คลุมแถวใหม่เสมอ)
@@ -6398,7 +6429,7 @@ function doPost(e){
       fmtColsOpen_(cinSh,['วัน+เวลา ที่ส่งสินค้า','U_ADD','วันที่โอนครั้งที่1','วันที่โอนครั้งที่2','แก้ไขเมื่อ','วันที่','วันเวลาอนุมัติ'],'yyyy-mm-dd hh:mm:ss');
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.45'}))
+    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.52'}))
       .setMimeType(ContentService.MimeType.JSON);
   }catch(err){
     return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err)}))
