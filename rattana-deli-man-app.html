@@ -690,7 +690,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 <div class="modal-overlay" id="modalScan">
   <div class="modal">
     <div class="modal-head">
-      <h3>🔍 สแกนเช็คสินค้า</h3>
+      <h3 id="scanTitle">🔍 สแกนเช็คสินค้า</h3>
       <button class="modal-close" onclick="closeScan()">×</button>
     </div>
     <div class="modal-body" id="scanBody"></div>
@@ -741,7 +741,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.47';
+const APP_VERSION='3.48';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -941,6 +941,7 @@ const CACHE_TTL_LONG=24*60*60*1000;       // 24 ชม. — ลูกค้า/�
 const CACHE_TTL_SYNC=30*1000;             // 30 วิ — งานอนุมัติ (ต้อง fresh บ่อย แต่ throttle กันโหลดถี่)
 // v3.36: bump คีย์ cache รายละเอียดบิล → ทิ้ง cache เก่าที่ค้าง/ว่างทุกเครื่อง โหลดใหม่รอบเดียว (แก้ CN ไม่ดึงรายการสินค้าในบิล)
 const BILLDETAILS_CACHE_KEY='billDetails_v336';
+const PRODUCTS_CACHE_KEY='products_v348img';   // v3.48: bump cache → เก็บรูปสินค้า (SKU_USAGE) + index บาร์โค้ดสำหรับสแกน
 function cacheKey(key){ return 'rdm_cache_'+key; }
 function getCachedSheet(key,ttl){
   try{
@@ -1110,12 +1111,13 @@ async function loadVehicles(){
 
 function afterProductsLoaded_(){   // v2.14: โหลดสินค้าเสร็จ → รีเฟรช pills หน่วยในหน้ารับคืน
   state._prodByName=null;
+  state._prodByCode=null;   // v3.48: reset index บาร์โค้ด → rebuild เมื่อสแกนครั้งถัดไป
   try{ if(state.currentTab==='sec-returns') renderReturnItems(); }catch(e){}
 }
 async function loadProducts(){
   if(state.products.length) return;
   // v2.53: 24h cache — สินค้าเปลี่ยนน้อย
-  const cached=getCachedSheet('products',CACHE_TTL_LONG);
+  const cached=getCachedSheet(PRODUCTS_CACHE_KEY,CACHE_TTL_LONG);
   if(cached){ state.products=cached; afterProductsLoaded_(); return; }
   try{
     const rows=await fetchSheet(CFG.productsSheetId,CFG.productsSheetName);
@@ -1124,6 +1126,7 @@ async function loadProducts(){
       if(!name) return null;
       return {
         name,
+        image:cleanCell(r['SKU_USAGE']||''),   // v3.48: URL รูปสินค้า (Google Drive) — ว่างได้
         codes:{
           EA:cleanCell(r['CODE EA']||''),
           PA:cleanCell(r['CODE PA']||''),
@@ -1153,7 +1156,7 @@ async function loadProducts(){
         },
       };
     }).filter(Boolean);
-    setCachedSheet('products',state.products);
+    setCachedSheet(PRODUCTS_CACHE_KEY,state.products);
     afterProductsLoaded_();
   }catch(e){ console.warn('loadProducts failed:',e); }
 }
@@ -2178,10 +2181,87 @@ function fillFromCNRef(){
   showToast('เพิ่มรายการจากเซลล์แล้ว '+Math.min(m.length,5)+' รายการ — ตรวจ/ใส่ราคาก่อนบันทึก','success');
 }
 
+/* ===== v3.48: รูปสินค้า (จาก SKU_USAGE = ลิงก์ Google Drive) + สแกนบาร์โค้ดหาสินค้า ===== */
+function driveId_(url){ const u=String(url||''); const m=u.match(/[?&]id=([^&]+)/)||u.match(/\/d\/([^/]+)/); return m?m[1]:''; }
+function imgFallback_(img){   // thumbnail โหลดไม่ได้ → ลอง uc?export=view ก่อน, ไม่ได้ค่อยซ่อน (เหลือกล่องว่าง)
+  if(img.dataset.fb){ img.style.display='none'; return; }
+  img.dataset.fb='1';
+  if(img.dataset.alt){ img.src=img.dataset.alt; } else { img.style.display='none'; }
+}
+function prodImgTag_(url,size){
+  const id=driveId_(url); if(!id) return '';
+  const s=size||120;
+  const thumb='https://drive.google.com/thumbnail?id='+id+'&sz=w'+s;
+  const view='https://drive.google.com/uc?export=view&id='+id;
+  return `<img src="${esc(thumb)}" data-alt="${esc(view)}" loading="lazy" style="width:100%;height:100%;object-fit:contain" onerror="imgFallback_(this)">`;
+}
+/* กล่องรูปสินค้า — ถ้าไม่มีรูปจะเป็นกล่องว่างเทาๆ (ตามที่ผู้ใช้ขอ) */
+function prodThumbBox_(url,px){
+  px=px||56;
+  return `<span style="width:${px}px;height:${px}px;flex:0 0 ${px}px;border:1px solid var(--line);border-radius:8px;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;background:var(--row-alt)">${prodImgTag_(url,px*2)}</span>`;
+}
+/* หา product จากบาร์โค้ด (จับกับ codes EA/PA/BP/CS) — คืน {product, unitKey} หรือ null */
+function findProductByBarcode_(code){
+  const c=normBC(code); if(!c||!state.products.length) return null;
+  if(!state._prodByCode){
+    state._prodByCode={};
+    state.products.forEach(p=>{ ['EA','PA','BP','CS'].forEach(k=>{ const bc=normBC(p.codes&&p.codes[k]); if(bc&&!state._prodByCode[bc]) state._prodByCode[bc]={product:p,unitKey:k}; }); });
+  }
+  return state._prodByCode[c] || state._prodByCode['0'+c] || state._prodByCode[c.replace(/^0+/,'')] || null;
+}
+/* เติมสินค้าลงรายการ (จากการสแกน) — เลือกหน่วยตามบาร์โค้ดที่ยิง ถ้าไม่รู้ใช้ CS→BP→PA→EA */
+function fillItemWithProduct_(idx,p,unitKeyHint){
+  const it=returnState.items[idx]; if(!it||!p) return;
+  it.productName=p.name; it.product=p;
+  let key=unitKeyHint;
+  if(!key||!p.units[key]){ key=['CS','BP','PA','EA'].find(k=>p.units[k])||'EA'; }
+  if(p.units[key]){ it.unit=p.units[key]; it.unitKey=key; }
+  if(p.prices[key]) it.price=p.prices[key];
+  renderReturnItems(); recalcReturnTotal();
+}
+/* เปิดสแกนเนอร์เพื่อ "หาสินค้า" ลงรายการที่ idx (ใช้กล้อง/ช่องพิมพ์เดียวกับสแกนเช็คบิล) */
+function openProductScan(idx){
+  _scanMode='product'; _scanProductItem=idx;
+  const ttl=$('scanTitle'); if(ttl) ttl.textContent='🔍 สแกนหาสินค้า';
+  if(!state.products.length) loadProducts();
+  $('scanBody').innerHTML=`
+    <div class="txt-sm mb-8">สแกน/พิมพ์บาร์โค้ดเพื่อค้นหาสินค้า → เติมลง <b>รายการที่ ${idx+1}</b></div>
+    <video id="scanVideo" playsinline muted></video>
+    <div id="scanCamMsg" class="txt-xs txt-muted" style="margin:4px 0"></div>
+    <div class="row gap-8 mb-8">
+      <button class="btn btn-outline" style="flex:1" id="btnScanCam" onclick="toggleScanCam()">📷 เปิดกล้องสแกน</button>
+      <button class="btn btn-outline btn-torch" id="btnScanTorch" style="display:none" onclick="toggleScanTorch()">🔦 เปิดไฟ</button>
+    </div>
+    <div class="field" style="margin-bottom:10px">
+      <label>พิมพ์ / ยิงบาร์โค้ด</label>
+      <div class="row gap-8">
+        <input class="input" id="scanManual" inputmode="numeric" placeholder="บาร์โค้ด แล้วกด Enter" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();checkManualScan();}">
+        <button class="btn btn-gold btn-sm" onclick="checkManualScan()">ค้นหา</button>
+      </div>
+    </div>
+    <div id="scanFound" class="txt-sm"></div>`;
+  openModal('modalScan');
+  setTimeout(()=>{ const m=$('scanManual'); if(m) m.focus(); },120);
+}
+function productScanHit_(code){
+  const hit=findProductByBarcode_(code);
+  const f=$('scanFound');
+  if(!hit){
+    if(navigator.vibrate) navigator.vibrate([40,40,40]);
+    showToast('⚠️ ไม่พบสินค้าบาร์โค้ด '+normBC(code),'warning');
+    if(f) f.innerHTML=`<div style="color:var(--danger);font-weight:600">✗ ไม่พบสินค้าบาร์โค้ด ${esc(normBC(code))}</div>`;
+    return;
+  }
+  if(navigator.vibrate) navigator.vibrate(60);
+  fillItemWithProduct_(_scanProductItem,hit.product,hit.unitKey);
+  showToast('✓ '+hit.product.name,'success');
+  closeScan();
+}
 function renderReturnItems(){
   const el=$('returnItems'); if(!el) return;
   el.innerHTML=returnState.items.map((it,i)=>{
     const lineTotal=(parseFloat(it.qty)||0)*(parseFloat(it.price)||0);
+    const _prod=it.product||findProductByName(it.productName);   // v3.48: หา product เพื่อโชว์รูป
     // v2.16: เตือนถ้าสินค้าที่เพิ่ม (เช่น จากที่เซลล์สั่งเก็บ) ไม่ตรงกับสินค้าในบิล
     const _billItems=returnState.docNo?state.billDetails[returnState.docNo]:null;
     const _notInBill=it.productName&&_billItems&&_billItems.length&&!_billItems.some(b=>normName_(b.sku)===normName_(it.productName));
@@ -2200,10 +2280,16 @@ function renderReturnItems(){
             if(bill&&bill.length) return `<span class="txt-xs txt-gold">⭐ ${bill.length} รายการในบิลนี้</span>`;
             return state.products.length?`<span class="txt-xs txt-muted">(${fmtInt(state.products.length)} รายการ — พิมพ์เพื่อค้นหา)</span>`:'';
           })()}</label>
-          <div class="product-picker" id="prodPick_${i}">
-            <input class="input" value="${esc(it.productName)}" placeholder="ค้นหาชื่อสินค้า..."
-                   oninput="onProductInput(${i},this.value)" onfocus="onProductInput(${i},this.value)" autocomplete="off">
-            <ul class="product-results" id="prodRes_${i}" style="display:none"></ul>
+          <div style="display:flex;gap:8px;align-items:flex-start">
+            ${prodThumbBox_(_prod&&_prod.image,56)}
+            <div style="flex:1;min-width:0">
+              <div class="product-picker" id="prodPick_${i}">
+                <input class="input" value="${esc(it.productName)}" placeholder="ค้นหาชื่อสินค้า..."
+                       oninput="onProductInput(${i},this.value)" onfocus="onProductInput(${i},this.value)" autocomplete="off">
+                <ul class="product-results" id="prodRes_${i}" style="display:none"></ul>
+              </div>
+              <button type="button" class="btn btn-outline btn-sm" style="margin-top:6px;width:100%" onclick="openProductScan(${i})">📷 สแกนบาร์โค้ดหาสินค้า</button>
+            </div>
           </div>
           ${_notInBill?`<div class="txt-xs" style="margin-top:6px;color:var(--danger);font-weight:700;background:#FFF1F0;border:1px solid #F3B4AD;border-radius:6px;padding:6px 10px">⚠️ สินค้านี้ไม่อยู่ในบิล — ตรวจสอบอีกครั้งก่อนบันทึก</div>`:''}
         </div>
@@ -2296,7 +2382,7 @@ function onProductInput(idx,q){
     });
     if(q) list=list.filter(x=>x.name.toLowerCase().includes(q));
     ul.innerHTML=list.length
-      ? list.slice(0,30).map(x=>`<li onclick="pickProductFromBill(${idx},'${esc(x.name).replace(/'/g,"\\'")}')">${esc(x.name)} <span class="txt-xs txt-muted">· ${esc(x._bill.unit)} · ${fmtInt(x._bill.qty)}</span></li>`).join('')
+      ? list.slice(0,30).map(x=>`<li onclick="pickProductFromBill(${idx},'${esc(x.name).replace(/'/g,"\\'")}')" style="display:flex;align-items:center;gap:8px">${prodThumbBox_(x.product&&x.product.image,34)}<span style="flex:1;min-width:0">${esc(x.name)} <span class="txt-xs txt-muted">· ${esc(x._bill.unit)} · ${fmtInt(x._bill.qty)}</span></span></li>`).join('')
       : '<li class="muted">ไม่พบสินค้าในบิลนี้</li>';
     ul.style.display='block';
     return;
@@ -2315,7 +2401,7 @@ function onProductInput(idx,q){
   if(!matches.length){
     ul.innerHTML='<li class="muted">ไม่พบสินค้า — ใช้ชื่อที่พิมพ์ได้เลย</li>';
   } else {
-    ul.innerHTML=matches.map(p=>`<li onclick="pickProduct(${idx},'${esc(p.name).replace(/'/g,"\\'")}')">${esc(p.name)}</li>`).join('');
+    ul.innerHTML=matches.map(p=>`<li onclick="pickProduct(${idx},'${esc(p.name).replace(/'/g,"\\'")}')" style="display:flex;align-items:center;gap:8px">${prodThumbBox_(p.image,34)}<span style="flex:1;min-width:0">${esc(p.name)}</span></li>`).join('');
   }
   ul.style.display='block';
 }
@@ -3614,12 +3700,15 @@ function billPayStatus(b){
 }
 /* ===== v2.30: สแกนเช็คสินค้ากับบิล (กล้อง BarcodeDetector + พิมพ์เอง) — เช็คแบบมี/ไม่มี ===== */
 let _scanItems=[], _scanDoc='', _scanControls=null, _scanStream=null, _scanTorchOn=false, _scanLibPromise=null, _lastScan='', _lastScanAt=0;
+let _scanMode='bill', _scanProductItem=0;   // v3.48: โหมดสแกน — 'bill' เช็คบิล / 'product' หาสินค้าลงรายการ CN
 const _scanMatchedByDoc={};  // doc → Set(ชื่อสินค้า normalize) — จำภายใน session
 function normBC(x){ return String(x||'').replace(/\D/g,''); }
 function barcodeMatch(a,b){ a=normBC(a); b=normBC(b); if(!a||!b) return false; return a===b||a==='0'+b||b==='0'+a; }
 function openScan(idx){
   const j=state.jobs.find(x=>x.id===state.activeJobId); if(!j) return;
   const b=j.bills[idx]; if(!b) return;
+  _scanMode='bill';   // v3.48: กลับมาโหมดเช็คบิล (เผื่อก่อนหน้าเพิ่งใช้สแกนหาสินค้า)
+  const ttl=$('scanTitle'); if(ttl) ttl.textContent='🔍 สแกนเช็คสินค้า';
   _scanDoc=b.doc;
   $('scanBody').innerHTML=`
     <div class="txt-sm mb-8">บิล <b>${esc(b.doc)}</b> · ${esc(b.name||'')}</div>
@@ -3719,6 +3808,7 @@ function matchScan(code){
 function checkManualScan(){
   const el=$('scanManual'); if(!el) return;
   const v=el.value.trim(); if(!v) return;
+  if(_scanMode==='product'){ productScanHit_(v); el.value=''; el.focus(); return; }   // v3.48
   matchScan(v); el.value=''; el.focus();
 }
 function toggleScanCam(){ if(_scanControls) stopScanCamera(); else startScanCamera(); }
@@ -3786,9 +3876,10 @@ function onScanBarcode(raw){
   const now=Date.now();
   if(code===_lastScan&&now-_lastScanAt<1500) return;   // กันยิงซ้ำถี่
   _lastScan=code; _lastScanAt=now;
+  if(_scanMode==='product'){ productScanHit_(code); return; }   // v3.48
   matchScan(code);
 }
-function closeScan(){ stopScanCamera(); closeModal('modalScan'); }
+function closeScan(){ stopScanCamera(); closeModal('modalScan'); _scanMode='bill'; }   // v3.48: reset โหมด
 /* v1.86: ข้อความเหตุผลของบิล (ทำไมยอดถึง 0 / จ่ายรวม ฯลฯ) */
 function billReasonText(b){
   const p=b.payment||{};
@@ -7002,7 +7093,7 @@ async function bootApp(){
     // ลูกค้า/สินค้า cache (24h) — เอาจาก localStorage มา hydrate state ให้ทันที (ไม่รอ fetch)
     const cachedCust=getCachedSheet('customers',CACHE_TTL_LONG);
     if(cachedCust) state.customers=cachedCust;
-    const cachedProd=getCachedSheet('products',CACHE_TTL_LONG);
+    const cachedProd=getCachedSheet(PRODUCTS_CACHE_KEY,CACHE_TTL_LONG);
     if(cachedProd){ state.products=cachedProd; }
     const cachedBD=getCachedSheet(BILLDETAILS_CACHE_KEY,CACHE_TTL_LONG);
     if(cachedBD && Object.keys(cachedBD).length) state.billDetails=cachedBD;   // v3.36: ข้าม cache ว่าง
