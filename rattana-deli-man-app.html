@@ -741,7 +741,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.50';
+const APP_VERSION='3.51';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -924,7 +924,8 @@ async function fetchSheet(sheetId,sheetName,opts){
   // v2.58: timeout 15s กัน gviz hang (เจอเคส postSyncGAS_ fallback verify hang รอเปล่า)
   const fresh=opts&&opts.fresh;
   const cb=fresh?('&_cb='+Date.now()):'';
-  const url=`https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}${cb}`;
+  // v3.51: บังคับ headers=1 — gviz auto-detect เดาหัวตารางผิดในบางชีท (เช่น Customer) ทำให้หัวคอลัมน์เพี้ยน+ข้อมูลร้านว่างทั้งหมด
+  const url=`https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent(sheetName)}${cb}`;
   const ctrl=('AbortController' in window)?new AbortController():null;
   const to=setTimeout(()=>{ if(ctrl) ctrl.abort(); }, (opts&&opts.timeoutMs)||15000);
   try{
@@ -1216,8 +1217,9 @@ async function loadBillDetails(force){
 
 async function loadCustomers(){
   // v2.53: cache 24 ชม. (5,303 rows — หนัก, ลูกค้าไม่ค่อยเปลี่ยน)
-  const cached=getCachedSheet('customers',CACHE_TTL_LONG);
-  if(cached){ state.customers=cached; return; }
+  // v3.51: bump คีย์ cache → ทิ้ง cache เก่าที่ parse เพี้ยน (หัวคอลัมน์พัง ข้อมูลร้าน/พิกัดว่าง) โหลดใหม่รอบเดียวทุกเครื่อง
+  const cached=getCachedSheet('customers_v351',CACHE_TTL_LONG);
+  if(cached){ state.customers=cached; enrichBills(); return; }
   try{
     const rows=await fetchSheet(CFG.customerSheetId,CFG.customerSheetName);
     state.customers=rows.map(r=>{
@@ -1237,7 +1239,8 @@ async function loadCustomers(){
         warehouse:cleanCell(r['WH']||''),
       };
     });
-    setCachedSheet('customers',state.customers);
+    setCachedSheet('customers_v351',state.customers);
+    enrichBills();   // v3.51: เติมข้อมูลร้าน/พิกัดให้บิลทันทีที่ลูกค้าโหลดเสร็จ (ไม่รอ loadJobs รอบถัดไป)
   }catch(e){ state.customers=[]; }
 }
 
@@ -1405,17 +1408,18 @@ function enrichBills(){
   state.customers.forEach(c=>{ if(c.code) byCode[c.code]=c; });
   state.jobs.forEach(j=>{
     j.bills.forEach(b=>{
-      if(b.lat&&b.lng) return; // มีอยู่แล้ว
       const cust=byCode[b.code];
-      if(cust&&cust.lat){
-        b.lat=cust.lat; b.lng=cust.lng;
-        b.address=b.address||cust.address;
-        b.phone=b.phone||cust.phone;
-        b.salesman=b.salesman||cust.salesman;
-        b.creditDays=b.creditDays||cust.creditDays;
-        b.creditLimit=b.creditLimit||cust.creditLimit;
-        b.photoUrl=b.photoUrl||cust.photoUrl;
-      }
+      if(!cust) return;
+      // v3.51: เติมข้อมูลร้าน (ที่อยู่/เบอร์/เซลล์/เครดิต/รูป) "เสมอ" ถ้าเจอร้าน — ไม่ผูกกับพิกัด
+      //   (เดิมกันไว้ด้วย if(cust.lat) → ร้านที่ไม่มี Location เลยไม่โชว์ข้อมูลร้านเลย)
+      b.address=b.address||cust.address;
+      b.phone=b.phone||cust.phone;
+      b.salesman=b.salesman||cust.salesman;
+      b.creditDays=b.creditDays||cust.creditDays;
+      b.creditLimit=b.creditLimit||cust.creditLimit;
+      b.photoUrl=b.photoUrl||cust.photoUrl;
+      // พิกัด — เติมเฉพาะเมื่อร้านมี Location และบิลยังไม่มีพิกัด (เช่น คนขับจับ GPS ไว้แล้ว)
+      if(cust.lat&&cust.lng&&!(b.lat&&b.lng)){ b.lat=cust.lat; b.lng=cust.lng; }
     });
   });
 }
@@ -7128,7 +7132,7 @@ async function bootApp(){
       if(localJobs.length){ state.jobs=localJobs; }
     }catch(e){}
     // ลูกค้า/สินค้า cache (24h) — เอาจาก localStorage มา hydrate state ให้ทันที (ไม่รอ fetch)
-    const cachedCust=getCachedSheet('customers',CACHE_TTL_LONG);
+    const cachedCust=getCachedSheet('customers_v351',CACHE_TTL_LONG);
     if(cachedCust) state.customers=cachedCust;
     const cachedProd=getCachedSheet(PRODUCTS_CACHE_KEY,CACHE_TTL_LONG);
     if(cachedProd){ state.products=cachedProd; }
