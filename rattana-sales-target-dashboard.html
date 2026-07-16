@@ -238,7 +238,7 @@ body.dark .ptbl-td{border-color:var(--border)}
 <div class="page hidden" id="appScreen">
   <header>
     <div class="logo-text">RATTANA<span>·</span>SALES
-      <small>ยอดขายเทียบเป้าหมาย v1.19</small>
+      <small>ยอดขายเทียบเป้าหมาย v1.14</small>
     </div>
     <div class="flex gap-8" style="margin-left:auto">
       <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">⟳</button>
@@ -292,8 +292,6 @@ const TARGET_SHEET_ID = '1dAxF4Mz-zhJIVbuJ_Ql126gt08qvVS1wndJD50pqCZI';
 const TARGET_SHEET_NAME = 'Target';
 const BP_SHEET_ID = '1NxFkxiQev0xxGir93-qt0flNfzHz848-KuE7jDRSxQE';
 const BP_SHEET_NAME = 'BP';
-const CN_SHEET_ID = '1WNJFRUTMZg4lGftUJRLyTuLczhobmFb6jsOrm9l_TYg';
-const CN_SHEET_NAME = 'incentive CN';
 
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
@@ -486,27 +484,8 @@ function buildDebtorActualIndex(targetRaw) {
   return idx;
 }
 
-function buildCnIndex(cnRaw) {
-  const idx = new Map();
-  if (cnRaw && cnRaw.length > 0) {
-    console.log('[CN] columns:', Object.keys(cnRaw[0]));
-    console.log('[CN] first row:', cnRaw[0]);
-  }
-  (cnRaw || []).forEach(r => {
-    const rawName = String(r['Sale no Roo'] || '').trim().replace(/^-*คุณ\s*/, '');
-    const colKey = Object.keys(r).find(k => k.includes('COUNTUNIQUE') || k.includes('บิลรับคืน'));
-    const v = colKey ? parseNum(r[colKey]) : 0;
-    if (!rawName || !v) return;
-    const key = normalizeName(rawName);
-    if (!idx.has(key)) idx.set(key, v);
-  });
-  console.log('[CN] index size:', idx.size, [...idx.entries()].slice(0,3));
-  return idx;
-}
-
-function computeAll(targetRaw, bpRaw, cnRaw) {
+function computeAll(targetRaw, bpRaw) {
   const bpIndex = buildBpIndex(bpRaw);
-  const cnIndex = buildCnIndex(cnRaw);
   const debtorActualIndex = buildDebtorActualIndex(targetRaw);
   const rows = [];
   targetRaw.forEach(t => {
@@ -542,11 +521,6 @@ function computeAll(targetRaw, bpRaw, cnRaw) {
         actual = debtorActualIndex.get(normName) ?? null;
         supported = actual !== null;
       }
-    } else if (parsed.dim.toUpperCase() === 'KPI' && normalizeText(parsed.value).toUpperCase() === 'CN') {
-      console.log('[CN KPI row]', name, '| parsed:', JSON.stringify(parsed), '| normName:', normName, '| cnIndex has:', cnIndex.has(normName), '| cnIndex size:', cnIndex.size);
-      const cnVal = cnIndex.get(normName) ?? null;
-      actual = cnVal;
-      supported = actual !== null;
     } else if (bpCol && monthInfo) {
       supported = true;
       const key = normName + '||' + monthInfo.mm + '/' + monthInfo.yyyy;
@@ -578,19 +552,14 @@ async function loadData(showSpin) {
   if (showSpin) showSpinner('กำลังโหลดข้อมูลยอดขาย...');
   setLoading(true);
   try {
-    const [targetRaw, bpRaw, cnRaw] = await Promise.all([
+    const [targetRaw, bpRaw] = await Promise.all([
       loadFromSheets(TARGET_SHEET_ID, TARGET_SHEET_NAME),
       loadFromSheets(BP_SHEET_ID, BP_SHEET_NAME),
-      loadFromSheets(CN_SHEET_ID, CN_SHEET_NAME),
     ]);
     state.targetRaw = targetRaw;
     state.bpRaw = bpRaw;
-    state.cnRaw = cnRaw;
     setCache('targetCache', targetRaw);
-    state.rows = computeAll(targetRaw, bpRaw, cnRaw);
-    const _cnIdx = buildCnIndex(cnRaw);
-    const _cnKpiRows = targetRaw.filter(t=>{ const p=parseTargetName(t['ชื่อเป้าหมาย']); return p && p.dim.toUpperCase()==='KPI' && normalizeText(p.value).toUpperCase()==='CN'; });
-    showToast(`[DEBUG] CN sheet rows: ${cnRaw.length} | CN index: ${_cnIdx.size} | CN KPI rows in Target: ${_cnKpiRows.length}`, 'info');
+    state.rows = computeAll(targetRaw, bpRaw);
     buildFilterControls();
     renderAll();
   } catch (e) {
