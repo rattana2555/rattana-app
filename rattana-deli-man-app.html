@@ -741,7 +741,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.53';
+const APP_VERSION='3.54';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -5972,7 +5972,7 @@ async function syncJobsFromSheet(opts){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.52 (CN: คอลัมน์ 30 = ชื่อเซลล์ (เดิม พนักงานขนของ) เขียนจาก data.salesman) */
+const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.54 (CN: แก้สลับคอลัมน์ P/Q → หน่วย ก่อน ราคา ให้ตรงชีทจริง) */
 const SHEET_INPUT='บันทึกเที่ยวส่ง';
 const SHEET_CIN='บันทึกบิลและการชำระ';
 const SHEET_CN='CN';
@@ -5993,7 +5993,7 @@ const DISCORD_DEFAULT=''; // ห้องสำรอง (ว่าง = คล�
 const HEADERS_CN=['วัน เวลา','วันที่คืน','ชื่อ-สกุล','รหัสใบคุม','คลัง','ชื่อร้าน','รหัสร้าน',
   'ประเภทคืน','ประเภทบิล','เลขที่บิล DS',
   'ลำดับ','รวมรายการ',
-  'บาร์โค้ด','ชื่อสินค้า','จำนวน','ราคา','หน่วย','รวม',
+  'บาร์โค้ด','ชื่อสินค้า','จำนวน','หน่วย','ราคา','รวม',   // v3.54: สลับให้ตรงชีทจริง (P=หน่วย, Q=ราคา)
   'สาเหตุรับคืน','ผิดพลาดจาก',
   'หมายเหตุการคืน','ยอดรวมทั้งใบ','ภาพคืน',
   'สถานะคืน','อนุมัติคืน','ผู้อนุมัติ','วันอนุมัติ','หมายเหตุอนุมัติ',
@@ -6020,7 +6020,7 @@ const HEADERS_CIN=['เลขใบคุม','Doc_Date','Doc_No','Customer_Code
 function doGet(e){
   let drive='unknown';
   try{ DriveApp.getRootFolder().getName(); drive='OK'; }catch(err){ drive='NOT_AUTHORIZED'; }
-  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.52',drive:drive}))
+  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.54',drive:drive}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -6055,7 +6055,7 @@ function doPost(e){
         fmtColsOpen_(sh,['รหัสร้าน','เลขใบคุม','Doc_No'],'@');   // v3.35: เปิดปลาย คลุมแถวใหม่
         fmtColsOpen_(sh,['Lat','Lng'],'0.000000');
         fmtColsOpen_(sh,['วันเวลา'],'yyyy-mm-dd hh:mm:ss');
-        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.52'})).setMimeType(ContentService.MimeType.JSON);
+        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.54'})).setMimeType(ContentService.MimeType.JSON);
       }finally{ lock.releaseLock(); }
     }
 
@@ -6279,7 +6279,7 @@ function doPost(e){
       const cnRows=items.map(function(it,idx){
         const qty=parseFloat(it.qty)||0; const price=parseFloat(it.price)||0;
         return [now,now,data.driver||'',jobId,data.warehouse||'',data.customerName||'',String(data.customerCode||''),
-          data.returnType||'',data.billType||'',docNo,idx+1,items.length,String(it.barcode||''),it.name||'',qty,price,it.unit||'',qty*price,
+          data.returnType||'',data.billType||'',docNo,idx+1,items.length,String(it.barcode||''),it.name||'',qty,it.unit||'',price,qty*price,   // v3.54: หน่วย ก่อน ราคา (ตรงชีท)
           data.reason||'',data.errorFrom||'',data.note||'',total,photoUrl,'รออนุมัติ','','','','',data.driver||'',data.salesman||data.loader||''];   // v3.52: คอลัมน์ 30 = ชื่อเซลล์
       });
       if(cnRows.length) cnSh.getRange(cnSh.getLastRow()+1,1,cnRows.length,cnRows[0].length).setValues(cnRows);
@@ -6453,7 +6453,7 @@ function doPost(e){
       fmtColsOpen_(cinSh,['วัน+เวลา ที่ส่งสินค้า','U_ADD','วันที่โอนครั้งที่1','วันที่โอนครั้งที่2','แก้ไขเมื่อ','วันที่','วันเวลาอนุมัติ'],'yyyy-mm-dd hh:mm:ss');
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.52'}))
+    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.54'}))
       .setMimeType(ContentService.MimeType.JSON);
   }catch(err){
     return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err)}))
