@@ -238,7 +238,7 @@ body.dark .ptbl-td{border-color:var(--border)}
 <div class="page hidden" id="appScreen">
   <header>
     <div class="logo-text">RATTANA<span>·</span>SALES
-      <small>ยอดขายเทียบเป้าหมาย v1.11</small>
+      <small>ยอดขายเทียบเป้าหมาย v1.12</small>
     </div>
     <div class="flex gap-8" style="margin-left:auto">
       <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">⟳</button>
@@ -472,23 +472,8 @@ function buildBpIndex(bpRaw) {
   return idx;
 }
 
-function buildDebtorActualIndex(targetRaw) {
-  const idx = new Map();
-  targetRaw.forEach(t => {
-    const name = t['ชื่อ สกุล'];
-    const my = parseThaiMonthYear(t['เดือน']);
-    if (!name || !my) return;
-    const v = parseNum(t['SUM ของ จำนวนวันที่จ่ายเกิน']);
-    if (!v) return;
-    const key = normalizeName(name) + '||' + my.mm + '/' + my.yyyy;
-    if (!idx.has(key)) idx.set(key, v);
-  });
-  return idx;
-}
-
 function computeAll(targetRaw, bpRaw) {
   const bpIndex = buildBpIndex(bpRaw);
-  const debtorActualIndex = buildDebtorActualIndex(targetRaw);
   const rows = [];
   targetRaw.forEach(t => {
     const name = t['ชื่อ สกุล'];
@@ -520,8 +505,7 @@ function computeAll(targetRaw, bpRaw) {
         bucket.forEach(r => { if (r['Customer_Code']) custMap.set(r['Customer_Code'], (custMap.get(r['Customer_Code'])||0) + r._exvatcn2); });
         const qualifyingCount = [...custMap.values()].filter(s => s >= thresh).length;
         targetVal = Math.round(qualifyingCount / 2);
-        const debtorActual = debtorActualIndex.get(normName + '||' + monthInfo.mm + '/' + monthInfo.yyyy) || null;
-        actual = debtorActual;
+        actual = parseNum(t['SUM ของ จำนวนวันที่จ่ายเกิน']) || null;
         supported = actual !== null;
       }
     } else if (bpCol && monthInfo) {
