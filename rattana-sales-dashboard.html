@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Sales Dashboard v9.5</title>
+<title>Rattana Sales Dashboard v9.6</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -285,7 +285,7 @@ body.dark .pvol{color:var(--gold-light)}
     <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
       <div>
         <div class="logo-text">RATTANA <span>SALES</span></div>
-        <div style="font-size:11px;color:rgba(255,255,255,.5)">ยอดขายของฉัน <span style="color:var(--gold);font-weight:600">v9.5</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.5)">ยอดขายของฉัน <span style="color:var(--gold);font-weight:600">v9.6</span></div>
       </div>
     </div>
     <button class="icon-btn" onclick="refreshData()" id="btnRefresh" title="รีเฟรช">↻</button>
@@ -1532,23 +1532,32 @@ let productImageMap   = {}; // { Product_Name: imageUrl }
 async function loadLowStoreData() {
   showSpinner('กำลังโหลดข้อมูลร้านค้า…');
   try {
-    const allCust = await fetchSheet(CUSTOMER_SHEET_ID, CUSTOMER_SHEET_NAME);
-    const prefixes = ['คุณ ','นาย ','นาง ','นางสาว ','ด.ช. ','ด.ญ. '];
-    const strip = s => { let v=String(s||'').trim(); for(const p of prefixes) if(v.startsWith(p)) return v.slice(p.length).trim(); return v; };
-    const myName = String(currentUser?.name||'').trim();
-    // หา key จริงของคอลัมน์ เซลล์ผู้ดูแล และ รหัสบีพลัส (อาจมีช่องว่างต่างกัน)
-    const sampleKeys = allCust.length ? Object.keys(allCust[0]) : [];
-    const sellerCol  = sampleKeys.find(k => k.replace(/\s/g,'') === 'เซลล์ผู้ดูแล') || 'เซลล์ผู้ดูแล';
-    const codeCol    = sampleKeys.find(k => k.replace(/\s/g,'') === 'รหัสบีพลัส') || 'รหัสบีพลัส';
-    const nameCol    = sampleKeys.find(k => k.replace(/\s/g,'') === 'ชื่อร้านค้า') || 'ชื่อร้านค้า';
-    const routeCol   = sampleKeys.find(k => k.replace(/\s/g,'') === 'ชื่อรูท') || 'ชื่อรูท';
-    console.log(`[lowStore] columns found: seller="${sellerCol}", code="${codeCol}", name="${nameCol}", route="${routeCol}"`);
-    console.log(`[lowStore] myName="${myName}" | totalCust=${allCust.length} | sample seller:`, allCust.slice(0,3).map(r=>r[sellerCol]));
-    lowCustomerRows = allCust.filter(r => strip(r[sellerCol]||'') === myName);
-    lowCustomerRows._codeCol  = codeCol;
-    lowCustomerRows._nameCol  = nameCol;
-    lowCustomerRows._routeCol = routeCol;
-    console.log(`[lowStore] matched=${lowCustomerRows.length}`);
+    // ใช้ homeCustomerRows ที่โหลดและ filter ไว้แล้วจาก loadData()
+    // ถ้ายังไม่มีให้โหลดใหม่
+    if (homeCustomerRows.length > 0) {
+      lowCustomerRows = homeCustomerRows;
+      const sampleKeys = Object.keys(homeCustomerRows[0]);
+      const findCol = terms => sampleKeys.find(k => terms.some(t => k.replace(/[\s_]/g,'').toUpperCase().includes(t.toUpperCase())));
+      lowCustomerRows._codeCol  = homeCustomerRows._codeCol  || findCol(['รหัสบีพลัส','BPLUS']) || 'รหัสบีพลัส';
+      lowCustomerRows._nameCol  = homeCustomerRows._nameCol  || findCol(['ชื่อร้านค้า'])         || 'ชื่อร้านค้า';
+      lowCustomerRows._routeCol = homeCustomerRows._routeCol || findCol(['ชื่อรูท'])             || 'ชื่อรูท';
+      console.log(`[lowStore] using homeCustomerRows matched=${lowCustomerRows.length}`);
+    } else {
+      const allCust = await fetchSheet(CUSTOMER_SHEET_ID, CUSTOMER_SHEET_NAME);
+      const prefixes = ['คุณ ','นาย ','นาง ','นางสาว ','ด.ช. ','ด.ญ. '];
+      const strip = s => { let v=String(s||'').trim(); for(const p of prefixes) if(v.startsWith(p)) return v.slice(p.length).trim(); return v; };
+      const myName = String(currentUser?.name||'').trim();
+      const sampleKeys = allCust.length ? Object.keys(allCust[0]) : [];
+      const codeCol  = sampleKeys.find(k => k.replace(/\s/g,'') === 'รหัสบีพลัส') || 'รหัสบีพลัส';
+      const nameCol  = sampleKeys.find(k => k.replace(/\s/g,'') === 'ชื่อร้านค้า') || 'ชื่อร้านค้า';
+      const routeCol = sampleKeys.find(k => k.replace(/\s/g,'') === 'ชื่อรูท')     || 'ชื่อรูท';
+      const sellerCol= sampleKeys.find(k => k.replace(/\s/g,'') === 'เซลล์ผู้ดูแล')|| 'เซลล์ผู้ดูแล';
+      lowCustomerRows = allCust.filter(r => strip(r[sellerCol]||'') === myName);
+      lowCustomerRows._codeCol  = codeCol;
+      lowCustomerRows._nameCol  = nameCol;
+      lowCustomerRows._routeCol = routeCol;
+      console.log(`[lowStore] fresh fetch matched=${lowCustomerRows.length}`);
+    }
 
     // ดึงประวัติสินค้า 3 เดือนจาก All Sales Sheet
     showSpinner('กำลังโหลดประวัติสินค้า…');
@@ -1792,4 +1801,4 @@ function closeProdModal() {
 </script>
 </body>
 </html>
-<!-- v9.5 -->
+<!-- v9.6 -->
