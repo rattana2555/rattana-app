@@ -741,7 +741,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.58';
+const APP_VERSION='3.59';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -755,7 +755,7 @@ const CFG = {
   jobsSheetName:'Jobs',
   productsSheetId:'16mYDqAqqJma-_0vCIAajy6bcjdOZ7F6VagxkdkqAB2I',
   productsSheetName:'Sheet1',
-  billDetailSheetName:'รายละเอียด',
+  // v3.59: รายละเอียดบิลย้ายไปดึงจากไฟล์ Order ชีท DS_DC ตรงๆ (ดู DSDC_SRC_ID) — ไม่ใช้ชีท "รายละเอียด" แล้ว
   cacheTTL:5*60*1000,
   storageKey:'d_delivery_v1',
   defaultAppsUrl:'https://script.google.com/macros/s/AKfycbwLs22hQFQdcUYjO8xzFPA3DydtBi5YUdVq6u6r8Iev_ltZdSLUj5h2H59uZfd7WtmC/exec',
@@ -941,7 +941,7 @@ const SHEET_CACHE_TTL=5*60*1000;          // default 5 นาที
 const CACHE_TTL_LONG=24*60*60*1000;       // 24 ชม. — ลูกค้า/สินค้า/รายละเอียดบิล (ไม่ค่อยเปลี่ยน)
 const CACHE_TTL_SYNC=30*1000;             // 30 วิ — งานอนุมัติ (ต้อง fresh บ่อย แต่ throttle กันโหลดถี่)
 // v3.36: bump คีย์ cache รายละเอียดบิล → ทิ้ง cache เก่าที่ค้าง/ว่างทุกเครื่อง โหลดใหม่รอบเดียว (แก้ CN ไม่ดึงรายการสินค้าในบิล)
-const BILLDETAILS_CACHE_KEY='billDetails_v336';
+const BILLDETAILS_CACHE_KEY='billDetails_v359dsdc';   // v3.59: bump — เปลี่ยนต้นทางเป็น DS_DC (ดึงเฉพาะร้าน/บิล) ทิ้ง cache ก้อนเก่า
 const PRODUCTS_CACHE_KEY='products_v348img';   // v3.48: bump cache → เก็บรูปสินค้า (SKU_USAGE) + index บาร์โค้ดสำหรับสแกน
 function cacheKey(key){ return 'rdm_cache_'+key; }
 function getCachedSheet(key,ttl){
@@ -1183,39 +1183,69 @@ function docOptionsFor(code){
   });
   return [...fromBills,...fromDetail].filter((v,i,a)=>v&&a.indexOf(v)===i);
 }
-async function loadBillDetails(force){
-  if(state._loadingBD) return;   // v2.17: กันโหลดซ้อน (เคยทำให้ข้อมูลเบิ้ล)
-  if(!force && Object.keys(state.billDetails).length) return;
-  // v2.53: 24h cache — v3.36: cache ว่าง ({}) ถือว่า miss จะได้ fetch ใหม่ (กันค้างว่าง 24 ชม. → CN ไม่ดึงรายการสินค้าในบิล)
-  if(!force){
-    const cached=getCachedSheet(BILLDETAILS_CACHE_KEY,CACHE_TTL_LONG);
-    if(cached && Object.keys(cached).length){ state.billDetails=cached; afterBillDetailsLoaded_(); return; }
-  }
-  state._loadingBD=true;
+/* ===== v3.59: รายละเอียดบิล — ดึงจากไฟล์ Order ชีท DS_DC "ตรงๆ" (ตัดขั้นตอน sync → ชีทรายละเอียด ออก) =====
+   DS_DC ทั้งชีท = ~265,000 แถว / ~43MB → โหลดทั้งก้อนไม่ไหวบนมือถือ
+   จึงใช้ gviz query ดึงเฉพาะ "ร้าน" หรือ "บิล" ที่เปิดดูจริง (ร้านละ ~7KB, บิลละ ~1KB)
+   ผลลัพธ์ merge เข้า state.billDetails รูปแบบเดิม (doc → [items]) → โค้ดส่วนอื่นใช้ได้เหมือนเดิม */
+const DSDC_SRC_ID='1NO8sHyDxwHTRqgcLFCxq_g_Rr09lfe4gt_odwkIgiB0';
+const DSDC_SHEET='DS_DC';
+const DSDC_COLS='A,B,C,E,F,G,H,I,J,K,M,N';   // DI_DATE,DI_REF,AR_CODE,SLMN_CODE,SLMN_NAME,WL_CODE,TRD_SH_CODE,SKU_NAME,TRD_UTQNAME,TRD_QTY,TRD_U_PRC,TRD_G_AMT
+const _dsdcDone={};                          // จำ query ที่ดึงแล้ว กันยิงซ้ำ
+function _dsdcEsc(v){ return String(v||'').replace(/'/g,''); }   // กัน quote ทำ query แตก
+async function fetchDsDc_(where){
+  const tq='select '+DSDC_COLS+' where '+where;
+  const url='https://docs.google.com/spreadsheets/d/'+DSDC_SRC_ID+'/gviz/tq?tqx=out:csv&sheet='+encodeURIComponent(DSDC_SHEET)+'&tq='+encodeURIComponent(tq)+'&_cb='+Date.now();
+  const ctrl=('AbortController' in window)?new AbortController():null;
+  const to=setTimeout(()=>{ if(ctrl) ctrl.abort(); },45000);   // v3.59: query ปกติ ~2-3 วิ แต่ครั้งแรกที่ Google ยังไม่ warm ชีท อาจถึง ~30 วิ
   try{
-    const rows=await fetchSheet(CFG.jobsSheetId,CFG.billDetailSheetName,force?{fresh:true}:undefined);
-    const acc={};   // v2.17: สร้างก้อนใหม่แล้วค่อย assign — กัน push เบิ้ลถาวร
-    rows.forEach(r=>{
-      const doc=cleanCell(r['DI_REF']); if(!doc) return;
-      if(!acc[doc]) acc[doc]=[];
-      acc[doc].push({
-        code:cleanCell(r['AR_CODE']||''),     // v2.15: รหัสร้าน (ใช้จับตัวเลือกเลขที่เอกสาร)
-        wh:cleanCell(r['WL_CODE']||''),       // v2.18: คลังของบิล (ใช้เป็น fallback ตอนหา job ไม่เจอ)
-        salesman:cleanCell(r['SLMN_NAME']||''),      // v3.52: ชื่อเซลล์ (ดึงมาเติมในหน้าทำ CN)
-        salesmanCode:cleanCell(r['SLMN_CODE']||''),  // v3.52
-        barcode:cleanCell(r['TRD_SH_CODE']),
-        sku:cleanCell(r['SKU_NAME']),
-        unit:cleanCell(r['TRD_UTQNAME']),
-        qty:parseFloat(cleanCell(r['TRD_QTY']||'0').replace(/,/g,''))||0,      // v2.13: EA → TRD_QTY
-        price:parseFloat(cleanCell(r['TRD_U_PRC']||'0').replace(/,/g,''))||0,  // v2.13: ราคาต่อหน่วย
-        amount:parseFloat(cleanCell(r['TRD_G_AMT']||'0').replace(/,/g,''))||0,
-      });
+    const res=await fetch(url,{cache:'no-store',signal:ctrl?ctrl.signal:undefined});
+    clearTimeout(to);
+    if(!res.ok) throw new Error('DS_DC HTTP '+res.status);
+    return parseCsv(await res.text());
+  }catch(e){ clearTimeout(to); throw e; }
+}
+function mergeDsDc_(rows){
+  const acc={};
+  (rows||[]).forEach(r=>{
+    const doc=cleanCell(r['DI_REF']); if(!doc) return;
+    if(!acc[doc]) acc[doc]=[];
+    acc[doc].push({
+      code:cleanCell(r['AR_CODE']||''),            // รหัสร้าน (ใช้จับตัวเลือกเลขที่เอกสาร)
+      wh:cleanCell(r['WL_CODE']||''),              // คลังของบิล
+      salesman:cleanCell(r['SLMN_NAME']||''),      // v3.52: ชื่อเซลล์
+      salesmanCode:cleanCell(r['SLMN_CODE']||''),  // v3.52
+      barcode:cleanCell(r['TRD_SH_CODE']),
+      sku:cleanCell(r['SKU_NAME']),
+      unit:cleanCell(r['TRD_UTQNAME']),
+      qty:parseFloat(cleanCell(r['TRD_QTY']||'0').replace(/,/g,''))||0,
+      price:parseFloat(cleanCell(r['TRD_U_PRC']||'0').replace(/,/g,''))||0,
+      amount:parseFloat(cleanCell(r['TRD_G_AMT']||'0').replace(/,/g,''))||0,
     });
-    state.billDetails=acc;
-    if(Object.keys(acc).length) setCachedSheet(BILLDETAILS_CACHE_KEY,state.billDetails);   // v3.36: อย่า cache ก้อนว่าง (กันค้างว่าง)
-    afterBillDetailsLoaded_();
-  }catch(e){ console.warn('loadBillDetails failed:',e); }
-  finally{ state._loadingBD=false; }
+  });
+  Object.keys(acc).forEach(d=>{ state.billDetails[d]=acc[d]; });   // แทนที่ทีละบิล (ดึงซ้ำก็ไม่เบิ้ล)
+  try{ setCachedSheet(BILLDETAILS_CACHE_KEY,state.billDetails); }catch(e){}
+  return Object.keys(acc).length;
+}
+/* ดึงรายละเอียดของ "ร้าน" → ได้ทุกบิลของร้านนั้น (ใช้ทั้งตัวเลือกเลขที่เอกสาร + รายการสินค้าในบิล) */
+async function ensureBillDetailsForStore_(code){
+  code=String(code||'').trim(); if(!code) return;
+  const k='C|'+code; if(_dsdcDone[k]) return; _dsdcDone[k]=1;
+  try{ mergeDsDc_(await fetchDsDc_("C = '"+_dsdcEsc(code)+"'")); afterBillDetailsLoaded_(); }
+  catch(e){ delete _dsdcDone[k]; console.warn('DS_DC by store failed:',e); }
+}
+/* ดึงรายละเอียดของ "บิลเดียว" */
+async function ensureBillDetailsForDoc_(doc){
+  doc=String(doc||'').trim(); if(!doc) return;
+  if((state.billDetails[doc]||[]).length) return;
+  const k='B|'+doc; if(_dsdcDone[k]) return; _dsdcDone[k]=1;
+  try{ mergeDsDc_(await fetchDsDc_("B = '"+_dsdcEsc(doc)+"'")); afterBillDetailsLoaded_(); }
+  catch(e){ delete _dsdcDone[k]; console.warn('DS_DC by doc failed:',e); }
+}
+/* v3.59: ล้างรายละเอียดที่ดึงไว้ (ปุ่ม sync ในหน้าตั้งค่า) → ครั้งถัดไปดึงสดจาก DS_DC */
+function resetBillDetails_(){
+  state.billDetails={};
+  Object.keys(_dsdcDone).forEach(k=>delete _dsdcDone[k]);
+  try{ localStorage.removeItem(cacheKey(BILLDETAILS_CACHE_KEY)); }catch(e){}
 }
 
 async function loadCustomers(){
@@ -2015,7 +2045,9 @@ function renderReturn(){
   }
   // โหลดสินค้า + รายละเอียดบิลครั้งแรก (background, ไม่บล็อก UI)
   if(!state.products.length) loadProducts();
-  if(!Object.keys(state.billDetails).length) loadBillDetails();
+  // v3.59: ดึงรายละเอียดจาก DS_DC เฉพาะร้าน/บิลที่เปิดดู (ไม่โหลดทั้งชีทแล้ว)
+  if(returnState.customerCode) ensureBillDetailsForStore_(returnState.customerCode);
+  if(returnState.docNo) ensureBillDetailsForDoc_(returnState.docNo);
   if(!Array.isArray(state.cnRef)) loadCNRef();   // v2.2: รายการที่เซลล์สั่งเก็บคืน (ชีท CN ในไฟล์ Customer)
   const drivers=state.drivers.map(d=>{
     const nk=cleanCell(d['ชื่อเล่น']); const fn=cleanCell(d['ชื่อ - สกุล']||d['ชื่อ-สกุล']||'');
@@ -2145,6 +2177,8 @@ function renderReturn(){
       const cust=state.customers.find(c=>c.code===returnState.customerCode);
       returnState.customerName=cust?cust.name:'';
       returnState._docOptions=docOptionsFor(returnState.customerCode);   // v2.15: รวมใบคุม + รายละเอียด
+      // v3.59: เลือกร้าน → ดึงบิลของร้านนี้จาก DS_DC (เสร็จแล้ว afterBillDetailsLoaded_ จะเติมตัวเลือกเลขที่เอกสารให้เอง)
+      ensureBillDetailsForStore_(returnState.customerCode);
       saveReturnDraft();
       renderCNRefPanel();   // v2.2: โชว์รายการที่เซลล์สั่งเก็บของร้านนี้
     });
@@ -2778,6 +2812,7 @@ function startCNFromBill(idx){
     _draftChecked:true, _editing:null, _view:'form'
   });
   state._cnOrigin={jobId:j.id, billIdx:idx};   // v2.91: จำที่มา
+  ensureBillDetailsForStore_(b.code);          // v3.59: ดึงบิลของร้านนี้จาก DS_DC (ได้ทั้งรายการสินค้า + ชื่อเซลล์)
   switchTab('sec-returns');
   showToast('เริ่มทำ CN สำหรับบิล '+b.doc+' — กรอกรายการที่คืน แล้วกด "บันทึกการรับคืน"','info');
 }
@@ -3803,7 +3838,7 @@ function openScan(idx){
   buildScanItems(b);
 }
 async function buildScanItems(b){
-  if(!Object.keys(state.billDetails).length){ try{ await loadBillDetails(); }catch(e){} }
+  try{ await ensureBillDetailsForDoc_(b.doc); }catch(e){}   // v3.59: ดึงเฉพาะบิลนี้จาก DS_DC
   if(!state.products.length){ try{ await loadProducts(); }catch(e){} }
   const rows=state.billDetails[b.doc]||[];
   const byName={}; const order=[];   // v2.32: รวมตามชื่อสินค้า + เก็บจำนวน/ยอด เพื่อโชว์ detail บิล
@@ -4709,6 +4744,7 @@ function openCustomer(idx){
 /* ========== CANNOT DELIVER ========== */
 function openCannot(idx){
   const j=state.jobs.find(x=>x.id===state.activeJobId);
+  try{ ensureBillDetailsForDoc_((j.bills[idx]||{}).doc); }catch(e){}   // v3.59: ดึงรายละเอียดบิลนี้จาก DS_DC (ใช้หาคลังของบิล)
   const wh=j.warehouse||'W1';
   const drivers=state.drivers.filter(d=>cleanCell(d['W'])===wh&&cleanCell(d['ชื่อเล่น'])!==state.user.nickname);
   $('cannotBody').innerHTML=`
@@ -5543,8 +5579,8 @@ async function manualSyncJadRot(){
       const dc=(r.resp&&r.resp.dsDc)||0;
       showToast(`✓ Sync สำเร็จ · ใบคุม ${jr} แถว · รายละเอียด ${dc} แถว`,'success');
       try{ await syncJobsFromSheet(); }catch(e){}
-      // v3.36: sync รายละเอียด ใหม่แล้ว → ล้าง cache + โหลด billDetails ใหม่ (force) ให้ CN ดึงรายการสินค้าในบิลได้ทันที
-      try{ state.billDetails={}; try{ localStorage.removeItem(cacheKey(BILLDETAILS_CACHE_KEY)); }catch(_){} await loadBillDetails(true); }catch(e){}
+      // v3.59: รายละเอียดดึงสดจาก DS_DC อยู่แล้ว — แค่ล้างของที่ดึงไว้ ครั้งถัดไปจะดึงใหม่
+      try{ resetBillDetails_(); }catch(e){}
     } else {
       showToast('✗ Sync ไม่สำเร็จ: '+(r.error||'-'),'error');
     }
