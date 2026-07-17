@@ -741,7 +741,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.63';
+const APP_VERSION='3.65';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -3323,14 +3323,11 @@ function renderDriverHome(){
         <button type="button" class="btn btn-outline btn-sm" onclick="resetDriverName_()" title="ใช้ชื่อฉัน">🔄</button>
       </div>
     </div>
-    <div class="field">
-      <label>ผู้ช่วย 1</label>
-      ${buildDD('ddHelper1',helperItems,'-- เลือกผู้ช่วย --')}
-    </div>
-    <div class="field">
-      <label>ผู้ช่วย 2</label>
-      ${buildDD('ddHelper2',helperItems,'-- (ถ้ามี) --')}
-    </div>
+    ${[1,2,3,4,5,6].map(n=>`
+    <div class="field" id="helperSlot_${n}"${n===1?'':' style="display:none"'}>
+      <label>ผู้ช่วย ${n}</label>
+      ${buildDD('ddHelper'+n,[{v:'',l:'— ไม่เลือก —'}].concat(helperItems),helperPlaceholder_(n))}
+    </div>`).join('')}
     <div class="field">
       <label>ผู้ช่วยที่ไม่มีในรายชื่อ</label>
       <input class="input" id="helperExtra" placeholder="พิมพ์ชื่อผู้ช่วยอื่น (ถ้ามี)">
@@ -3358,7 +3355,49 @@ function renderDriverHome(){
       const orig=li.onclick; li.onclick=(e)=>{ if(orig) orig.call(li,e); saveDriverName_(li.dataset.v); };
     });
   }
+  // v3.64: เลือกผู้ช่วยช่องไหน → ช่องถัดไปโผล่เอง (สูงสุด 6 ช่อง = คอลัมน์ ผู้ช่วย1-6 ในชีท)
+  HELPER_SLOTS.forEach(n=>{
+    const hp=document.getElementById('ddHelper'+n+'_panel');
+    if(!hp) return;
+    hp.querySelectorAll('li[data-v]').forEach(li=>{
+      const orig=li.onclick; li.onclick=(e)=>{ if(orig) orig.call(li,e); onHelperPicked_(n); };
+    });
+  });
+  refreshHelperSlots_();
   previewPickupBills();
+}
+
+/* ===== v3.64: ช่องผู้ช่วย 1-6 (เดิมมีแค่ 2) — ชีทมีคอลัมน์ ผู้ช่วย1-6 รองรับอยู่แล้วตั้งแต่ v3.45 =====
+   โชว์เท่าที่ใช้: ช่องถัดจากช่องสุดท้ายที่เลือกไว้จะโผล่เอง — งานปกติมีผู้ช่วย 1-2 คน ฟอร์มจะไม่ยาวเกินจำเป็น */
+const HELPER_SLOTS=[1,2,3,4,5,6];
+/* v3.65: ค่า พนง.ใหม่ ที่จะส่งขึ้นชีท — รู้ค่าจริงเท่านั้นถึงส่ง (undefined → JSON.stringify ตัดคีย์ทิ้ง → GAS คงค่าเดิมในชีท)
+   งานเก่าใน localStorage ที่ยังไม่มี team.newStaff จะไม่ล้างของที่คนอื่นกรอกไว้ */
+function newStaffPayload_(j){ return (j&&j.team&&typeof j.team.newStaff==='string')?j.team.newStaff:undefined; }
+function helperPlaceholder_(n){ return n===1?'-- เลือกผู้ช่วย --':'-- (ถ้ามี) --'; }
+function helperSlotValues_(){ return HELPER_SLOTS.map(n=>ddValue('ddHelper'+n)); }
+function refreshHelperSlots_(){
+  const vals=helperSlotValues_();
+  let lastFilled=0;
+  vals.forEach((v,i)=>{ if(v) lastFilled=i+1; });
+  const visible=Math.min(HELPER_SLOTS.length,lastFilled+1);
+  HELPER_SLOTS.forEach(n=>{
+    const el=document.getElementById('helperSlot_'+n);
+    if(el) el.style.display=(n<=visible)?'':'none';
+  });
+}
+function onHelperPicked_(n){
+  const v=ddValue('ddHelper'+n);
+  if(!v){
+    ddPick('ddHelper'+n,'',helperPlaceholder_(n));   // เลือก "— ไม่เลือก —" → ล้างช่อง คืน label เดิม
+  } else {
+    // กันเลือกคนเดิมซ้ำสองช่อง — เตือนทันทีตอนเลือก แล้วคืนช่องนี้เป็นว่าง
+    const dup=HELPER_SLOTS.find(m=>m!==n&&ddValue('ddHelper'+m)===v);
+    if(dup){
+      ddPick('ddHelper'+n,'',helperPlaceholder_(n));
+      showToast(`เลือก ${v} ไว้ที่ผู้ช่วย ${dup} แล้ว`,'warning');
+    }
+  }
+  refreshHelperSlots_();
 }
 
 function previewPickupBills(){
@@ -3495,18 +3534,23 @@ async function confirmPickup(){   // v3.43: async — งานส่งซ้�
     if(!state.jobs.some(x=>x.id===j.id)) state.jobs.push(j);
   }
   // v3.31: ผู้ช่วยทุกช่อง (dropdown + พิมพ์เอง) → normalize เป็น "ชื่อ-สกุล (ชื่อเล่น)" เหมือนคนขับ
-  const h1=expandPersonName_(ddValue('ddHelper1'));
-  const h2=expandPersonName_(ddValue('ddHelper2'));
-  const hExtra=expandPersonName_($('helperExtra').value.trim());
-  if(h1&&h2&&h1===h2){ showToast('ผู้ช่วย 1 กับ 2 ต้องไม่ซ้ำกัน','warning'); return; }
+  // v3.64: อ่านครบ 6 ช่อง (เดิมอ่านแค่ 2 → ชีทมีคอลัมน์ ผู้ช่วย1-6 แต่ใส่ได้จริงแค่ 3 คน)
+  // v3.65: "ผู้ช่วยที่ไม่มีในรายชื่อ" → คอลัมน์ พนง.ใหม่ (เดิมยัดลง ผู้ช่วย3)
+  const newStaff=expandPersonName_($('helperExtra').value.trim());
+  const helpers=[];
+  HELPER_SLOTS.map(n=>expandPersonName_(ddValue('ddHelper'+n)))
+    .forEach(x=>{ if(x&&helpers.indexOf(x)<0) helpers.push(x); });   // ตัดชื่อซ้ำกันเหนียว (ปกติกันไว้ตั้งแต่ตอนเลือกแล้ว)
   const pattern=document.querySelector('#pickupPattern .pill.active')?.dataset.v||PICKUP_PATTERNS[0];
-  const helpers=[h1,h2,hExtra].filter(Boolean);
   // v2.93/v2.94: driver — จาก dropdown ddDriver (เลือกได้จากในคลัง) fallback = user.displayName
   const picked=ddValue('ddDriver')||'';
   const driverDisplay=expandPersonName_(picked||state.user.displayName||state.user.nickname||state.user.name);
   saveDriverName_(picked);   // จำไว้ต่ออีเมล
-  j.team={driver:driverDisplay,helper:helpers.join(', '),helper1:h1,helper2:h2,helperExtra:hExtra,plate,pattern};
-  j.driver=driverDisplay; j.helper=helpers.join(', '); j.plate=plate; j.pickup=pattern;
+  // v3.64: helperList = แหล่งจริง (payload ทุกตัวใช้ก่อน) — helper1/2/Extra เก็บไว้ให้ตรงกับที่ loadJobsFromSheet อ่านกลับ (ผู้ช่วย1/2/3)
+  // v3.65: newStaff = "ผู้ช่วยที่ไม่มีในรายชื่อ" → ลงคอลัมน์ พนง.ใหม่ (ไม่นับรวมใน ผู้ช่วย1-6) แต่ยังโชว์รวมในแบดจ์คนบนรถ
+  j.team={driver:driverDisplay,helper:helpers.concat(newStaff?[newStaff]:[]).join(', '),
+    helper1:helpers[0]||'',helper2:helpers[1]||'',helperExtra:helpers[2]||'',
+    helperList:helpers,newStaff,plate,pattern};
+  j.driver=driverDisplay; j.helper=j.team.helper; j.plate=plate; j.pickup=pattern;
   j.status='in_progress';
   j.startedAt=Date.now();
   state.activeJobId=j.id;
@@ -4608,6 +4652,7 @@ function saveBillWithVerify_(j,b,saveBtn,changedDocs){
     : (x=>x.status&&x.status!=='pending');
   const payload={action:'save_job',jobId:j.id,status:j.status,team:j.team,
     helperList:(j.team&&Array.isArray(j.team.helperList)&&j.team.helperList.length)?j.team.helperList:(j.team?[j.team.helper1,j.team.helper2,j.team.helperExtra].filter(Boolean):[]),   // v3.45: ส่งชื่อผู้ช่วยชัดเจน กันถูกลบตอนบันทึกบิล
+    newStaff:newStaffPayload_(j),   // v3.65: พนง.ใหม่ — ไม่รู้ค่า = ไม่ส่งคีย์ (GAS คงค่าเดิมในชีท)
     warehouse:j.warehouse||'W1',special:j.special||null,
     startedAt:j.startedAt,submittedAt:j.submittedAt,approvedAt:j.approvedAt,approvedBy:j.approvedBy,rejectedAt:j.rejectedAt,rejectedBy:j.rejectedBy,rejectReason:j.rejectReason,
     bills:j.bills.filter(billFilter).map(x=>({doc:x.doc,docDate:x.docDate,code:x.code,name:x.name,salesman:x.salesman,salesmanCode:x.salesmanCode,amount:x.amount,status:x.status,isCN:!!x.isCN,failReason:x.failReason||'',nextResp:x.nextResp||'',note:x.note||'',creditDays:x.creditDays||0,payment:x.payment,total:payTotal(x.payment),palletCount:x.palletCount||'',amountPerPallet:x.amountPerPallet||'',amountTotal:x.amountTotal||'',savedAt:x.savedAt}))};
@@ -5437,6 +5482,7 @@ async function approveJob(id){
     // v2.42: verify sheet write ก่อนสลับหน้า
     const payload={action:'save_job',jobId:j.id,status:j.status,team:j.team,
       helperList:(j.team&&Array.isArray(j.team.helperList)&&j.team.helperList.length)?j.team.helperList:(j.team?[j.team.helper1,j.team.helper2,j.team.helperExtra].filter(Boolean):[]),   // v3.45: ส่งชื่อผู้ช่วยชัดเจน กันถูกลบตอนอนุมัติ
+      newStaff:newStaffPayload_(j),   // v3.65: พนง.ใหม่ — ไม่รู้ค่า = ไม่ส่งคีย์ (GAS คงค่าเดิม)
       warehouse:j.warehouse||'W1',special:j.special||null,
       startedAt:j.startedAt,submittedAt:j.submittedAt,approvedAt:j.approvedAt,approvedBy:j.approvedBy,rejectedAt:j.rejectedAt,rejectedBy:j.rejectedBy,rejectReason:j.rejectReason,
       bills:j.bills.filter(x=>x.status&&x.status!=='pending').map(x=>({doc:x.doc,docDate:x.docDate,code:x.code,name:x.name,salesman:x.salesman,salesmanCode:x.salesmanCode,amount:x.amount,status:x.status,isCN:!!x.isCN,failReason:x.failReason||'',nextResp:x.nextResp||'',note:x.note||'',creditDays:x.creditDays||0,payment:x.payment,total:payTotal(x.payment),palletCount:x.palletCount||'',amountPerPallet:x.amountPerPallet||'',amountTotal:x.amountTotal||'',savedAt:x.savedAt}))};
@@ -5806,6 +5852,7 @@ async function syncToSheets(job){
     status:job.status,
     team:job.team,
     helperList:(job.team&&Array.isArray(job.team.helperList)&&job.team.helperList.length)?job.team.helperList:(job.team?[job.team.helper1,job.team.helper2,job.team.helperExtra].filter(Boolean):[]),   // v3.45: ส่งชื่อผู้ช่วยชัดเจน กันถูกลบ
+    newStaff:newStaffPayload_(job),   // v3.65: พนง.ใหม่ — ไม่รู้ค่า = ไม่ส่งคีย์ (GAS คงค่าเดิม)
     warehouse:job.warehouse||'W1',
     special:job.special||null,
     startedAt:job.startedAt,
@@ -5935,6 +5982,7 @@ async function loadJobsFromSheet(){
           helper2:cleanCell(inRow['ผู้ช่วย2']),
           helperExtra:cleanCell(inRow['ผู้ช่วย3']),
           helperList:[1,2,3,4,5,6].map(i=>cleanCell(inRow['ผู้ช่วย'+i])).filter(Boolean),
+          newStaff:cleanCell(inRow['พนง.ใหม่']),   // v3.65: อ่าน พนง.ใหม่ กลับมา → re-save ส่งกลับ ไม่ถูกล้าง (บั๊กเดียวกับผู้ช่วยหายใน v3.45)
           plate:cleanCell(inRow['ทะเบียน']),
           pattern:cleanCell(inRow['การส่ง']),
         },
@@ -6069,7 +6117,7 @@ async function syncJobsFromSheet(opts){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.60 (sync เฉพาะ ใบคุม — ตัด sync DS_DC → รายละเอียด ออก, แอปดึง DS_DC ตรงๆ) */
+const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.65 (พนง.ใหม่: เขียนเฉพาะเมื่อแอปส่งค่ามา — เดิมล้างเป็นค่าว่างทุกครั้งที่บันทึก) */
 const SHEET_INPUT='บันทึกเที่ยวส่ง';
 const SHEET_CIN='บันทึกบิลและการชำระ';
 const SHEET_CN='CN';
@@ -6117,7 +6165,7 @@ const HEADERS_CIN=['เลขใบคุม','Doc_Date','Doc_No','Customer_Code
 function doGet(e){
   let drive='unknown';
   try{ DriveApp.getRootFolder().getName(); drive='OK'; }catch(err){ drive='NOT_AUTHORIZED'; }
-  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.60',drive:drive}))
+  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.65',drive:drive}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -6152,7 +6200,7 @@ function doPost(e){
         fmtColsOpen_(sh,['รหัสร้าน','เลขใบคุม','Doc_No'],'@');   // v3.35: เปิดปลาย คลุมแถวใหม่
         fmtColsOpen_(sh,['Lat','Lng'],'0.000000');
         fmtColsOpen_(sh,['วันเวลา'],'yyyy-mm-dd hh:mm:ss');
-        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.60'})).setMimeType(ContentService.MimeType.JSON);
+        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.65'})).setMimeType(ContentService.MimeType.JSON);
       }finally{ lock.releaseLock(); }
     }
 
@@ -6412,7 +6460,9 @@ function doPost(e){
       inObj['ผู้ช่วย1']=h[0]; inObj['ผู้ช่วย2']=h[1]; inObj['ผู้ช่วย3']=h[2];
       inObj['ผู้ช่วย4']=h[3]; inObj['ผู้ช่วย5']=h[4]; inObj['ผู้ช่วย6']=h[5];
     }
-    inObj['พนง.ใหม่']=data.newStaff||'';
+    // v3.65: เขียน พนง.ใหม่ เฉพาะเมื่อแอปส่งค่ามาจริง — payload เก่าไม่ส่งคีย์นี้ (undefined) ต้องคงค่าเดิมในชีท ไม่ใช่ล้างทิ้ง
+    //   (เดิม data.newStaff||'' → ทุกการบันทึกล้างคอลัมน์นี้เป็นค่าว่างเสมอ เพราะแอปไม่เคยส่ง newStaff มาเลย)
+    if(data.newStaff!==undefined) inObj['พนง.ใหม่']=data.newStaff;
     inObj['การส่ง']=team.pattern||'';
     inObj['ส่งพิเศษ']=sp.type||'';
     inObj['หมายเหตุขน']=sp.item||'';
@@ -6549,7 +6599,7 @@ function doPost(e){
       fmtColsOpen_(cinSh,['วัน+เวลา ที่ส่งสินค้า','U_ADD','วันที่โอนครั้งที่1','วันที่โอนครั้งที่2','แก้ไขเมื่อ','วันที่','วันเวลาอนุมัติ'],'yyyy-mm-dd hh:mm:ss');
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.60'}))
+    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.65'}))
       .setMimeType(ContentService.MimeType.JSON);
   }catch(err){
     return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err)}))
