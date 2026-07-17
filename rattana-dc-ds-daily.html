@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.4</title>
+<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.5</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -124,7 +124,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
 
 /* badges */
 .badge{display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap}
-.badge-green{background:var(--green-bg);color:var(--green)}.badge-orange{background:var(--orange-bg);color:var(--orange)}.badge-blue{background:var(--blue-light);color:var(--blue)}.badge-gray{background:var(--bg);color:var(--muted);border:1px solid var(--border)}
+.badge-green{background:var(--green-bg);color:var(--green)}.badge-orange{background:var(--orange-bg);color:var(--orange)}.badge-partial{background:#FFF8E1;color:#F57F17;border:1px solid #FFE082}.badge-blue{background:var(--blue-light);color:var(--blue)}.badge-gray{background:var(--bg);color:var(--muted);border:1px solid var(--border)}
 
 /* section header */
 .sec-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
@@ -134,7 +134,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
 /* invoice card */
 .inv-card{background:var(--card);border-radius:var(--radius-md);border:1px solid var(--border);padding:14px 16px;margin:0 14px 10px;cursor:pointer;transition:box-shadow .15s;position:relative;overflow:hidden}
 .inv-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:4px 0 0 4px}
-.inv-card.ok::before{background:var(--green)}.inv-card.pending::before{background:var(--orange)}
+.inv-card.ok::before{background:var(--green)}.inv-card.partial::before{background:#F9A825}.inv-card.pending::before{background:var(--orange)}
 .inv-card:active{box-shadow:var(--shadow-md)}
 .ic-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px}
 .ic-store{font-size:14px;font-weight:700;flex:1;line-height:1.3}
@@ -276,7 +276,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
       <div class="sb-item" id="sb-report" onclick="dskGoto('dsk-report')"><span class="si">📊</span>รายงาน</div>
       <div class="sb-item" id="sb-settings" onclick="dskGoto('dsk-settings')"><span class="si">⚙️</span>ตั้งค่า</div>
     </div>
-    <div class="sb-ver">v3.4 · 2026-07-17</div>
+    <div class="sb-ver">v3.5 · 2026-07-17</div>
   </nav>
 
   <div id="mainCol">
@@ -374,7 +374,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
             <div class="ss-title">Export</div>
             <div class="ss-row"><div><div class="ss-label">ส่งออก Excel</div><div class="ss-sub">ข้อมูลที่กรองไว้</div></div><button class="btn btn-sm btn-success" onclick="exportExcel()">⬇ Excel</button></div>
           </div>
-          <div style="margin-top:20px;font-size:11px;color:var(--muted)">ตรวจส่วนลด DC/DS รัตนไพบูลย์ <b>v3.4</b> · 2026-07-17</div>
+          <div style="margin-top:20px;font-size:11px;color:var(--muted)">ตรวจส่วนลด DC/DS รัตนไพบูลย์ <b>v3.5</b> · 2026-07-17</div>
         </div>
 
       </div><!-- /dsk-screens -->
@@ -443,7 +443,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
               <div class="ss-title">Export</div>
               <div class="ss-row"><div><div class="ss-label">ส่งออก Excel</div></div><button class="btn btn-sm btn-success" onclick="exportExcel()">⬇ Excel</button></div>
             </div>
-            <div style="margin-top:20px;font-size:11px;color:var(--muted);text-align:center">ตรวจส่วนลด DC/DS v3.4 · 2026-07-17</div>
+            <div style="margin-top:20px;font-size:11px;color:var(--muted);text-align:center">ตรวจส่วนลด DC/DS v3.5 · 2026-07-17</div>
           </div>
         </div>
 
@@ -565,8 +565,11 @@ function mkInvs(data){
 }
 
 function invSt(inv){
-  if(inv.free>0)return{key:'ok',label:'ถูกต้อง',cls:'badge-green'};
-  return{key:'pending',label:'รอตรวจสอบ',cls:'badge-orange'};
+  const totalLines=inv.lines.length;
+  const linesWithFree=inv.lines.filter(r=>parseInt(r['TRD_Q_FREE'])>0).length;
+  if(linesWithFree===0)return{key:'pending',label:'รอตรวจสอบ',cls:'badge-orange',linesWithFree,totalLines};
+  if(linesWithFree===totalLines)return{key:'ok',label:'ครบทุกรายการ',cls:'badge-green',linesWithFree,totalLines};
+  return{key:'partial',label:'บางรายการ',cls:'badge-partial',linesWithFree,totalLines};
 }
 
 /* ── DATE FORMAT ── */
@@ -706,9 +709,9 @@ function dskPg(p){const tp=Math.ceil(filtInvs.length/DSK_SZ);if(p<1||p>tp)return
 
 /* ── DSK HOME & REPORT ── */
 function renderDskHome(){
-  const total=allInvs.length,ok=allInvs.filter(i=>i.free>0).length,amt=allInvs.reduce((s,i)=>s+i.amt,0);
+  const total=allInvs.length,ok=allInvs.filter(i=>invSt(i).key==='ok').length,partial=allInvs.filter(i=>invSt(i).key==='partial').length,amt=allInvs.reduce((s,i)=>s+i.amt,0);
   const dates=[...new Set(allInvs.map(i=>i.date))];
-  txt('ds-total',fmtI(total));txt('ds-ok',fmtI(ok));txt('ds-pending',fmtI(total-ok));txt('ds-amt',fmt(amt));txt('ds-dates',fmtI(dates.length)+' วัน');
+  txt('ds-total',fmtI(total));txt('ds-ok',fmtI(ok+partial));txt('ds-pending',fmtI(total-ok-partial));txt('ds-amt',fmt(amt));txt('ds-dates',fmtI(dates.length)+' วัน');
   const byD={};allInvs.forEach(inv=>{if(!byD[inv.date])byD[inv.date]={total:0,ok:0,amt:0};byD[inv.date].total++;if(inv.free>0)byD[inv.date].ok++;byD[inv.date].amt+=inv.amt;});
   const el=document.getElementById('ds-date-list');if(!el)return;
   el.innerHTML=Object.entries(byD).sort((a,b)=>b[0]>a[0]?1:b[0]<a[0]?-1:0).map(([d,v])=>`
@@ -743,7 +746,7 @@ function mobFilter(){
 }
 
 function renderMobHome(){
-  const total=allInvs.length,ok=allInvs.filter(i=>i.free>0).length,amt=allInvs.reduce((s,i)=>s+i.amt,0);
+  const total=allInvs.length,ok=allInvs.filter(i=>invSt(i).key!=='pending').length,amt=allInvs.reduce((s,i)=>s+i.amt,0);
   const dates=[...new Set(allInvs.map(i=>i.date))].sort().reverse();
   txt('ms-total',fmtI(total));txt('ms-amt',fmt(amt));txt('ms-ok',fmtI(ok));txt('ms-pending',fmtI(total-ok));
   txt('mob-hero-date',dates.length?thD(dates[0]):'–');
@@ -766,10 +769,11 @@ function renderMobReport(){
 
 function invCard(inv){
   const st=invSt(inv);
-  return`<div class="inv-card ${st.key}" onclick="openDetail('${inv.ref}')">
+  const cardCls=st.key==='ok'?'ok':st.key==='partial'?'partial':'pending';
+  return`<div class="inv-card ${cardCls}" onclick="openDetail('${inv.ref}')">
     <div class="ic-top"><div class="ic-store">${inv.store}</div><span class="badge ${st.cls}">${st.label}</span></div>
     <div class="ic-meta"><span>📅${thS(inv.date)}</span><span>👤${inv.slmn||'–'}</span><span>🏭${inv.wl||'–'}</span></div>
-    <div class="ic-foot"><div class="ic-amt">${fmt(inv.amt)} บ.</div><div style="font-size:11px;color:var(--muted)">${fmtI(inv.qty)} ชิ้น${inv.free>0?' · 🎁'+fmtI(inv.free):''}</div></div>
+    <div class="ic-foot"><div class="ic-amt">${fmt(inv.amt)} บ.</div><div style="font-size:11px;color:var(--muted)">${fmtI(inv.qty)} ชิ้น · โปร ${fmtI(st.linesWithFree)}/${fmtI(st.totalLines)}</div></div>
   </div>`;
 }
 
@@ -784,17 +788,30 @@ function openDetail(ref){
   const st=invSt(inv);
   document.getElementById('dp-store').textContent=inv.store;
   document.getElementById('dp-meta').innerHTML=`<span>🗓${thD(inv.date)}</span><span>👤${inv.slmn}</span><span>🏭${inv.wl}</span><span class="badge ${st.cls}" style="margin-top:2px">${st.label}</span>`;
-  const prods=inv.lines;
-  const freeL=inv.lines.filter(r=>parseInt(r['TRD_Q_FREE'])>0);
+  const st=invSt(inv);
   document.getElementById('dp-body').innerHTML=`
     <div class="dp-info-row">
       <div class="dp-kv"><span class="k">เลขที่ใบ</span><span class="v" style="font-family:monospace;font-size:11px">${inv.ref}</span></div>
       <div class="dp-kv"><span class="k">ยอดรวม</span><span class="v" style="color:var(--blue)">${fmt(inv.amt)} บ.</span></div>
       <div class="dp-kv"><span class="k">รหัสร้าน</span><span class="v">${inv.code}</span></div>
     </div>
-    <div class="dp-sec-title">สินค้า (${fmtI(inv.qty)} ชิ้น)</div>
-    <div class="dp-prod-grid">${prods.map(r=>`<div class="dp-prod"><div class="dp-prod-name">${r['SKU_NAME']||r['TRD_SH_CODE']||'–'}</div><div class="dp-prod-row"><span style="font-weight:700">${fmtI(parseInt(r['TRD_QTY'])||0)} ${r['TRD_UTQNAME']||''}</span><span style="font-weight:700;color:var(--blue)">${fmt(r['TRD_G_AMT'])} บ.</span></div></div>`).join('')}</div>
-    ${freeL.length?`<div class="dp-sec-title">🎁 ของแถม (${fmtI(inv.free)} ชิ้น)</div><div class="dp-prod-grid">${freeL.map(r=>`<div class="dp-prod free"><div class="dp-prod-name free">${r['SKU_NAME']||r['TRD_SH_CODE']||'–'}</div><div class="dp-prod-row"><span style="font-weight:700;color:var(--green)">${fmtI(parseInt(r['TRD_Q_FREE'])||0)} ${r['TRD_UTQNAME']||''}</span><span style="color:var(--green);font-weight:700">ของแถม</span></div></div>`).join('')}</div>`:''}
+    <div class="dp-sec-title">สินค้า — มีโปร ${fmtI(st.linesWithFree)}/${fmtI(st.totalLines)} รายการ</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${inv.lines.map(r=>{
+        const hasFree=parseInt(r['TRD_Q_FREE'])>0;
+        return`<div style="background:${hasFree?'var(--green-bg)':'var(--bg)'};border-radius:8px;padding:10px 12px;border:1px solid ${hasFree?'rgba(46,125,50,.2)':'var(--border)'};display:flex;align-items:center;gap:10px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;color:${hasFree?'var(--green)':'var(--text)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r['SKU_NAME']||r['TRD_SH_CODE']||'–'}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">สั่ง ${fmtI(parseInt(r['TRD_QTY'])||0)} ${r['TRD_UTQNAME']||''} · ${fmt(r['TRD_G_AMT'])} บ.</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            ${hasFree
+              ?`<span class="badge badge-green">🎁 แถม ${fmtI(parseInt(r['TRD_Q_FREE']))} ${r['TRD_UTQNAME']||''}</span>`
+              :`<span style="font-size:11px;color:var(--muted)">ไม่มีโปร</span>`}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
     ${inv.lines[0]?.['DI_REMARK']?`<div class="dp-sec-title">หมายเหตุ</div><div style="font-size:13px;color:var(--muted);background:var(--bg);border-radius:8px;padding:10px">${inv.lines[0]['DI_REMARK']}</div>`:''}
     <div class="dp-sec-title">บันทึก</div>
     <textarea class="dp-note" placeholder="พิมพ์บันทึก..."></textarea>`;
