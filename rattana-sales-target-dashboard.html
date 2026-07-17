@@ -238,7 +238,7 @@ body.dark .ptbl-td{border-color:var(--border)}
 <div class="page hidden" id="appScreen">
   <header>
     <div class="logo-text">RATTANA<span>·</span>SALES
-      <small>ยอดขายเทียบเป้าหมาย v1.32</small>
+      <small>ยอดขายเทียบเป้าหมาย v1.33</small>
     </div>
     <div class="flex gap-8" style="margin-left:auto">
       <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">⟳</button>
@@ -831,6 +831,21 @@ function renderOverview() {
 }
 
 /* ================= WORKING DAYS ================= */
+function getHolidayCount(dataMonthStr) {
+  if (!state.targetRaw || !dataMonthStr) return 0;
+  const p = parseThaiMonthYear(dataMonthStr);
+  if (!p) return 0;
+  const holidays = new Set();
+  state.targetRaw.forEach(t => {
+    const tMonth = normalizeText(t['เดือน'] || '');
+    const tm = parseThaiMonthYear(tMonth);
+    if (!tm || tm.mm !== p.mm || tm.yyyy !== p.yyyy) return;
+    const h = normalizeText(String(t['Holiday'] || ''));
+    if (h) holidays.add(h);
+  });
+  return holidays.size;
+}
+
 function getWorkingDaysInfo(dataMonthStr) {
   let year, month;
   if (dataMonthStr) {
@@ -850,6 +865,9 @@ function getWorkingDaysInfo(dataMonthStr) {
       if (d <= today) doneWork++;
     }
   }
+  const holidays = getHolidayCount(dataMonthStr);
+  totalWork = Math.max(0, totalWork - holidays);
+  doneWork = Math.max(0, doneWork - holidays);
   const remaining = totalWork - doneWork;
   const pct = totalWork > 0 ? Math.round(doneWork / totalWork * 100) : 0;
   const weekOfMonth = Math.ceil(today / 7);
