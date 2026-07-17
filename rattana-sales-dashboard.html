@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Sales Dashboard v9.6</title>
+<title>Rattana Sales Dashboard v9.7</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -285,7 +285,7 @@ body.dark .pvol{color:var(--gold-light)}
     <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
       <div>
         <div class="logo-text">RATTANA <span>SALES</span></div>
-        <div style="font-size:11px;color:rgba(255,255,255,.5)">ยอดขายของฉัน <span style="color:var(--gold);font-weight:600">v9.6</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.5)">ยอดขายของฉัน <span style="color:var(--gold);font-weight:600">v9.7</span></div>
       </div>
     </div>
     <button class="icon-btn" onclick="refreshData()" id="btnRefresh" title="รีเฟรช">↻</button>
@@ -1656,24 +1656,31 @@ function renderLowStore() {
   document.getElementById('lowMonthLabel').textContent = 'ข้อมูล ' + monthLabel;
   document.getElementById('lowMonthBadge').style.display = 'inline-flex';
 
-  // sum EXVat by Customer_Code จาก BP
+  // sum EXVat by Customer_Code และ Customer_Name จาก BP
   const salesByCode = {};
+  const salesByName = {};
   for (const r of useRows) {
     const code = (r['Customer_Code']||'').trim();
-    if (!code) continue;
-    salesByCode[code] = (salesByCode[code]||0) + parseNum(r['EXVat+CN*2']||r.EXVat);
+    const name = (r['Customer_Name']||'').trim();
+    const val  = parseNum(r['EXVat+CN*2']||r.EXVat);
+    if (code) salesByCode[code] = (salesByCode[code]||0) + val;
+    if (name) salesByName[name] = (salesByName[name]||0) + val;
   }
 
+  // หา column ใน Customer sheet แบบ dynamic
+  const lcKeys = lowCustomerRows.length ? Object.keys(lowCustomerRows[0]) : [];
+  const findLC = terms => lcKeys.find(k => terms.some(t => k.replace(/[\s_]/g,'').toUpperCase().includes(t.toUpperCase())));
+  const codeCol  = lowCustomerRows._codeCol  || findLC(['รหัสบีพลัส','BPLUS']) || 'รหัสบีพลัส';
+  const nameCol  = lowCustomerRows._nameCol  || findLC(['ชื่อร้านค้า'])         || 'ชื่อร้านค้า';
+  const routeCol = lowCustomerRows._routeCol || findLC(['ชื่อรูท'])             || 'ชื่อรูท';
+
   // สร้างรายการร้านจาก Customer sheet → map กับยอดขาย
-  const codeCol  = lowCustomerRows._codeCol  || 'รหัสบีพลัส';
-  const nameCol  = lowCustomerRows._nameCol  || 'ชื่อร้านค้า';
-  const routeCol = lowCustomerRows._routeCol || 'ชื่อรูท';
-  let stores = lowCustomerRows.map(r => ({
-    code : (r[codeCol]||'').trim(),
-    name : (r[nameCol]||'').trim(),
-    route: (r[routeCol]||'').trim(),
-    baht : salesByCode[(r[codeCol]||'').trim()] || 0,
-  })).filter(s => s.code && s.baht < LOW_THRESHOLD);
+  let stores = lowCustomerRows.map(r => {
+    const code = (r[codeCol]||'').trim();
+    const name = (r[nameCol]||'').trim();
+    const baht = salesByCode[code] || salesByName[name] || 0;
+    return { code, name, route: (r[routeCol]||'').trim(), baht };
+  }).filter(s => (s.code || s.name) && s.baht < LOW_THRESHOLD);
 
   // filter + sort
   const dayFilter = document.getElementById('lowDayFilter')?.value||'';
@@ -1801,4 +1808,4 @@ function closeProdModal() {
 </script>
 </body>
 </html>
-<!-- v9.6 -->
+<!-- v9.7 -->
