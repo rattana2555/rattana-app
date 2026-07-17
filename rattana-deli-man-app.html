@@ -741,7 +741,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.60';
+const APP_VERSION='3.61';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -2330,7 +2330,10 @@ function fillItemWithProduct_(idx,p,unitKeyHint){
   let key=unitKeyHint;
   if(!key||!p.units[key]){ key=['CS','BP','PA','EA'].find(k=>p.units[k])||'EA'; }
   if(p.units[key]){ it.unit=p.units[key]; it.unitKey=key; }
-  if(p.prices[key]) it.price=p.prices[key];
+  // v3.61: ราคาในบิลจริง (TRD_U_PRC) ก่อน แล้วค่อยราคา master
+  const bp=billPriceOf_(p.name,key,p.codes?p.codes[key]:'');
+  if(bp>0) it.price=bp;
+  else if(p.prices[key]) it.price=p.prices[key];
   renderReturnItems(); recalcReturnTotal();
 }
 /* เปิดสแกนเนอร์เพื่อ "หาสินค้า" ลงรายการที่ idx (ใช้กล้อง/ช่องพิมพ์เดียวกับสแกนเช็คบิล) */
@@ -2466,12 +2469,37 @@ function getItemUnitOptions(it){
   return ITEM_UNITS.map(u=>({key:u.includes('EA')?'EA':u.includes('PA')?'PA':u.includes('BP')?'BP':'CS',value:u}));
 }
 
+/* ===== v3.61: ราคา CN ต้องใช้ "ราคาต่อหน่วยในบิลจริง" (DS_DC คอลัมน์ TRD_U_PRC) ก่อนราคา master เสมอ =====
+   เดิมเอา PRICE CC00 (master) มาก่อน → บิลที่ขายราคาโปรฯ/ราคาพิเศษ จะคืนเงินผิด (ไม่ตรงราคาที่ร้านจ่ายมา)
+   หาแถวในบิลที่ "หน่วยตรงกัน" + (บาร์โค้ดตรง หรือ ชื่อตรง) → ไม่เจอคืน 0 ให้ผู้เรียก fallback ราคา master */
+function unitKeyOf_(u){ const m=String(u||'').match(/\(([A-Z]+)\)$/); return m?m[1]:''; }
+function billPriceOf_(name,unitKey,barcode){
+  const rows=returnState.docNo?state.billDetails[returnState.docNo]:null;
+  if(!rows||!rows.length) return 0;
+  const nm=normName_(name||'');
+  const hit=rows.find(b=>{
+    if(unitKey&&unitKeyOf_(b.unit)!==unitKey) return false;
+    if(barcode&&barcodeMatch(b.barcode,barcode)) return true;
+    return !!nm&&normName_(b.sku)===nm;
+  });
+  return hit?billRowPrice_(hit):0;
+}
+/* ราคาต่อหน่วยของแถวบิล — TRD_U_PRC ก่อน, ถ้าว่างคำนวณจาก TRD_G_AMT/TRD_QTY */
+function billRowPrice_(b){
+  if(!b) return 0;
+  if(b.price>0) return b.price;
+  if(b.qty>0) return b.amount/b.qty;
+  return 0;
+}
+
 function pickItemUnit(idx,unit,unitKey){
   const it=returnState.items[idx];
   it.unit=unit;
   it.unitKey=unitKey||(unit.includes('EA')?'EA':unit.includes('PA')?'PA':unit.includes('BP')?'BP':'CS');
-  // ถ้าเลือกสินค้าไว้แล้ว → set ราคา default ตามหน่วยใหม่
-  if(it.product){
+  // ถ้าเลือกสินค้าไว้แล้ว → set ราคา default ตามหน่วยใหม่ (v3.61: ราคาในบิลจริงก่อน แล้วค่อย master)
+  const bp=billPriceOf_(it.productName,it.unitKey,it.product&&it.product.codes?it.product.codes[it.unitKey]:'');
+  if(bp>0) it.price=bp;
+  else if(it.product){
     const price=it.product.prices[it.unitKey];
     if(price) it.price=price;
   }
@@ -2531,10 +2559,10 @@ function pickProductFromBill(idx,name){
     // จับ key จากชื่อหน่วย "ชิ้นx1(CS)" → "CS"
     const m=bill.unit.match(/\(([A-Z]+)\)$/);
     it.unitKey=m?m[1]:'CS';
-    // ราคา default — product price ก่อน, ไม่งั้นราคาต่อหน่วยจากบิล (TRD_U_PRC), ไม่งั้น amount/qty
-    if(product&&product.prices[it.unitKey]) it.price=product.prices[it.unitKey];
-    else if(bill.price>0) it.price=bill.price;
-    else if(bill.qty>0) it.price=bill.amount/bill.qty;
+    // v3.61: ราคาต่อหน่วยจากบิลจริง (TRD_U_PRC) ก่อน — ไม่มีค่อยใช้ราคา master
+    const bp=billRowPrice_(bill);
+    if(bp>0) it.price=bp;
+    else if(product&&product.prices[it.unitKey]) it.price=product.prices[it.unitKey];
   }
   $('prodRes_'+idx).style.display='none';
   renderReturnItems();
@@ -2552,7 +2580,10 @@ function pickProduct(idx,name){
       if(p.units[k]){
         it.unit=p.units[k];
         it.unitKey=k;
-        if(p.prices[k]) it.price=p.prices[k];
+        // v3.61: ถ้าบิลนี้มีสินค้าตัวนี้อยู่ใน DS_DC → ใช้ราคาในบิล ไม่งั้นราคา master
+        const bp=billPriceOf_(name,k,p.codes?p.codes[k]:'');
+        if(bp>0) it.price=bp;
+        else if(p.prices[k]) it.price=p.prices[k];
         break;
       }
     }
