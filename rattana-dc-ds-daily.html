@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.5</title>
+<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.6</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -276,7 +276,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
       <div class="sb-item" id="sb-report" onclick="dskGoto('dsk-report')"><span class="si">📊</span>รายงาน</div>
       <div class="sb-item" id="sb-settings" onclick="dskGoto('dsk-settings')"><span class="si">⚙️</span>ตั้งค่า</div>
     </div>
-    <div class="sb-ver">v3.5 · 2026-07-17</div>
+    <div class="sb-ver">v3.6 · 2026-07-18</div>
   </nav>
 
   <div id="mainCol">
@@ -374,7 +374,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
             <div class="ss-title">Export</div>
             <div class="ss-row"><div><div class="ss-label">ส่งออก Excel</div><div class="ss-sub">ข้อมูลที่กรองไว้</div></div><button class="btn btn-sm btn-success" onclick="exportExcel()">⬇ Excel</button></div>
           </div>
-          <div style="margin-top:20px;font-size:11px;color:var(--muted)">ตรวจส่วนลด DC/DS รัตนไพบูลย์ <b>v3.5</b> · 2026-07-17</div>
+          <div style="margin-top:20px;font-size:11px;color:var(--muted)">ตรวจส่วนลด DC/DS รัตนไพบูลย์ <b>v3.6</b> · 2026-07-18</div>
         </div>
 
       </div><!-- /dsk-screens -->
@@ -443,7 +443,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
               <div class="ss-title">Export</div>
               <div class="ss-row"><div><div class="ss-label">ส่งออก Excel</div></div><button class="btn btn-sm btn-success" onclick="exportExcel()">⬇ Excel</button></div>
             </div>
-            <div style="margin-top:20px;font-size:11px;color:var(--muted);text-align:center">ตรวจส่วนลด DC/DS v3.5 · 2026-07-17</div>
+            <div style="margin-top:20px;font-size:11px;color:var(--muted);text-align:center">ตรวจส่วนลด DC/DS v3.6 · 2026-07-18</div>
           </div>
         </div>
 
@@ -539,17 +539,22 @@ async function fetchData(){
 }
 
 async function fetchPddt(){
-  const url=`https://docs.google.com/spreadsheets/d/${PDDT_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(PDDT_NAME)}`;
-  const res=await fetch(url);
-  if(!res.ok)return;
-  const text=await res.text();
-  if(text.trim().startsWith('<'))return;
-  const rows=parseCsv(text);
-  pddtMap={};
-  rows.forEach(r=>{
-    const name=(r['PRODUCT NAME']||'').trim();
-    if(name)pddtMap[name]={brand:r['CAT BRAND']||'',size:r['CAT SIZE']||''};
-  });
+  try{
+    const url=`https://docs.google.com/spreadsheets/d/${PDDT_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(PDDT_NAME)}`;
+    const res=await fetch(url);
+    if(!res.ok){showToast('PDDT: HTTP '+res.status,'error');return;}
+    const text=await res.text();
+    if(text.trim().startsWith('<')){showToast('PDDT ยังไม่ได้เปิดสาธารณะ — กรุณาแชร์ชีต PDDT','error');return;}
+    const rows=parseCsv(text);
+    pddtMap={};
+    rows.forEach(r=>{
+      const name=(r['PRODUCT NAME']||'').trim();
+      if(name)pddtMap[name]={brand:(r['CAT BRAND']||'').trim(),size:(r['CAT SIZE']||'').trim()};
+    });
+    const n=Object.keys(pddtMap).length;
+    if(n>0)showToast(`โหลด PDDT ${n.toLocaleString()} รายการ ✓`,'success');
+    else showToast('PDDT โหลดได้ 0 รายการ — ตรวจสอบชื่อคอลัมน์','error');
+  }catch(e){showToast('PDDT โหลดไม่สำเร็จ: '+e.message,'error');}
 }
 
 function lookupPddt(skuName){
@@ -568,7 +573,7 @@ async function loadData(force=false){
     // Load DS_DC and PDDT in parallel
     const [dsData] = await Promise.all([
       data?Promise.resolve(data):fetchData(),
-      Object.keys(pddtMap).length===0?fetchPddt():Promise.resolve()
+      (force||Object.keys(pddtMap).length===0)?fetchPddt():Promise.resolve()
     ]);
     if(!data){
       try{localStorage.setItem(CACHE_KEY,JSON.stringify({ts:Date.now(),data:dsData}));}catch(e){/* quota exceeded */}
@@ -909,3 +914,4 @@ document.addEventListener('DOMContentLoaded',()=>loadData());
 </script>
 </body>
 </html>
+
