@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.11</title>
+<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.12</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -276,7 +276,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
       <div class="sb-item" id="sb-report" onclick="dskGoto('dsk-report')"><span class="si">📊</span>รายงาน</div>
       <div class="sb-item" id="sb-settings" onclick="dskGoto('dsk-settings')"><span class="si">⚙️</span>ตั้งค่า</div>
     </div>
-    <div class="sb-ver">v3.11 · 2026-07-18</div>
+    <div class="sb-ver">v3.12 · 2026-07-18</div>
   </nav>
 
   <div id="mainCol">
@@ -374,7 +374,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
             <div class="ss-title">Export</div>
             <div class="ss-row"><div><div class="ss-label">ส่งออก Excel</div><div class="ss-sub">ข้อมูลที่กรองไว้</div></div><button class="btn btn-sm btn-success" onclick="exportExcel()">⬇ Excel</button></div>
           </div>
-          <div style="margin-top:20px;font-size:11px;color:var(--muted)">ตรวจส่วนลด DC/DS รัตนไพบูลย์ <b>v3.11</b> · 2026-07-18</div>
+          <div style="margin-top:20px;font-size:11px;color:var(--muted)">ตรวจส่วนลด DC/DS รัตนไพบูลย์ <b>v3.12</b> · 2026-07-18</div>
         </div>
 
       </div><!-- /dsk-screens -->
@@ -443,7 +443,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
               <div class="ss-title">Export</div>
               <div class="ss-row"><div><div class="ss-label">ส่งออก Excel</div></div><button class="btn btn-sm btn-success" onclick="exportExcel()">⬇ Excel</button></div>
             </div>
-            <div style="margin-top:20px;font-size:11px;color:var(--muted);text-align:center">ตรวจส่วนลด DC/DS v3.11 · 2026-07-18</div>
+            <div style="margin-top:20px;font-size:11px;color:var(--muted);text-align:center">ตรวจส่วนลด DC/DS v3.12 · 2026-07-18</div>
           </div>
         </div>
 
@@ -592,24 +592,51 @@ async function fetchPromo(){
     rows.forEach(r=>{
       const field=(r['วิธีวัด']||'').trim();
       const value=(r['ชื่อ']||'').trim();
-      if(field&&value)promoRules.push({field,value,valueN:value.replace(/\s+/g,'')});
+      if(field&&value)promoRules.push({
+        field,value,valueN:value.replace(/\s+/g,''),
+        price:(r['ราคาขายกำหนด']||'').trim(),
+        qty:(r['จำนวน']||'').trim(),
+        unit:(r['รูปแบบขาย']||'').trim()
+      });
     });
     if(promoRules.length>0)showToast(`โหลดโปรโมชั่น ${promoRules.length} เงื่อนไข ✓`,'success');
     else showToast('Promotion โหลดได้ 0 เงื่อนไข','error');
   }catch(e){showToast('Promotion โหลดไม่สำเร็จ: '+e.message,'error');}
 }
 
-function hasPromo(skuName, pd){
+function hasPromo(skuName, pd, row){
   if(!promoRules.length)return false;
   const skuN=(skuName||'').replace(/\s+/g,'');
   const brandN=(pd?.brand||'').replace(/\s+/g,'');
   const sizeN=(pd?.size||'').replace(/\s+/g,'');
+  // values from DS_DC row
+  const rowPrice=parseFloat(row['TRD_U_PRC']||0)||0;
+  const rowQty=parseInt(row['TRD_QTY']||0)||0;
+  const rowUnit=(row['TRD_UTQNAME']||'').trim();
+  const rowUnitShort=/\(([^)]+)\)/.exec(rowUnit)?.[1]||rowUnit;
   return promoRules.some(rule=>{
     const rv=rule.valueN;
-    if(rule.field==='PRODUCT NAME')return skuN===rv||skuN.includes(rv)||rv.includes(skuN);
-    if(rule.field==='CAT BRAND')return brandN===rv||brandN.includes(rv)||rv.includes(brandN);
-    if(rule.field==='CAT SIZE')return sizeN===rv||sizeN.includes(rv)||rv.includes(sizeN);
-    return false;
+    // เงื่อนไข วิธีวัด
+    let fieldMatch=false;
+    if(rule.field==='PRODUCT NAME')fieldMatch=skuN===rv||skuN.includes(rv)||rv.includes(skuN);
+    else if(rule.field==='CAT BRAND')fieldMatch=brandN===rv||brandN.includes(rv)||rv.includes(brandN);
+    else if(rule.field==='CAT SIZE')fieldMatch=sizeN===rv||sizeN.includes(rv)||rv.includes(sizeN);
+    if(!fieldMatch)return false;
+    // เงื่อนไข ราคาขายกำหนด (ถ้ามีค่าในชีต)
+    if(rule.price!==''&&parseFloat(rule.price)||0){
+      if(Math.abs(rowPrice-(parseFloat(rule.price)||0))>0.001)return false;
+    }
+    // เงื่อนไข จำนวน
+    if(rule.qty!==''&&parseInt(rule.qty)||0){
+      if(rowQty!==(parseInt(rule.qty)||0))return false;
+    }
+    // เงื่อนไข รูปแบบขาย (จับกับ TRD_UTQNAME เต็ม หรือ ส่วนในวงเล็บ)
+    if(rule.unit!==''){
+      const ruN=rule.unit.replace(/\s+/g,'');
+      const match=rowUnit.replace(/\s+/g,'')===ruN||rowUnitShort.replace(/\s+/g,'')===ruN;
+      if(!match)return false;
+    }
+    return true;
   });
 }
 
@@ -878,7 +905,7 @@ function openDetail(ref){
     <div class="dp-sec-title">สินค้า (${fmtI(inv.qty)} ชิ้น)</div>
     <div class="dp-prod-grid">${prods.map(r=>{
       const pd=lookupPddt(r['SKU_NAME']);
-      const promo=hasPromo(r['SKU_NAME'],pd);
+      const promo=hasPromo(r['SKU_NAME'],pd,r);
       return`<div class="dp-prod">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:4px">
           <div class="dp-prod-name" style="flex:1">${r['SKU_NAME']||r['TRD_SH_CODE']||'–'}</div>
@@ -967,6 +994,7 @@ document.addEventListener('DOMContentLoaded',()=>loadData());
 </script>
 </body>
 </html>
+
 
 
 
