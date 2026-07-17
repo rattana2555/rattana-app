@@ -741,7 +741,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.62';
+const APP_VERSION='3.63';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -2487,13 +2487,14 @@ function billPriceOf_(name,unitLabel,unitKey,prod){
   const exact=unitKey?mine.find(b=>unitKeyOf_(b.unit)===unitKey):null;
   if(exact){ const p=billRowPrice_(exact); if(p>0) return p; }
   // v3.62: หน่วยไม่มีในบิล → หารด้วยจำนวนต่อหน่วยของบิล แล้วคูณจำนวนต่อหน่วยที่จะคืน
-  //   เช่น บิลขาย "ลังx12(CS)" 293 ฿ แต่คืนเป็น "ชิ้นx1(EA)" → 293/12×1 = 24.42 ฿
+  //   เช่น บิลขาย "ลังx12(CS)" 293 ฿ แต่คืนเป็น "ชิ้นx1(EA)" → 293/12×1 = 24.4166 → ปัดขึ้น 25 ฿
   //   (ห้ามใช้ราคา master EA — คนละราคากับที่ร้านจ่ายมา: ราคา master 6,853 ตัวไม่ตรงอัตราส่วนนี้)
+  //   v3.63: ปัดขึ้นเป็นจำนวนเต็มบาท — ราคาต่อหน่วยในบิลจริงเป็นจำนวนเต็มอยู่แล้ว CN จึงไม่ควรมีเศษสตางค์
   const want=unitQtyOf_(unitLabel);
   if(!(want>0)) return 0;
   for(const b of mine){
     const per=unitQtyOf_(b.unit), bp=billRowPrice_(b);
-    if(per>0&&bp>0) return Math.round(bp/per*want*100)/100;
+    if(per>0&&bp>0) return Math.ceil(bp/per*want-1e-9);   // กันเลขทศนิยมลอย (เช่น 160.00000000000003 → 161)
   }
   return 0;
 }
