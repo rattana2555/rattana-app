@@ -741,7 +741,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.61';
+const APP_VERSION='3.62';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -2331,7 +2331,7 @@ function fillItemWithProduct_(idx,p,unitKeyHint){
   if(!key||!p.units[key]){ key=['CS','BP','PA','EA'].find(k=>p.units[k])||'EA'; }
   if(p.units[key]){ it.unit=p.units[key]; it.unitKey=key; }
   // v3.61: ราคาในบิลจริง (TRD_U_PRC) ก่อน แล้วค่อยราคา master
-  const bp=billPriceOf_(p.name,key,p.codes?p.codes[key]:'');
+  const bp=billPriceOf_(p.name,p.units[key],key,p);
   if(bp>0) it.price=bp;
   else if(p.prices[key]) it.price=p.prices[key];
   renderReturnItems(); recalcReturnTotal();
@@ -2471,18 +2471,31 @@ function getItemUnitOptions(it){
 
 /* ===== v3.61: ราคา CN ต้องใช้ "ราคาต่อหน่วยในบิลจริง" (DS_DC คอลัมน์ TRD_U_PRC) ก่อนราคา master เสมอ =====
    เดิมเอา PRICE CC00 (master) มาก่อน → บิลที่ขายราคาโปรฯ/ราคาพิเศษ จะคืนเงินผิด (ไม่ตรงราคาที่ร้านจ่ายมา)
-   หาแถวในบิลที่ "หน่วยตรงกัน" + (บาร์โค้ดตรง หรือ ชื่อตรง) → ไม่เจอคืน 0 ให้ผู้เรียก fallback ราคา master */
+   v3.62: หน่วยที่คืนไม่มีในบิล → แปลงจากราคาบิลด้วยอัตราส่วนใน label (ห้ามข้ามไปใช้ราคา master)
+   หาแถวของสินค้าตัวเดียวกันในบิลไม่เจอเลย → คืน 0 ให้ผู้เรียก fallback ราคา master */
 function unitKeyOf_(u){ const m=String(u||'').match(/\(([A-Z]+)\)$/); return m?m[1]:''; }
-function billPriceOf_(name,unitKey,barcode){
+/* จำนวนหน่วยย่อยต่อ 1 หน่วยนั้น — อ่านตัวเลขใน label: "ลังx12(CS)" → 12, "ชิ้นx1(EA)" → 1 (EA เป็น x1 เสมอ) */
+function unitQtyOf_(u){ const m=String(u||'').match(/x\s*([0-9.]+)\s*\(/); const n=m?parseFloat(m[1]):0; return n>0?n:0; }
+function billPriceOf_(name,unitLabel,unitKey,prod){
   const rows=returnState.docNo?state.billDetails[returnState.docNo]:null;
   if(!rows||!rows.length) return 0;
   const nm=normName_(name||'');
-  const hit=rows.find(b=>{
-    if(unitKey&&unitKeyOf_(b.unit)!==unitKey) return false;
-    if(barcode&&barcodeMatch(b.barcode,barcode)) return true;
-    return !!nm&&normName_(b.sku)===nm;
-  });
-  return hit?billRowPrice_(hit):0;
+  const codes=(prod&&prod.codes)?['EA','PA','BP','CS'].map(k=>prod.codes[k]).filter(Boolean):[];
+  const mine=rows.filter(b=>codes.some(c=>barcodeMatch(b.barcode,c))||(!!nm&&normName_(b.sku)===nm));
+  if(!mine.length) return 0;
+  // หน่วยตรงกับที่ขายในบิล → ใช้ราคาบิลตรงๆ
+  const exact=unitKey?mine.find(b=>unitKeyOf_(b.unit)===unitKey):null;
+  if(exact){ const p=billRowPrice_(exact); if(p>0) return p; }
+  // v3.62: หน่วยไม่มีในบิล → หารด้วยจำนวนต่อหน่วยของบิล แล้วคูณจำนวนต่อหน่วยที่จะคืน
+  //   เช่น บิลขาย "ลังx12(CS)" 293 ฿ แต่คืนเป็น "ชิ้นx1(EA)" → 293/12×1 = 24.42 ฿
+  //   (ห้ามใช้ราคา master EA — คนละราคากับที่ร้านจ่ายมา: ราคา master 6,853 ตัวไม่ตรงอัตราส่วนนี้)
+  const want=unitQtyOf_(unitLabel);
+  if(!(want>0)) return 0;
+  for(const b of mine){
+    const per=unitQtyOf_(b.unit), bp=billRowPrice_(b);
+    if(per>0&&bp>0) return Math.round(bp/per*want*100)/100;
+  }
+  return 0;
 }
 /* ราคาต่อหน่วยของแถวบิล — TRD_U_PRC ก่อน, ถ้าว่างคำนวณจาก TRD_G_AMT/TRD_QTY */
 function billRowPrice_(b){
@@ -2496,8 +2509,8 @@ function pickItemUnit(idx,unit,unitKey){
   const it=returnState.items[idx];
   it.unit=unit;
   it.unitKey=unitKey||(unit.includes('EA')?'EA':unit.includes('PA')?'PA':unit.includes('BP')?'BP':'CS');
-  // ถ้าเลือกสินค้าไว้แล้ว → set ราคา default ตามหน่วยใหม่ (v3.61: ราคาในบิลจริงก่อน แล้วค่อย master)
-  const bp=billPriceOf_(it.productName,it.unitKey,it.product&&it.product.codes?it.product.codes[it.unitKey]:'');
+  // ถ้าเลือกสินค้าไว้แล้ว → set ราคา default ตามหน่วยใหม่ (v3.61/v3.62: ราคาในบิลจริงก่อน — หน่วยไม่มีในบิลก็แปลงให้)
+  const bp=billPriceOf_(it.productName,it.unit,it.unitKey,it.product);
   if(bp>0) it.price=bp;
   else if(it.product){
     const price=it.product.prices[it.unitKey];
@@ -2581,7 +2594,7 @@ function pickProduct(idx,name){
         it.unit=p.units[k];
         it.unitKey=k;
         // v3.61: ถ้าบิลนี้มีสินค้าตัวนี้อยู่ใน DS_DC → ใช้ราคาในบิล ไม่งั้นราคา master
-        const bp=billPriceOf_(name,k,p.codes?p.codes[k]:'');
+        const bp=billPriceOf_(name,p.units[k],k,p);
         if(bp>0) it.price=bp;
         else if(p.prices[k]) it.price=p.prices[k];
         break;
