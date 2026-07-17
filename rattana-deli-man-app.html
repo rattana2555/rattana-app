@@ -741,7 +741,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.59';
+const APP_VERSION='3.60';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -5566,18 +5566,17 @@ async function captureShopCoords(idx){
   }
 }
 
-/* v3.26: Manual sync ทั้ง 2 ชีท (ใบคุม + รายละเอียด) จากแอป (ยิงไป GAS action='sync_all') */
+/* v3.26/v3.60: Manual sync "ใบคุม" อย่างเดียว (รายละเอียดบิลดึงสดจาก DS_DC ตรงๆ แล้ว ไม่ต้อง sync) */
 async function manualSyncJadRot(){
   const btn=event&&event.currentTarget;
   const label=btn?btn.innerHTML:'';
   if(btn){ btn.disabled=true; btn.innerHTML='⏳ กำลัง sync...'; }
-  showToast('กำลัง sync ใบคุม + รายละเอียด จากไฟล์ต้นทาง...','info');
+  showToast('กำลัง sync ใบคุม จากไฟล์ต้นทาง...','info');
   try{
     const r=await postSyncGAS_({action:'sync_all'},90000);
     if(r.ok){
       const jr=(r.resp&&r.resp.jadRot)||0;
-      const dc=(r.resp&&r.resp.dsDc)||0;
-      showToast(`✓ Sync สำเร็จ · ใบคุม ${jr} แถว · รายละเอียด ${dc} แถว`,'success');
+      showToast(`✓ Sync ใบคุม สำเร็จ · ${jr} แถว`,'success');
       try{ await syncJobsFromSheet(); }catch(e){}
       // v3.59: รายละเอียดดึงสดจาก DS_DC อยู่แล้ว — แค่ล้างของที่ดึงไว้ ครั้งถัดไปจะดึงใหม่
       try{ resetBillDetails_(); }catch(e){}
@@ -6025,7 +6024,7 @@ async function syncJobsFromSheet(opts){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.58 (CN บันทึกเร็วขึ้น: อ่านคอลัมน์เดียว + ลบเป็นช่วง + ตั้ง format ครั้งเดียว) */
+const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.60 (sync เฉพาะ ใบคุม — ตัด sync DS_DC → รายละเอียด ออก, แอปดึง DS_DC ตรงๆ) */
 const SHEET_INPUT='บันทึกเที่ยวส่ง';
 const SHEET_CIN='บันทึกบิลและการชำระ';
 const SHEET_CN='CN';
@@ -6073,7 +6072,7 @@ const HEADERS_CIN=['เลขใบคุม','Doc_Date','Doc_No','Customer_Code
 function doGet(e){
   let drive='unknown';
   try{ DriveApp.getRootFolder().getName(); drive='OK'; }catch(err){ drive='NOT_AUTHORIZED'; }
-  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.58',drive:drive}))
+  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.60',drive:drive}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -6108,7 +6107,7 @@ function doPost(e){
         fmtColsOpen_(sh,['รหัสร้าน','เลขใบคุม','Doc_No'],'@');   // v3.35: เปิดปลาย คลุมแถวใหม่
         fmtColsOpen_(sh,['Lat','Lng'],'0.000000');
         fmtColsOpen_(sh,['วันเวลา'],'yyyy-mm-dd hh:mm:ss');
-        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.58'})).setMimeType(ContentService.MimeType.JSON);
+        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.60'})).setMimeType(ContentService.MimeType.JSON);
       }finally{ lock.releaseLock(); }
     }
 
@@ -6124,23 +6123,11 @@ function doPost(e){
       }
     }
 
-    // ===== v3.30: Sync DS_DC → รายละเอียด จากไฟล์ต้นทาง (Order) =====
-    if(data.action==='sync_ds_dc'){
-      try{
-        const r=syncDsDcSheet();
-        return ContentService.createTextOutput(JSON.stringify({ok:true,rows:r.rows,at:r.at}))
-          .setMimeType(ContentService.MimeType.JSON);
-      }catch(err){
-        return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err)}))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
-    }
-
-    // ===== v3.30: Sync ทั้ง 2 ชีท (ใบคุม + รายละเอียด) — เรียกจากแอป =====
+    // ===== v3.60: Sync "ใบคุม" อย่างเดียว — เรียกจากแอป (รายละเอียดบิล แอปดึงจาก DS_DC ตรงๆ แล้ว) =====
     if(data.action==='sync_all'){
       try{
         const r=syncAllSheets();
-        return ContentService.createTextOutput(JSON.stringify({ok:true,jadRot:r.jadRot.rows,dsDc:r.dsDc.rows}))
+        return ContentService.createTextOutput(JSON.stringify({ok:true,jadRot:r.jadRot.rows}))
           .setMimeType(ContentService.MimeType.JSON);
       }catch(err){
         return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err)}))
@@ -6517,7 +6504,7 @@ function doPost(e){
       fmtColsOpen_(cinSh,['วัน+เวลา ที่ส่งสินค้า','U_ADD','วันที่โอนครั้งที่1','วันที่โอนครั้งที่2','แก้ไขเมื่อ','วันที่','วันเวลาอนุมัติ'],'yyyy-mm-dd hh:mm:ss');
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.58'}))
+    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.60'}))
       .setMimeType(ContentService.MimeType.JSON);
   }catch(err){
     return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err)}))
@@ -6976,88 +6963,23 @@ function syncJadRotSheet(){
   }
 }
 
-function syncJadRotSheetUI(){
-  try{
-    const r=syncJadRotSheet();
-    SpreadsheetApp.getUi().alert('✓ Sync ใบคุม สำเร็จ — '+r.rows+' แถว\\n('+new Date().toLocaleString('th-TH')+')');
-  }catch(err){
-    SpreadsheetApp.getUi().alert('✗ Sync ใบคุม ไม่สำเร็จ:\\n'+err.message);
-  }
-}
+/* v3.60: เอา syncDsDcSheet (DS_DC → ชีท "รายละเอียด") ออกทั้งหมด
+   — แอปดึงรายละเอียดบิลจากไฟล์ Order ชีท DS_DC ตรงๆ ผ่าน gviz query แล้ว (ดู DSDC_SRC_ID ฝั่งแอป)
+   — ชีท "รายละเอียด" ในไฟล์นี้เลิกใช้ (ลบทิ้งได้เลย) */
 
-/* ========== v3.30: Sync DS_DC → รายละเอียด จากไฟล์ Order ==========
-   ต้นทาง: Order (1NO8sHyDxwHTRqgcLFCxq_g_Rr09lfe4gt_odwkIgiB0) ชีท "DS_DC"
-   ปลายทาง: D-Man App (this sheet) ชีท "รายละเอียด" */
-const DS_DC_SRC_ID='1NO8sHyDxwHTRqgcLFCxq_g_Rr09lfe4gt_odwkIgiB0';
-const DS_DC_SRC_SHEET='DS_DC';
-const DS_DC_DST_SHEET='รายละเอียด';
-
-function syncDsDcSheet(){
-  const lock=LockService.getScriptLock();
-  try{ lock.waitLock(30000); }catch(e){ throw new Error('มี sync กำลังรันอยู่ ลองใหม่ในไม่กี่วินาที'); }
-  try{
-    const src=SpreadsheetApp.openById(DS_DC_SRC_ID);
-    if(!src) throw new Error('เปิดไฟล์ Order ต้นทางไม่ได้');
-    const srcSh=src.getSheetByName(DS_DC_SRC_SHEET);
-    if(!srcSh) throw new Error('ไม่พบชีท "'+DS_DC_SRC_SHEET+'" ในไฟล์ Order');
-    const data=srcSh.getDataRange().getValues();
-    if(!data.length) throw new Error('ไม่มีข้อมูล');
-    const dst=SpreadsheetApp.getActiveSpreadsheet();
-    const dstSh=dst.getSheetByName(DS_DC_DST_SHEET);
-    if(!dstSh) throw new Error('ไม่พบชีท "'+DS_DC_DST_SHEET+'" ในไฟล์นี้');
-    dstSh.clearContents();
-    dstSh.getRange(1,1,data.length,data[0].length).setValues(data);
-    dstSh.getRange(1,1,1,data[0].length).setFontWeight('bold').setBackground('#0A1B3E').setFontColor('#fff');
-    const hdr=data[0].map(String);
-    const idxOf=function(name){ return hdr.indexOf(name); };
-    ['DI_REF','AR_CODE','SLMN_CODE','WL_CODE','TRD_SH_CODE'].forEach(function(name){
-      const i=idxOf(name); if(i>=0) dstSh.getRange(1,i+1,data.length,1).setNumberFormat('@');
-    });
-    const di=idxOf('DI_DATE');
-    if(di>=0&&data.length>1) dstSh.getRange(2,di+1,data.length-1,1).setNumberFormat('dd/mm/yyyy');
-    ['TRD_QTY','TRD_Q_FREE','TRD_U_PRC','TRD_G_AMT'].forEach(function(name){
-      const i=idxOf(name); if(i>=0&&data.length>1) dstSh.getRange(2,i+1,data.length-1,1).setNumberFormat('#,##0.00');
-    });
-    const props=PropertiesService.getScriptProperties();
-    props.setProperty('lastDsDcSync',new Date().toISOString());
-    props.setProperty('lastDsDcRows',String(data.length-1));
-    props.deleteProperty('lastDsDcError');
-    return {ok:true,rows:data.length-1,at:new Date()};
-  }catch(err){
-    Logger.log('syncDsDcSheet ERROR: '+err);
-    try{ PropertiesService.getScriptProperties().setProperty('lastDsDcError',String(err)); }catch(e){}
-    throw err;
-  }finally{
-    lock.releaseLock();
-  }
-}
-
-function syncDsDcSheetUI(){
-  try{
-    const r=syncDsDcSheet();
-    SpreadsheetApp.getUi().alert('✓ Sync รายละเอียด สำเร็จ — '+r.rows+' แถว\\n('+new Date().toLocaleString('th-TH')+')');
-  }catch(err){
-    SpreadsheetApp.getUi().alert('✗ Sync รายละเอียด ไม่สำเร็จ:\\n'+err.message);
-  }
-}
-
-/* Sync ทั้ง 2 ชีท (ใบคุม + รายละเอียด) พร้อมกัน — ใช้เป็น trigger หลัก */
+/* v3.60: Sync เฉพาะ "ใบคุม" — ใช้เป็น trigger หลัก
+   (รายละเอียดบิล แอปดึงจากไฟล์ Order ชีท DS_DC ตรงๆ แล้ว ไม่ต้อง sync มาเก็บในชีท "รายละเอียด" อีก) */
 function syncAllSheets(){
-  let jadRot={ok:false,rows:0,error:''}, dsDc={ok:false,rows:0,error:''};
-  try{ jadRot=syncJadRotSheet(); }catch(e){ jadRot={ok:false,rows:0,error:String(e)}; Logger.log('syncAllSheets jadRot: '+e); }
-  try{ dsDc=syncDsDcSheet(); }catch(e){ dsDc={ok:false,rows:0,error:String(e)}; Logger.log('syncAllSheets dsDc: '+e); }
-  if(!jadRot.ok&&!dsDc.ok) throw new Error('Sync ล้มเหลวทั้ง 2 ชีท:\\n- ใบคุม: '+jadRot.error+'\\n- รายละเอียด: '+dsDc.error);
-  return {jadRot:jadRot,dsDc:dsDc};
+  const jadRot=syncJadRotSheet();   // ล้มเหลว → throw ให้ผู้เรียกจัดการ
+  return {jadRot:jadRot};
 }
 
 function syncAllSheetsUI(){
   try{
     const r=syncAllSheets();
-    const j=r.jadRot.ok?('✓ ใบคุม: '+r.jadRot.rows+' แถว'):('✗ ใบคุม: '+r.jadRot.error);
-    const d=r.dsDc.ok?('✓ รายละเอียด: '+r.dsDc.rows+' แถว'):('✗ รายละเอียด: '+r.dsDc.error);
-    SpreadsheetApp.getUi().alert('Sync เสร็จสิ้น\\n\\n'+j+'\\n'+d+'\\n\\n('+new Date().toLocaleString('th-TH')+')');
+    SpreadsheetApp.getUi().alert('✓ Sync ใบคุม สำเร็จ — '+r.jadRot.rows+' แถว\\n('+new Date().toLocaleString('th-TH')+')');
   }catch(err){
-    SpreadsheetApp.getUi().alert('✗ Sync ล้มเหลว:\\n'+err.message);
+    SpreadsheetApp.getUi().alert('✗ Sync ใบคุม ไม่สำเร็จ:\\n'+err.message);
   }
 }
 
@@ -7136,10 +7058,7 @@ function fixDocDateColumn(){
 function onOpen(){
   try{
     SpreadsheetApp.getUi().createMenu('🚚 D-Man')
-      .addItem('▶ Sync ทั้งหมด (ใบคุม + รายละเอียด)','syncAllSheetsUI')
-      .addSeparator()
-      .addItem('▶ Sync เฉพาะ ใบคุม','syncJadRotSheetUI')
-      .addItem('▶ Sync เฉพาะ รายละเอียด','syncDsDcSheetUI')
+      .addItem('▶ Sync ใบคุม (ตอนนี้)','syncAllSheetsUI')   // v3.60: เหลือ sync ใบคุม อย่างเดียว
       .addSeparator()
       .addItem('⏰ ตั้ง Trigger 9:00 · 15:00 · 21:00','setupJadRotTriggers')
       .addSeparator()
