@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.6</title>
+<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.7</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -276,7 +276,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
       <div class="sb-item" id="sb-report" onclick="dskGoto('dsk-report')"><span class="si">📊</span>รายงาน</div>
       <div class="sb-item" id="sb-settings" onclick="dskGoto('dsk-settings')"><span class="si">⚙️</span>ตั้งค่า</div>
     </div>
-    <div class="sb-ver">v3.6 · 2026-07-18</div>
+    <div class="sb-ver">v3.7 · 2026-07-18</div>
   </nav>
 
   <div id="mainCol">
@@ -374,7 +374,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
             <div class="ss-title">Export</div>
             <div class="ss-row"><div><div class="ss-label">ส่งออก Excel</div><div class="ss-sub">ข้อมูลที่กรองไว้</div></div><button class="btn btn-sm btn-success" onclick="exportExcel()">⬇ Excel</button></div>
           </div>
-          <div style="margin-top:20px;font-size:11px;color:var(--muted)">ตรวจส่วนลด DC/DS รัตนไพบูลย์ <b>v3.6</b> · 2026-07-18</div>
+          <div style="margin-top:20px;font-size:11px;color:var(--muted)">ตรวจส่วนลด DC/DS รัตนไพบูลย์ <b>v3.7</b> · 2026-07-18</div>
         </div>
 
       </div><!-- /dsk-screens -->
@@ -443,7 +443,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
               <div class="ss-title">Export</div>
               <div class="ss-row"><div><div class="ss-label">ส่งออก Excel</div></div><button class="btn btn-sm btn-success" onclick="exportExcel()">⬇ Excel</button></div>
             </div>
-            <div style="margin-top:20px;font-size:11px;color:var(--muted);text-align:center">ตรวจส่วนลด DC/DS v3.6 · 2026-07-18</div>
+            <div style="margin-top:20px;font-size:11px;color:var(--muted);text-align:center">ตรวจส่วนลด DC/DS v3.7 · 2026-07-18</div>
           </div>
         </div>
 
@@ -503,6 +503,7 @@ const PDDT_NAME  = 'PDDT';
 
 let allData=[], allInvs=[], filtInvs=[], selRef=null, lastLoad=null;
 let pddtMap={}; // PRODUCT NAME → {brand, size}
+let pddtMapNorm={}; // normalized (no spaces) → {brand, size}
 let dskPage=1, DSK_SZ=15, sortCol='date', sortAsc=false;
 let mfDate='', mfStore='', mfStatus='', mfSearch='', activePeriod='';
 
@@ -546,10 +547,14 @@ async function fetchPddt(){
     const text=await res.text();
     if(text.trim().startsWith('<')){showToast('PDDT ยังไม่ได้เปิดสาธารณะ — กรุณาแชร์ชีต PDDT','error');return;}
     const rows=parseCsv(text);
-    pddtMap={};
+    pddtMap={};pddtMapNorm={};
     rows.forEach(r=>{
       const name=(r['PRODUCT NAME']||'').trim();
-      if(name)pddtMap[name]={brand:(r['CAT BRAND']||'').trim(),size:(r['CAT SIZE']||'').trim()};
+      if(name){
+        const entry={brand:(r['CAT BRAND']||'').trim(),size:(r['CAT SIZE']||'').trim()};
+        pddtMap[name]=entry;
+        pddtMapNorm[name.replace(/\s+/g,'')]=entry;
+      }
     });
     const n=Object.keys(pddtMap).length;
     if(n>0)showToast(`โหลด PDDT ${n.toLocaleString()} รายการ ✓`,'success');
@@ -559,10 +564,10 @@ async function fetchPddt(){
 
 function lookupPddt(skuName){
   if(!skuName)return null;
-  // SKU_NAME format: "CODE@PRODUCT NAME" or just "PRODUCT NAME"
   const atIdx=skuName.indexOf('@');
   const productName=(atIdx>=0?skuName.slice(atIdx+1):skuName).trim();
-  return pddtMap[productName]||null;
+  // exact match first, then space-normalized fallback
+  return pddtMap[productName]||pddtMapNorm[productName.replace(/\s+/g,'')]||null;
 }
 
 async function loadData(force=false){
@@ -914,4 +919,5 @@ document.addEventListener('DOMContentLoaded',()=>loadData());
 </script>
 </body>
 </html>
+
 
