@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.10</title>
+<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.11</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -276,7 +276,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
       <div class="sb-item" id="sb-report" onclick="dskGoto('dsk-report')"><span class="si">📊</span>รายงาน</div>
       <div class="sb-item" id="sb-settings" onclick="dskGoto('dsk-settings')"><span class="si">⚙️</span>ตั้งค่า</div>
     </div>
-    <div class="sb-ver">v3.10 · 2026-07-18</div>
+    <div class="sb-ver">v3.11 · 2026-07-18</div>
   </nav>
 
   <div id="mainCol">
@@ -374,7 +374,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
             <div class="ss-title">Export</div>
             <div class="ss-row"><div><div class="ss-label">ส่งออก Excel</div><div class="ss-sub">ข้อมูลที่กรองไว้</div></div><button class="btn btn-sm btn-success" onclick="exportExcel()">⬇ Excel</button></div>
           </div>
-          <div style="margin-top:20px;font-size:11px;color:var(--muted)">ตรวจส่วนลด DC/DS รัตนไพบูลย์ <b>v3.10</b> · 2026-07-18</div>
+          <div style="margin-top:20px;font-size:11px;color:var(--muted)">ตรวจส่วนลด DC/DS รัตนไพบูลย์ <b>v3.11</b> · 2026-07-18</div>
         </div>
 
       </div><!-- /dsk-screens -->
@@ -443,7 +443,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
               <div class="ss-title">Export</div>
               <div class="ss-row"><div><div class="ss-label">ส่งออก Excel</div></div><button class="btn btn-sm btn-success" onclick="exportExcel()">⬇ Excel</button></div>
             </div>
-            <div style="margin-top:20px;font-size:11px;color:var(--muted);text-align:center">ตรวจส่วนลด DC/DS v3.10 · 2026-07-18</div>
+            <div style="margin-top:20px;font-size:11px;color:var(--muted);text-align:center">ตรวจส่วนลด DC/DS v3.11 · 2026-07-18</div>
           </div>
         </div>
 
@@ -500,10 +500,13 @@ const CACHE_KEY  = 'rattana_dcds_v3';
 const TTL        = 5 * 60 * 1000;
 const PDDT_ID    = '16mYDqAqqJma-_0vCIAajy6bcjdOZ7F6VagxkdkqAB2I';
 const PDDT_NAME  = 'PDDT';
+const PROMO_ID   = '1CqHARklgveAeJ6rTkNeyUSku__puTiNE7-c6ebn93W8';
+const PROMO_NAME = 'Promotion';
 
 let allData=[], allInvs=[], filtInvs=[], selRef=null, lastLoad=null;
 let pddtMap={}; // PRODUCT NAME → {brand, size}
 let pddtMapNorm={}; // normalized (no spaces) → {brand, size}
+let promoRules=[]; // [{field:'PRODUCT NAME'|'CAT BRAND'|'CAT SIZE', value:string}]
 let dskPage=1, DSK_SZ=15, sortCol='date', sortAsc=false;
 let mfDate='', mfStore='', mfStatus='', mfSearch='', activePeriod='';
 
@@ -577,15 +580,49 @@ function lookupPddt(skuName){
   return pddtMap[pn]||pddtMapNorm[pn.replace(/\s+/g,'')]||null;
 }
 
+async function fetchPromo(){
+  try{
+    const url=`https://docs.google.com/spreadsheets/d/${PROMO_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(PROMO_NAME)}`;
+    const res=await fetch(url);
+    if(!res.ok){showToast('Promotion: HTTP '+res.status,'error');return;}
+    const text=await res.text();
+    if(text.trim().startsWith('<')){showToast('Promotion ยังไม่ได้เปิดสาธารณะ','error');return;}
+    const rows=parseCsv(text);
+    promoRules=[];
+    rows.forEach(r=>{
+      const field=(r['วิธีวัด']||'').trim();
+      const value=(r['ชื่อ']||'').trim();
+      if(field&&value)promoRules.push({field,value,valueN:value.replace(/\s+/g,'')});
+    });
+    if(promoRules.length>0)showToast(`โหลดโปรโมชั่น ${promoRules.length} เงื่อนไข ✓`,'success');
+    else showToast('Promotion โหลดได้ 0 เงื่อนไข','error');
+  }catch(e){showToast('Promotion โหลดไม่สำเร็จ: '+e.message,'error');}
+}
+
+function hasPromo(skuName, pd){
+  if(!promoRules.length)return false;
+  const skuN=(skuName||'').replace(/\s+/g,'');
+  const brandN=(pd?.brand||'').replace(/\s+/g,'');
+  const sizeN=(pd?.size||'').replace(/\s+/g,'');
+  return promoRules.some(rule=>{
+    const rv=rule.valueN;
+    if(rule.field==='PRODUCT NAME')return skuN===rv||skuN.includes(rv)||rv.includes(skuN);
+    if(rule.field==='CAT BRAND')return brandN===rv||brandN.includes(rv)||rv.includes(brandN);
+    if(rule.field==='CAT SIZE')return sizeN===rv||sizeN.includes(rv)||rv.includes(sizeN);
+    return false;
+  });
+}
+
 async function loadData(force=false){
   setLoading(true);
   try{
     let data=null;
     if(!force){const c=localStorage.getItem(CACHE_KEY);if(c){const p=JSON.parse(c);if(Date.now()-p.ts<TTL)data=p.data;}}
-    // Load DS_DC and PDDT in parallel
+    // Load DS_DC, PDDT and Promotion in parallel
     const [dsData] = await Promise.all([
       data?Promise.resolve(data):fetchData(),
-      (force||Object.keys(pddtMap).length===0)?fetchPddt():Promise.resolve()
+      (force||Object.keys(pddtMap).length===0)?fetchPddt():Promise.resolve(),
+      (force||promoRules.length===0)?fetchPromo():Promise.resolve()
     ]);
     if(!data){
       try{localStorage.setItem(CACHE_KEY,JSON.stringify({ts:Date.now(),data:dsData}));}catch(e){/* quota exceeded */}
@@ -841,8 +878,12 @@ function openDetail(ref){
     <div class="dp-sec-title">สินค้า (${fmtI(inv.qty)} ชิ้น)</div>
     <div class="dp-prod-grid">${prods.map(r=>{
       const pd=lookupPddt(r['SKU_NAME']);
+      const promo=hasPromo(r['SKU_NAME'],pd);
       return`<div class="dp-prod">
-        <div class="dp-prod-name">${r['SKU_NAME']||r['TRD_SH_CODE']||'–'}</div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:4px">
+          <div class="dp-prod-name" style="flex:1">${r['SKU_NAME']||r['TRD_SH_CODE']||'–'}</div>
+          ${promo?`<span style="font-size:10px;background:#C62828;color:#fff;border-radius:4px;padding:2px 6px;font-weight:700;white-space:nowrap;flex-shrink:0">มีโปร</span>`:''}
+        </div>
         ${pd?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin:3px 0">
           ${pd.brand?`<span style="font-size:10px;background:var(--blue-light);color:var(--blue);border-radius:4px;padding:1px 6px;font-weight:600">${pd.brand}</span>`:''}
           ${pd.size?`<span style="font-size:10px;background:#F3E5F5;color:#6A1B9A;border-radius:4px;padding:1px 6px;font-weight:600">${pd.size}</span>`:''}
@@ -926,6 +967,7 @@ document.addEventListener('DOMContentLoaded',()=>loadData());
 </script>
 </body>
 </html>
+
 
 
 
