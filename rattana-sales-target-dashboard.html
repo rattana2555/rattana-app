@@ -238,7 +238,7 @@ body.dark .ptbl-td{border-color:var(--border)}
 <div class="page hidden" id="appScreen">
   <header>
     <div class="logo-text">RATTANA<span>·</span>SALES
-      <small>ยอดขายเทียบเป้าหมาย v1.30</small>
+      <small>ยอดขายเทียบเป้าหมาย v1.31</small>
     </div>
     <div class="flex gap-8" style="margin-left:auto">
       <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">⟳</button>
@@ -612,6 +612,25 @@ function computeAll(targetRaw, bpRaw, cnRaw, budgetRaw, newSkuRaw) {
       const key = normName + '||' + monthInfo.mm + '/' + monthInfo.yyyy;
       const bucket = bpIndex.get(key) || [];
       actual = new Set(bucket.map(r => r['Customer_Code']).filter(Boolean)).size;
+      supported = true;
+    } else if (parsed.dim.toUpperCase() === 'KPI' && normalizeText(parsed.value).replace(/\s+/g,'').toUpperCase() === 'SKU/OUTLET' && monthInfo) {
+      const key = normName + '||' + monthInfo.mm + '/' + monthInfo.yyyy;
+      const bucket = bpIndex.get(key) || [];
+      const custSkuMap = new Map();
+      bucket.forEach(r => {
+        const cust = r['Customer_Code'];
+        const prod = r['Product_Name'];
+        if (!cust || !prod) return;
+        if (!custSkuMap.has(cust)) custSkuMap.set(cust, new Set());
+        custSkuMap.get(cust).add(prod);
+      });
+      const custCount = custSkuMap.size;
+      if (custCount > 0) {
+        const totalSkus = [...custSkuMap.values()].reduce((s, set) => s + set.size, 0);
+        actual = Math.round(totalSkus / custCount);
+      } else {
+        actual = 0;
+      }
       supported = true;
     } else if (parsed.dim.toUpperCase() === 'KPI' && normalizeText(parsed.value).toUpperCase() === 'ALL SKU' && monthInfo) {
       const key = normName + '||' + monthInfo.mm + '/' + monthInfo.yyyy;
