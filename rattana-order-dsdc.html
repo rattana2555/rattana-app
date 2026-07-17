@@ -282,6 +282,59 @@ const SHEET_NAME = 'DS_DC';
 const CACHE_KEY = 'rattana_dsdc_data';
 const TTL = 5 * 60 * 1000;
 
+let allData = [], filteredData = [], filterStore = '', filterWH = '';
+
+// ── CSV Parser (RFC-4180) ──
+function parseCsv(text) {
+  const rows = []; let cur = [], field = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], n = text[i+1];
+    if (inQ) {
+      if (c==='"' && n==='"') { field+='"'; i++; }
+      else if (c==='"') inQ = false;
+      else field += c;
+    } else {
+      if (c==='"') inQ = true;
+      else if (c===',') { cur.push(field); field=''; }
+      else if (c==='\r'||c==='\n') {
+        cur.push(field); field='';
+        if (cur.some(f=>f!=='')) rows.push(cur);
+        cur = [];
+        if (c==='\r'&&n==='\n') i++;
+      } else field += c;
+    }
+  }
+  if (field||cur.length) { cur.push(field); if (cur.some(f=>f!=='')) rows.push(cur); }
+  if (!rows.length) return [];
+  const headers = rows[0];
+  return rows.slice(1).map(r => Object.fromEntries(headers.map((h,i) => [h.trim(), (r[i]||'').trim()])));
+}
+
+// ── Fetch from Sheets ──
+async function loadFromSheets(sheetId, sheetName) {
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('fetch failed ' + res.status);
+  return parseCsv(await res.text());
+}
+
+// ── Load / Cache ──
+async function loadData() {
+  showSpinner('กำลังโหลดข้อมูล...');
+  try {
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached) {
+      const { ts, data } = JSON.parse(cached);
+      if (Date.now() - ts < TTL) { allData = data; hideSpinner(); return; }
+    }
+    allData = await loadFromSheets(SHEET_ID, SHEET_NAME);
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: allData }));
+  } catch(e) {
+    showToast('โหลดข้อมูลไม่ได้: ' + e.message, 'error');
+    allData = [];
+  }
+  hideSpinner();
+}
 
 async function refreshData() {
   const b = document.getElementById('btnRefresh');
