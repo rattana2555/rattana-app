@@ -238,7 +238,7 @@ body.dark .ptbl-td{border-color:var(--border)}
 <div class="page hidden" id="appScreen">
   <header>
     <div class="logo-text">RATTANA<span>·</span>SALES
-      <small>ยอดขายเทียบเป้าหมาย v1.29</small>
+      <small>ยอดขายเทียบเป้าหมาย v1.30</small>
     </div>
     <div class="flex gap-8" style="margin-left:auto">
       <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">⟳</button>
@@ -296,6 +296,8 @@ const CN_SHEET_ID = '1WNJFRUTMZg4lGftUJRLyTuLczhobmFb6jsOrm9l_TYg';
 const CN_SHEET_NAME = 'incentive CN หัวข้อเซลล์';
 const BUDGET_SHEET_ID = '1ww64IJdFJk8z8CDCCoFYZyE8FNzuH9W6sFDO6K44gWw';
 const BUDGET_SHEET_NAME = 'Budget Incentive';
+const NEWSKU_SHEET_ID = '1pEuwai-9O38A0C22eKI2_vU5rqUEa0liApjoUfNw1SY';
+const NEWSKU_SHEET_NAME = 'SKU ใหม่';
 
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
@@ -514,11 +516,24 @@ function buildBudgetIndex(budgetRaw) {
   return idx;
 }
 
-function computeAll(targetRaw, bpRaw, cnRaw, budgetRaw) {
+function buildNewSkuIndex(newSkuRaw) {
+  const idx = new Map();
+  (newSkuRaw || []).forEach(r => {
+    const rawName = String(r['Sale NO ROO'] || '').trim();
+    const v = parseNum(r['จำนวนร้าน']);
+    if (!rawName || v === 0) return;
+    const key = normalizeName(rawName);
+    if (!idx.has(key)) idx.set(key, v);
+  });
+  return idx;
+}
+
+function computeAll(targetRaw, bpRaw, cnRaw, budgetRaw, newSkuRaw) {
   const bpIndex = buildBpIndex(bpRaw);
   const debtorActualIndex = buildDebtorActualIndex(targetRaw);
   const cnIndex = buildCnIndex(cnRaw);
   const budgetIndex = buildBudgetIndex(budgetRaw);
+  const newSkuIndex = buildNewSkuIndex(newSkuRaw);
   const rows = [];
   targetRaw.forEach(t => {
     const name = t['ชื่อ สกุล'];
@@ -578,6 +593,9 @@ function computeAll(targetRaw, bpRaw, cnRaw, budgetRaw) {
       const sumExvat = filtered.reduce((s, r) => s + r._exvatcn2, 0);
       targetVal = sumExvat * 0.002;
       actual = budgetIndex.get(empCode) ?? null;
+      supported = actual !== null;
+    } else if (parsed.dim.toUpperCase() === 'KPI' && normalizeText(parsed.value).toUpperCase().includes('SKUใหม่') && monthInfo) {
+      actual = newSkuIndex.get(normName) ?? null;
       supported = actual !== null;
     } else if (parsed.dim.toUpperCase() === 'KPI' && normalizeText(parsed.value).toUpperCase() === 'ร้าน ROO' && monthInfo) {
       const key = normName + '||' + monthInfo.mm + '/' + monthInfo.yyyy;
@@ -658,18 +676,20 @@ async function loadData(showSpin) {
   if (showSpin) showSpinner('กำลังโหลดข้อมูลยอดขาย...');
   setLoading(true);
   try {
-    const [targetRaw, bpRaw, cnRaw, budgetRaw] = await Promise.all([
+    const [targetRaw, bpRaw, cnRaw, budgetRaw, newSkuRaw] = await Promise.all([
       loadFromSheets(TARGET_SHEET_ID, TARGET_SHEET_NAME),
       loadFromSheets(BP_SHEET_ID, BP_SHEET_NAME),
       loadFromSheets(CN_SHEET_ID, CN_SHEET_NAME),
       loadFromSheets(BUDGET_SHEET_ID, BUDGET_SHEET_NAME),
+      loadFromSheets(NEWSKU_SHEET_ID, NEWSKU_SHEET_NAME),
     ]);
     state.targetRaw = targetRaw;
     state.bpRaw = bpRaw;
     state.cnRaw = cnRaw;
     state.budgetRaw = budgetRaw;
+    state.newSkuRaw = newSkuRaw;
     setCache('targetCache', targetRaw);
-    state.rows = computeAll(targetRaw, bpRaw, cnRaw, budgetRaw);
+    state.rows = computeAll(targetRaw, bpRaw, cnRaw, budgetRaw, newSkuRaw);
     buildFilterControls();
     renderAll();
   } catch (e) {
