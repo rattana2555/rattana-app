@@ -777,9 +777,62 @@ function showToast(msg,type='info'){
 })();
 
 // ─────────────────────────────────────────────────────────
+//  REALTIME — live updates from Supabase
+// ─────────────────────────────────────────────────────────
+function setupRealtime(){
+  // New / updated conversation (unread count, last message)
+  sb.channel('conv-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, payload=>{
+      const r = payload.new;
+      if(!r) return;
+      const existing = convs.find(c=>c.id===r.id);
+      if(existing){
+        existing.name    = r.customer_name||'ลูกค้า';
+        existing.lastMsg = r.last_message||'';
+        existing.lastTime= new Date(r.last_message_at);
+        // don't overwrite unread if this conv is currently open
+        if(activeId !== r.id) existing.unread = r.unread_count||0;
+      } else {
+        convs.push({
+          id: r.id, platform: r.platform,
+          uid: r.platform_conv_id,
+          name: r.customer_name||'ลูกค้า',
+          lastMsg: r.last_message||'',
+          lastTime: new Date(r.last_message_at),
+          unread: r.unread_count||0,
+        });
+      }
+      renderList();
+    })
+    .subscribe();
+
+  // New incoming message — append to open conversation
+  sb.channel('msg-changes')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload=>{
+      const m = payload.new;
+      if(!m || m.conversation_id !== activeId) return;
+      if(!msgCache[activeId]) msgCache[activeId]=[];
+      // avoid duplicate if we added it optimistically
+      const already = msgCache[activeId].find(x=>x.sent_at===m.sent_at&&x.content===m.content&&x.direction===m.direction);
+      if(!already){
+        msgCache[activeId].push({ direction:m.direction, content:m.content, sent_at:m.sent_at });
+        renderMsgs(msgCache[activeId]);
+        scrollBottom();
+      }
+    })
+    .subscribe();
+}
+
+// ─────────────────────────────────────────────────────────
 //  INIT
 // ─────────────────────────────────────────────────────────
-renderList();
+if(SUPABASE_ANON==='YOUR_ANON_KEY_HERE'){
+  document.getElementById('convList').innerHTML =
+    '<div class="conv-empty" style="padding:24px;line-height:1.8">⚠️ ยังไม่ได้ตั้งค่า Supabase<br><small>เปิดไฟล์ HTML แก้ไข <b>YOUR_ANON_KEY_HERE</b><br>ด้วย anon key จาก Supabase Dashboard &gt; Settings &gt; API</small></div>';
+} else {
+  setupRealtime();
+  loadConvs();
+}
 </script>
 </body>
 </html>
