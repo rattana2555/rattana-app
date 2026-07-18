@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.19</title>
+<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.20</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -276,7 +276,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
       <div class="sb-item" id="sb-report" onclick="dskGoto('dsk-report')"><span class="si">📊</span>รายงาน</div>
       <div class="sb-item" id="sb-settings" onclick="dskGoto('dsk-settings')"><span class="si">⚙️</span>ตั้งค่า</div>
     </div>
-    <div class="sb-ver">v3.19 · 2026-07-18</div>
+    <div class="sb-ver">v3.20 · 2026-07-18</div>
   </nav>
 
   <div id="mainCol">
@@ -374,7 +374,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
             <div class="ss-title">Export</div>
             <div class="ss-row"><div><div class="ss-label">ส่งออก Excel</div><div class="ss-sub">ข้อมูลที่กรองไว้</div></div><button class="btn btn-sm btn-success" onclick="exportExcel()">⬇ Excel</button></div>
           </div>
-          <div style="margin-top:20px;font-size:11px;color:var(--muted)">ตรวจส่วนลด DC/DS รัตนไพบูลย์ <b>v3.19</b> · 2026-07-18</div>
+          <div style="margin-top:20px;font-size:11px;color:var(--muted)">ตรวจส่วนลด DC/DS รัตนไพบูลย์ <b>v3.20</b> · 2026-07-18</div>
         </div>
 
       </div><!-- /dsk-screens -->
@@ -443,7 +443,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
               <div class="ss-title">Export</div>
               <div class="ss-row"><div><div class="ss-label">ส่งออก Excel</div></div><button class="btn btn-sm btn-success" onclick="exportExcel()">⬇ Excel</button></div>
             </div>
-            <div style="margin-top:20px;font-size:11px;color:var(--muted);text-align:center">ตรวจส่วนลด DC/DS v3.19 · 2026-07-18</div>
+            <div style="margin-top:20px;font-size:11px;color:var(--muted);text-align:center">ตรวจส่วนลด DC/DS v3.20 · 2026-07-18</div>
           </div>
         </div>
 
@@ -906,16 +906,39 @@ function openDetail(ref){
   document.getElementById('dp-meta').innerHTML=`<span>🗓${thD(inv.date)}</span><span>👤${inv.slmn}</span><span>🏭${inv.wl}</span><span class="badge ${st.cls}" style="margin-top:2px">${st.label}</span>`;
   const prods=inv.lines;
   const freeL=inv.lines.filter(r=>parseInt(r['TRD_Q_FREE'])>0);
+  // คำนวณ promo ทุกรายการและสรุปของแถม
+  const prodsWithPromo=prods.map(r=>{
+    const pd=lookupPddt(r['SKU_NAME']);
+    const promo=matchPromo(r['SKU_NAME'],pd,r);
+    let totalGift=0;
+    if(promo&&promo.gift){
+      const rq=parseInt(promo.qty)||1;
+      const gq=parseInt(promo.giftQty)||1;
+      const bought=parseInt(r['TRD_QTY']||0)||0;
+      totalGift=Math.floor(bought/rq)*gq||gq;
+    }
+    return{r,pd,promo,totalGift};
+  });
+  const promoSummary={};
+  prodsWithPromo.forEach(({promo,totalGift})=>{
+    if(promo&&promo.gift&&totalGift>0)promoSummary[promo.gift]=(promoSummary[promo.gift]||0)+totalGift;
+  });
+  const promoSumKeys=Object.keys(promoSummary);
   document.getElementById('dp-body').innerHTML=`
     <div class="dp-info-row">
       <div class="dp-kv"><span class="k">เลขที่ใบ</span><span class="v" style="font-family:monospace;font-size:11px">${inv.ref}</span></div>
       <div class="dp-kv"><span class="k">ยอดรวม</span><span class="v" style="color:var(--blue)">${fmt(inv.amt)} บ.</span></div>
       <div class="dp-kv"><span class="k">รหัสร้าน</span><span class="v">${inv.code}</span></div>
     </div>
+    ${promoSumKeys.length?`<div style="background:#FFF3E0;border:1.5px solid #FFB74D;border-radius:10px;padding:10px 14px;margin-bottom:8px">
+      <div style="font-size:11px;font-weight:700;color:#E65100;letter-spacing:.4px;margin-bottom:6px">🎁 สรุปของแถมโปรโมชั่น</div>
+      ${promoSumKeys.map(g=>`<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:2px 0">
+        <span style="font-weight:600;color:#4E342E">${g}</span>
+        <span style="font-weight:800;color:#E65100;font-size:14px">${promoSummary[g]} EA</span>
+      </div>`).join('')}
+    </div>`:''}
     <div class="dp-sec-title">สินค้า (${fmtI(inv.qty)} ชิ้น)</div>
-    <div class="dp-prod-grid">${prods.map(r=>{
-      const pd=lookupPddt(r['SKU_NAME']);
-      const promo=matchPromo(r['SKU_NAME'],pd,r);
+    <div class="dp-prod-grid">${prodsWithPromo.map(({r,pd,promo,totalGift})=>{
       return`<div class="dp-prod">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:4px">
           <div class="dp-prod-name" style="flex:1">${r['SKU_NAME']||r['TRD_SH_CODE']||'–'}</div>
@@ -928,7 +951,7 @@ function openDetail(ref){
         <div class="dp-prod-row"><span style="font-weight:700">${fmtI(parseInt(r['TRD_QTY'])||0)} ${(/\(([^)]+)\)/.exec(r['TRD_UTQNAME']||'')?.[1]||r['TRD_UTQNAME']||'')}</span><span style="font-weight:700;color:var(--blue)">${fmt(r['TRD_G_AMT'])} บ.</span></div>
         ${promo&&promo.gift?`<div style="display:flex;align-items:center;gap:6px;background:#FFF3E0;border-radius:6px;padding:4px 8px;margin-top:4px;font-size:11px">
           <span style="font-size:13px">🎁</span>
-          <span style="font-weight:700;color:#E65100">แถม ${promo.gift}${promo.giftQty?' × '+promo.giftQty+' EA':''}</span>
+          <span style="font-weight:700;color:#E65100">แถม ${promo.gift} × ${totalGift} EA</span>
         </div>`:''}
       </div>`;
     }).join('')}</div>
@@ -1008,6 +1031,7 @@ document.addEventListener('DOMContentLoaded',()=>loadData());
 </script>
 </body>
 </html>
+
 
 
 
