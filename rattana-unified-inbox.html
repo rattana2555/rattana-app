@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Rattana Unified Inbox</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#0d1b3e;--navy-mid:#1a2f5e;--navy-light:#243b73;--gold:#c9a84c;--gold-light:#e8c86a;--success:#2ecc71;--danger:#e74c3c;--warning:#f39c12;--info:#3498db;--bg:#f4f6fb;--text:#0d1b3e;--card-bg:#ffffff;--border:#dde3f0;--muted:#6b7896;--radius-sm:6px;--radius-md:12px;--radius-lg:16px;--shadow-md:0 2px 8px rgba(0,0,0,.08);--shadow-lg:0 8px 24px rgba(13,27,62,.12);--shadow-gold:0 4px 12px rgba(201,168,76,.35)}
+body.dark{--bg:#0a1020;--text:#e8eaf0;--card-bg:#111c35;--border:#243b73;--muted:#8a98b8}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;min-height:100dvh;overflow:hidden;background:var(--bg);color:var(--text);transition:background .25s,color .25s}
+button{font-family:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+input,textarea{font-family:inherit}
+
+/* HEADER */
+header{background:var(--navy);color:#fff;padding:0 14px;height:58px;display:flex;align-items:center;gap:10px;border-bottom:3px solid var(--gold);position:sticky;top:0;z-index:100;flex-shrink:0}
+.logo-text{font-weight:700;letter-spacing:1px;font-size:15px;color:#fff;line-height:1.2}
+.logo-text span{color:var(--gold)}
+.logo-sub{font-size:10px;color:rgba(255,255,255,.5);font-weight:400;display:block}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:6px}
+.icon-btn{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.2);width:34px;height:34px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:15px}
+.icon-btn:hover{background:rgba(255,255,255,.12)}
+
+/* DEMO BANNER */
+.demo-banner{background:linear-gradient(90deg,#e67e22,#f39c12);color:#fff;text-align:center;padding:5px 12px;font-size:11px;font-weight:600;flex-shrink:0}
+
+/* LAYOUT */
+.inbox-wrap{display:flex;height:calc(100dvh - 58px - 30px);overflow:hidden;position:relative}
+
+/* CONV PANEL */
+.conv-panel{width:320px;min-width:260px;display:flex;flex-direction:column;border-right:1px solid var(--border);background:var(--card-bg);flex-shrink:0}
+.conv-search{padding:8px 10px;border-bottom:1px solid var(--border);display:flex;gap:6px}
+.conv-search input{flex:1;height:36px;padding:0 12px;border-radius:18px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);outline:none;font-size:14px;font-family:inherit}
+.conv-search input:focus{border-color:var(--gold)}
+
+/* PLATFORM TABS */
+.ptabs{display:flex;overflow-x:auto;border-bottom:1px solid var(--border);scrollbar-width:none;flex-shrink:0}
+.ptabs::-webkit-scrollbar{display:none}
+.ptab{padding:7px 8px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;display:flex;align-items:center;gap:3px;background:transparent;transition:all .15s;font-family:inherit}
+.ptab:hover{color:var(--text)}
+.ptab.active{color:var(--navy);border-bottom-color:var(--gold)}
+.ptab .nb{background:var(--danger);color:#fff;border-radius:8px;padding:1px 4px;font-size:9px;min-width:14px;text-align:center}
+body.dark .ptab.active{color:var(--gold)}
+
+/* CONV LIST */
+.conv-list{flex:1;overflow-y:auto}
+.conv-item{display:flex;align-items:center;gap:9px;padding:11px 12px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .12s;position:relative}
+.conv-item:hover{background:var(--bg)}
+.conv-item.active{background:rgba(201,168,76,.09);border-left:3px solid var(--gold)}
+.conv-avatar{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#fff;flex-shrink:0;position:relative}
+.pdot{position:absolute;bottom:-1px;right:-1px;width:17px;height:17px;border-radius:50%;border:2px solid var(--card-bg);display:flex;align-items:center;justify-content:center;font-size:8px;color:#fff;font-weight:800}
+.conv-info{flex:1;min-width:0}
+.conv-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conv-prev{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.conv-item.has-unread .conv-prev{font-weight:600;color:var(--text)}
+.conv-meta{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
+.conv-time{font-size:10px;color:var(--muted)}
+.ubadge{background:var(--danger);color:#fff;border-radius:8px;padding:2px 5px;font-size:10px;font-weight:700;min-width:16px;text-align:center}
+.conv-empty{text-align:center;padding:48px 20px;color:var(--muted);font-size:13px}
+
+/* CHAT PANEL */
+.chat-panel{flex:1;display:flex;flex-direction:column;min-width:0}
+.chat-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);gap:10px}
+.chat-empty .ei{font-size:60px;opacity:.25}
+
+/* CHAT HEADER */
+.chat-hdr{padding:10px 14px;border-bottom:1px solid var(--border);background:var(--card-bg);display:flex;align-items:center;gap:10px;flex-shrink:0}
+.back-btn{display:none;background:transparent;color:var(--muted);font-size:20px;padding:4px 6px;border-radius:var(--radius-sm)}
+.back-btn:hover{background:var(--bg);color:var(--text)}
+.chat-cinfo{flex:1;min-width:0}
+.chat-cname{font-size:14px;font-weight:700}
+.chat-csub{font-size:11px;color:var(--muted);margin-top:1px}
+.plat-badge{padding:3px 10px;border-radius:14px;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+
+/* MESSAGES */
+.msgs-area{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px;background:var(--bg)}
+.msg-grp{display:flex;flex-direction:column;gap:3px;max-width:72%}
+.msg-grp.fc{align-self:flex-start}
+.msg-grp.fa{align-self:flex-end}
+.msg-bubble{padding:9px 13px;border-radius:16px;font-size:14px;line-height:1.6;word-break:break-word}
+.fc .msg-bubble{background:var(--card-bg);border:1px solid var(--border);border-bottom-left-radius:4px}
+.fa .msg-bubble{background:var(--navy);color:#fff;border-bottom-right-radius:4px}
+.msg-time{font-size:10px;color:var(--muted);padding:0 3px}
+.fa .msg-time{text-align:right}
+.date-sep{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:11px;margin:4px 0;flex-shrink:0}
+.date-sep::before,.date-sep::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* QUICK REPLIES */
+.quick-replies{display:flex;gap:5px;padding:7px 12px;overflow-x:auto;scrollbar-width:none;background:var(--card-bg);border-top:1px solid var(--border);flex-shrink:0}
+.quick-replies::-webkit-scrollbar{display:none}
+.qchip{padding:5px 11px;border:1px solid var(--border);border-radius:16px;font-size:12px;background:var(--bg);color:var(--text);cursor:pointer;white-space:nowrap;font-family:inherit;transition:all .12s}
+.qchip:hover{border-color:var(--gold);background:rgba(201,168,76,.08)}
+
+/* REPLY BAR */
+.reply-bar{padding:8px 10px;background:var(--card-bg);border-top:1px solid var(--border);display:flex;gap:7px;align-items:flex-end;flex-shrink:0}
+.reply-input{flex:1;min-height:40px;max-height:100px;padding:8px 13px;border-radius:20px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);outline:none;resize:none;font-size:14px;line-height:1.5;overflow-y:auto;font-family:inherit}
+.reply-input:focus{border-color:var(--gold)}
+.reply-input::placeholder{color:var(--muted)}
+.send-btn{width:40px;height:40px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;transition:background .15s}
+.send-btn:hover{background:var(--navy-mid)}
+.send-btn:active{transform:scale(.93)}
+
+/* TOAST */
+.toast{position:fixed;bottom:max(20px,env(safe-area-inset-bottom));right:14px;padding:10px 18px;border-radius:var(--radius-md);color:#fff;z-index:9999;animation:slideIn .3s ease;font-weight:500;box-shadow:var(--shadow-lg);font-size:13px}
+.toast-success{background:var(--success)}
+.toast-error{background:var(--danger)}
+.toast-info{background:var(--navy-mid);border-left:3px solid var(--gold)}
+
+@keyframes slideIn{from{transform:translateX(110%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+
+/* MOBILE */
+@media(max-width:768px){
+  .conv-panel{width:100%;position:absolute;top:0;left:0;right:0;bottom:0;z-index:5}
+  .conv-panel.hide-m{display:none}
+  .chat-panel{position:absolute;top:0;left:0;right:0;bottom:0;display:none;z-index:6}
+  .chat-panel.show-m{display:flex}
+  .back-btn{display:block}
+  .msg-grp{max-width:85%}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAAF8WlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4gPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgNy4yLWMwMDAgNzkuMWI2NWE3OWI0LCAyMDIyLzA2LzEzLTIyOjAxOjAxICAgICAgICAiPiA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPiA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtbG5zOnhtcE1NPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvbW0vIiB4bWxuczpzdEV2dD0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL3NUeXBlL1Jlc291cmNlRXZlbnQjIiB4bWxuczpkYz0iaHR0cDovL3B1cmwub3JnL2RjL2VsZW1lbnRzLzEuMS8iIHhtbG5zOnBob3Rvc2hvcD0iaHR0cDovL25zLmFkb2JlLmNvbS9waG90b3Nob3AvMS4wLyIgeG1wOkNyZWF0b3JUb29sPSJBZG9iZSBQaG90b3Nob3AgMjMuNSAoTWFjaW50b3NoKSIgeG1wOkNyZWF0ZURhdGU9IjIwMjItMTItMjJUMDE6MzY6MTkrMDc6MDAiIHhtcDpNZXRhZGF0YURhdGU9IjIwMjItMTItMjJUMDE6Mzc6NTMrMDc6MDAiIHhtcDpNb2RpZnlEYXRlPSIyMDIyLTEyLTIyVDAxOjM3OjUzKzA3OjAwIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjEzMjkzMmYzLTMxMjUtNDM1YS04YTJjLTk5YTFiMzZiM2YyOCIgeG1wTU06RG9jdW1lbnRJRD0iYWRvYmU6ZG9jaWQ6cGhvdG9zaG9wOjM5OTA1ZjNlLWVmOTMtYWM0ZC04MDM4LTBkYTE3ZGZmZmE1NCIgeG1wTU06T3JpZ2luYWxEb2N1bWVudElEPSJ4bXAuZGlkOmVhNTFiZTc1LTZkNTgtNGQ4Yi1iOGQxLWQ4MzhjMWE0ODVhNiIgZGM6Zm9ybWF0PSJpbWFnZS9wbmciIHBob3Rvc2hvcDpDb2xvck1vZGU9IjMiPiA8eG1wTU06SGlzdG9yeT4gPHJkZjpTZXE+IDxyZGY6bGkgc3RFdnQ6YWN0aW9uPSJjcmVhdGVkIiBzdEV2dDppbnN0YW5jZUlEPSJ4bXAuaWlkOmVhNTFiZTc1LTZkNTgtNGQ4Yi1iOGQxLWQ4MzhjMWE0ODVhNiIgc3RFdnQ6d2hlbj0iMjAyMi0xMi0yMlQwMTozNjoxOSswNzowMCIgc3RFdnQ6c29mdHdhcmVBZ2VudD0iQWRvYmUgUGhvdG9zaG9wIDIzLjUgKE1hY2ludG9zaCkiLz4gPHJkZjpsaSBzdEV2dDphY3Rpb249InNhdmVkIiBzdEV2dDppbnN0YW5jZUlEPSJ4bXAuaWlkOjEzMjkzMmYzLTMxMjUtNDM1YS04YTJjLTk5YTFiMzZiM2YyOCIgc3RFdnQ6d2hlbj0iMjAyMi0xMi0yMlQwMTozNzo1MyswNzowMCIgc3RFdnQ6c29mdHdhcmVBZ2VudD0iQWRvYmUgUGhvdG9zaG9wIDIzLjUgKE1hY2ludG9zaCkiIHN0RXZ0OmNoYW5nZWQ9Ii8iLz4gPC9yZGY6U2VxPiA8L3htcE1NOkhpc3Rvcnk+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+zBBP4QAABnJJREFUaN7tWHlsFEUYn5md3b09tve1QCmUo5RDQERuERAVBS94gBc+8IiKqEQRBTUeDxQVFQ8URfDAA0FQEAQR5L6hpbQFSgttt3TP3Xb3mN2d8Y/dbpddtlvAJP6Tyc7MN9/3/b5vZmcXAP7LQSsNAABgjDFCCJRSSqmUUkopKSUAoCiKoijKOeecUkoppZRSSimllFJKKaWUUkoppQghRAghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgj5B34BV5IpnwAAAABJRU5ErkJggg==" height="34" style="border-radius:50%;object-fit:cover;flex-shrink:0" onerror="this.style.display='none'">
+  <div>
+    <div class="logo-text">RATTANA <span>Unified Inbox</span></div>
+    <span class="logo-sub">ระบบรวมแชททุกช่องทาง</span>
+  </div>
+  <div class="hdr-right">
+    <button class="icon-btn" onclick="toggleDark()" title="Dark mode">🌙</button>
+  </div>
+</header>
+
+<div class="demo-banner">⚠️ UI Preview Mode — ยังไม่ได้เชื่อมต่อ API จริง (ข้อมูล Mock)</div>
+
+<div class="inbox-wrap">
+
+  <!-- LEFT: Conversation List -->
+  <div class="conv-panel" id="convPanel">
+    <div class="conv-search">
+      <input type="text" placeholder="🔍 ค้นหาลูกค้า..." oninput="filterConv(this.value)" autocomplete="off">
+    </div>
+    <div class="ptabs" id="ptabs">
+      <button class="ptab active" data-p="all" onclick="setPlatform('all',this)">ทั้งหมด&nbsp;<span class="nb" id="nb-all"></span></button>
+      <button class="ptab" data-p="line" onclick="setPlatform('line',this)">LINE&nbsp;<span class="nb" id="nb-line"></span></button>
+      <button class="ptab" data-p="facebook" onclick="setPlatform('facebook',this)">Facebook&nbsp;<span class="nb" id="nb-facebook"></span></button>
+      <button class="ptab" data-p="tiktok" onclick="setPlatform('tiktok',this)">TikTok&nbsp;<span class="nb" id="nb-tiktok"></span></button>
+      <button class="ptab" data-p="shopee" onclick="setPlatform('shopee',this)">Shopee&nbsp;<span class="nb" id="nb-shopee"></span></button>
+      <button class="ptab" data-p="tiktokshop" onclick="setPlatform('tiktokshop',this)">TikTok Shop&nbsp;<span class="nb" id="nb-tiktokshop"></span></button>
+    </div>
+    <div class="conv-list" id="convList"></div>
+  </div>
+
+  <!-- RIGHT: Chat Panel -->
+  <div class="chat-panel" id="chatPanel">
+
+    <!-- Empty state -->
+    <div class="chat-empty" id="chatEmpty">
+      <div class="ei">💬</div>
+      <div style="font-size:15px;font-weight:600">เลือกการสนทนา</div>
+      <div style="font-size:13px;color:var(--muted)">คลิกที่รายการทางซ้ายเพื่อดูข้อความ</div>
+    </div>
+
+    <!-- Chat content -->
+    <div id="chatContent" style="display:none;flex-direction:column;flex:1;min-height:0">
+
+      <div class="chat-hdr">
+        <button class="back-btn" onclick="backToList()">←</button>
+        <div class="conv-avatar" id="chatAv" style="width:38px;height:38px;font-size:14px;font-weight:700;color:#fff;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center"></div>
+        <div class="chat-cinfo">
+          <div class="chat-cname" id="chatName"></div>
+          <div class="chat-csub" id="chatSub"></div>
+        </div>
+        <span class="plat-badge" id="chatBadge"></span>
+      </div>
+
+      <div class="msgs-area" id="msgsArea"></div>
+
+      <div class="quick-replies">
+        <button class="qchip" onclick="useQuick(this)">สวัสดีครับ 🙏</button>
+        <button class="qchip" onclick="useQuick(this)">รับทราบครับ ✓</button>
+        <button class="qchip" onclick="useQuick(this)">รอสักครู่นะครับ</button>
+        <button class="qchip" onclick="useQuick(this)">จัดส่งภายใน 2-3 วันครับ 📦</button>
+        <button class="qchip" onclick="useQuick(this)">ขอ slip ได้เลยครับ</button>
+        <button class="qchip" onclick="useQuick(this)">ขอบคุณที่ใช้บริการครับ 🙏</button>
+      </div>
+
+      <div class="reply-bar">
+        <textarea class="reply-input" id="replyInput" placeholder="พิมพ์ข้อความตอบกลับ... (Enter ส่ง, Shift+Enter ขึ้นบรรทัด)" rows="1"
+          onkeydown="handleKey(event)" oninput="autoGrow(this)"></textarea>
+        <button class="send-btn" onclick="sendMsg()">➤</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ──────────────────────────────────────────────────────
+//  PLATFORM CONFIG
+// ──────────────────────────────────────────────────────
+const P = {
+  line:       { name:'LINE',        color:'#06C755', short:'L'  },
+  facebook:   { name:'Facebook',    color:'#1877F2', short:'f'  },
+  tiktok:     { name:'TikTok',      color:'#222222', short:'T'  },
+  shopee:     { name:'Shopee',      color:'#EE4D2D', short:'S'  },
+  tiktokshop: { name:'TikTok Shop', color:'#FF0050', short:'TS' },
+};
+
+const AV_COLORS = ['#5e72e4','#11cdef','#2dce89','#fb6340','#f5365c','#8965e0','#e8a838','#3b82f6'];
+const avColor = s => { let h=0; for(let c of s) h=(h*31+c.charCodeAt(0))&0xffffff; return AV_COLORS[Math.abs(h)%AV_COLORS.length]; };
+
+// ──────────────────────────────────────────────────────
+//  MOCK DATA
+// ──────────────────────────────────────────────────────
+const N = Date.now(), M = 60000, H = 3600000;
+
+let convs = [
+  { id:1, platform:'line', name:'คุณอรทัย มีสุข', uid:'line_U1aF2b3', unread:0,
+    lastMsg:'ขอบคุณค่ะ รอรับของนะคะ', lastTime:new Date(N-5*M),
+    msgs:[
+      {from:'c',text:'สวัสดีค่ะ อยากสอบถามราคาถุงข้าวสาร 5 กก ค่ะ',time:new Date(N-32*M)},
+      {from:'a',text:'สวัสดีครับ 🙏 ราคาถุงข้าวสาร 5 กก อยู่ที่ 185 บาทครับ',time:new Date(N-30*M)},
+      {from:'c',text:'ถ้าซื้อ 10 ถุงมีส่วนลดไหมคะ',time:new Date(N-25*M)},
+      {from:'a',text:'ซื้อ 10 ถุงขึ้นไปลด 5% ครับ รวมเป็น 1,757.50 บาทครับ',time:new Date(N-22*M)},
+      {from:'c',text:'ตกลงค่ะ สั่งเลย 10 ถุงนะคะ',time:new Date(N-18*M)},
+      {from:'a',text:'รับออเดอร์แล้วครับ จะจัดส่งภายใน 2-3 วันทำการนะครับ 📦',time:new Date(N-12*M)},
+      {from:'c',text:'ขอบคุณค่ะ รอรับของนะคะ',time:new Date(N-5*M)},
+    ]},
+  { id:2, platform:'facebook', name:'Somchai Jaidee', uid:'fb_100055', unread:2,
+    lastMsg:'อยู่สุพรรณบุรีครับ',lastTime:new Date(N-8*M),
+    msgs:[
+      {from:'c',text:'สวัสดีครับ เห็นโฆษณาน้ำมันพืช อยากสอบถามครับ',time:new Date(N-40*M)},
+      {from:'a',text:'สวัสดีครับ มีหลายยี่ห้อนะครับ ราคาเริ่มต้น 68 บาทครับ',time:new Date(N-38*M)},
+      {from:'c',text:'มีส่งต่างจังหวัดไหมครับ?',time:new Date(N-10*M)},
+      {from:'c',text:'อยู่สุพรรณบุรีครับ',time:new Date(N-8*M)},
+    ]},
+  { id:3, platform:'tiktok', name:'user_rattana_fan', uid:'@rattana_fan', unread:0,
+    lastMsg:'ราคาดีมากเลยค่ะ 👍',lastTime:new Date(N-2*H),
+    msgs:[
+      {from:'c',text:'เห็น live สินค้าวันนี้ค่ะ อยากได้ขนมปังแซนวิชค่ะ',time:new Date(N-3*H)},
+      {from:'a',text:'มีเลยครับ ขนมปังแซนวิช 8 แผ่น ราคา 45 บาทครับ',time:new Date(N-2.9*H)},
+      {from:'c',text:'ราคาดีมากเลยค่ะ 👍',time:new Date(N-2*H)},
+    ]},
+  { id:4, platform:'shopee', name:'buyer_siam8821', uid:'Shopee #8821', unread:1,
+    lastMsg:'พัสดุยังไม่มาเลยครับ',lastTime:new Date(N-3*H),
+    msgs:[
+      {from:'c',text:'สั่งไป 3 วันแล้วครับ แต่ยังไม่ส่งเลย',time:new Date(N-5*H)},
+      {from:'a',text:'ขอโทษด้วยนะครับ รบกวนส่ง tracking number ให้ดูด้วยครับ',time:new Date(N-4.5*H)},
+      {from:'c',text:'TH012345678TH ครับ',time:new Date(N-4*H)},
+      {from:'c',text:'พัสดุยังไม่มาเลยครับ',time:new Date(N-3*H)},
+    ]},
+  { id:5, platform:'tiktokshop', name:'tts_shopper99', uid:'TikTok Shop', unread:3,
+    lastMsg:'โอน slip มาแล้วนะครับ',lastTime:new Date(N-18*M),
+    msgs:[
+      {from:'c',text:'สั่งสินค้าแล้วครับ ออเดอร์ #TTS-20250718-001',time:new Date(N-50*M)},
+      {from:'a',text:'รับทราบครับ กำลังเตรียมจัดส่งนะครับ 📦',time:new Date(N-45*M)},
+      {from:'c',text:'มีส่วนลดเพิ่มสำหรับลูกค้าประจำไหมครับ',time:new Date(N-30*M)},
+      {from:'c',text:'ซื้อทุกอาทิตย์เลยครับ',time:new Date(N-25*M)},
+      {from:'c',text:'โอน slip มาแล้วนะครับ',time:new Date(N-18*M)},
+    ]},
+  { id:6, platform:'line', name:'คุณวิไล สุขใส', uid:'line_V3x9y', unread:1,
+    lastMsg:'อยากได้แบบกล่อง 12 ชิ้นค่ะ',lastTime:new Date(N-H),
+    msgs:[
+      {from:'c',text:'ไข่ไก่มีขายไหมคะ',time:new Date(N-1.5*H)},
+      {from:'a',text:'มีเลยครับ ไข่ไก่เบอร์ 2 แผง 30 ฟอง 145 บาทครับ',time:new Date(N-1.3*H)},
+      {from:'c',text:'อยากได้แบบกล่อง 12 ชิ้นค่ะ',time:new Date(N-H)},
+    ]},
+  { id:7, platform:'facebook', name:'นิดา เพชรดี', uid:'fb_200133', unread:0,
+    lastMsg:'ขนมเบเกอรี่มีอะไรบ้างคะ',lastTime:new Date(N-4*H),
+    msgs:[
+      {from:'c',text:'ขนมเบเกอรี่มีอะไรบ้างคะ',time:new Date(N-4*H)},
+      {from:'a',text:'มีขนมปัง, เค้ก, คุ้กกี้ และมาการอนครับ สนใจตัวไหนเป็นพิเศษครับ?',time:new Date(N-3.8*H)},
+    ]},
+  { id:8, platform:'shopee', name:'happy_buyer555', uid:'Shopee #555', unread:0,
+    lastMsg:'ได้รับของแล้วค่ะ ขอบคุณนะคะ ⭐⭐⭐⭐⭐',lastTime:new Date(N-6*H),
+    msgs:[
+      {from:'c',text:'สินค้ามาถึงแล้วค่ะ',time:new Date(N-7*H)},
+      {from:'a',text:'ยินดีเลยครับ สินค้าเป็นไปตามที่สั่งไหมครับ?',time:new Date(N-6.5*H)},
+      {from:'c',text:'ได้รับของแล้วค่ะ ขอบคุณนะคะ ⭐⭐⭐⭐⭐',time:new Date(N-6*H)},
+    ]},
+];
+
+// ──────────────────────────────────────────────────────
+//  STATE
+// ──────────────────────────────────────────────────────
+let activePlatform = 'all';
+let searchQ = '';
+let activeId = null;
+
+// ──────────────────────────────────────────────────────
+//  HELPERS
+// ──────────────────────────────────────────────────────
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+
+function timeAgo(d){
+  const diff = Date.now()-d;
+  if(diff<60000) return 'เมื่อกี้';
+  if(diff<3600000) return Math.floor(diff/60000)+' นาที';
+  if(diff<86400000) return Math.floor(diff/3600000)+' ชม.';
+  return d.toLocaleDateString('th-TH',{day:'numeric',month:'short'});
+}
+
+function hhmm(d){
+  return String(d.getHours()).padStart(2,'0')+'.'+String(d.getMinutes()).padStart(2,'0');
+}
+
+// ──────────────────────────────────────────────────────
+//  RENDER CONV LIST
+// ──────────────────────────────────────────────────────
+function renderList(){
+  const filtered = convs.filter(c=>{
+    const okP = activePlatform==='all' || c.platform===activePlatform;
+    const okS = !searchQ || c.name.toLowerCase().includes(searchQ.toLowerCase());
+    return okP && okS;
+  }).sort((a,b)=>b.lastTime-a.lastTime);
+
+  const el = document.getElementById('convList');
+  if(!filtered.length){ el.innerHTML='<div class="conv-empty">ไม่พบการสนทนา</div>'; return; }
+
+  el.innerHTML = filtered.map(c=>{
+    const p = P[c.platform];
+    const bg = avColor(c.name);
+    return `<div class="conv-item ${c.unread>0?'has-unread':''} ${activeId===c.id?'active':''}" onclick="openConv(${c.id})">
+      <div class="conv-avatar" style="background:${bg}">
+        ${esc(c.name.charAt(0))}
+        <div class="pdot" style="background:${p.color}">${p.short}</div>
+      </div>
+      <div class="conv-info">
+        <div class="conv-name">${esc(c.name)}</div>
+        <div class="conv-prev">${esc(c.lastMsg)}</div>
+      </div>
+      <div class="conv-meta">
+        <div class="conv-time">${timeAgo(c.lastTime)}</div>
+        ${c.unread>0?`<div class="ubadge">${c.unread}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+
+  updateBadges();
+}
+
+function updateBadges(){
+  const total = convs.reduce((s,c)=>s+c.unread,0);
+  const set = (id,n)=>{ const e=document.getElementById('nb-'+id); if(e){ e.textContent=n; e.style.display=n>0?'':'none'; } };
+  set('all',total);
+  Object.keys(P).forEach(p=>{ set(p, convs.filter(c=>c.platform===p).reduce((s,c)=>s+c.unread,0)); });
+}
+
+// ──────────────────────────────────────────────────────
+//  OPEN CONVERSATION
+// ──────────────────────────────────────────────────────
+function openConv(id){
+  activeId = id;
+  const c = convs.find(x=>x.id===id);
+  if(!c) return;
+  c.unread = 0;
+
+  const p = P[c.platform];
+  const av = document.getElementById('chatAv');
+  av.style.background = avColor(c.name);
+  av.textContent = c.name.charAt(0);
+
+  document.getElementById('chatName').textContent = c.name;
+  document.getElementById('chatSub').textContent = p.name + ' · ' + c.uid;
+  const badge = document.getElementById('chatBadge');
+  badge.textContent = p.name;
+  badge.style.background = p.color;
+
+  renderMsgs(c);
+
+  document.getElementById('chatEmpty').style.display = 'none';
+  document.getElementById('chatContent').style.display = 'flex';
+
+  // mobile
+  document.getElementById('convPanel').classList.add('hide-m');
+  document.getElementById('chatPanel').classList.add('show-m');
+
+  renderList();
+  scrollBottom();
+}
+
+// ──────────────────────────────────────────────────────
+//  RENDER MESSAGES
+// ──────────────────────────────────────────────────────
+function renderMsgs(c){
+  const area = document.getElementById('msgsArea');
+  let html='', lastDate='';
+  c.msgs.forEach((m,i)=>{
+    const ds = m.time.toLocaleDateString('th-TH',{day:'numeric',month:'long',year:'numeric'});
+    if(ds!==lastDate){ html+=`<div class="date-sep">${ds}</div>`; lastDate=ds; }
+    const side = m.from==='c'?'fc':'fa';
+    html+=`<div class="msg-grp ${side}" style="animation:fadeUp .2s ease ${i*.03}s both">
+      <div class="msg-bubble">${esc(m.text)}</div>
+      <div class="msg-time">${hhmm(m.time)} ${m.from==='a'?'✓✓':''}</div>
+    </div>`;
+  });
+  area.innerHTML = html;
+}
+
+function scrollBottom(){
+  setTimeout(()=>{ const a=document.getElementById('msgsArea'); a.scrollTop=a.scrollHeight; },60);
+}
+
+// ──────────────────────────────────────────────────────
+//  SEND MESSAGE
+// ──────────────────────────────────────────────────────
+function sendMsg(){
+  const inp = document.getElementById('replyInput');
+  const text = inp.value.trim();
+  if(!text || activeId===null) return;
+  const c = convs.find(x=>x.id===activeId);
+  if(!c) return;
+  const now = new Date();
+  c.msgs.push({from:'a', text, time:now});
+  c.lastMsg = text;
+  c.lastTime = now;
+  inp.value='';
+  autoGrow(inp);
+  renderMsgs(c);
+  renderList();
+  scrollBottom();
+  showToast('ส่งข้อความแล้ว ✓','success');
+}
+
+function handleKey(e){ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendMsg(); } }
+function autoGrow(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,100)+'px'; }
+function useQuick(btn){ const i=document.getElementById('replyInput'); i.value=btn.textContent.trim(); i.focus(); autoGrow(i); }
+function backToList(){ document.getElementById('convPanel').classList.remove('hide-m'); document.getElementById('chatPanel').classList.remove('show-m'); }
+function setPlatform(p,btn){ activePlatform=p; document.querySelectorAll('.ptab').forEach(t=>t.classList.remove('active')); btn.classList.add('active'); renderList(); }
+function filterConv(q){ searchQ=q; renderList(); }
+function toggleDark(){ document.body.classList.toggle('dark'); }
+
+function showToast(msg,type='info'){
+  const t=document.createElement('div'); t.className=`toast toast-${type}`; t.textContent=msg;
+  document.body.appendChild(t); setTimeout(()=>t.remove(),2800);
+}
+
+// ──────────────────────────────────────────────────────
+//  INIT
+// ──────────────────────────────────────────────────────
+renderList();
+</script>
+</body>
+</html>
