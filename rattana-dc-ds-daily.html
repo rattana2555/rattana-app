@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.32</title>
+<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.33</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -287,7 +287,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
       <div class="h-title dsk-only">ตรวจส่วนลด <span>DC/DS</span></div>
       <div class="h-title mob-only" id="mobTitle">รัตนไพบูลย์</div>
       <div class="flex gap-6 dsk-only" style="margin-left:auto;align-items:center">
-        <span style="font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap">v3.32 · 18/07/2569</span>
+        <span style="font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap">v3.33 · 18/07/2569</span>
         <button class="btn btn-sm" style="background:rgba(201,168,76,.15);color:var(--gold);border:1px solid rgba(201,168,76,.3);font-size:12px" onclick="exportExcel()">⬇ Excel</button>
         <button class="h-btn" onclick="refreshData()" title="รีเฟรช">⟳</button>
       </div>
@@ -322,6 +322,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
         <!-- DSK Check -->
         <div class="dsk-screen" id="dsk-check" style="padding:0">
           <div class="filter-bar" style="padding:12px 20px">
+            <select class="dsk-select" id="df-month" onchange="mfMonth=this.value;dskFilter()"><option value="">📆 ทุกเดือน</option></select>
             <select class="dsk-select" id="df-date" onchange="dskFilter()"><option value="">📅 ทุกวัน</option></select>
             <select class="dsk-select" id="df-store" onchange="dskFilter()"><option value="">🏪 ทุกร้าน</option></select>
             <select class="dsk-select" id="df-slmn" onchange="dskFilter()"><option value="">👤 พนักงาน</option></select>
@@ -410,6 +411,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
         <div class="mob-screen" id="mob-check">
           <div class="filter-bar" style="flex-wrap:wrap;gap:8px">
             <input type="text" class="search-box" id="mf-search" style="width:100%" placeholder="🔍 ค้นหาร้าน / เลขที่ใบ..." oninput="mobFilter()">
+            <button class="filter-trigger" onclick="openDD('dd-month')" id="mf-month-btn"><span class="ft-val" id="mf-month-lbl">📆 เดือนนี้</span><span class="ft-arr">▼</span></button>
             <button class="filter-trigger" onclick="openDD('dd-date')" id="mf-date-btn"><span class="ft-val" id="mf-date-lbl">📅 ทุกวัน</span><span class="ft-arr">▼</span></button>
             <button class="filter-trigger" onclick="openDD('dd-store')" id="mf-store-btn"><span class="ft-val" id="mf-store-lbl">🏪 ทุกร้าน</span><span class="ft-arr">▼</span></button>
             <button class="filter-trigger" onclick="openDD('dd-status')" id="mf-status-btn"><span class="ft-val" id="mf-status-lbl">🔵 ทุกสถานะ</span><span class="ft-arr">▼</span></button>
@@ -480,6 +482,10 @@ input,select,textarea{font-family:inherit;font-size:16px}
 <button id="fabBtn" onclick="mobGoto('mob-check','check')">🔍</button>
 
 <!-- DROPDOWN OVERLAYS (mobile) -->
+<div class="dd-overlay" id="dd-month">
+  <div class="dd-bg" onclick="closeDD('dd-month')"></div>
+  <div class="dd-sheet"><div class="dd-head"><span class="dd-head-title">เลือกเดือน</span><button class="dd-close-btn" onclick="closeDD('dd-month')">✕</button></div><div class="dd-opts" id="dd-month-opts"></div></div>
+</div>
 <div class="dd-overlay" id="dd-date">
   <div class="dd-bg" onclick="closeDD('dd-date')"></div>
   <div class="dd-sheet"><div class="dd-head"><span class="dd-head-title">เลือกวันที่</span><button class="dd-close-btn" onclick="closeDD('dd-date')">✕</button></div><div class="dd-opts" id="dd-date-opts"></div></div>
@@ -512,7 +518,7 @@ let pddtMapNorm={}; // normalized (no spaces) → {brand, size}
 let promoRules=[]; // [{field,value,price,qty,unit,gift,giftQty,warehouses}]
 let usersMap={}; // cleanName → warehouse (W1/W2/...)
 let dskPage=1, DSK_SZ=15, sortCol='date', sortAsc=false;
-let mfDate='', mfStore='', mfStatus='', mfSearch='', activePeriod='';
+let mfDate='', mfStore='', mfStatus='', mfSearch='', activePeriod='', mfMonth=(()=>{const n=new Date();return`${n.getFullYear()}/${String(n.getMonth()+1).padStart(2,'0')}`;})();
 
 /* ── CSV PARSER ── */
 function parseCsv(raw){
@@ -745,6 +751,11 @@ function invSt(inv){
 }
 
 /* ── DATE FORMAT ── */
+function thMonth(ym){
+  if(!ym)return'ทุกเดือน';const p=ym.split('/');
+  const mo=['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  return`${mo[parseInt(p[1])]||p[1]} ${parseInt(p[0])+543}`;
+}
 function thD(input){
   if(!input)return'–';const p=String(input).split('/');if(p.length<3)return input;
   const mo=['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
@@ -773,16 +784,20 @@ function updateLast(){
 
 /* ── BUILD FILTER OPTIONS ── */
 function buildOpts(){
+  const months=[...new Set(allInvs.map(i=>i.date.substring(0,7)))].sort().reverse();
   const dates=[...new Set(allInvs.map(i=>i.date))].sort().reverse();
   const stores=[...new Set(allInvs.map(i=>i.store))].sort();
   const slmns=[...new Set(allInvs.map(i=>i.slmn))].sort();
   const wls=[...new Set(allInvs.map(i=>i.wl))].sort();
 
+  fillSel('df-month',[{v:'',l:'📆 ทุกเดือน'},...months.map(m=>({v:m,l:'📆 '+thMonth(m)}))]);
+  const mEl=document.getElementById('df-month');if(mEl)mEl.value=mfMonth;
   fillSel('df-date',[{v:'',l:'📅 ทุกวัน'},...dates.map(d=>({v:d,l:thS(d)}))]);
   fillSel('df-store',[{v:'',l:'🏪 ทุกร้าน'},...stores.map(s=>({v:s,l:s}))]);
   fillSel('df-slmn',[{v:'',l:'👤 ทุกพนักงาน'},...slmns.map(s=>({v:s,l:s}))]);
   fillSel('df-wl',[{v:'',l:'🏭 ทุกคลัง'},...wls.map(w=>({v:w,l:w}))]);
 
+  fillDD('dd-month-opts',[{v:'',l:'ทุกเดือน'},...months.map(m=>({v:m,l:thMonth(m)}))],mfMonth,v=>{mfMonth=v;updateMBtn();closeDD('dd-month');mobFilter();});
   fillDD('dd-date-opts',[{v:'',l:'ทุกวัน'},...dates.map(d=>({v:d,l:thD(d)}))],mfDate,v=>{mfDate=v;updateMBtn();closeDD('dd-date');mobFilter();});
   fillDD('dd-store-opts',[{v:'',l:'ทุกร้าน'},...stores.map(s=>({v:s,l:s}))],mfStore,v=>{mfStore=v;updateMBtn();closeDD('dd-store');mobFilter();});
   fillDD('dd-status-opts',[{v:'',l:'ทุกสถานะ'},{v:'ok',l:'✅ ถูกต้อง'},{v:'pending',l:'⏳ รอตรวจสอบ'}],mfStatus,v=>{mfStatus=v;updateMBtn();closeDD('dd-status');mobFilter();});
@@ -800,6 +815,7 @@ function fillDD(id,opts,sel,onSel){
   e.innerHTML=opts.map(o=>`<div class="dd-opt ${o.v===sel?'sel':''}" onclick="(${onSel.toString()})('${o.v.replace(/'/g,"\\'")}')">${o.l}</div>`).join('');
 }
 function updateMBtn(){
+  txt('mf-month-lbl',mfMonth?'📆 '+thMonth(mfMonth):'📆 ทุกเดือน');
   txt('mf-date-lbl',mfDate?'📅 '+thS(mfDate):'📅 ทุกวัน');
   txt('mf-store-lbl',mfStore||'🏪 ทุกร้าน');
   txt('mf-status-lbl',mfStatus==='ok'?'✅ ถูกต้อง':mfStatus==='pending'?'⏳ รอตรวจสอบ':'🔵 ทุกสถานะ');
@@ -808,6 +824,7 @@ function selPeriod(d){activePeriod=d;renderMobHome();buildOpts();}
 
 /* ── DESKTOP FILTER/TABLE ── */
 function dskFilter(){
+  const fm=mfMonth;
   const fd=document.getElementById('df-date')?.value||'';
   const fs=document.getElementById('df-store')?.value||'';
   const fsl=document.getElementById('df-slmn')?.value||'';
@@ -815,6 +832,7 @@ function dskFilter(){
   const fst=document.getElementById('df-status')?.value||'';
   const fq=(document.getElementById('df-search')?.value||'').toLowerCase().trim();
   filtInvs=allInvs.filter(inv=>{
+    if(fm&&!inv.date.startsWith(fm))return false;
     if(fd&&inv.date!==fd)return false;
     if(fs&&inv.store!==fs)return false;
     if(fsl&&inv.slmn!==fsl)return false;
@@ -906,6 +924,7 @@ function renderDskReport(){
 function mobFilter(){
   const q=(document.getElementById('mf-search')?.value||'').toLowerCase().trim();
   const list=allInvs.filter(inv=>{
+    if(mfMonth&&!inv.date.startsWith(mfMonth))return false;
     if(mfDate&&inv.date!==mfDate)return false;
     if(mfStore&&inv.store!==mfStore)return false;
     if(mfStatus&&invSt(inv).key!==mfStatus)return false;
