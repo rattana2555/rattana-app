@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.33</title>
+<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.34</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -287,7 +287,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
       <div class="h-title dsk-only">ตรวจส่วนลด <span>DC/DS</span></div>
       <div class="h-title mob-only" id="mobTitle">รัตนไพบูลย์</div>
       <div class="flex gap-6 dsk-only" style="margin-left:auto;align-items:center">
-        <span style="font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap">v3.33 · 18/07/2569</span>
+        <span style="font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap">v3.34 · 18/07/2569</span>
         <button class="btn btn-sm" style="background:rgba(201,168,76,.15);color:var(--gold);border:1px solid rgba(201,168,76,.3);font-size:12px" onclick="exportExcel()">⬇ Excel</button>
         <button class="h-btn" onclick="refreshData()" title="รีเฟรช">⟳</button>
       </div>
@@ -305,7 +305,13 @@ input,select,textarea{font-family:inherit;font-size:16px}
         <div class="dsk-screen active" id="dsk-home">
           <div style="background:linear-gradient(135deg,var(--navy) 0%,var(--navy-mid) 100%);padding:20px;color:#fff;flex-shrink:0">
             <div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:4px">สวัสดี · รัตนไพบูลย์</div>
-            <div style="font-size:18px;font-weight:700;margin-bottom:14px">ภาพรวมส่วนลด DC/DS</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+              <div style="font-size:18px;font-weight:700">ภาพรวมส่วนลด DC/DS</div>
+              <div style="display:flex;gap:6px">
+                <button id="hf-month-btn" onclick="homeFilter='month';renderDskHome()" style="padding:5px 12px;border-radius:20px;border:none;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;background:var(--gold);color:var(--navy)">เดือนนี้</button>
+                <button id="hf-all-btn" onclick="homeFilter='all';renderDskHome()" style="padding:5px 12px;border-radius:20px;border:1px solid rgba(255,255,255,.3);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;background:transparent;color:rgba(255,255,255,.7)">ทั้งหมด</button>
+              </div>
+            </div>
             <div class="stat-grid">
               <div class="stat-card sc-blue"><div class="sc-label">ใบส่งสินค้า</div><div class="sc-value" id="ds-total">–</div><div class="sc-sub">รายการ</div></div>
               <div class="stat-card sc-green"><div class="sc-label">ถูกต้อง</div><div class="sc-value" id="ds-ok">–</div><div class="sc-sub">มีของแถม</div></div>
@@ -518,6 +524,7 @@ let pddtMapNorm={}; // normalized (no spaces) → {brand, size}
 let promoRules=[]; // [{field,value,price,qty,unit,gift,giftQty,warehouses}]
 let usersMap={}; // cleanName → warehouse (W1/W2/...)
 let dskPage=1, DSK_SZ=15, sortCol='date', sortAsc=false;
+let homeFilter='month';
 let mfDate='', mfStore='', mfStatus='', mfSearch='', activePeriod='', mfMonth=(()=>{const n=new Date();return`${n.getFullYear()}/${String(n.getMonth()+1).padStart(2,'0')}`;})();
 
 /* ── CSV PARSER ── */
@@ -899,10 +906,15 @@ function dskPg(p){const tp=Math.ceil(filtInvs.length/DSK_SZ);if(p<1||p>tp)return
 
 /* ── DSK HOME & REPORT ── */
 function renderDskHome(){
-  const total=allInvs.length,ok=allInvs.filter(i=>i.free>0).length,amt=allInvs.reduce((s,i)=>s+i.amt,0);
-  const dates=[...new Set(allInvs.map(i=>i.date))];
+  const curM=(()=>{const n=new Date();return`${n.getFullYear()}/${String(n.getMonth()+1).padStart(2,'0')}`;})();
+  const src=homeFilter==='month'?allInvs.filter(i=>i.date.startsWith(curM)):allInvs;
+  const mb=document.getElementById('hf-month-btn'),ab=document.getElementById('hf-all-btn');
+  if(mb){mb.style.background=homeFilter==='month'?'var(--gold)':'transparent';mb.style.color=homeFilter==='month'?'var(--navy)':'rgba(255,255,255,.7)';mb.style.border=homeFilter==='month'?'none':'1px solid rgba(255,255,255,.3)';}
+  if(ab){ab.style.background=homeFilter==='all'?'var(--gold)':'transparent';ab.style.color=homeFilter==='all'?'var(--navy)':'rgba(255,255,255,.7)';ab.style.border=homeFilter==='all'?'none':'1px solid rgba(255,255,255,.3)';}
+  const total=src.length,ok=src.filter(i=>i.free>0).length,amt=src.reduce((s,i)=>s+i.amt,0);
+  const dates=[...new Set(src.map(i=>i.date))];
   txt('ds-total',fmtI(total));txt('ds-ok',fmtI(ok));txt('ds-pending',fmtI(total-ok));txt('ds-amt',fmt(amt));txt('ds-dates',fmtI(dates.length)+' วัน');
-  const byD={};allInvs.forEach(inv=>{if(!byD[inv.date])byD[inv.date]={total:0,ok:0,amt:0};byD[inv.date].total++;if(inv.free>0)byD[inv.date].ok++;byD[inv.date].amt+=inv.amt;});
+  const byD={};src.forEach(inv=>{if(!byD[inv.date])byD[inv.date]={total:0,ok:0,amt:0};byD[inv.date].total++;if(inv.free>0)byD[inv.date].ok++;byD[inv.date].amt+=inv.amt;});
   const el=document.getElementById('ds-date-list');if(!el)return;
   el.innerHTML=Object.entries(byD).sort((a,b)=>b[0]>a[0]?1:b[0]<a[0]?-1:0).map(([d,v])=>`
     <div style="background:var(--card);border-radius:10px;border:1px solid var(--border);padding:12px 16px;margin-bottom:10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between" onclick="dskGoto('dsk-check');document.getElementById('df-date').value='${d}';dskFilter()">
