@@ -751,7 +751,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.68';
+const APP_VERSION='3.69';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -4676,6 +4676,7 @@ function saveBillWithVerify_(j,b,saveBtn,changedDocs){
     bills:j.bills.filter(billFilter).map(x=>({doc:x.doc,docDate:x.docDate,code:x.code,name:x.name,salesman:x.salesman,salesmanCode:x.salesmanCode,amount:x.amount,status:x.status,isCN:!!x.isCN,failReason:x.failReason||'',nextResp:x.nextResp||'',note:x.note||'',creditDays:x.creditDays||0,payment:x.payment,total:payTotal(x.payment),palletCount:x.palletCount||'',amountPerPallet:x.amountPerPallet||'',amountTotal:x.amountTotal||'',savedAt:x.savedAt}))};
   _lastQueuedDoc=b.doc;
   queueSync(payload,'save_job|'+j.id+'|'+[...(changedDocs||[b.doc])].join(','));   // ส่งเข้าคิว → flush เบื้องหลัง
+  notifyPalletDiscord(j,b);   // v3.69: มีค่าพาเลท → เด้งแจ้งฝ่ายบัญชี (ห้อง HQ) ทันที
   _restoreSaveBtn_(saveBtn);
   showToast('บันทึก '+b.doc+' ✓','success');                                       // สำเร็จทันที (ข้อมูลอยู่ในเครื่องแล้ว)
   switchTab('sec-driver-job');
@@ -5127,6 +5128,28 @@ function notifyCNDiscord(p){
     total:p.totalAmount||0,
     ts:p.submittedAt||Date.now()
   })}).catch(e=>console.warn('discord cn:',e));
+}
+/* v3.69: เด้ง Discord แจ้งฝ่ายบัญชี (ห้อง HQ) ทันทีที่คนขับกรอกค่าพาเลทในบิล
+   กันยิงซ้ำด้วย b._palletNotified (ยิงใหม่เมื่อยอดเปลี่ยน) + ไม่ยิงถ้าบัญชีดำเนินการไปแล้ว */
+function notifyPalletDiscord(j,b){
+  const url=getAppsUrl(); if(!url||!j||!b) return;
+  const fee=(parseFloat(b.palletCount)||0)*(parseFloat(b.amountPerPallet)||0);
+  if(!(fee>0.005)) return;                              // ไม่มีค่าพาเลท → ไม่แจ้ง
+  if(palletApproved(b)||palletRejected(b)) return;      // บัญชีอนุมัติ/ตีกลับไปแล้ว → ไม่ต้องแจ้งซ้ำ
+  if(b._palletNotified&&Math.abs(b._palletNotified-fee)<0.005) return;   // แจ้งยอดนี้ไปแล้ว
+  b._palletNotified=fee;
+  fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify({
+    action:'notify_pallet',
+    jobId:j.id,
+    docNo:b.doc,
+    customerName:b.name||b.code||'',
+    driver:(j.team&&j.team.driver)||state.user.displayName||state.user.nickname||'',
+    warehouse:j.warehouse||'',
+    palletCount:parseFloat(b.palletCount)||0,
+    amountPerPallet:parseFloat(b.amountPerPallet)||0,
+    fee:fee,
+    ts:Date.now()
+  })}).catch(e=>console.warn('discord pallet:',e));
 }
 /* v1.83: ยกเลิกการขออนุมัติ → กลับมาเป็น "กำลังทำอยู่" แก้ไขต่อได้ */
 async function cancelApproval(){
@@ -6252,7 +6275,7 @@ async function syncJobsFromSheet(opts){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.68 (+ อนุมัติค่าพาเลทโดยฝ่ายบัญชี: action approve_pallet/reject_pallet/unapprove_pallet + คอลัมน์สถานะพาเลท) */
+const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.69 (+ Discord notify_pallet: คนขับกรอกค่าพาเลท → แจ้งฝ่ายบัญชี ห้อง HQ | v3.68 อนุมัติค่าพาเลท) */
 const SHEET_INPUT='บันทึกเที่ยวส่ง';
 const SHEET_CIN='บันทึกบิลและการชำระ';
 const SHEET_CN='CN';
@@ -6301,7 +6324,7 @@ const HEADERS_CIN=['เลขใบคุม','Doc_Date','Doc_No','Customer_Code
 function doGet(e){
   let drive='unknown';
   try{ DriveApp.getRootFolder().getName(); drive='OK'; }catch(err){ drive='NOT_AUTHORIZED'; }
-  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.68',drive:drive}))
+  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.69',drive:drive}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -6336,7 +6359,7 @@ function doPost(e){
         fmtColsOpen_(sh,['รหัสร้าน','เลขใบคุม','Doc_No'],'@');   // v3.35: เปิดปลาย คลุมแถวใหม่
         fmtColsOpen_(sh,['Lat','Lng'],'0.000000');
         fmtColsOpen_(sh,['วันเวลา'],'yyyy-mm-dd hh:mm:ss');
-        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.68'})).setMimeType(ContentService.MimeType.JSON);
+        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.69'})).setMimeType(ContentService.MimeType.JSON);
       }finally{ lock.releaseLock(); }
     }
 
@@ -6490,6 +6513,20 @@ function doPost(e){
       var embedCN={title:'📦 ขออนุมัติ CN (รับคืนสินค้า)',description:descCN,color:0xF59E0B};
       var sentc=sendDiscord_(data.warehouse,{embeds:[embedCN]});
       return ContentService.createTextOutput(JSON.stringify({ok:true,sent:sentc})).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ===== v3.69: Discord embed — คนขับกรอกค่าพาเลท → แจ้งฝ่ายบัญชี (ห้อง HQ เสมอ เพราะบัญชีเป็นส่วนกลาง) =====
+    if(data.action==='notify_pallet'){
+      var descPl=[
+        'บิล: **'+(data.docNo||'-')+'**',
+        'ร้าน: '+(data.customerName||'-'),
+        'คนขับ: '+(data.driver||'-')+' · คลัง: '+(data.warehouse||'-'),
+        'พาเลท: '+(data.palletCount||0)+' × '+fmtBaht_(data.amountPerPallet)+' = '+fmtBaht_(data.fee)+' ฿',
+        '⏰ '+fmtThai_(data.ts||new Date())
+      ].join(String.fromCharCode(10));   // v3.41: ใช้ char(10) กัน \\n เพี้ยนเป็นตัวอักษรใน Discord
+      var embedPl={title:'🧺 ค่าพาเลทรออนุมัติ (บัญชี)',description:descPl,color:0x8B5CF6};
+      var sentp=sendDiscord_('HQ',{embeds:[embedPl]});   // v3.69: บัญชีเป็นส่วนกลาง → ห้อง HQ เสมอ
+      return ContentService.createTextOutput(JSON.stringify({ok:true,sent:sentp})).setMimeType(ContentService.MimeType.JSON);
     }
 
     // ===== v3.21: ฝ่ายคลังอนุมัติ/ตีกลับ/ยกเลิกอนุมัติ CN → อัปเดตสถานะในชีท CN (ทุกแถวของใบนั้น) =====
@@ -6765,7 +6802,7 @@ function doPost(e){
       fmtColsOpen_(cinSh,['วัน+เวลา ที่ส่งสินค้า','U_ADD','วันที่โอนครั้งที่1','วันที่โอนครั้งที่2','แก้ไขเมื่อ','วันที่','วันเวลาอนุมัติ'],'yyyy-mm-dd hh:mm:ss');
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.68'}))
+    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.69'}))
       .setMimeType(ContentService.MimeType.JSON);
   }catch(err){
     return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err)}))
