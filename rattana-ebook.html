@@ -4,9 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana E-Book v1.1</title>
+<title>Rattana E-Book v2.0</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<!-- Google sign-in ปิดชั่วคราว v1.1 (origin_mismatch) — เปิดใช้ใหม่: คืนบรรทัด GSI ด้านล่าง -->
+<!-- PDF.js — เปิดไฟล์ PDF เป็นหนังสือ -->
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<!-- Google sign-in ปิดชั่วคราว (origin_mismatch) — เปิดใช้ใหม่: คืนบรรทัด GSI ด้านล่าง -->
 <!-- <script src="https://accounts.google.com/gsi/client" async defer></script> -->
 <style>
 :root{
@@ -30,16 +32,18 @@ input{font-family:inherit;font-size:16px}
 img{max-width:100%}
 
 /* Header */
-header{background:var(--navy);color:#fff;padding:10px 14px;position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:10px;border-bottom:3px solid var(--gold);padding-top:max(10px,env(safe-area-inset-top))}
+header{background:var(--navy);color:#fff;padding:10px 14px;position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:8px;border-bottom:3px solid var(--gold);padding-top:max(10px,env(safe-area-inset-top))}
 .logo-text{font-weight:700;letter-spacing:1px;font-size:16px;color:#fff;white-space:nowrap}
 .logo-text span{color:var(--gold)}
 .grow{flex:1}
 .icon-btn{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.2);min-width:38px;height:38px;padding:0 10px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;gap:6px;font-size:16px;font-weight:600;transition:background .15s}
 .icon-btn:hover{background:rgba(255,255,255,.12)}
+.icon-btn.solid{background:var(--gold);color:var(--navy);border-color:var(--gold)}
+.icon-btn.solid:hover{background:var(--gold-light)}
 .icon-btn .lbl{font-size:12px}
 @media(max-width:560px){.icon-btn .lbl{display:none}}
 
-/* Login */
+/* Login (ปิดใช้ชั่วคราว) */
 #loginScreen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100dvh;padding:24px;background:radial-gradient(1200px 600px at 50% -10%,rgba(201,168,76,.12),transparent),var(--navy)}
 .login-card{background:var(--card-bg);border-radius:var(--radius-lg);border-top:4px solid var(--gold);box-shadow:var(--shadow-lg);padding:34px 30px;max-width:400px;width:100%;text-align:center}
 .login-card .book-emoji{font-size:52px;margin-bottom:8px}
@@ -65,7 +69,6 @@ body.dark .book-stage{background:radial-gradient(1000px 500px at 50% 0%,rgba(0,0
 .face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;overflow:hidden;border-radius:3px 10px 10px 3px;background:var(--paper);color:var(--text);box-shadow:var(--shadow-lg)}
 .face.back{transform:rotateY(180deg);background:var(--paper);
   background-image:linear-gradient(to left,var(--paper-edge),transparent 22%)}
-/* spine shading on front */
 .face.front::before{content:"";position:absolute;left:0;top:0;bottom:0;width:26px;background:linear-gradient(to right,rgba(0,0,0,.16),transparent);pointer-events:none;z-index:3}
 .face.front::after{content:"";position:absolute;inset:0;background:linear-gradient(to right,rgba(0,0,0,.18),transparent 12%);opacity:0;transition:opacity .4s;pointer-events:none}
 .page.flipping .face.front::after{opacity:1}
@@ -94,14 +97,15 @@ body.dark .book-stage{background:radial-gradient(1000px 500px at 50% 0%,rgba(0,0
 .pg-toc{padding:28px 22px 44px}
 .pg-toc .kicker{text-align:center}
 .pg-toc h2{text-align:center;margin-bottom:16px}
-.toc-list{list-style:none;overflow-y:auto;flex:1;margin:0;padding:0}
+.toc-list{list-style:none;overflow-y:auto;margin:0;padding:0}
 .toc-row{width:100%;display:flex;align-items:baseline;gap:8px;background:transparent;border:none;padding:9px 4px;text-align:left;color:var(--text);font-family:inherit;border-radius:6px;cursor:pointer}
 .toc-row:hover{background:rgba(201,168,76,.12)}
 .toc-row .t{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .toc-row .dots{flex:1;border-bottom:1.5px dotted var(--border);transform:translateY(-4px)}
 .toc-row .n{font-size:13px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums}
 .toc-row.active{background:rgba(201,168,76,.16)}
-.toc-empty{color:var(--muted);font-size:13px;text-align:center;margin-top:20px}
+.toc-empty{color:var(--muted);font-size:13px;text-align:center;margin:14px 0}
+.pg-toc .toc-list{flex:1}
 
 /* controls */
 .controls{background:var(--card-bg);border-top:1px solid var(--border);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px}
@@ -115,11 +119,16 @@ input[type=range]{width:100%;accent-color:var(--gold);height:26px}
 /* TOC overlay */
 .sheet-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.6);z-index:9000;backdrop-filter:blur(4px)}
 .sheet-overlay.open{display:block}
-.sheet{position:absolute;top:0;right:0;bottom:0;width:min(88vw,360px);background:var(--card-bg);border-left:4px solid var(--gold);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;animation:slideL .25s ease}
+.sheet{position:absolute;top:0;right:0;bottom:0;width:min(90vw,380px);background:var(--card-bg);border-left:4px solid var(--gold);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;animation:slideL .25s ease}
 @keyframes slideL{from{transform:translateX(100%)}to{transform:translateX(0)}}
 .sheet-head{display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid var(--border)}
 .sheet-head h3{font-size:16px;font-weight:700}
-.sheet-body{flex:1;overflow-y:auto;padding:8px}
+.sheet-body{flex:1;overflow-y:auto;padding:8px 10px 16px}
+.toc-sec-title{font-size:11px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;padding:12px 4px 6px;border-bottom:1px solid var(--border);margin-bottom:4px}
+.page-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:6px 2px}
+.page-grid button{aspect-ratio:1;border:1px solid var(--border);background:var(--card-bg);color:var(--text);border-radius:8px;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;transition:all .12s}
+.page-grid button:hover{border-color:var(--gold)}
+.page-grid button.active{background:var(--gold);color:var(--navy);border-color:var(--gold)}
 .modal-close{background:transparent;border:none;font-size:26px;color:var(--muted);cursor:pointer;line-height:1;padding:2px 8px}
 
 /* Manage modal */
@@ -131,6 +140,10 @@ input[type=range]{width:100%;accent-color:var(--gold);height:26px}
 .modal-head h3{font-size:16px;font-weight:700}
 .modal-body{padding:16px 20px}
 .modal-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap}
+.pdf-status{background:var(--row-alt);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-size:12.5px;color:var(--text);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.pdf-status .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0}
+.pdf-status.on .dot{background:var(--success)}
+.sec-div{text-align:center;font-size:11px;color:var(--muted);margin:16px 0 12px;position:relative}
 .field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
 .field label{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.3px;text-transform:uppercase}
 .input{height:44px;padding:0 12px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:16px;outline:none;width:100%}
@@ -141,7 +154,6 @@ input[type=range]{width:100%;accent-color:var(--gold);height:26px}
 .btn-gold{background:var(--gold);color:var(--navy)}
 .btn-outline{background:transparent;color:var(--text);border-color:var(--border)}
 .btn-danger{background:var(--danger);color:#fff}
-.btn-sm{padding:5px 9px;font-size:12px;min-height:32px}
 .mng-list{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
 .mng-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--row-alt)}
 .mng-item .thumb{width:34px;height:44px;border-radius:4px;object-fit:cover;background:var(--navy-light);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px}
@@ -153,12 +165,11 @@ input[type=range]{width:100%;accent-color:var(--gold);height:26px}
 .seg{display:flex;gap:6px;margin-bottom:12px}
 .seg button{flex:1;padding:8px;border:1.5px solid var(--border);background:transparent;color:var(--text);border-radius:var(--radius-sm);font-weight:600;font-size:13px}
 .seg button.on{background:var(--gold);color:var(--navy);border-color:var(--gold)}
-.hint{font-size:11px;color:var(--muted);margin-top:-6px;margin-bottom:12px}
 
 /* spinner + toast */
 #spinner{display:none;position:fixed;inset:0;background:rgba(13,27,62,.6);align-items:center;justify-content:center;z-index:99999;backdrop-filter:blur(3px)}
 #spinner.show{display:flex}
-.spin-box{background:var(--card-bg);border-radius:16px;padding:30px 40px;text-align:center;border-top:4px solid var(--gold)}
+.spin-box{background:var(--card-bg);border-radius:16px;padding:30px 40px;text-align:center;border-top:4px solid var(--gold);min-width:220px}
 .ring{width:48px;height:48px;border:5px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .toast{position:fixed;bottom:max(80px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);padding:11px 20px;border-radius:var(--radius-md);color:#fff;z-index:99999;font-weight:500;font-size:13px;box-shadow:var(--shadow-lg);animation:fadeUp .3s ease;max-width:92vw;text-align:center}
@@ -169,8 +180,8 @@ input[type=range]{width:100%;accent-color:var(--gold);height:26px}
 </head>
 <body>
 
-<!-- ══ LOGIN ══ -->
-<div id="loginScreen" style="display:none"><!-- ปิดล็อกอินชั่วคราว v1.1 -->
+<!-- ══ LOGIN (ปิดใช้ชั่วคราว) ══ -->
+<div id="loginScreen" style="display:none"><!-- ปิดล็อกอินชั่วคราว -->
   <div class="login-card">
     <div class="book-emoji">📖</div>
     <h1>Rattana <span>E-Book</span></h1>
@@ -182,7 +193,7 @@ input[type=range]{width:100%;accent-color:var(--gold);height:26px}
       <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with" data-shape="pill"></div>
     </div>
     <div class="login-err" id="loginErr"></div>
-    <div class="login-foot">v1.0 · เฉพาะพนักงานที่ได้รับสิทธิ์</div>
+    <div class="login-foot">เฉพาะพนักงานที่ได้รับสิทธิ์</div>
   </div>
 </div>
 
@@ -191,8 +202,10 @@ input[type=range]{width:100%;accent-color:var(--gold);height:26px}
   <header>
     <span class="logo-text">RATTANA <span>E-BOOK</span></span>
     <span class="grow"></span>
-    <button class="icon-btn" id="btnToc" onclick="openToc()" title="สารบัญ">☰<span class="lbl">สารบัญ</span></button>
-    <button class="icon-btn hidden" id="btnManage" onclick="openManage()" title="จัดการหน้า">✎<span class="lbl">จัดการ</span></button>
+    <input type="file" id="pdfInput" accept="application/pdf,.pdf" class="hidden" onchange="openPdf(this.files[0]);this.value='';">
+    <button class="icon-btn solid" id="btnPdf" onclick="document.getElementById('pdfInput').click()" title="อัปโหลด PDF">📄<span class="lbl">เปิด PDF</span></button>
+    <button class="icon-btn" id="btnToc" onclick="openToc()" title="สารบัญ / ไปหน้า">☰<span class="lbl">สารบัญ</span></button>
+    <button class="icon-btn hidden" id="btnManage" onclick="openManage()" title="จัดการ">✎</button>
     <button class="icon-btn" id="btnDark" onclick="toggleDark()" title="โหมดมืด">🌙</button>
   </header>
 
@@ -212,40 +225,53 @@ input[type=range]{width:100%;accent-color:var(--gold);height:26px}
   </div>
 </div>
 
-<!-- TOC overlay -->
+<!-- TOC + page jump overlay -->
 <div class="sheet-overlay" id="tocOverlay" onclick="if(event.target===this)closeToc()">
   <div class="sheet">
-    <div class="sheet-head"><h3>สารบัญ</h3><button class="modal-close" onclick="closeToc()">&times;</button></div>
-    <div class="sheet-body"><ul class="toc-list" id="tocOverlayList"></ul></div>
+    <div class="sheet-head"><h3>สารบัญ · ไปหน้า</h3><button class="modal-close" onclick="closeToc()">&times;</button></div>
+    <div class="sheet-body">
+      <div class="toc-sec-title">สารบัญ (บท)</div>
+      <ul class="toc-list" id="tocOverlayList"></ul>
+      <div class="toc-sec-title">ไปหน้า — แตะเลขหน้า</div>
+      <div class="page-grid" id="pageGrid"></div>
+    </div>
   </div>
 </div>
 
-<!-- Manage modal -->
+<!-- Manage / source modal -->
 <div class="modal-overlay" id="manageOverlay" onclick="if(event.target===this)closeManage()">
   <div class="modal">
-    <div class="modal-head"><h3>จัดการหน้าหนังสือ</h3><button class="modal-close" onclick="closeManage()">&times;</button></div>
+    <div class="modal-head"><h3>แหล่งที่มาหนังสือ</h3><button class="modal-close" onclick="closeManage()">&times;</button></div>
     <div class="modal-body">
-      <div class="seg">
-        <button id="segUrl" class="on" onclick="setAddMode('url')">🔗 ลิงก์รูป</button>
-        <button id="segFile" onclick="setAddMode('file')">📁 อัปโหลด</button>
+      <div class="pdf-status" id="pdfStatus"><span class="dot"></span><span id="pdfStatusText">—</span></div>
+      <input type="file" id="pdfInput2" accept="application/pdf,.pdf" class="hidden" onchange="openPdf(this.files[0]);this.value='';closeManage();">
+      <button class="btn btn-gold" style="width:100%;justify-content:center;margin-bottom:8px" onclick="document.getElementById('pdfInput2').click()">📄 อัปโหลด / เปลี่ยน PDF</button>
+      <button class="btn btn-outline hidden" id="btnClearPdf" style="width:100%;justify-content:center" onclick="clearPdf()">🗑 ล้าง PDF (กลับหนังสือตัวอย่าง)</button>
+
+      <div id="manualSection">
+        <div class="sec-div">— หรือสร้างหนังสือจากรูปทีละหน้า —</div>
+        <div class="seg">
+          <button id="segUrl" class="on" onclick="setAddMode('url')">🔗 ลิงก์รูป</button>
+          <button id="segFile" onclick="setAddMode('file')">📁 อัปโหลดรูป</button>
+        </div>
+        <div class="field" id="fieldUrl">
+          <label>URL รูปภาพหน้า</label>
+          <input class="input" id="inpUrl" placeholder="https://...jpg / .png">
+        </div>
+        <div class="field hidden" id="fieldFile">
+          <label>เลือกไฟล์รูป (เก็บในเครื่อง)</label>
+          <input class="input" id="inpFile" type="file" accept="image/*" style="padding:9px 12px;height:auto">
+        </div>
+        <div class="field">
+          <label>ชื่อบท (แสดงในสารบัญ — เว้นว่างได้)</label>
+          <input class="input" id="inpChap" placeholder="เช่น บทที่ 5 — ...">
+        </div>
+        <button class="btn btn-gold" style="width:100%;justify-content:center" onclick="addPage()">+ เพิ่มหน้า</button>
+        <ul class="mng-list" id="mngList"></ul>
       </div>
-      <div class="field" id="fieldUrl">
-        <label>URL รูปภาพหน้า</label>
-        <input class="input" id="inpUrl" placeholder="https://...jpg / .png">
-      </div>
-      <div class="field hidden" id="fieldFile">
-        <label>เลือกไฟล์รูป (เก็บในเครื่อง)</label>
-        <input class="input" id="inpFile" type="file" accept="image/*" style="padding:9px 12px;height:auto">
-      </div>
-      <div class="field">
-        <label>ชื่อบท (แสดงในสารบัญ — เว้นว่างได้)</label>
-        <input class="input" id="inpChap" placeholder="เช่น บทที่ 5 — ...">
-      </div>
-      <button class="btn btn-gold w-full" style="width:100%;justify-content:center" onclick="addPage()">+ เพิ่มหน้า</button>
-      <ul class="mng-list" id="mngList"></ul>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-outline" onclick="resetBook()">↺ รีเซ็ตค่าเริ่มต้น</button>
+      <button class="btn btn-outline" id="btnResetBook" onclick="resetBook()">↺ รีเซ็ตหนังสือรูป</button>
       <button class="btn btn-primary" onclick="closeManage()">เสร็จสิ้น</button>
     </div>
   </div>
@@ -256,75 +282,69 @@ input[type=range]{width:100%;accent-color:var(--gold);height:26px}
 
 <script>
 /* ════════ CONFIG ════════ */
-const AUTH_CONFIG = {
-  usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
-  usersSheetName:'Rattana Users for apps',
-};
-const EDIT_MIN_ROLE = 5;            // role >= 5 จัดการหน้าได้
+const AUTH_CONFIG = { usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ', usersSheetName:'Rattana Users for apps' };
+const EDIT_MIN_ROLE = 5;
 const STORE_KEY = 'rattanaEbookPages_v1';
+const PDF_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const PDF_TARGET_W = 1000;     // ความกว้าง render ต่อหน้า (px) — คมชัดพอ + ไฟล์ไม่ใหญ่
 
-/* ════════ DEFAULT BOOK ════════ */
+/* ════════ DEFAULT (DEMO) BOOK ════════ */
 const DEFAULT_PAGES = [
-  {type:'cover', heading:'คู่มือพนักงาน', sub:'บริษัท รัตนไพบูลย์ จำกัด'},
+  {type:'cover', heading:'Rattana E-Book', sub:'เปิดไฟล์ PDF เป็นหนังสือ'},
   {type:'toc'},
-  {type:'demo', chapter:'บทที่ 1 — บทนำ', kicker:'ยินดีต้อนรับ',
-   body:['หนังสือเล่มนี้เป็นตัวอย่างการแสดงผลแบบหนังสือจริง สามารถพลิกหน้าไป-มาได้เหมือนเปิดหนังสือเล่มจริง โดยกดปุ่มลูกศร ปัดหน้าจอ หรือใช้แถบเลื่อนด้านล่าง',
-          'หน้าสารบัญสามารถกดที่ชื่อบทหรือเลขหน้าเพื่อกระโดดไปยังหน้านั้นได้ทันที ทั้งจากสารบัญในเล่มและปุ่มสารบัญ (☰) ด้านบน']},
-  {type:'demo', chapter:'', kicker:'บทที่ 1 (ต่อ)',
-   body:['ผู้ที่มีสิทธิ์ระดับผู้จัดการขึ้นไปสามารถกดปุ่ม “จัดการ” (✎) เพื่อเพิ่มรูปภาพแต่ละหน้าจากลิงก์หรืออัปโหลดจากเครื่อง ตั้งชื่อบท จัดลำดับ และลบหน้าได้',
-          'เนื้อหาทั้งหมดจะถูกบันทึกไว้ในเครื่องของผู้ใช้โดยอัตโนมัติ']},
-  {type:'demo', chapter:'บทที่ 2 — กฎระเบียบบริษัท', kicker:'ระเบียบปฏิบัติ',
-   body:['พนักงานทุกคนพึงปฏิบัติตามระเบียบของบริษัทอย่างเคร่งครัด เพื่อความเป็นระเบียบเรียบร้อยและประสิทธิภาพในการทำงานร่วมกัน',
-          'การเข้างาน การลา และการแต่งกาย ให้เป็นไปตามที่ฝ่ายบุคคลกำหนด']},
-  {type:'demo', chapter:'บทที่ 3 — สวัสดิการพนักงาน', kicker:'สิทธิประโยชน์',
-   body:['บริษัทจัดสวัสดิการเพื่อดูแลคุณภาพชีวิตของพนักงาน อาทิ ประกันสุขภาพ กองทุนสำรองเลี้ยงชีพ และเงินช่วยเหลือในโอกาสต่าง ๆ',
-          'รายละเอียดและเงื่อนไขสามารถสอบถามได้ที่ฝ่ายทรัพยากรบุคคล']},
-  {type:'demo', chapter:'บทที่ 4 — ความปลอดภัยในการทำงาน', kicker:'Safety First',
-   body:['ความปลอดภัยเป็นสิ่งสำคัญสูงสุด พนักงานต้องสวมใส่อุปกรณ์ป้องกันตามที่กำหนด และปฏิบัติตามขั้นตอนความปลอดภัยของแต่ละพื้นที่',
-          'หากพบเหตุผิดปกติหรืออุบัติเหตุ ให้รายงานผู้บังคับบัญชาทันที']},
-  {type:'back', heading:'จบเล่ม', sub:'ขอบคุณที่อ่านจนจบ · รัตนไพบูลย์'},
+  {type:'demo', chapter:'เริ่มต้นใช้งาน', kicker:'ยินดีต้อนรับ',
+   body:['กดปุ่ม 📄 เปิด PDF ด้านบน แล้วเลือกไฟล์ PDF จากเครื่อง ระบบจะแปลงเป็นหนังสือพลิกอ่านได้ทันที',
+          'พลิกหน้าได้ 3 แบบ: กดลูกศร ‹ › ด้านล่าง · ปัดหน้าจอซ้าย-ขวา · ลากแถบเลื่อน']},
+  {type:'demo', chapter:'สารบัญ & ไปหน้า', kicker:'การนำทาง',
+   body:['กดปุ่ม ☰ สารบัญ ด้านบน จะเห็นรายการบท (ดึงจาก bookmark ใน PDF) — แตะชื่อบทหรือเลขหน้าเพื่อกระโดดไปหน้านั้นทันที',
+          'ด้านล่างมีตาราง “ไปหน้า” แตะเลขหน้าใดก็ได้เพื่อข้ามไปหน้านั้นตรง ๆ']},
+  {type:'demo', chapter:'เก็บอัตโนมัติ', kicker:'ข้อมูล',
+   body:['PDF ที่เปิดล่าสุดจะถูกจำไว้ในเครื่อง เปิดแอปครั้งหน้าเล่มเดิมจะขึ้นมาให้เลย',
+          'ต้องการกลับหน้าตัวอย่างนี้ กดปุ่ม ✎ แล้วเลือก “ล้าง PDF”']},
+  {type:'back', heading:'พร้อมแล้ว', sub:'กด 📄 เปิด PDF เพื่อเริ่มอ่าน · รัตนไพบูลย์'},
 ];
 
 /* ════════ STATE ════════ */
 let currentUser=null;
 let PAGES=[];
+let CHAPTERS=[];          // [{title, index}] สำหรับสารบัญ
+let BOOK_MODE='manual';   // 'manual' (demo/รูป) | 'pdf'
+let PDF_NAME='';
 let pageEls=[];
 let currentIndex=0;
 let N=0;
 let addMode='url';
 
-/* ════════ AUTH ════════ */
+/* ════════ IndexedDB (เก็บ PDF ข้ามการรีโหลด) ════════ */
+function idbOpen(){ return new Promise((res,rej)=>{ const r=indexedDB.open('rattanaEbook',1);
+  r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains('kv')) r.result.createObjectStore('kv'); };
+  r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+async function idbSet(k,v){ const db=await idbOpen(); return new Promise((res,rej)=>{ const tx=db.transaction('kv','readwrite'); tx.objectStore('kv').put(v,k); tx.oncomplete=()=>{db.close();res();}; tx.onerror=()=>{db.close();rej(tx.error);}; }); }
+async function idbGet(k){ const db=await idbOpen(); return new Promise((res,rej)=>{ const tx=db.transaction('kv','readonly'); const g=tx.objectStore('kv').get(k); g.onsuccess=()=>{db.close();res(g.result);}; g.onerror=()=>{db.close();rej(g.error);}; }); }
+async function idbDel(k){ const db=await idbOpen(); return new Promise((res,rej)=>{ const tx=db.transaction('kv','readwrite'); tx.objectStore('kv').delete(k); tx.oncomplete=()=>{db.close();res();}; tx.onerror=()=>{db.close();rej(tx.error);}; }); }
+
+/* ════════ AUTH (ปิดใช้ชั่วคราว — คงไว้เผื่อเปิดใหม่) ════════ */
 function decodeJwtPayload(token){
-  const parts=String(token||'').split('.');
-  if(parts.length<2) throw new Error('JWT invalid');
-  let b64=parts[1].replace(/-/g,'+').replace(/_/g,'/');
-  const pad=(4-b64.length%4)%4; if(pad) b64+='='.repeat(pad);
-  const bin=atob(b64), bytes=new Uint8Array(bin.length);
-  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  const parts=String(token||'').split('.'); if(parts.length<2) throw new Error('JWT invalid');
+  let b64=parts[1].replace(/-/g,'+').replace(/_/g,'/'); const pad=(4-b64.length%4)%4; if(pad) b64+='='.repeat(pad);
+  const bin=atob(b64), bytes=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
   return JSON.parse(new TextDecoder('utf-8').decode(bytes));
 }
 const normalizeEmail=s=>String(s||'').replace(/[​‌‍﻿]/g,'').replace(/\s+/g,'').toLowerCase();
-
 function parseCsv(text){
-  if(!text) return [];
-  if(text.charCodeAt(0)===0xFEFF) text=text.slice(1);
+  if(!text) return []; if(text.charCodeAt(0)===0xFEFF) text=text.slice(1);
   const rows=[]; let row=[],cell='',q=false;
   for(let i=0;i<text.length;i++){const ch=text[i];
     if(q){ if(ch==='"'){ if(text[i+1]==='"'){cell+='"';i++;}else q=false;} else cell+=ch; }
-    else{ if(ch==='"')q=true; else if(ch===',')row.push(cell),cell=''; else if(ch==='\r'){} else if(ch==='\n'){row.push(cell);rows.push(row);row=[];cell='';} else cell+=ch; }
-  }
+    else{ if(ch==='"')q=true; else if(ch===',')row.push(cell),cell=''; else if(ch==='\r'){} else if(ch==='\n'){row.push(cell);rows.push(row);row=[];cell='';} else cell+=ch; } }
   if(cell.length||row.length){row.push(cell);rows.push(row);}
   if(!rows.length) return [];
   const clean=s=>String(s||'').replace(/[​‌‍﻿]/g,'').replace(/ /g,' ').trim();
   const headers=rows[0].map(clean);
   return rows.slice(1).filter(r=>r.some(c=>clean(c))).map(r=>Object.fromEntries(headers.map((k,i)=>[k,clean(r[i])])));
 }
-async function loadFromSheets(id,name){
-  const url=`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(name)}`;
-  const res=await fetch(url); if(!res.ok) throw new Error('fetch failed');
-  return parseCsv(await res.text());
-}
-
+async function loadFromSheets(id,name){ const url=`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(name)}`;
+  const res=await fetch(url); if(!res.ok) throw new Error('fetch failed'); return parseCsv(await res.text()); }
 async function handleGoogleLogin(r){
   showSpinner('กำลังตรวจสอบสิทธิ์...');
   try{
@@ -333,19 +353,15 @@ async function handleGoogleLogin(r){
     const u=users.find(x=>normalizeEmail(x['E-mail'])===email);
     if(!u){ loginErr('ไม่พบอีเมลนี้ในระบบ ติดต่อผู้ดูแล'); return; }
     if(String(u['Status']||'').trim().toLowerCase()!=='active'){ loginErr('บัญชีถูกระงับ ติดต่อผู้ดูแล'); return; }
-    currentUser={ email, name:u['ชื่อ - สกุล'], nickname:u['ชื่อเล่น'],
-      role:parseInt(u['User Role'])||1, dept:u['แผนก'], company:u['บริษัท'], warehouse:u['W'], empId:u['รหัสพนักงาน'] };
+    currentUser={ email, name:u['ชื่อ - สกุล'], nickname:u['ชื่อเล่น'], role:parseInt(u['User Role'])||1, dept:u['แผนก'], company:u['บริษัท'], warehouse:u['W'], empId:u['รหัสพนักงาน'] };
     localStorage.setItem('rattanaUser',JSON.stringify({data:currentUser,exp:Date.now()+30*24*60*60*1000}));
     enterApp();
-  }catch(e){ loginErr('เกิดข้อผิดพลาด ลองใหม่อีกครั้ง'); }
-  finally{ hideSpinner(); }
+  }catch(e){ loginErr('เกิดข้อผิดพลาด ลองใหม่อีกครั้ง'); } finally{ hideSpinner(); }
 }
 function loginErr(m){ document.getElementById('loginErr').textContent=m; }
 function checkSession(){
-  try{
-    const raw=localStorage.getItem('rattanaUser'); if(!raw) return;
-    const {data,exp}=JSON.parse(raw);
-    if(Date.now()>exp){ localStorage.removeItem('rattanaUser'); return; }
+  try{ const raw=localStorage.getItem('rattanaUser'); if(!raw) return;
+    const {data,exp}=JSON.parse(raw); if(Date.now()>exp){ localStorage.removeItem('rattanaUser'); return; }
     currentUser=data; enterApp();
   }catch{ localStorage.removeItem('rattanaUser'); }
 }
@@ -355,111 +371,164 @@ function enterApp(){
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('appScreen').style.display='flex';
   document.getElementById('btnManage').classList.toggle('hidden',!(currentUser && currentUser.role>=EDIT_MIN_ROLE));
-  loadBook(); buildBook(); jumpTo(0,false);
+  startReader();
 }
 
-/* ════════ BOOK DATA ════════ */
+/* ════════ BOOT READER — โหลด PDF ที่จำไว้ก่อน ไม่งั้นใช้หนังสือตัวอย่าง ════════ */
+async function startReader(){
+  try{
+    const buf=await idbGet('pdfData');
+    if(buf && buf.byteLength){ const name=await idbGet('pdfName'); await renderPdf(buf,name||'PDF',true); return; }
+  }catch(e){ /* ignore */ }
+  BOOK_MODE='manual'; PDF_NAME=''; loadBook(); buildBook(); jumpTo(0,false);
+}
+
+/* ════════ MANUAL BOOK DATA ════════ */
 function loadBook(){
   try{ const s=JSON.parse(localStorage.getItem(STORE_KEY)); PAGES=(Array.isArray(s)&&s.length)?s:JSON.parse(JSON.stringify(DEFAULT_PAGES)); }
   catch{ PAGES=JSON.parse(JSON.stringify(DEFAULT_PAGES)); }
 }
-function saveBook(){ localStorage.setItem(STORE_KEY,JSON.stringify(PAGES)); }
+function saveBook(){ if(BOOK_MODE!=='manual') return; try{ localStorage.setItem(STORE_KEY,JSON.stringify(PAGES)); }catch(e){ showToast('บันทึกไม่สำเร็จ (พื้นที่เต็ม)','error'); } }
 
-/* ---- render one page face ---- */
+/* ════════ PDF PIPELINE ════════ */
+function ensurePdfWorker(){ if(window.pdfjsLib && !pdfjsLib.GlobalWorkerOptions.workerSrc) pdfjsLib.GlobalWorkerOptions.workerSrc=PDF_WORKER; }
+
+async function openPdf(file){
+  if(!file) return;
+  if(!/pdf$/i.test(file.type||'') && !/\.pdf$/i.test(file.name||'')){ showToast('กรุณาเลือกไฟล์ PDF','warning'); return; }
+  try{ const buf=await file.arrayBuffer(); await renderPdf(buf, file.name, false); }
+  catch(e){ console.error(e); showToast('อ่านไฟล์ไม่สำเร็จ','error'); }
+}
+
+async function renderPdf(buf, name, fromStore){
+  if(!window.pdfjsLib){ showToast('ไลบรารี PDF ยังโหลดไม่เสร็จ ลองอีกครั้ง','error'); return; }
+  ensurePdfWorker();
+  showSpinner('กำลังเปิด PDF...');
+  try{
+    if(!fromStore){ try{ await idbSet('pdfData', buf.slice(0)); await idbSet('pdfName', name||'PDF'); }catch(e){ console.warn('idb store fail',e); } }
+    const pdf=await pdfjsLib.getDocument({data: buf.slice(0)}).promise;
+    const num=pdf.numPages;
+    const pages=[];
+    for(let i=1;i<=num;i++){
+      showSpinner(`กำลังแปลงหน้า ${i} / ${num} ...`);
+      const page=await pdf.getPage(i);
+      const v1=page.getViewport({scale:1});
+      const scale=Math.min(2.2, Math.max(1, PDF_TARGET_W/v1.width));
+      const vp=page.getViewport({scale});
+      const canvas=document.createElement('canvas');
+      canvas.width=Math.floor(vp.width); canvas.height=Math.floor(vp.height);
+      const ctx=canvas.getContext('2d',{alpha:false});
+      ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+      await page.render({canvasContext:ctx, viewport:vp}).promise;
+      pages.push({type:'image', img:canvas.toDataURL('image/jpeg',0.82)});
+      canvas.width=canvas.height=0;
+    }
+    let chapters=[];
+    try{ const outline=await pdf.getOutline(); if(outline&&outline.length) chapters=await outlineToChapters(pdf,outline); }catch(e){ console.warn('outline fail',e); }
+    PDF_NAME=name||'PDF'; BOOK_MODE='pdf'; CHAPTERS=chapters; PAGES=pages;
+    buildBook(); jumpTo(0,false);
+    showToast(`เปิด “${PDF_NAME}” · ${num} หน้า${chapters.length?` · ${chapters.length} บท`:''}`,'success');
+  }catch(e){ console.error(e); showToast('เปิด PDF ไม่สำเร็จ: '+(e&&e.message||e),'error'); }
+  finally{ hideSpinner(); }
+}
+
+async function outlineToChapters(pdf, outline){
+  const out=[];
+  async function walk(items, depth){
+    for(const it of (items||[])){
+      let idx=null;
+      try{
+        let dest=it.dest;
+        if(typeof dest==='string') dest=await pdf.getDestination(dest);
+        if(Array.isArray(dest) && dest[0]) idx=await pdf.getPageIndex(dest[0]);
+      }catch(e){}
+      if(idx!=null) out.push({title:(depth?'· ':'')+String(it.title||'(ไม่มีชื่อ)').trim(), index:idx});
+      if(it.items && it.items.length) await walk(it.items, depth+1);
+    }
+  }
+  await walk(outline,0);
+  return out;
+}
+
+async function clearPdf(){
+  if(!confirm('ล้าง PDF ที่เปิดอยู่ แล้วกลับไปหนังสือตัวอย่าง?')) return;
+  try{ await idbDel('pdfData'); await idbDel('pdfName'); }catch(e){}
+  PDF_NAME=''; BOOK_MODE='manual'; loadBook(); buildBook(); jumpTo(0,false);
+  closeManage(); showToast('ล้าง PDF แล้ว','info');
+}
+
+/* ════════ RENDER PAGES ════════ */
 function esc(s){ return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-
 function faceHTML(p,i){
   const num=`<div class="pg-num">${i+1}</div>`;
   if(p.type==='cover'){
     return `<div class="pg pg-cover"><div class="brand">RATTANA</div>
       <div class="h">${esc(p.heading)}</div><div class="rule"></div>
-      <div class="s">${esc(p.sub)}</div><div class="foot">แตะ › เพื่อเปิดอ่าน · v1.1</div></div>`;
+      <div class="s">${esc(p.sub)}</div><div class="foot">แตะ › เพื่อเปิดอ่าน · v2.0</div></div>`;
   }
-  if(p.type==='back'){
-    return `<div class="pg pg-back"><div class="h">${esc(p.heading)}</div><div class="s">${esc(p.sub)}</div></div>${num}`;
-  }
-  if(p.type==='toc'){
-    return `<div class="pg pg-toc"><div class="kicker">Table of Contents</div><h2>สารบัญ</h2>
-      <ul class="toc-list" id="tocInBook"></ul></div>${num}`;
-  }
-  if(p.type==='image'){
-    return `<div class="pg pg-img"><img src="${esc(p.img)}" alt="page ${i+1}" loading="lazy"
+  if(p.type==='back') return `<div class="pg pg-back"><div class="h">${esc(p.heading)}</div><div class="s">${esc(p.sub)}</div></div>${num}`;
+  if(p.type==='toc') return `<div class="pg pg-toc"><div class="kicker">Table of Contents</div><h2>สารบัญ</h2><ul class="toc-list" id="tocInBook"></ul></div>${num}`;
+  if(p.type==='image') return `<div class="pg pg-img"><img src="${esc(p.img)}" alt="page ${i+1}" loading="lazy"
        onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','<div style=&quot;padding:30px;text-align:center;color:var(--muted)&quot;>โหลดรูปไม่สำเร็จ</div>')"></div>${num}`;
-  }
-  // demo
   const body=(p.body||[]).map(t=>`<p>${esc(t)}</p>`).join('');
-  return `<div class="pg">${p.kicker?`<div class="kicker">${esc(p.kicker)}</div>`:''}
-    ${p.chapter?`<h2>${esc(p.chapter)}</h2><div class="hr"></div>`:''}${body}</div>${num}`;
+  return `<div class="pg">${p.kicker?`<div class="kicker">${esc(p.kicker)}</div>`:''}${p.chapter?`<h2>${esc(p.chapter)}</h2><div class="hr"></div>`:''}${body}</div>${num}`;
 }
-
+function deriveChapters(){
+  const out=[]; PAGES.forEach((p,i)=>{ if(p.chapter && p.type!=='cover' && p.type!=='toc') out.push({title:p.chapter,index:i}); }); return out;
+}
 function buildBook(){
   const book=document.getElementById('book');
-  N=PAGES.length;
-  book.innerHTML='';
-  pageEls=[];
+  N=PAGES.length; book.innerHTML=''; pageEls=[];
   PAGES.forEach((p,i)=>{
-    const el=document.createElement('div');
-    el.className='page';
+    const el=document.createElement('div'); el.className='page';
     el.innerHTML=`<div class="face front">${faceHTML(p,i)}</div><div class="face back"></div>`;
-    book.appendChild(el);
-    pageEls.push(el);
+    book.appendChild(el); pageEls.push(el);
   });
+  if(BOOK_MODE==='manual') CHAPTERS=deriveChapters();   // PDF โหมด: CHAPTERS ตั้งจาก outline แล้ว
   document.getElementById('pgTot').textContent=N;
-  const sl=document.getElementById('pgSlider'); sl.min=1; sl.max=N;
+  const sl=document.getElementById('pgSlider'); sl.min=1; sl.max=Math.max(1,N);
   buildTocLists();
 }
 
-/* ---- TOC (chapters) ---- */
-function tocEntries(){
-  const out=[];
-  PAGES.forEach((p,i)=>{ if(p.chapter && p.type!=='cover' && p.type!=='toc') out.push({title:p.chapter,index:i}); });
-  return out;
-}
+/* ════════ TOC + PAGE GRID ════════ */
+function tocEntries(){ return CHAPTERS; }
 function tocRowsHTML(){
   const e=tocEntries();
-  if(!e.length) return `<li class="toc-empty">ยังไม่มีบท — เพิ่มชื่อบทได้ที่ปุ่มจัดการ</li>`;
+  if(!e.length) return `<li class="toc-empty">PDF นี้ไม่มีสารบัญ (bookmark) — ใช้ “ไปหน้า” ด้านล่างแทน</li>`;
   return e.map(x=>`<li><button class="toc-row" data-idx="${x.index}" onclick="jumpTo(${x.index});closeToc()">
       <span class="t">${esc(x.title)}</span><span class="dots"></span><span class="n">${x.index+1}</span></button></li>`).join('');
 }
+function buildPageGrid(){
+  const g=document.getElementById('pageGrid'); if(!g) return;
+  let h=''; for(let i=0;i<N;i++) h+=`<button data-pg="${i}" onclick="jumpTo(${i});closeToc()">${i+1}</button>`;
+  g.innerHTML=h;
+}
 function buildTocLists(){
   const html=tocRowsHTML();
-  const inBook=document.getElementById('tocInBook');
-  if(inBook) inBook.innerHTML=html;
-  document.getElementById('tocOverlayList').innerHTML=html;
+  const inBook=document.getElementById('tocInBook'); if(inBook) inBook.innerHTML=html;
+  const ov=document.getElementById('tocOverlayList'); if(ov) ov.innerHTML=html;
+  buildPageGrid();
 }
 function highlightToc(){
-  document.querySelectorAll('.toc-row').forEach(r=>{
-    r.classList.toggle('active', +r.dataset.idx===currentIndex);
-  });
+  document.querySelectorAll('.toc-row').forEach(r=>r.classList.toggle('active',+r.dataset.idx===currentIndex));
+  document.querySelectorAll('#pageGrid button').forEach(b=>b.classList.toggle('active',+b.dataset.pg===currentIndex));
 }
 
 /* ════════ FLIP ENGINE ════════ */
-function applyZ(){
-  pageEls.forEach((el,i)=>{ el.style.zIndex = i<currentIndex ? i : (2*N-i); });
-}
+function applyZ(){ pageEls.forEach((el,i)=>{ el.style.zIndex = i<currentIndex ? i : (2*N-i); }); }
 function step(dir){
-  const target=currentIndex+dir;
-  if(target<0||target>=N) return;
-  const movingIdx = dir>0 ? currentIndex : currentIndex-1;
-  const moving=pageEls[movingIdx];
+  const target=currentIndex+dir; if(target<0||target>=N) return;
+  const movingIdx = dir>0 ? currentIndex : currentIndex-1; const moving=pageEls[movingIdx];
   currentIndex=target;
   pageEls.forEach((el,i)=>el.classList.toggle('flipped', i<currentIndex));
   applyZ();
-  if(moving){
-    moving.style.zIndex=3*N;                 // keep the turning sheet on top
-    moving.classList.add('flipping');
-    clearTimeout(moving._t);
-    moving._t=setTimeout(()=>{ applyZ(); moving.classList.remove('flipping'); },820);
-  }
+  if(moving){ moving.style.zIndex=3*N; moving.classList.add('flipping');
+    clearTimeout(moving._t); moving._t=setTimeout(()=>{ applyZ(); moving.classList.remove('flipping'); },820); }
   updateUI();
 }
 function jumpTo(idx,animate=true){
-  idx=Math.max(0,Math.min(N-1,+idx));
-  currentIndex=idx;
-  pageEls.forEach((el,i)=>{
-    if(!animate) el.style.transition='none';
-    el.classList.toggle('flipped', i<currentIndex);
-  });
+  idx=Math.max(0,Math.min(N-1,+idx)); currentIndex=idx;
+  pageEls.forEach((el,i)=>{ if(!animate) el.style.transition='none'; el.classList.toggle('flipped', i<currentIndex); });
   applyZ();
   if(!animate) requestAnimationFrame(()=>pageEls.forEach(el=>el.style.transition=''));
   updateUI();
@@ -472,12 +541,22 @@ function updateUI(){
   highlightToc();
 }
 
-/* ════════ TOC OVERLAY ════════ */
+/* ════════ OVERLAYS ════════ */
 function openToc(){ buildTocLists(); highlightToc(); document.getElementById('tocOverlay').classList.add('open'); }
 function closeToc(){ document.getElementById('tocOverlay').classList.remove('open'); }
 
-/* ════════ MANAGE ════════ */
-function openManage(){ if(!(currentUser&&currentUser.role>=EDIT_MIN_ROLE)){showToast('ไม่มีสิทธิ์แก้ไข','warning');return;} renderMngList(); document.getElementById('manageOverlay').classList.add('open'); }
+function openManage(){
+  if(!(currentUser&&currentUser.role>=EDIT_MIN_ROLE)){ showToast('ไม่มีสิทธิ์แก้ไข','warning'); return; }
+  const isPdf=BOOK_MODE==='pdf';
+  const st=document.getElementById('pdfStatus'), stt=document.getElementById('pdfStatusText');
+  st.classList.toggle('on',isPdf);
+  stt.textContent = isPdf ? `กำลังอ่าน PDF: ${PDF_NAME} · ${N} หน้า` : 'ตอนนี้ใช้หนังสือตัวอย่าง (ยังไม่ได้เปิด PDF)';
+  document.getElementById('btnClearPdf').classList.toggle('hidden',!isPdf);
+  document.getElementById('manualSection').classList.toggle('hidden',isPdf);
+  document.getElementById('btnResetBook').classList.toggle('hidden',isPdf);
+  if(!isPdf) renderMngList();
+  document.getElementById('manageOverlay').classList.add('open');
+}
 function closeManage(){ document.getElementById('manageOverlay').classList.remove('open'); }
 function setAddMode(m){
   addMode=m;
@@ -486,18 +565,14 @@ function setAddMode(m){
   document.getElementById('fieldUrl').classList.toggle('hidden',m!=='url');
   document.getElementById('fieldFile').classList.toggle('hidden',m!=='file');
 }
-function commitAdd(img,chap){
-  PAGES.push({type:'image',img,chapter:chap||''});
-  saveBook(); buildBook(); jumpTo(N-1); renderMngList();
-  showToast('เพิ่มหน้าแล้ว ✓','success');
-}
+function commitAdd(img,chap){ PAGES.push({type:'image',img,chapter:chap||''}); saveBook(); buildBook(); jumpTo(N-1); renderMngList(); showToast('เพิ่มหน้าแล้ว ✓','success'); }
 function addPage(){
+  if(BOOK_MODE==='pdf'){ showToast('อยู่ในโหมด PDF — ล้าง PDF ก่อนจึงจะสร้างหนังสือรูปเองได้','warning'); return; }
   const chap=document.getElementById('inpChap').value.trim();
   if(addMode==='url'){
     const url=document.getElementById('inpUrl').value.trim();
     if(!url){ showToast('ใส่ลิงก์รูปก่อน','warning'); return; }
-    commitAdd(url,chap);
-    document.getElementById('inpUrl').value=''; document.getElementById('inpChap').value='';
+    commitAdd(url,chap); document.getElementById('inpUrl').value=''; document.getElementById('inpChap').value='';
   }else{
     const f=document.getElementById('inpFile').files[0];
     if(!f){ showToast('เลือกไฟล์ก่อน','warning'); return; }
@@ -507,16 +582,10 @@ function addPage(){
   }
 }
 function renderMngList(){
-  const box=document.getElementById('mngList');
+  const box=document.getElementById('mngList'); if(!box) return;
   box.innerHTML=PAGES.map((p,i)=>{
-    const label = p.type==='image' ? (p.chapter||`รูปหน้า ${i+1}`)
-                : p.type==='cover' ? 'ปกหน้า'
-                : p.type==='back'  ? 'ปกหลัง'
-                : p.type==='toc'   ? 'สารบัญ (อัตโนมัติ)'
-                : (p.chapter||p.kicker||`หน้า ${i+1}`);
-    const thumb = p.type==='image'
-        ? `<img class="thumb" src="${esc(p.img)}" alt="">`
-        : `<div class="thumb">${p.type==='cover'?'📕':p.type==='back'?'📗':p.type==='toc'?'☰':'📄'}</div>`;
+    const label = p.type==='image' ? (p.chapter||`รูปหน้า ${i+1}`) : p.type==='cover' ? 'ปกหน้า' : p.type==='back' ? 'ปกหลัง' : p.type==='toc' ? 'สารบัญ (อัตโนมัติ)' : (p.chapter||p.kicker||`หน้า ${i+1}`);
+    const thumb = p.type==='image' ? `<img class="thumb" src="${esc(p.img)}" alt="">` : `<div class="thumb">${p.type==='cover'?'📕':p.type==='back'?'📗':p.type==='toc'?'☰':'📄'}</div>`;
     const locked = p.type==='cover'||p.type==='back'||p.type==='toc';
     return `<li class="mng-item">${thumb}
       <div class="meta"><div class="ttl">${esc(label)}</div><div class="sub">หน้า ${i+1} · ${p.type}</div></div>
@@ -527,56 +596,41 @@ function renderMngList(){
       </div></li>`;
   }).join('');
 }
-function movePage(i,dir){
-  const j=i+dir; if(j<0||j>=PAGES.length) return;
-  [PAGES[i],PAGES[j]]=[PAGES[j],PAGES[i]];
-  saveBook(); buildBook(); renderMngList(); jumpTo(Math.min(currentIndex,N-1),false);
-}
-function delPage(i){
-  const p=PAGES[i];
+function movePage(i,dir){ if(BOOK_MODE==='pdf')return; const j=i+dir; if(j<0||j>=PAGES.length) return;
+  [PAGES[i],PAGES[j]]=[PAGES[j],PAGES[i]]; saveBook(); buildBook(); renderMngList(); jumpTo(Math.min(currentIndex,N-1),false); }
+function delPage(i){ if(BOOK_MODE==='pdf')return; const p=PAGES[i];
   if(p.type==='cover'||p.type==='back'||p.type==='toc'){ showToast('หน้านี้ลบไม่ได้','warning'); return; }
-  PAGES.splice(i,1); saveBook(); buildBook(); renderMngList(); jumpTo(Math.min(currentIndex,N-1),false);
-  showToast('ลบหน้าแล้ว','info');
-}
-function resetBook(){
-  if(!confirm('รีเซ็ตหนังสือกลับเป็นค่าเริ่มต้น? เนื้อหาที่เพิ่มไว้จะหายทั้งหมด')) return;
-  PAGES=JSON.parse(JSON.stringify(DEFAULT_PAGES));
-  saveBook(); buildBook(); renderMngList(); jumpTo(0,false);
-  showToast('รีเซ็ตแล้ว','success');
-}
+  PAGES.splice(i,1); saveBook(); buildBook(); renderMngList(); jumpTo(Math.min(currentIndex,N-1),false); showToast('ลบหน้าแล้ว','info'); }
+function resetBook(){ if(BOOK_MODE==='pdf'){ showToast('ล้าง PDF ก่อน','warning'); return; }
+  if(!confirm('รีเซ็ตหนังสือรูปกลับเป็นค่าเริ่มต้น?')) return;
+  PAGES=JSON.parse(JSON.stringify(DEFAULT_PAGES)); saveBook(); buildBook(); renderMngList(); jumpTo(0,false); showToast('รีเซ็ตแล้ว','success'); }
 
-/* ════════ INPUT: keyboard + swipe ════════ */
+/* ════════ INPUT ════════ */
 document.addEventListener('keydown',e=>{
   if(document.getElementById('appScreen').style.display==='none') return;
-  if(e.key==='ArrowRight') step(1);
-  else if(e.key==='ArrowLeft') step(-1);
+  if(document.getElementById('tocOverlay').classList.contains('open')||document.getElementById('manageOverlay').classList.contains('open')) return;
+  if(e.key==='ArrowRight') step(1); else if(e.key==='ArrowLeft') step(-1);
 });
 let tsx=0,tsy=0;
 const stage=document.getElementById('bookStage');
 stage.addEventListener('touchstart',e=>{ tsx=e.changedTouches[0].clientX; tsy=e.changedTouches[0].clientY; },{passive:true});
-stage.addEventListener('touchend',e=>{
-  const dx=e.changedTouches[0].clientX-tsx, dy=e.changedTouches[0].clientY-tsy;
-  if(Math.abs(dx)>50 && Math.abs(dx)>Math.abs(dy)) step(dx<0?1:-1);
-},{passive:true});
+stage.addEventListener('touchend',e=>{ const dx=e.changedTouches[0].clientX-tsx, dy=e.changedTouches[0].clientY-tsy;
+  if(Math.abs(dx)>50 && Math.abs(dx)>Math.abs(dy)) step(dx<0?1:-1); },{passive:true});
 
 /* ════════ MISC UI ════════ */
-function toggleDark(){
-  document.body.classList.toggle('dark');
+function toggleDark(){ document.body.classList.toggle('dark');
   document.getElementById('btnDark').textContent=document.body.classList.contains('dark')?'☀️':'🌙';
-  localStorage.setItem('rattanaEbookDark',document.body.classList.contains('dark')?'1':'0');
-}
+  localStorage.setItem('rattanaEbookDark',document.body.classList.contains('dark')?'1':'0'); }
 function showSpinner(m){ document.getElementById('spinMsg').textContent=m||'กำลังโหลด...'; document.getElementById('spinner').classList.add('show'); }
 function hideSpinner(){ document.getElementById('spinner').classList.remove('show'); }
-function showToast(msg,type='info'){
-  const t=document.createElement('div'); t.className='toast toast-'+type; t.textContent=msg;
-  document.body.appendChild(t); setTimeout(()=>t.remove(),3000);
-}
+function showToast(msg,type='info'){ const t=document.createElement('div'); t.className='toast toast-'+type; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),3200); }
 
 /* ════════ BOOT ════════ */
 if(localStorage.getItem('rattanaEbookDark')==='1'){ document.body.classList.add('dark'); }
-/* login ปิดชั่วคราว v1.1 — เข้าอ่านตรง ๆ (guest role 8 = จัดการหน้าได้)
-   เปิดใช้ login ใหม่: เปลี่ยน enterApp() กลับเป็น checkSession() + คืน GSI script + ลบ style display:none ที่ #loginScreen */
+/* login ปิดชั่วคราว — เข้าอ่านตรง ๆ (guest role 8 = จัดการได้)
+   เปิดใช้ login ใหม่: เปลี่ยน enterApp() → checkSession() + คืน GSI script + ลบ style display:none ที่ #loginScreen */
 window.onload=()=>{
+  ensurePdfWorker();
   document.getElementById('btnDark').textContent=document.body.classList.contains('dark')?'☀️':'🌙';
   currentUser={ name:'ผู้อ่าน', nickname:'ผู้อ่าน', role:8 };
   enterApp();
