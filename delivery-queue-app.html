@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.30</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.31</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -541,7 +541,7 @@ body.dragging .trip-drop{border-style:dashed!important;animation:pulse-glow 1.2s
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.30</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.31</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -2627,7 +2627,11 @@ function confirmAutoAssign(){
       console.log(`📅 Auto-assign DI_DATE filter: latest=${new Date(_latestMs).toISOString().slice(0,10)} cutoff=${new Date(_cutoffMs).toISOString().slice(0,10)}`);
     }
     // v8.21: filter step-by-step + fallback ถ้า DI_DATE 3-day filter คัดทิ้งหมด
-    const _preDate=bills.filter(b=>routeMap[b.arCode]&&b.lat&&b.lng&&matchDay(b.days)&&slmnOK(b));
+    // v8.30: ร้านที่มี "รถประจำ" (slmnTruckMap) → เอาแม้ไม่มี GPS/รูท (จัดใส่รถประจำ ไว้ท้ายสุด)
+    const _hasFixedTruck=b=>!!(b.slmnCode&&slmnTruckMap[b.slmnCode]);
+    const _preDate=bills.filter(b=>matchDay(b.days)&&slmnOK(b)&&(
+      (routeMap[b.arCode]&&b.lat&&b.lng) || _hasFixedTruck(b)
+    ));
     let tmrBills=_preDate.filter(_dateOKFn);
     if(!tmrBills.length&&_preDate.length){
       console.warn(`⚠ 5-day DI_DATE filter คัดออก ${_preDate.length} bills → fallback: ไม่กรองวันที่`);
@@ -3558,6 +3562,23 @@ function confirmAutoAssign(){
         // 3) หาไม่ได้ → ปล่อยให้เฟส 2 / last-resort จัดต่อ
       }
     }
+    // ══ v8.30: ร้านมี "รถประจำ" แต่ไม่มี GPS → ใส่รถประจำเลย (ไว้ท้ายสุด เพราะไม่มีพิกัด) ══
+    //   ตั้ง newQ ไว้ก่อน retailPass/phase → พาสอื่นข้ามบิลพวกนี้ · consolidateSameStore ก็ข้าม
+    (function assignFixedNoGps(){
+      let n=0;
+      tmrBills.forEach(b=>{
+        if(newQ[b.ref]!==undefined)return;
+        if(b.lat&&b.lng)return;                     // มี GPS → ให้ engine ปกติจัด
+        const pin=b.slmnCode&&slmnTruckMap[b.slmnCode];
+        if(!pin)return;
+        if(!loads[pin])loads[pin]={w1:0,v1:0,w2:0,v2:0,w3:0,v3:0};
+        newQ[b.ref]=pin; newTripMap[b.ref]=1;
+        loads[pin].w1+=(b.totalW||0); loads[pin].v1+=(b.totalV||0);
+        n++;
+      });
+      if(n)console.log(`📌 ร้านรถประจำ (ไม่มี GPS) → ใส่รถประจำ ${n} บิล (ไว้ท้ายลิสต์)`);
+    })();
+
     // ══ v8.21: RETAIL PASS (พรีปลีก PM/RO/TL≤1ตัน) — จัมโบ้ที่ pin → ล้นกระบะ ══
     // รันก่อน delivery engine · ใช้ config: จัมโบ้ cap 4000, กระบะ cap 2500
     const retailPlates=new Set(); // รถที่รับ retail — freeze กัน consolidation ย้าย
@@ -4439,6 +4460,7 @@ function confirmAutoAssign(){
       const groups={};
       tmrBills.forEach(b=>{
         if(segOf(b)==='R')return;               // ข้ามพรีปลีก
+        if((!b.lat||!b.lng)&&b.slmnCode&&slmnTruckMap[b.slmnCode])return; // v8.30: ร้านรถประจำไม่มี GPS — ล็อกไว้ ห้ามย้าย
         const k=keyOf(b); if(!k)return;
         (groups[k]||(groups[k]=[])).push(b);
       });
