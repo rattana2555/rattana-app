@@ -683,23 +683,48 @@ function closeChat(){
 // ─────────────────────────────────────────────────────────
 //  SEND MESSAGE
 // ─────────────────────────────────────────────────────────
-function sendMsg(){
+async function sendMsg(){
   const inp = document.getElementById('replyInp');
   const text = inp.value.trim();
   if(!text||activeId===null) return;
   const c = convs.find(x=>x.id===activeId);
   if(!c) return;
-  const now2 = new Date();
-  c.msgs.push({f:'a',t:text,ts:now2});
-  c.lastMsg = text;
-  c.lastTime = now2;
+
   inp.value='';
   grow(inp);
   syncSend();
-  renderMsgs(c);
-  renderList();
+
+  // Optimistic UI — add outbound bubble immediately
+  const now2 = new Date().toISOString();
+  if(!msgCache[activeId]) msgCache[activeId]=[];
+  msgCache[activeId].push({direction:'out',content:text,sent_at:now2});
+  renderMsgs(msgCache[activeId]);
   scrollBottom();
-  showToast('ส่งแล้ว ✓','success');
+
+  // Update conv preview locally
+  c.lastMsg = text;
+  c.lastTime = new Date(now2);
+  renderList();
+
+  // Call Edge Function → delivers to platform + saves outbound to DB
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/send-message`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_ANON}`,
+      },
+      body: JSON.stringify({ conversationId: activeId, content: text }),
+    });
+    const json = await res.json();
+    if(json.sent){
+      showToast('ส่งแล้ว ✓','success');
+    } else {
+      showToast('ส่งไปยังแพลตฟอร์มไม่ได้: '+(json.error||'unknown'),'warning');
+    }
+  } catch(e){
+    showToast('ส่งข้อความไม่ได้: '+e.message,'error');
+  }
 }
 
 function onKey(e){ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendMsg(); } }
