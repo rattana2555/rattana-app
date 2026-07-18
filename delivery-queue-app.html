@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.24</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.25</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -541,7 +541,7 @@ body.dragging .trip-drop{border-style:dashed!important;animation:pulse-glow 1.2s
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.24</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.25</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -1064,6 +1064,11 @@ try{savedRefs=new Set(JSON.parse(localStorage.getItem('dq_v4_saved')||'[]'));}ca
 let savedDates={};
 try{savedDates=JSON.parse(localStorage.getItem('dq_v4_saved_dates')||'{}');}catch(e){}
 let dashFilterDate=null;  // วันที่กรองใน Dashboard
+// v8.25: ลำดับร้านที่ผู้ใช้จัดเอง {plate|trip: [ref,...]} — override ลำดับ TSP อัตโนมัติ
+let manualStopOrder={};
+try{manualStopOrder=JSON.parse(localStorage.getItem('dq_v4_manual_order')||'{}');}catch(e){}
+let _displayedOrder={}; // {plate|trip: [ref,...]} ลำดับที่แสดงล่าสุด — ให้ปุ่ม ▲▼ รู้ลำดับปัจจุบัน
+let _savedOpenTrips=new Set(); // เที่ยวที่กาง <details> อยู่ในหน้าบันทึก — คงสถานะเปิดตอน re-render
 let keepData=[];          // ข้อมูลจากชีท Keepdata (โหลดจาก Google Sheet)
 let keepDataLoading=false;
 
@@ -5027,7 +5032,7 @@ function renderSavedView(){
           } else {
             billsList=ld.bills;
           }
-          billsList=_clusterSameStore(billsList); // v8.24: ร้านเดียวกันให้ติดกัน
+          billsList=finalizeOrder(plate,tr,billsList); // v8.25: manual override + cluster + จำลำดับ
         })();
         // ── ชิปร้าน (ไม่ซ้ำชื่อ) — ลิงก์แผนที่ถ้ามีพิกัด ──
         const seen=new Set(); let ord=0;
@@ -5039,17 +5044,24 @@ function renderSavedView(){
         // ── รายละเอียด (กางดู) — ระยะ + น้ำหนัก + แผนที่ ──
         const detail=billsList.map((bb,idx)=>{
           const dHQ=bb.lat&&bb.lng?haversine(HQ.lat,HQ.lng,bb.lat,bb.lng).toFixed(1)+' กม.':'—';
+          const rf=String(bb.ref||'').replace(/'/g,"\\'");
+          const reBtns=bb.ref?`<span style="flex-shrink:0;display:flex;flex-direction:column;gap:1px">
+              <button onclick="moveStop('${plate}',${tr},'${rf}',-1)" title="เลื่อนขึ้น" style="line-height:1;background:#fff;border:1px solid #D5DEE9;border-radius:4px;width:20px;height:15px;font-size:9px;cursor:pointer;color:#1A5FA5;padding:0">▲</button>
+              <button onclick="moveStop('${plate}',${tr},'${rf}',1)" title="เลื่อนลง" style="line-height:1;background:#fff;border:1px solid #D5DEE9;border-radius:4px;width:20px;height:15px;font-size:9px;cursor:pointer;color:#1A5FA5;padding:0">▼</button>
+            </span>`:'';
           return`<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-top:1px solid #F4F6FA;font-size:11.5px">
             <span style="background:#FEF6EC;color:#7D6428;border:1px solid #E4C46E;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;flex-shrink:0">${idx+1}</span>
             <div style="flex:1;min-width:0"><div style="font-weight:600;color:#07101F;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${bb.arName||'—'}</div>
               <div style="font-size:9.5px;color:#9BAAB8">${bb.district||''}${bb.district&&bb.province?', ':''}${bb.province||''} · 📏 ${dHQ}</div></div>
             <div style="text-align:right;flex-shrink:0"><div style="font-size:10.5px;color:#6B7A90">⚖ ${fmtKg(bb.weight)}</div>${bb.amount?`<div style="font-size:9.5px;color:#7D6428;font-weight:600">฿${fmtN(Math.round(bb.amount))}</div>`:''}</div>
             ${bb.lat&&bb.lng?`<a href="https://www.google.com/maps?q=${bb.lat},${bb.lng}" target="_blank" style="color:#1A5FA5;font-size:13px;text-decoration:none;flex-shrink:0" title="แผนที่">📍</a>`:''}
+            ${reBtns}
           </div>`;
         }).join('');
+        const _tk=plate+'|'+tr, _hasMan=!!(manualStopOrder[_tk]&&manualStopOrder[_tk].length), _open=_savedOpenTrips.has(_tk);
         return`<div style="border-top:1px solid #F1F4F8;padding:9px 0">
           <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;font-family:Kanit;margin-bottom:5px">
-            <span>${TE} เที่ยว ${tr} · ${seen.size} ร้าน · ฿${fmtN(Math.round(ld.amt))}</span>
+            <span>${TE} เที่ยว ${tr} · ${seen.size} ร้าน · ฿${fmtN(Math.round(ld.amt))}${_hasMan?' <span style="color:#7D6428;font-weight:400;font-size:10px">✏️ จัดลำดับเอง</span>':''}</span>
             <span style="color:${eff>100?'#C62828':pcColor(eff)}">${eff}% · ${canAdd?'ว่าง '+fmtKg(freeW):'เต็ม'}</span>
           </div>
           <div style="height:5px;background:#E6EAF1;border-radius:3px;overflow:hidden;margin-bottom:4px">
@@ -5057,8 +5069,11 @@ function renderSavedView(){
           </div>
           <div style="font-size:10.5px;color:#6B7A90;margin-bottom:6px">⚖ ${fmtKg(ld.w)}${maxW?'/'+fmtKg(maxW):''} · 📦 ${fmtM3(ld.v)}${maxV?'/'+fmtM3(maxV):''}</div>
           <div style="display:flex;flex-wrap:wrap;gap:5px">${chips}</div>
-          <details style="margin-top:6px"><summary style="cursor:pointer;font-size:10.5px;color:#1A5FA5;list-style:none;outline:none">📋 ดูรายละเอียด + แผนที่ (ตามลำดับวิ่งจริง)</summary>
-            <div style="margin-top:5px;background:#FAFBFD;border:1px solid #EDF0F4;border-radius:8px;overflow:hidden">${detail||'<div style="padding:8px;text-align:center;color:#A0ABBB;font-size:11px">ไม่มีรายการ</div>'}</div>
+          <details ${_open?'open':''} ontoggle="if(this.open)_savedOpenTrips.add('${_tk}');else _savedOpenTrips.delete('${_tk}')" style="margin-top:6px"><summary style="cursor:pointer;font-size:10.5px;color:#1A5FA5;list-style:none;outline:none">📋 ดูรายละเอียด + จัดลำดับร้าน (▲▼ เส้นทางเปลี่ยนตาม)</summary>
+            <div style="margin-top:5px;background:#FAFBFD;border:1px solid #EDF0F4;border-radius:8px;overflow:hidden">
+              ${_hasMan?`<div style="padding:5px 8px;background:#FEF6E4;border-bottom:1px solid #F0E4C0;font-size:10px;color:#7D6428;display:flex;justify-content:space-between;align-items:center"><span>✏️ ลำดับที่จัดเอง</span><button onclick="resetStopOrder('${plate}',${tr})" style="background:#fff;border:1px solid #E6C26E;color:#7D6428;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:600;cursor:pointer">↺ กลับอัตโนมัติ</button></div>`:''}
+              ${detail||'<div style="padding:8px;text-align:center;color:#A0ABBB;font-size:11px">ไม่มีรายการ</div>'}
+            </div>
           </details>
         </div>`;
       }).join('');
@@ -6003,7 +6018,7 @@ function rUpdateMap(){
     let _stopBase=0;
     [1,2,3].forEach(tr=>{
       if(rMapTrip&&rMapTrip!==tr)return;
-      const tb=_tspOrderCached(t.plate,tr,bills.filter(b=>plateOf(b.ref)===t.plate&&b.lat&&b.lng&&tripOf(b.ref)===tr)); // v8.21: memoize
+      const tb=orderedTripBills(t.plate,tr).filter(b=>b.lat&&b.lng); // v8.25: manual order override + จำลำดับ (route ตามลำดับที่จัดเอง)
       if(rMapPlate){tb.forEach((b,i)=>{stopNums[b.ref]=i+1+_stopBase;});_stopBase+=tb.length;}
       if(!tb.length)return;
       const wpts=[[HQ.lat,HQ.lng],...tb.map(b=>[b.lat,b.lng])]; // เที่ยวไปอย่างเดียว
@@ -6071,7 +6086,7 @@ function rUpdateMap(){
       marker.bindTooltip(labelHtml,{permanent:true,direction:'right',offset:[14,0],className:'route-label',opacity:.95});
     }
     rMapLayers.push(marker);
-    stopsForList.push({num:num||null,name:b.arName||b.ref,plate:plate||'',col,trip:tr,marker,lat:b.lat,lng:b.lng});
+    stopsForList.push({num:num||null,name:b.arName||b.ref,plate:plate||'',col,trip:tr,marker,lat:b.lat,lng:b.lng,ref:b.ref});
   });
   _renderStopsList(stopsForList);
 
@@ -6125,14 +6140,30 @@ function _renderStopsList(stops){
     const na=a.num==null?9999:Number(a.num),nb=b.num==null?9999:Number(b.num);
     return na-nb;
   });
-  el.innerHTML=sorted.map((s,i)=>{
+  // v8.25: ปุ่มจัดลำดับเอง แสดงเมื่อเลือกรถเดียว (มีเลขจุด) · reset ถ้ารถนี้มี manual order
+  const canReorder=!!rMapPlate;
+  const hasManual=canReorder&&Object.keys(manualStopOrder).some(k=>k.split('|')[0]===rMapPlate&&manualStopOrder[k]&&manualStopOrder[k].length);
+  let head='';
+  if(canReorder){
+    head=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:10px;color:#9BAAB8">
+      <span>↕ กด ▲▼ จัดลำดับเอง (เส้นทางเปลี่ยนตาม)</span>
+      ${hasManual?`<button onclick="resetStopOrder('${rMapPlate}',null)" style="margin-left:auto;background:#FEF6E4;border:1px solid #E6C26E;color:#7D6428;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:600;cursor:pointer">↺ อัตโนมัติ</button>`:''}
+    </div>`;
+  }
+  el.innerHTML=head+sorted.map((s,i)=>{
     const tripCol=s.trip===3?'#15803D':s.trip===2?'#1A5FA5':s.trip===1?'#C47000':'#6B7A90';
     const tripBg=s.trip===3?'#F0FDF4':s.trip===2?'#EAF0F8':s.trip===1?'#FFF8EC':'#F5F7FA';
     const label=s.num!=null?s.num:'?';
+    const showBtns=canReorder&&s.num!=null&&s.plate&&s.ref;
+    const reBtns=showBtns?`<span style="flex-shrink:0;display:flex;flex-direction:column;gap:1px" onclick="event.stopPropagation()">
+        <button onclick="moveStop('${s.plate}',${s.trip},'${String(s.ref).replace(/'/g,"\\'")}',-1)" title="เลื่อนขึ้น" style="line-height:1;background:#fff;border:1px solid #D5DEE9;border-radius:4px;width:20px;height:15px;font-size:9px;cursor:pointer;color:#1A5FA5;padding:0">▲</button>
+        <button onclick="moveStop('${s.plate}',${s.trip},'${String(s.ref).replace(/'/g,"\\'")}',1)" title="เลื่อนลง" style="line-height:1;background:#fff;border:1px solid #D5DEE9;border-radius:4px;width:20px;height:15px;font-size:9px;cursor:pointer;color:#1A5FA5;padding:0">▼</button>
+      </span>`:'';
     return `<div onclick="_zoomToStop(${i})" title="คลิกเพื่อซูมไปที่จุดนี้" style="cursor:pointer;padding:6px 8px;border-radius:6px;border:1px solid ${tripBg};background:${tripBg};display:flex;align-items:center;gap:8px;transition:all .12s" onmouseover="this.style.borderColor='${s.col}';this.style.transform='translateX(2px)'" onmouseout="this.style.borderColor='${tripBg}';this.style.transform=''">
       <span style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:${s.col};color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.15)">${label}</span>
       <span style="flex:1;min-width:0;font-size:11px;color:${tripCol};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500">${s.name}</span>
       ${s.plate?`<span style="flex-shrink:0;font-size:9px;color:${s.col};background:#fff;padding:1px 5px;border-radius:4px;font-weight:600">${s.plate}</span>`:''}
+      ${reBtns}
     </div>`;
   }).join('');
   window._rStopsData=sorted;
@@ -6290,15 +6321,62 @@ function _clusterSameStore(arr){
   }
   return out;
 }
+// ══ v8.25: ลำดับร้านที่จัดเอง (manual) — override ลำดับ TSP ══
+function saveManualOrder(){try{localStorage.setItem('dq_v4_manual_order',JSON.stringify(manualStopOrder));}catch(e){}}
+// เรียง orderedBills ตาม manualStopOrder[plate|tr] · บิลที่ไม่อยู่ในลิสต์ (บิลใหม่) ต่อท้ายตามลำดับเดิม
+function applyManualStopOrder(plate,tr,orderedBills){
+  const mo=manualStopOrder[plate+'|'+tr];
+  if(!mo||!mo.length)return orderedBills;
+  const rank={}; mo.forEach((r,i)=>{rank[r]=i;});
+  const N=orderedBills.length;
+  return orderedBills.map((b,i)=>({b,i}))
+    .sort((x,y)=>{
+      const rx=rank[x.b.ref]!==undefined?rank[x.b.ref]:N+x.i;
+      const ry=rank[y.b.ref]!==undefined?rank[y.b.ref]:N+y.i;
+      return rx-ry;
+    }).map(x=>x.b);
+}
+// เลือกลำดับสุดท้าย: ถ้ามี manual → ใช้ manual · ไม่งั้น cluster ร้านเดียวกัน · แล้วบันทึกลำดับที่แสดง
+function finalizeOrder(plate,tr,base){
+  const key=plate+'|'+tr;
+  const list=(manualStopOrder[key]&&manualStopOrder[key].length)
+    ? applyManualStopOrder(plate,tr,base)
+    : _clusterSameStore(base);
+  _displayedOrder[key]=list.map(b=>b.ref);
+  return list;
+}
+// เลื่อนร้านขึ้น/ลง (dir=-1 ขึ้น, +1 ลง) ภายในคัน+เที่ยวเดียวกัน แล้ววาดใหม่ (แผนที่/ลิสต์ตามหน้าปัจจุบัน)
+function moveStop(plate,tr,ref,dir){
+  const key=plate+'|'+tr;
+  const cur=(_displayedOrder[key]||[]).slice();
+  const i=cur.indexOf(ref); if(i<0)return;
+  const j=i+dir; if(j<0||j>=cur.length)return;
+  [cur[i],cur[j]]=[cur[j],cur[i]];
+  manualStopOrder[key]=cur; _displayedOrder[key]=cur; saveManualOrder();
+  if(currentTab==='routes'&&typeof rUpdateMap==='function')rUpdateMap();
+  else if(currentTab==='saved')renderSavedView();
+  else if(typeof renderAll==='function')renderAll();
+  showToast('↕ ปรับลำดับแล้ว — เส้นทางอัปเดตตาม','ok');
+}
+// ล้างลำดับที่จัดเอง กลับไปใช้อัตโนมัติ (TSP)
+function resetStopOrder(plate,tr){
+  if(tr==null){ // ทั้งคัน (ทุกเที่ยว)
+    Object.keys(manualStopOrder).forEach(k=>{if(k.split('|')[0]===plate)delete manualStopOrder[k];});
+  } else { delete manualStopOrder[plate+'|'+tr]; }
+  saveManualOrder();
+  if(currentTab==='routes'&&typeof rUpdateMap==='function')rUpdateMap();
+  else if(currentTab==='saved')renderSavedView();
+  else if(typeof renderAll==='function')renderAll();
+  showToast('↺ กลับเป็นลำดับอัตโนมัติ','ok');
+}
 // v8.21: เรียงตามลำดับวิ่งจริง — ใช้ร่วมกันทุกหน้า (ฝูงรถ/ใบพิมพ์) ให้ตรงกับสายส่ง
 function orderedTripBills(plate,tr){
   const tb=tripBillsFor(plate,tr);
   const wg=tb.filter(b=>b.lat&&b.lng);
-  if(wg.length>1&&typeof tspRoute==='function'){
-    // v8.24: จัดร้านเดียวกันให้ติดกัน หลังได้ลำดับวิ่งจริง
-    return _clusterSameStore([..._tspOrderCached(plate,tr,wg),...tb.filter(b=>!b.lat||!b.lng)]);
-  }
-  return _clusterSameStore(tb);
+  const base=(wg.length>1&&typeof tspRoute==='function')
+    ? [..._tspOrderCached(plate,tr,wg),...tb.filter(b=>!b.lat||!b.lng)]
+    : tb;
+  return finalizeOrder(plate,tr,base); // v8.25: manual override + cluster + จำลำดับที่แสดง
 }
 function carTripHtml(plate){
   const TC=['','#C47000','#1A5FA5','#15803D'],BG=['','#FFF8EC','#EAF0F8','#EAF3DE'],BD=['','#E4C46E','#93B8DE','#97C459'],TE=['','🔴','🔵','🟢'];
