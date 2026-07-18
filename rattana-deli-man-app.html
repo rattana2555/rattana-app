@@ -741,7 +741,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.65';
+const APP_VERSION='3.66';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -6117,7 +6117,7 @@ async function syncJobsFromSheet(opts){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.65 (พนง.ใหม่: เขียนเฉพาะเมื่อแอปส่งค่ามา — เดิมล้างเป็นค่าว่างทุกครั้งที่บันทึก) */
+const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.66 (รวมยอดชำระ = เงินจริงล้วน ไม่รวมใบลดหนี้ — ใบลดหนี้ยังนับปิดบิลใน ชำระขาด-เกิน/สถานะ) */
 const SHEET_INPUT='บันทึกเที่ยวส่ง';
 const SHEET_CIN='บันทึกบิลและการชำระ';
 const SHEET_CN='CN';
@@ -6165,7 +6165,7 @@ const HEADERS_CIN=['เลขใบคุม','Doc_Date','Doc_No','Customer_Code
 function doGet(e){
   let drive='unknown';
   try{ DriveApp.getRootFolder().getName(); drive='OK'; }catch(err){ drive='NOT_AUTHORIZED'; }
-  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.65',drive:drive}))
+  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.66',drive:drive}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -6200,7 +6200,7 @@ function doPost(e){
         fmtColsOpen_(sh,['รหัสร้าน','เลขใบคุม','Doc_No'],'@');   // v3.35: เปิดปลาย คลุมแถวใหม่
         fmtColsOpen_(sh,['Lat','Lng'],'0.000000');
         fmtColsOpen_(sh,['วันเวลา'],'yyyy-mm-dd hh:mm:ss');
-        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.65'})).setMimeType(ContentService.MimeType.JSON);
+        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.66'})).setMimeType(ContentService.MimeType.JSON);
       }finally{ lock.releaseLock(); }
     }
 
@@ -6499,8 +6499,12 @@ function doPost(e){
       var jobApprovedAtVal=data.approvedAt?new Date(data.approvedAt):'';
       data.bills.forEach(b=>{
         const p=b.payment||{};
-        const totalPaid=(parseFloat(p.banknotes)||0)+(parseFloat(p.coins)||0)+(parseFloat(p.transfer1)||0)
-          +(parseFloat(p.transfer2)||0)+(parseFloat(p.cheque)||0)+(parseFloat(p.creditNote)||0);
+        // v3.66: แยก "เงินจริง" (เงินสด/โอน/เช็ค) กับ "ใบลดหนี้" ออกจากกัน
+        //   moneyPaid → คอลัมน์ "รวมยอดชำระ" (โชว์เฉพาะเงินที่กรอกจริง ไม่รวมใบลดหนี้ — ไม่กรอก = 0)
+        //   totalPaid → ยังรวมใบลดหนี้ ใช้คิด "ชำระขาด-เกิน" + สถานะบิล (ใบลดหนี้ยังนับเป็นการปิดบิล)
+        const moneyPaid=(parseFloat(p.banknotes)||0)+(parseFloat(p.coins)||0)+(parseFloat(p.transfer1)||0)
+          +(parseFloat(p.transfer2)||0)+(parseFloat(p.cheque)||0);
+        const totalPaid=moneyPaid+(parseFloat(p.creditNote)||0);
         const diff=totalPaid-(parseFloat(b.amount)||0);
         // v3.25: Status จ่าย + Status บิล — ให้ค่าตรงกับแอปเก่า (เงินสด/โอน/ไม่ชำระ/จ่ายรวมบิล/ไม่ได้จัดส่ง + เรียบร้อย/ยังไม่ชำระ/ขาด/ตรวจสอบ)
         const types=Array.isArray(p._types)?p._types:[];
@@ -6569,7 +6573,7 @@ function doPost(e){
         cinObj['ปีในเช็ค']=p.chequeYear||'';
         cinObj['วัน-เดือน-ปี ของเช็ค']=chequeDateVal;
         cinObj['ใบลดหนี้']=p.creditNote||0;
-        cinObj['รวมยอดชำระ']=totalPaid;
+        cinObj['รวมยอดชำระ']=moneyPaid;   // v3.66: เงินจริงล้วน (ไม่รวมใบลดหนี้) — ไม่กรอก = 0
         cinObj['ชำระขาด-เกิน']=diff;
         cinObj['Status จ่าย']=payStatus;
         cinObj['หมายเหตุ']=b.note||'';
@@ -6599,7 +6603,7 @@ function doPost(e){
       fmtColsOpen_(cinSh,['วัน+เวลา ที่ส่งสินค้า','U_ADD','วันที่โอนครั้งที่1','วันที่โอนครั้งที่2','แก้ไขเมื่อ','วันที่','วันเวลาอนุมัติ'],'yyyy-mm-dd hh:mm:ss');
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.65'}))
+    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.66'}))
       .setMimeType(ContentService.MimeType.JSON);
   }catch(err){
     return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err)}))
