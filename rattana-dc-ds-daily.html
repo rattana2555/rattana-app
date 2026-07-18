@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.21</title>
+<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.22</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -276,7 +276,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
       <div class="sb-item" id="sb-report" onclick="dskGoto('dsk-report')"><span class="si">📊</span>รายงาน</div>
       <div class="sb-item" id="sb-settings" onclick="dskGoto('dsk-settings')"><span class="si">⚙️</span>ตั้งค่า</div>
     </div>
-    <div class="sb-ver">v3.21 · 2026-07-18</div>
+    <div class="sb-ver">v3.22 · 2026-07-18</div>
   </nav>
 
   <div id="mainCol">
@@ -287,7 +287,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
       <div class="h-title dsk-only">ตรวจส่วนลด <span>DC/DS</span></div>
       <div class="h-title mob-only" id="mobTitle">รัตนไพบูลย์</div>
       <div class="flex gap-6 dsk-only" style="margin-left:auto;align-items:center">
-        <span style="font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap">v3.21 · 18/07/2569</span>
+        <span style="font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap">v3.22 · 18/07/2569</span>
         <button class="btn btn-sm" style="background:rgba(201,168,76,.15);color:var(--gold);border:1px solid rgba(201,168,76,.3);font-size:12px" onclick="exportExcel()">⬇ Excel</button>
         <button class="h-btn" onclick="refreshData()" title="รีเฟรช">⟳</button>
       </div>
@@ -375,7 +375,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
             <div class="ss-title">Export</div>
             <div class="ss-row"><div><div class="ss-label">ส่งออก Excel</div><div class="ss-sub">ข้อมูลที่กรองไว้</div></div><button class="btn btn-sm btn-success" onclick="exportExcel()">⬇ Excel</button></div>
           </div>
-          <div style="margin-top:20px;font-size:11px;color:var(--muted)">ตรวจส่วนลด DC/DS รัตนไพบูลย์ <b>v3.21</b> · 2026-07-18</div>
+          <div style="margin-top:20px;font-size:11px;color:var(--muted)">ตรวจส่วนลด DC/DS รัตนไพบูลย์ <b>v3.22</b> · 2026-07-18</div>
         </div>
 
       </div><!-- /dsk-screens -->
@@ -444,7 +444,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
               <div class="ss-title">Export</div>
               <div class="ss-row"><div><div class="ss-label">ส่งออก Excel</div></div><button class="btn btn-sm btn-success" onclick="exportExcel()">⬇ Excel</button></div>
             </div>
-            <div style="margin-top:20px;font-size:11px;color:var(--muted);text-align:center">ตรวจส่วนลด DC/DS v3.21 · 2026-07-18</div>
+            <div style="margin-top:20px;font-size:11px;color:var(--muted);text-align:center">ตรวจส่วนลด DC/DS v3.22 · 2026-07-18</div>
           </div>
         </div>
 
@@ -503,11 +503,14 @@ const PDDT_ID    = '16mYDqAqqJma-_0vCIAajy6bcjdOZ7F6VagxkdkqAB2I';
 const PDDT_NAME  = 'PDDT';
 const PROMO_ID   = '1CqHARklgveAeJ6rTkNeyUSku__puTiNE7-c6ebn93W8';
 const PROMO_NAME = 'Promotion';
+const USERS_ID   = '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ';
+const USERS_NAME = 'Sheet1';
 
 let allData=[], allInvs=[], filtInvs=[], selRef=null, lastLoad=null;
 let pddtMap={}; // PRODUCT NAME → {brand, size}
 let pddtMapNorm={}; // normalized (no spaces) → {brand, size}
-let promoRules=[]; // [{field:'PRODUCT NAME'|'CAT BRAND'|'CAT SIZE', value:string}]
+let promoRules=[]; // [{field,value,price,qty,unit,gift,giftQty,warehouses}]
+let usersMap={}; // cleanName → warehouse (W1/W2/...)
 let dskPage=1, DSK_SZ=15, sortCol='date', sortAsc=false;
 let mfDate='', mfStore='', mfStatus='', mfSearch='', activePeriod='';
 
@@ -599,12 +602,37 @@ async function fetchPromo(){
         qty:(r['จำนวน']||'').trim(),
         unit:(r['รูปแบบขาย']||'').trim(),
         gift:(r['แถมสินค้า']||'').trim(),
-        giftQty:(r['จำนวนแถมEA']||'').trim()
+        giftQty:(r['จำนวนแถมEA']||'').trim(),
+        warehouses:(r['Warehouses']||'').trim()
       });
     });
     if(promoRules.length>0)showToast(`โหลดโปรโมชั่น ${promoRules.length} เงื่อนไข ✓`,'success');
     else showToast('Promotion โหลดได้ 0 เงื่อนไข','error');
   }catch(e){showToast('Promotion โหลดไม่สำเร็จ: '+e.message,'error');}
+}
+
+async function fetchUsers(){
+  try{
+    const url=`https://docs.google.com/spreadsheets/d/${USERS_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(USERS_NAME)}`;
+    const res=await fetch(url);
+    if(!res.ok){showToast('Rattana Users: HTTP '+res.status,'error');return;}
+    const text=await res.text();
+    if(text.trim().startsWith('<')){showToast('Rattana Users ยังไม่ได้เปิดสาธารณะ','error');return;}
+    const rows=parseCsv(text);
+    usersMap={};
+    rows.forEach(r=>{
+      const name=(r['ชื่อ - สกุล']||'').trim();
+      const wh=(r['W']||'').trim();
+      if(name&&wh)usersMap[name]=wh;
+    });
+    const n=Object.keys(usersMap).length;
+    if(n>0)showToast(`โหลด Rattana Users ${n} คน ✓`,'success');
+    else showToast('Rattana Users โหลดได้ 0 รายการ','error');
+  }catch(e){showToast('Rattana Users โหลดไม่สำเร็จ: '+e.message,'error');}
+}
+
+function cleanSlmn(slmn){
+  return (slmn||'').replace(/^คุณ\s*/,'').replace(/\s*\(ROO\)\s*$/i,'').replace(/\s*\([^)]*\)\s*$/,'').trim();
 }
 
 function matchPromo(skuName, pd, row){
@@ -616,6 +644,9 @@ function matchPromo(skuName, pd, row){
   const rowQty=parseInt(row['TRD_QTY']||0)||0;
   const rowUnit=(row['TRD_UTQNAME']||'').trim();
   const rowUnitShort=/\(([^)]+)\)/.exec(rowUnit)?.[1]||rowUnit;
+  // หา warehouse ของพนักงานจาก SLMN_NAME
+  const cleanName=cleanSlmn(row['SLMN_NAME']);
+  const rowWh=usersMap[cleanName]||'';
   return promoRules.find(rule=>{
     const rv=rule.valueN;
     let fieldMatch=false;
@@ -647,6 +678,14 @@ function matchPromo(skuName, pd, row){
         return false;
       }
     }
+    // Warehouses: ถ้าโปรมีเงื่อนไข warehouse ต้องตรง
+    if(rule.warehouses!==''){
+      const allowed=rule.warehouses.split(',').map(w=>w.trim()).filter(Boolean);
+      if(allowed.length&&!allowed.includes(rowWh)){
+        console.log('[PROMO] Warehouse ไม่ตรง',skuName,'→ พนักงาน:',cleanName,'wh:',rowWh,'อนุญาต:',allowed);
+        return false;
+      }
+    }
     return true;
   })||null;
 }
@@ -660,7 +699,8 @@ async function loadData(force=false){
     const [dsData] = await Promise.all([
       data?Promise.resolve(data):fetchData(),
       (force||Object.keys(pddtMap).length===0)?fetchPddt():Promise.resolve(),
-      (force||promoRules.length===0)?fetchPromo():Promise.resolve()
+      (force||promoRules.length===0)?fetchPromo():Promise.resolve(),
+      (force||Object.keys(usersMap).length===0)?fetchUsers():Promise.resolve()
     ]);
     if(!data){
       try{localStorage.setItem(CACHE_KEY,JSON.stringify({ts:Date.now(),data:dsData}));}catch(e){/* quota exceeded */}
@@ -1032,6 +1072,8 @@ document.addEventListener('DOMContentLoaded',()=>loadData());
 </script>
 </body>
 </html>
+
+
 
 
 
