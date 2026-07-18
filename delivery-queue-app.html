@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.25</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.26</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -541,7 +541,7 @@ body.dragging .trip-drop{border-style:dashed!important;animation:pulse-glow 1.2s
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.25</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.26</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -4554,8 +4554,9 @@ const KEEPDATA_HEADERS=[
   'เลขบิล','รหัสร้านค้า','ชื่อร้านค้า','จังหวัด','อำเภอ',                    // C D E F G
   'มี GPS','Lat','Lng','ห่าง HQ (กม.)','สายส่ง','รหัสสาย','วันส่ง',          // H I J K L M N
   'ทะเบียนรถ','เที่ยว','ชื่อเล่น','คนขับ','ประเภทรถ',                        // O P Q R S
-  'น้ำหนัก (กก.)','ปริมาตร (m³)','มูลค่า (บาท)','สถานะ','วันที่อัปเดต'      // T U V W X
-];  // 24 คอลัมน์ (A–X) ตรงกับ GAS sheet
+  'น้ำหนัก (กก.)','ปริมาตร (m³)','มูลค่า (บาท)','สถานะ','วันที่อัปเดต',     // T U V W X
+  'ลำดับร้าน'                                                                 // Y (v8.26)
+];  // 25 คอลัมน์ (A–Y) ตรงกับ GAS sheet
 
 // ── Delivery Date state ──
 let _deliveryDate=''; // "DD/MM/YYYY" เช่น "13/05/2026"
@@ -4633,6 +4634,17 @@ async function doSave(){
     // v8.21: queue คือแผนปัจจุบันสมบูรณ์ (บันทึกแล้วไม่ลบทิ้ง) → ส่ง queue ตรงๆ
     //   เอา _prevForDate (v8.21) ออก — เดิมดึงบิลเก่าจาก keepData กลับ ทำให้
     //   "ลบบิลที่บันทึกแล้ว" ไม่ได้ (มันดึงกลับมาทุกครั้ง) · ตอนนี้ queue มีครบอยู่แล้ว
+    // v8.26: ลำดับร้านต่อคัน+เที่ยว (ตามที่จัดเอง ▲▼ / TSP) → เขียนลงคอลัมน์ "ลำดับร้าน"
+    const seqMap={};
+    (function(){
+      const doneKeys=new Set();
+      Object.keys(queue).forEach(ref=>{
+        const pl=queue[ref]; if(!pl)return;
+        const tr=tripMap[ref]||1; const key=pl+'|'+tr;
+        if(doneKeys.has(key))return; doneKeys.add(key);
+        orderedTripBills(pl,tr).forEach((bb,i)=>{seqMap[bb.ref]=i+1;});
+      });
+    })();
     const rows=bills.sort((a,b)=>(a.province||'').localeCompare(b.province||'','th')).map(b=>{
       const t=TRUCKS.find(tt=>tt.plate===queue[b.ref]);
       const hasGPS=!!(b.lat&&b.lng);
@@ -4649,7 +4661,8 @@ async function doSave(){
         b.totalW.toFixed(0), b.totalV.toFixed(3),
         Math.round(b.totalAmt||0),
         queue[b.ref]?'จัดแล้ว':'รอจัด',
-        now
+        now,
+        seqMap[b.ref]||''              // Y: ลำดับร้าน (v8.26)
       ];
     });
 
@@ -4809,7 +4822,8 @@ async function loadKeepdata(silent=false){
       weight      : parseFloat(r['น้ำหนัก (กก.)']||'0')||0,
       volume      : parseFloat(r['ปริมาตร (m³)']||'0')||0,
       amount      : parseFloat(r['มูลค่า (บาท)']||'0')||0,
-      status      : r['สถานะ']||''
+      status      : r['สถานะ']||'',
+      seq         : parseInt(r['ลำดับร้าน']||'0')||0  // v8.26: ลำดับร้านที่บันทึกไว้
     })).filter(r=>r.plate&&r.deliveryDate);  // เก็บเฉพาะแถวที่มีรถและวันส่ง
     if(!silent)showToast(`โหลด Keepdata ${keepData.length} แถว`,'ok');
     if(currentTab==='saved')renderSavedView();
@@ -5023,16 +5037,30 @@ function renderSavedView(){
         //   cache hit จะคืน "บิลจาก queue" (ฟิลด์คนละชื่อ) จึงเอาแค่ "ลำดับตาม ref" มา sort แถว keepData
         let billsList;
         (function(){
-          const wg=ld.bills.filter(b=>b.lat&&b.lng);
-          const nog=ld.bills.filter(b=>!b.lat||!b.lng);
-          if(wg.length>1&&typeof tspRoute==='function'){
-            const ordered=_tspOrderCached(plate,tr,wg);
-            const rank={}; ordered.forEach((b,i)=>{if(b&&b.ref!=null)rank[b.ref]=i;});
-            billsList=[...wg].sort((a,b)=>(rank[a.ref]??999)-(rank[b.ref]??999)).concat(nog);
+          const key=plate+'|'+tr;
+          const hasSeq=ld.bills.some(b=>b.seq>0); // v8.26: มีลำดับที่บันทึกไว้ในชีท
+          // ลำดับพื้นฐาน: ชีท (seq) ก่อน → ไม่มีก็ TSP
+          let base;
+          if(hasSeq){
+            base=[...ld.bills].sort((a,b)=>((a.seq>0?a.seq:9999)-(b.seq>0?b.seq:9999)));
           } else {
-            billsList=ld.bills;
+            const wg=ld.bills.filter(b=>b.lat&&b.lng);
+            const nog=ld.bills.filter(b=>!b.lat||!b.lng);
+            if(wg.length>1&&typeof tspRoute==='function'){
+              const ordered=_tspOrderCached(plate,tr,wg);
+              const rank={}; ordered.forEach((b,i)=>{if(b&&b.ref!=null)rank[b.ref]=i;});
+              base=[...wg].sort((a,b)=>(rank[a.ref]??999)-(rank[b.ref]??999)).concat(nog);
+            } else { base=ld.bills; }
           }
-          billsList=finalizeOrder(plate,tr,billsList); // v8.25: manual override + cluster + จำลำดับ
+          // แก้สดบนหน้าบันทึก (localStorage) ทับได้ · ไม่งั้นใช้ลำดับจากชีท · ไม่มี seq ค่อย cluster
+          if(manualStopOrder[key]&&manualStopOrder[key].length){
+            billsList=applyManualStopOrder(plate,tr,base);
+          } else if(hasSeq){
+            billsList=base;
+          } else {
+            billsList=_clusterSameStore(base);
+          }
+          _displayedOrder[key]=billsList.map(b=>b.ref);
         })();
         // ── ชิปร้าน (ไม่ซ้ำชื่อ) — ลิงก์แผนที่ถ้ามีพิกัด ──
         const seen=new Set(); let ord=0;
