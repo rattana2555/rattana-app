@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.22</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.23</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -541,7 +541,7 @@ body.dragging .trip-drop{border-style:dashed!important;animation:pulse-glow 1.2s
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.22</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.23</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -4963,9 +4963,21 @@ function renderSavedView(){
         const canAdd=eff<100&&freeW>50;
         if(canAdd)anyFree=true;
         const TE=tr===3?'🟢':tr===2?'🔵':'🔴';
-        // เรียงร้าน: ไกล HQ → ใกล้ HQ (ตรงลำดับวิ่งจริง)
-        const billsList=[...ld.bills].sort((a,b)=>
-          haversine(HQ.lat,HQ.lng,b.lat||0,b.lng||0)-haversine(HQ.lat,HQ.lng,a.lat||0,a.lng||0));
+        // เรียงร้านตามลำดับวิ่งจริง (TSP) — ให้ตรงกับหน้าสายส่ง/ฝูงรถเป๊ะ
+        //   _tspOrderCached คีย์ด้วย plate|trip|refs (ไม่ขึ้นกับลำดับ) → reuse ลำดับที่สายส่งคำนวณไว้
+        //   cache hit จะคืน "บิลจาก queue" (ฟิลด์คนละชื่อ) จึงเอาแค่ "ลำดับตาม ref" มา sort แถว keepData
+        let billsList;
+        (function(){
+          const wg=ld.bills.filter(b=>b.lat&&b.lng);
+          const nog=ld.bills.filter(b=>!b.lat||!b.lng);
+          if(wg.length>1&&typeof tspRoute==='function'){
+            const ordered=_tspOrderCached(plate,tr,wg);
+            const rank={}; ordered.forEach((b,i)=>{if(b&&b.ref!=null)rank[b.ref]=i;});
+            billsList=[...wg].sort((a,b)=>(rank[a.ref]??999)-(rank[b.ref]??999)).concat(nog);
+          } else {
+            billsList=ld.bills;
+          }
+        })();
         // ── ชิปร้าน (ไม่ซ้ำชื่อ) — ลิงก์แผนที่ถ้ามีพิกัด ──
         const seen=new Set(); let ord=0;
         const chips=billsList.map(bb=>{
@@ -4994,7 +5006,7 @@ function renderSavedView(){
           </div>
           <div style="font-size:10.5px;color:#6B7A90;margin-bottom:6px">⚖ ${fmtKg(ld.w)}${maxW?'/'+fmtKg(maxW):''} · 📦 ${fmtM3(ld.v)}${maxV?'/'+fmtM3(maxV):''}</div>
           <div style="display:flex;flex-wrap:wrap;gap:5px">${chips}</div>
-          <details style="margin-top:6px"><summary style="cursor:pointer;font-size:10.5px;color:#1A5FA5;list-style:none;outline:none">📋 ดูรายละเอียด + แผนที่ (เรียงไกล→ใกล้ HQ)</summary>
+          <details style="margin-top:6px"><summary style="cursor:pointer;font-size:10.5px;color:#1A5FA5;list-style:none;outline:none">📋 ดูรายละเอียด + แผนที่ (ตามลำดับวิ่งจริง)</summary>
             <div style="margin-top:5px;background:#FAFBFD;border:1px solid #EDF0F4;border-radius:8px;overflow:hidden">${detail||'<div style="padding:8px;text-align:center;color:#A0ABBB;font-size:11px">ไม่มีรายการ</div>'}</div>
           </details>
         </div>`;
