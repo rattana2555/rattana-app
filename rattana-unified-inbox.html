@@ -515,6 +515,41 @@ function timeAgo(d){
 }
 
 // ─────────────────────────────────────────────────────────
+//  LOAD CONVERSATIONS FROM SUPABASE
+// ─────────────────────────────────────────────────────────
+async function loadConvs(){
+  const { data, error } = await sb
+    .from('conversations')
+    .select('id,platform,platform_conv_id,customer_name,last_message,last_message_at,unread_count')
+    .order('last_message_at', { ascending: false });
+  if(error){ showToast('โหลดการสนทนาไม่ได้: '+error.message,'error'); return; }
+  convs = (data||[]).map(r=>({
+    id: r.id,
+    platform: r.platform,
+    uid: r.platform_conv_id,
+    name: r.customer_name||'ลูกค้า',
+    lastMsg: r.last_message||'',
+    lastTime: new Date(r.last_message_at),
+    unread: r.unread_count||0,
+  }));
+  renderList();
+}
+
+// ─────────────────────────────────────────────────────────
+//  LOAD MESSAGES FOR A CONVERSATION
+// ─────────────────────────────────────────────────────────
+async function loadMsgs(convId){
+  const { data, error } = await sb
+    .from('messages')
+    .select('id,direction,content,sent_at')
+    .eq('conversation_id', convId)
+    .order('sent_at', { ascending: true });
+  if(error){ showToast('โหลดข้อความไม่ได้','error'); return []; }
+  msgCache[convId] = data||[];
+  return msgCache[convId];
+}
+
+// ─────────────────────────────────────────────────────────
 //  RENDER LIST
 // ─────────────────────────────────────────────────────────
 function renderList(){
@@ -531,11 +566,11 @@ function renderList(){
   }
 
   el.innerHTML = filtered.map(c=>{
-    const p = P[c.platform];
+    const p = P[c.platform]||{name:c.platform,color:'#888',short:'?'};
     const bg = avCol(c.name);
     return `<div class="conv-item ${c.unread>0?'unread':''} ${activeId===c.id?'selected':''}"
-      style="${c.unread>0?`--stripe:${p.color};`:''}${c.unread>0?`border-left-color:${p.color};border-left-width:3px;border-left-style:solid;`:''}"
-      onclick="openConv(${c.id})">
+      style="${c.unread>0?`border-left-color:${p.color};border-left-width:3px;border-left-style:solid;`:''}"
+      onclick="openConv('${c.id}')">
       <div class="av-wrap">
         <div class="av" style="background:${bg}">${esc(c.name.charAt(0))}</div>
         <div class="pdot" style="background:${p.color}">${p.short}</div>
@@ -572,13 +607,19 @@ function updateBadges(){
 // ─────────────────────────────────────────────────────────
 //  OPEN CONVERSATION
 // ─────────────────────────────────────────────────────────
-function openConv(id){
+async function openConv(id){
   activeId = id;
   const c = convs.find(x=>x.id===id);
   if(!c) return;
-  c.unread = 0;
 
-  const p = P[c.platform];
+  // Reset unread in DB and locally
+  if(c.unread>0){
+    c.unread = 0;
+    sb.rpc('reset_unread', { conv_id: id });
+    updateBadges();
+  }
+
+  const p = P[c.platform]||{name:c.platform,color:'#888',short:'?'};
   const chatAv = document.getElementById('chatAv');
   chatAv.style.background = avCol(c.name);
   chatAv.textContent = c.name.charAt(0);
@@ -589,34 +630,38 @@ function openConv(id){
   badge.textContent = p.name;
   badge.style.background = p.color;
 
-  renderMsgs(c);
-
   document.getElementById('chatEmpty').style.display = 'none';
   document.getElementById('chatContent').style.display = 'flex';
 
   // Mobile: slide in
   if(!isDesktop()){
     document.getElementById('chatPane').classList.add('open');
-    document.getElementById('replyInp').focus();
   }
 
+  // Load messages
+  const msgs = await loadMsgs(id);
+  renderMsgs(msgs);
   renderList();
   scrollBottom();
+
+  if(!isDesktop()) document.getElementById('replyInp').focus();
 }
 
 // ─────────────────────────────────────────────────────────
 //  RENDER MESSAGES
 // ─────────────────────────────────────────────────────────
-function renderMsgs(c){
+function renderMsgs(msgs){
   const area = document.getElementById('msgsArea');
+  if(!msgs||!msgs.length){ area.innerHTML='<div class="conv-empty" style="margin-top:40px">ยังไม่มีข้อความ</div>'; return; }
   let html='', lastDate='';
-  c.msgs.forEach((m,i)=>{
-    const ds = m.ts.toLocaleDateString('th-TH',{day:'numeric',month:'long',year:'numeric'});
+  msgs.forEach((m,i)=>{
+    const ts = new Date(m.sent_at);
+    const ds = ts.toLocaleDateString('th-TH',{day:'numeric',month:'long',year:'numeric'});
     if(ds!==lastDate){ html+=`<div class="date-sep">${ds}</div>`; lastDate=ds; }
-    const side = m.f==='c'?'fc':'fa';
+    const side = m.direction==='in'?'fc':'fa';
     html+=`<div class="msg-grp ${side}" style="animation:fadeUp .18s ease ${i*.025}s both">
-      <div class="bubble">${esc(m.t)}</div>
-      <div class="msg-time">${hhmm(m.ts)}${m.f==='a'?' ✓✓':''}</div>
+      <div class="bubble">${esc(m.content)}</div>
+      <div class="msg-time">${hhmm(ts)}${m.direction==='out'?' ✓✓':''}</div>
     </div>`;
   });
   area.innerHTML = html;
