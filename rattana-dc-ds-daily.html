@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.37</title>
+<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.38</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -287,7 +287,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
       <div class="h-title dsk-only">ตรวจส่วนลด <span>DC/DS</span></div>
       <div class="h-title mob-only" id="mobTitle">รัตนไพบูลย์</div>
       <div class="flex gap-6 dsk-only" style="margin-left:auto;align-items:center">
-        <span style="font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap">v3.37 · 18/07/2569</span>
+        <span style="font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap">v3.38 · 18/07/2569</span>
         <button class="btn btn-sm" style="background:rgba(201,168,76,.15);color:var(--gold);border:1px solid rgba(201,168,76,.3);font-size:12px" onclick="exportExcel()">⬇ Excel</button>
         <button class="h-btn" onclick="refreshData()" title="รีเฟรช">⟳</button>
       </div>
@@ -1001,6 +1001,13 @@ function openDetail(ref){
     if(promo&&promo.gift&&totalGift>0)promoSummary[promo.gift]=(promoSummary[promo.gift]||0)+totalGift;
   });
   const promoSumKeys=Object.keys(promoSummary);
+  // สร้าง freeGroupsMatching สำหรับใช้ร่วมกัน
+  const _freeMap={};
+  freeL.forEach(r=>{const k=r['SKU_NAME']||r['TRD_SH_CODE']||'–';if(!_freeMap[k])_freeMap[k]=0;_freeMap[k]+=(parseInt(r['TRD_Q_FREE'])||0);});
+  const freeGroupsMatching=Object.entries(_freeMap).filter(([name])=>{
+    const fn=name.replace(/\s+/g,'');
+    return promoSumKeys.some(g=>{const gn=g.replace(/\s+/g,'');return fn.includes(gn)||gn.includes(fn);});
+  });
   document.getElementById('dp-body').innerHTML=`
     <div class="dp-info-row">
       <div class="dp-kv"><span class="k">เลขที่ใบ</span><span class="v" style="font-family:monospace;font-size:11px">${inv.ref}</span></div>
@@ -1033,34 +1040,23 @@ function openDetail(ref){
       </div>`).join('')}
     </div>`:''}
     ${(()=>{
-      if(!freeL.length)return'';
-      const freeMap={};
-      freeL.forEach(r=>{
-        const key=r['SKU_NAME']||r['TRD_SH_CODE']||'–';
-        if(!freeMap[key])freeMap[key]={r,qty:0};
-        freeMap[key].qty+=(parseInt(r['TRD_Q_FREE'])||0);
-      });
-      const freeGroups=Object.values(freeMap).filter(({r})=>{
-        const fn=(r['SKU_NAME']||r['TRD_SH_CODE']||'').replace(/\s+/g,'');
-        return promoSumKeys.some(g=>{const gn=g.replace(/\s+/g,'');return fn.includes(gn)||gn.includes(fn);});
-      });
-      if(!freeGroups.length)return'';
+      if(!freeGroupsMatching.length)return'';
       return`<div style="background:#E8F5E9;border:1.5px solid #81C784;border-radius:10px;padding:10px 14px;margin-top:8px">
         <div style="font-size:11px;font-weight:700;color:#2E7D32;letter-spacing:.4px;margin-bottom:6px">🎁 ของแถม (${fmtI(inv.free)} ชิ้น)</div>
-        ${freeGroups.map(({r,qty})=>`<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:2px 0">
-          <span style="font-weight:600;color:#1B5E20">${r['SKU_NAME']||r['TRD_SH_CODE']||'–'}</span>
-          <span style="font-weight:800;color:#2E7D32;font-size:14px">${fmtI(qty)} EA</span>
-        </div>`).join('')}
+        ${freeGroupsMatching.map(([name,qty])=>{
+          const fn=name.replace(/\s+/g,'');
+          const matchKey=promoSumKeys.find(g=>{const gn=g.replace(/\s+/g,'');return fn.includes(gn)||gn.includes(fn);});
+          const expected=matchKey?promoSummary[matchKey]:0;
+          const isOk=expected>0&&qty>=expected;
+          return`<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:2px 0">
+            <span style="font-weight:600;color:#1B5E20">${name}</span>
+            <span style="font-weight:800;color:${isOk?'#2E7D32':'#F57F17'};font-size:14px">${fmtI(qty)} EA ${isOk?'✅':''}</span>
+          </div>`;
+        }).join('')}
       </div>`;
     })()}
     ${(()=>{
-      const freeMap2={};
-      freeL.forEach(r=>{
-        const key=r['SKU_NAME']||r['TRD_SH_CODE']||'–';
-        if(!freeMap2[key])freeMap2[key]=0;
-        freeMap2[key]+=(parseInt(r['TRD_Q_FREE'])||0);
-      });
-      const abnormal=Object.entries(freeMap2).filter(([name])=>{
+      const abnormal=Object.entries(_freeMap).filter(([name])=>{
         const fn=name.replace(/\s+/g,'');
         return!promoSumKeys.some(g=>{const gn=g.replace(/\s+/g,'');return fn.includes(gn)||gn.includes(fn);});
       });
@@ -1073,16 +1069,19 @@ function openDetail(ref){
       </div>`:'';
     })()}
     ${(()=>{
-      const freeNorm=freeL.map(r=>(r['SKU_NAME']||'').replace(/\s+/g,''));
-      const missing=promoSumKeys.filter(g=>{
+      const shortfalls=promoSumKeys.map(g=>{
         const gn=g.replace(/\s+/g,'');
-        return!freeNorm.some(fn=>fn.includes(gn)||gn.includes(fn));
-      });
-      return missing.length?`<div style="background:#FFEBEE;border:1.5px solid #EF9A9A;border-radius:10px;padding:10px 14px;margin-top:6px">
+        const match=freeGroupsMatching.find(([name])=>{const fn=name.replace(/\s+/g,'');return fn.includes(gn)||gn.includes(fn);});
+        const received=match?match[1]:0;
+        const expected=promoSummary[g]||0;
+        const diff=expected-received;
+        return diff>0?{name:g,received,expected,diff}:null;
+      }).filter(Boolean);
+      return shortfalls.length?`<div style="background:#FFEBEE;border:1.5px solid #EF9A9A;border-radius:10px;padding:10px 14px;margin-top:6px">
         <div style="font-size:11px;font-weight:700;color:#B71C1C;letter-spacing:.4px;margin-bottom:6px">⚠️ ยังไม่ได้รับของแถม</div>
-        ${missing.map(g=>`<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:2px 0">
-          <span style="font-weight:600;color:#B71C1C">${g}</span>
-          <span style="font-weight:800;color:#B71C1C;font-size:14px">${promoSummary[g]} EA</span>
+        ${shortfalls.map(({name,received,expected,diff})=>`<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:2px 0">
+          <span style="font-weight:600;color:#B71C1C">${name}</span>
+          <span style="font-weight:800;color:#B71C1C;font-size:14px">ได้ ${fmtI(received)} / ควรได้ ${fmtI(expected)} EA <span style="font-size:11px">(ขาด ${fmtI(diff)})</span></span>
         </div>`).join('')}
       </div>`:'';
     })()}
