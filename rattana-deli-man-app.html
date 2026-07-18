@@ -741,7 +741,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.66';
+const APP_VERSION='3.67';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -6117,7 +6117,7 @@ async function syncJobsFromSheet(opts){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.66 (รวมยอดชำระ = เงินจริงล้วน ไม่รวมใบลดหนี้ — ใบลดหนี้ยังนับปิดบิลใน ชำระขาด-เกิน/สถานะ) */
+const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.67 (+ เครื่องมือ backfill: แก้ รวมยอดชำระ แถวเก่า ตัดใบลดหนี้ออก | v3.66 รวมยอดชำระ = เงินจริงล้วน) */
 const SHEET_INPUT='บันทึกเที่ยวส่ง';
 const SHEET_CIN='บันทึกบิลและการชำระ';
 const SHEET_CN='CN';
@@ -6165,7 +6165,7 @@ const HEADERS_CIN=['เลขใบคุม','Doc_Date','Doc_No','Customer_Code
 function doGet(e){
   let drive='unknown';
   try{ DriveApp.getRootFolder().getName(); drive='OK'; }catch(err){ drive='NOT_AUTHORIZED'; }
-  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.66',drive:drive}))
+  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.67',drive:drive}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -6200,7 +6200,7 @@ function doPost(e){
         fmtColsOpen_(sh,['รหัสร้าน','เลขใบคุม','Doc_No'],'@');   // v3.35: เปิดปลาย คลุมแถวใหม่
         fmtColsOpen_(sh,['Lat','Lng'],'0.000000');
         fmtColsOpen_(sh,['วันเวลา'],'yyyy-mm-dd hh:mm:ss');
-        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.66'})).setMimeType(ContentService.MimeType.JSON);
+        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.67'})).setMimeType(ContentService.MimeType.JSON);
       }finally{ lock.releaseLock(); }
     }
 
@@ -6603,7 +6603,7 @@ function doPost(e){
       fmtColsOpen_(cinSh,['วัน+เวลา ที่ส่งสินค้า','U_ADD','วันที่โอนครั้งที่1','วันที่โอนครั้งที่2','แก้ไขเมื่อ','วันที่','วันเวลาอนุมัติ'],'yyyy-mm-dd hh:mm:ss');
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.66'}))
+    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.67'}))
       .setMimeType(ContentService.MimeType.JSON);
   }catch(err){
     return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err)}))
@@ -7154,6 +7154,38 @@ function fixDocDateColumn(){
   SpreadsheetApp.getUi().alert('✓ แก้ Doc_Date เรียบร้อย\\n- ดึงจากต้นทาง (ถูก 100%): '+fixedSrc+' แถว\\n- แปลง text วันเกิน 12: '+fixedText+' แถว');
 }
 
+/* v3.67: BACKFILL — แก้คอลัมน์ "รวมยอดชำระ" แถวเก่าให้เป็นเงินจริงล้วน (ไม่รวมใบลดหนี้)
+   ตั้งแต่ v3.66 รวมยอดชำระ = ธนบัตร+เหรียญ+โอน1+โอน2+เช็ค (ไม่บวกใบลดหนี้) — ฟังก์ชันนี้ไล่แก้แถวที่บันทึกก่อนหน้า
+   คำนวณใหม่จากคอลัมน์เงินจริงในชีท → ปลอดภัย รันซ้ำได้ (idempotent) / ไม่แตะ "ชำระขาด-เกิน" + สถานะ (ใบลดหนี้ยังนับปิดบิล)
+   วิธีรัน: เมนู 🚚 D-Man → 💵 แก้ รวมยอดชำระ แถวเก่า (ตัดใบลดหนี้) */
+function fixTotalPaidColumn(){
+  const ss=SpreadsheetApp.getActiveSpreadsheet();
+  const sh=ss.getSheetByName(SHEET_CIN);
+  if(!sh){ SpreadsheetApp.getUi().alert('ไม่พบชีท '+SHEET_CIN); return; }
+  const hmap=headerMap_(sh);
+  const _c=function(name){ return hmap[name]?hmap[name][0]:-1; };
+  const cSum=_c('รวมยอดชำระ');
+  if(cSum<0){ SpreadsheetApp.getUi().alert('ไม่พบคอลัมน์ รวมยอดชำระ'); return; }
+  const cDoc=_c('Doc_No');
+  const cBk=_c('ธนบัตร'), cCn=_c('เหรียญ'), cT1=_c('โอนครั้งที่1'), cT2=_c('โอนครั้งที่2'), cCq=_c('เช็ค'), cCr=_c('ใบลดหนี้');
+  const last=sh.getLastRow(); if(last<2){ SpreadsheetApp.getUi().alert('ไม่มีข้อมูล'); return; }
+  const data=sh.getDataRange().getValues();
+  const out=[]; var changed=0, withCN=0, skipped=0;
+  for(var i=1;i<data.length;i++){
+    const r=data[i];
+    // แถวว่าง (ไม่มี Doc_No) → คงค่าเดิม กันเขียน 0 ทับเซลล์ว่าง
+    if(cDoc>=0 && !String(r[cDoc]||'').trim()){ out.push([r[cSum]]); skipped++; continue; }
+    const money=(parseFloat(r[cBk])||0)+(parseFloat(r[cCn])||0)+(parseFloat(r[cT1])||0)+(parseFloat(r[cT2])||0)+(parseFloat(r[cCq])||0);
+    const cnAmt=cCr>=0?(parseFloat(r[cCr])||0):0;
+    if(cnAmt>0.005) withCN++;
+    const oldVal=parseFloat(r[cSum])||0;
+    if(Math.abs(oldVal-money)>0.005) changed++;
+    out.push([money]);
+  }
+  sh.getRange(2,cSum+1,out.length,1).setValues(out);
+  SpreadsheetApp.getUi().alert('✓ แก้ รวมยอดชำระ (ตัดใบลดหนี้ออก) เรียบร้อย\\n- แถวทั้งหมด: '+out.length+'\\n- แถวที่มีใบลดหนี้: '+withCN+'\\n- แถวที่ค่าเปลี่ยนจริง: '+changed+(skipped?'\\n- แถวว่างข้าม: '+skipped:''));
+}
+
 function onOpen(){
   try{
     SpreadsheetApp.getUi().createMenu('🚚 D-Man')
@@ -7164,6 +7196,7 @@ function onOpen(){
       .addItem('🩹 Backfill Status columns (Cin เก่า)','backfillStatusColumns')
       .addItem('🔧 แก้ทะเบียนแถวเก่าเป็น text','fixPlateColumnFormat')
       .addItem('📅 แก้ Doc_Date แถวเก่า (สลับวัน/เดือน)','fixDocDateColumn')
+      .addItem('💵 แก้ รวมยอดชำระ แถวเก่า (ตัดใบลดหนี้)','fixTotalPaidColumn')   // v3.67
       .addToUi();
   }catch(e){}
 }`;
