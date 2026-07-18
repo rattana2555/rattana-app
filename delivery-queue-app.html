@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.28</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.29</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -541,7 +541,7 @@ body.dragging .trip-drop{border-style:dashed!important;animation:pulse-glow 1.2s
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.28</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.29</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -1067,6 +1067,8 @@ let dashFilterDate=null;  // วันที่กรองใน Dashboard
 // v8.25: ลำดับร้านที่ผู้ใช้จัดเอง {plate|trip: [ref,...]} — override ลำดับ TSP อัตโนมัติ
 let manualStopOrder={};
 try{manualStopOrder=JSON.parse(localStorage.getItem('dq_v4_manual_order')||'{}');}catch(e){}
+let sideMode={}; // {plate|trip: true} เที่ยวที่เปิด "จัดตามฝั่งถนน" — โชว์ป้าย ไป/กลับ
+try{sideMode=JSON.parse(localStorage.getItem('dq_v4_side_mode')||'{}');}catch(e){}
 let _displayedOrder={}; // {plate|trip: [ref,...]} ลำดับที่แสดงล่าสุด — ให้ปุ่ม ▲▼ รู้ลำดับปัจจุบัน
 let _savedOpenTrips=new Set(); // เที่ยวที่กาง <details> อยู่ในหน้าบันทึก — คงสถานะเปิดตอน re-render
 let keepData=[];          // ข้อมูลจากชีท Keepdata (โหลดจาก Google Sheet)
@@ -5070,8 +5072,10 @@ function renderSavedView(){
           return bb.lat&&bb.lng?`<a href="https://www.google.com/maps?q=${bb.lat},${bb.lng}" target="_blank" style="text-decoration:none">${chip}</a>`:chip;
         }).join('');
         // ── รายละเอียด (กางดู) — ระยะ + น้ำหนัก + แผนที่ ──
+        const _sideMap=sideMode[plate+'|'+tr]?stopSideMap(plate,tr):{}; // v8.29: ป้ายฝั่งถนน
         const detail=billsList.map((bb,idx)=>{
           const dHQ=bb.lat&&bb.lng?haversine(HQ.lat,HQ.lng,bb.lat,bb.lng).toFixed(1)+' กม.':'—';
+          const _sc=_sideMap[bb.ref]; const _scol=_sc==='go'?'#2E9E5B':_sc==='back'?'#E08A2B':null;
           const rf=String(bb.ref||'').replace(/'/g,"\\'");
           const reBtns=bb.ref?`<span style="flex-shrink:0;display:flex;flex-direction:column;gap:1px">
               <button onclick="moveStop('${plate}',${tr},'${rf}',-1)" title="เลื่อนขึ้น" style="line-height:1;background:#fff;border:1px solid #D5DEE9;border-radius:4px;width:20px;height:15px;font-size:9px;cursor:pointer;color:#1A5FA5;padding:0">▲</button>
@@ -5081,6 +5085,7 @@ function renderSavedView(){
           const firstBtn=bb.ref&&idx!==0?_firstBtn(plate,tr,bb.ref):'';
           const dataAttr=bb.ref?` data-ref="${bb.ref}" data-dkey="${plate}|${tr}"`:'';
           return`<div${dataAttr} style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-top:1px solid #F4F6FA;font-size:11.5px">
+            ${_scol?`<span title="${_sc==='go'?'ฝั่งไป':'ฝั่งกลับ'}" style="flex-shrink:0;width:4px;align-self:stretch;border-radius:3px;background:${_scol}"></span>`:''}
             <span style="background:#FEF6EC;color:#7D6428;border:1px solid #E4C46E;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;flex-shrink:0">${idx+1}</span>
             <div style="flex:1;min-width:0"><div style="font-weight:600;color:#07101F;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${bb.arName||'—'}</div>
               <div style="font-size:9.5px;color:#9BAAB8">${bb.district||''}${bb.district&&bb.province?', ':''}${bb.province||''} · 📏 ${dHQ}</div></div>
@@ -5102,7 +5107,11 @@ function renderSavedView(){
           <div style="display:flex;flex-wrap:wrap;gap:5px">${chips}</div>
           <details ${_open?'open':''} ontoggle="if(this.open)_savedOpenTrips.add('${_tk}');else _savedOpenTrips.delete('${_tk}')" style="margin-top:6px"><summary style="cursor:pointer;font-size:10.5px;color:#1A5FA5;list-style:none;outline:none">📋 ดูรายละเอียด + จัดลำดับ (🚩 ตั้งร้านแรก / ลาก ⠿ / ▲▼)</summary>
             <div style="margin-top:5px;background:#FAFBFD;border:1px solid #EDF0F4;border-radius:8px;overflow:hidden">
-              ${_hasMan?`<div style="padding:5px 8px;background:#FEF6E4;border-bottom:1px solid #F0E4C0;font-size:10px;color:#7D6428;display:flex;justify-content:space-between;align-items:center"><span>✏️ ลำดับที่จัดเอง</span><button onclick="resetStopOrder('${plate}',${tr})" style="background:#fff;border:1px solid #E6C26E;color:#7D6428;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:600;cursor:pointer">↺ กลับอัตโนมัติ</button></div>`:''}
+              <div style="padding:5px 8px;background:#F4F8FF;border-bottom:1px solid #E3ECF7;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                <button onclick="reorderBySide('${plate}',${tr})" style="background:#EAF3FF;border:1px solid #93B8DE;color:#1A5FA5;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:Kanit">↩️ จัดตามฝั่ง</button>
+                ${sideMode[_tk]?`<span style="font-size:9.5px;color:#6B7A90">🟢 ฝั่งไป · 🟠 ฝั่งกลับ</span>`:''}
+                ${_hasMan?`<button onclick="resetStopOrder('${plate}',${tr})" style="margin-left:auto;background:#fff;border:1px solid #E6C26E;color:#7D6428;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:600;cursor:pointer">↺ อัตโนมัติ</button>`:''}
+              </div>
               ${detail||'<div style="padding:8px;text-align:center;color:#A0ABBB;font-size:11px">ไม่มีรายการ</div>'}
             </div>
           </details>
@@ -6174,16 +6183,26 @@ function _renderStopsList(stops){
   // v8.25: ปุ่มจัดลำดับเอง แสดงเมื่อเลือกรถเดียว (มีเลขจุด) · reset ถ้ารถนี้มี manual order
   const canReorder=!!rMapPlate;
   const hasManual=canReorder&&Object.keys(manualStopOrder).some(k=>k.split('|')[0]===rMapPlate&&manualStopOrder[k]&&manualStopOrder[k].length);
+  // v8.29: ป้ายฝั่งถนน — คำนวณ side map เฉพาะเที่ยวที่เปิด sideMode
+  const sideMaps={};
+  const anySide=canReorder&&[...new Set(sorted.filter(s=>s.plate&&s.trip).map(s=>s.plate+'|'+s.trip))]
+    .filter(k=>sideMode[k]).map(k=>{const p=k.split('|');sideMaps[k]=stopSideMap(p[0],+p[1]);return k;}).length>0;
   let head='';
   if(canReorder){
-    head=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:10px;color:#9BAAB8">
-      <span>🚩 ตั้งร้านแรก (จัดที่เหลืออัตโนมัติ) · ลาก ⠿ / ▲▼ ปรับเอง</span>
-      ${hasManual?`<button onclick="resetStopOrder('${rMapPlate}',null)" style="margin-left:auto;background:#FEF6E4;border:1px solid #E6C26E;color:#7D6428;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:600;cursor:pointer">↺ อัตโนมัติ</button>`:''}
+    head=`<div style="margin-bottom:6px">
+      <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:#9BAAB8;margin-bottom:5px">
+        <span>🚩 ตั้งร้านแรก · ลาก ⠿ / ▲▼ ปรับเอง</span>
+        ${hasManual?`<button onclick="resetStopOrder('${rMapPlate}',null)" style="margin-left:auto;background:#FEF6E4;border:1px solid #E6C26E;color:#7D6428;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:600;cursor:pointer">↺ อัตโนมัติ</button>`:''}
+      </div>
+      <button onclick="reorderBySideAllTrips('${rMapPlate}')" style="width:100%;background:#EAF3FF;border:1.5px solid #93B8DE;color:#1A5FA5;border-radius:7px;padding:5px;font-size:11px;font-weight:700;cursor:pointer;font-family:Kanit">↩️ จัดตามฝั่งถนน (ไปฝั่งนึง–กลับอีกฝั่ง)</button>
+      ${anySide?`<div style="display:flex;gap:10px;justify-content:center;margin-top:5px;font-size:10px;color:#6B7A90"><span>🟢 ฝั่งไป</span><span>🟠 ฝั่งกลับ</span></div>`:''}
     </div>`;
   }
   el.innerHTML=head+sorted.map((s,i)=>{
     const tripCol=s.trip===3?'#15803D':s.trip===2?'#1A5FA5':s.trip===1?'#C47000':'#6B7A90';
     const tripBg=s.trip===3?'#F0FDF4':s.trip===2?'#EAF0F8':s.trip===1?'#FFF8EC':'#F5F7FA';
+    const _side=sideMaps[s.plate+'|'+s.trip]?.[s.ref];
+    const sideCol=_side==='go'?'#2E9E5B':_side==='back'?'#E08A2B':null;
     const label=s.num!=null?s.num:'?';
     const showBtns=canReorder&&s.num!=null&&s.plate&&s.ref;
     const rf=showBtns?String(s.ref).replace(/'/g,"\\'"):'';
@@ -6195,6 +6214,7 @@ function _renderStopsList(stops){
     const firstBtn=showBtns&&Number(s.num)!==1?_firstBtn(s.plate,s.trip,s.ref):'';
     const dataAttr=showBtns?` data-ref="${s.ref}" data-dkey="${s.plate}|${s.trip}"`:'';
     return `<div${dataAttr} onclick="_zoomToStop(${i})" title="คลิกเพื่อซูมไปที่จุดนี้" style="cursor:pointer;padding:6px 8px;border-radius:6px;border:1px solid ${tripBg};background:${tripBg};display:flex;align-items:center;gap:8px;transition:all .12s" onmouseover="this.style.borderColor='${s.col}';this.style.transform='translateX(2px)'" onmouseout="this.style.borderColor='${tripBg}';this.style.transform=''">
+      ${sideCol?`<span title="${_side==='go'?'ฝั่งไป':'ฝั่งกลับ'}" style="flex-shrink:0;width:4px;align-self:stretch;border-radius:3px;background:${sideCol}"></span>`:''}
       <span style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:${s.col};color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.15)">${label}</span>
       <span style="flex:1;min-width:0;font-size:11px;color:${tripCol};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500">${s.name}</span>
       ${s.plate&&!canReorder?`<span style="flex-shrink:0;font-size:9px;color:${s.col};background:#fff;padding:1px 5px;border-radius:4px;font-weight:600">${s.plate}</span>`:''}
@@ -6397,8 +6417,9 @@ function moveStop(plate,tr,ref,dir){
 function resetStopOrder(plate,tr){
   if(tr==null){ // ทั้งคัน (ทุกเที่ยว)
     Object.keys(manualStopOrder).forEach(k=>{if(k.split('|')[0]===plate)delete manualStopOrder[k];});
-  } else { delete manualStopOrder[plate+'|'+tr]; }
-  saveManualOrder();
+    Object.keys(sideMode).forEach(k=>{if(k.split('|')[0]===plate)delete sideMode[k];});
+  } else { delete manualStopOrder[plate+'|'+tr]; delete sideMode[plate+'|'+tr]; }
+  saveManualOrder(); saveSideMode();
   if(currentTab==='routes'&&typeof rUpdateMap==='function')rUpdateMap();
   else if(currentTab==='saved')renderSavedView();
   else if(typeof renderAll==='function')renderAll();
@@ -6506,6 +6527,58 @@ function reorderFromFirst(plate,tr,firstRef){
   else if(currentTab==='saved')renderSavedView();
   else if(typeof renderAll==='function')renderAll();
   showToast('🚩 ตั้งร้านแรก + จัดเส้นทางใหม่ ('+(useMatrix?'ระยะถนน':'เส้นตรง')+')','ok');
+}
+
+// ══ v8.29: จัดตามฝั่งถนน (loop by side) — เดาฝั่งจาก GPS · แกน = HQ → ร้านไกลสุด ══
+function saveSideMode(){try{localStorage.setItem('dq_v4_side_mode',JSON.stringify(sideMode));}catch(e){}}
+// คืน {ref: 'go'|'back'} · go=ซ้ายของแนวขาไป (ไทยขับซ้าย = ฝั่งจอดง่าย) · back=ขวา
+function stopSideMap(plate,tr){
+  const gps=_tripBillObjs(plate,tr).filter(b=>b.lat&&b.lng);
+  if(gps.length<2)return {};
+  let far=gps[0],fd=-1;
+  gps.forEach(b=>{const d=haversine(HQ.lat,HQ.lng,b.lat,b.lng);if(d>fd){fd=d;far=b;}});
+  const ax=far.lng-HQ.lng, ay=far.lat-HQ.lat; // แกนขาไป
+  const map={};
+  gps.forEach(b=>{
+    const cross=ax*(b.lat-HQ.lat)-ay*(b.lng-HQ.lng); // >0 = ซ้าย(ไป), <0 = ขวา(กลับ)
+    map[b.ref]=cross>=0?'go':'back';
+  });
+  return map;
+}
+// จัดเป็นวงรอบ: เก็บฝั่งไป (ใกล้→ไกล) แล้วฝั่งกลับ (ไกล→ใกล้)
+function reorderBySide(plate,tr,silent){
+  const all=_tripBillObjs(plate,tr);
+  const gps=all.filter(b=>b.lat&&b.lng);
+  const noGps=all.filter(b=>!b.lat||!b.lng).map(b=>b.ref);
+  if(gps.length<2){if(!silent)showToast('ต้องมีอย่างน้อย 2 ร้านที่มีพิกัด','warn');return false;}
+  let far=gps[0],fd=-1;
+  gps.forEach(b=>{const d=haversine(HQ.lat,HQ.lng,b.lat,b.lng);if(d>fd){fd=d;far=b;}});
+  const ax=far.lng-HQ.lng, ay=far.lat-HQ.lat, alen=Math.hypot(ax,ay)||1;
+  const proj=b=>((b.lng-HQ.lng)*ax+(b.lat-HQ.lat)*ay)/alen; // ระยะตามแนวขาไป
+  const cross=b=>ax*(b.lat-HQ.lat)-ay*(b.lng-HQ.lng);
+  const go=gps.filter(b=>cross(b)>=0).sort((a,b)=>proj(a)-proj(b));   // ใกล้→ไกล
+  const back=gps.filter(b=>cross(b)<0).sort((a,b)=>proj(b)-proj(a));  // ไกล→ใกล้
+  const key=plate+'|'+tr;
+  manualStopOrder[key]=[...go.map(b=>b.ref),...back.map(b=>b.ref),...noGps];
+  _displayedOrder[key]=manualStopOrder[key]; sideMode[key]=true;
+  saveManualOrder(); saveSideMode();
+  if(!silent){
+    if(currentTab==='routes'&&typeof rUpdateMap==='function')rUpdateMap();
+    else if(currentTab==='saved')renderSavedView();
+    else if(typeof renderAll==='function')renderAll();
+    showToast(`↩️ จัดตามฝั่ง: 🟢ไป ${go.length} · 🟠กลับ ${back.length} ร้าน`,'ok');
+  }
+  return true;
+}
+// สายส่ง: กดครั้งเดียวจัดทุกเที่ยวของรถคันนี้
+function reorderBySideAllTrips(plate){
+  let done=0;
+  [1,2,3].forEach(tr=>{ if(reorderBySide(plate,tr,true))done++; });
+  if(!done){showToast('ไม่มีเที่ยวที่จัดได้','warn');return;}
+  if(currentTab==='routes'&&typeof rUpdateMap==='function')rUpdateMap();
+  else if(currentTab==='saved')renderSavedView();
+  else if(typeof renderAll==='function')renderAll();
+  showToast('↩️ จัดตามฝั่งถนนแล้ว '+done+' เที่ยว','ok');
 }
 // v8.21: เรียงตามลำดับวิ่งจริง — ใช้ร่วมกันทุกหน้า (ฝูงรถ/ใบพิมพ์) ให้ตรงกับสายส่ง
 function orderedTripBills(plate,tr){
