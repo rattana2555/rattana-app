@@ -579,6 +579,11 @@ body.dark .banner-gold{color:var(--gold-light)}
         <div class="card-head"><h3>📦 CN รออนุมัติ</h3><span class="txt-sm txt-muted" id="cnPendingCount">0</span></div>
         <div class="card-body" id="cnPendingList"></div>
       </div>
+      <!-- ค่าพาเลทรออนุมัติ (ฝ่ายบัญชี) v3.68 -->
+      <div class="card card-gold" id="palletPendingCard" style="display:none">
+        <div class="card-head"><h3>🧺 ค่าพาเลทรออนุมัติ</h3><span class="txt-sm txt-muted" id="palletPendingCount">0</span></div>
+        <div class="card-body" id="palletPendingList"></div>
+      </div>
     </div>
 
     <!-- SUPERVISOR: สรุปงาน (v2.86: date + search + 4 stats) -->
@@ -621,6 +626,11 @@ body.dark .banner-gold{color:var(--gold-light)}
       <div class="card" id="histCNCard">
         <div class="card-head"><h3>📜 ประวัติ CN</h3></div>
         <div class="card-body" id="cnHistoryList"></div>
+      </div>
+      <!-- ประวัติค่าพาเลท (ฝ่ายบัญชี) v3.68 -->
+      <div class="card" id="histPalletCard" style="display:none">
+        <div class="card-head"><h3>🧺 ประวัติค่าพาเลท</h3><button class="btn btn-outline btn-sm" onclick="renderPalletHistory()">🔄 รีเฟรช</button></div>
+        <div class="card-body" id="palletHistoryList"></div>
       </div>
     </div>
 
@@ -741,7 +751,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.67';
+const APP_VERSION='3.68';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -1033,10 +1043,11 @@ async function handleGoogleLogin(resp){
     const canApprove=userRole>=3||inSupervisorList;
     const canDeliver=true;
     const canApproveCN=String(dept).indexOf('คลัง')>=0&&userRole>=3;   // v1.99: แผนกคลัง + Role ถึงระดับอนุมัติ (≥3)
+    const canApprovePallet=String(dept).indexOf('บัญชี')>=0&&userRole>=3;   // v3.68: ฝ่ายบัญชี (บัญชีและการเงิน) + Role ≥3 → อนุมัติค่าพาเลท
     const role=canApprove?'supervisor':'driver';
 
     const displayName=name&&nick?`${name} (${nick})`:(name||nick);
-    state.user={email,name,nickname:nick,displayName,empId,dept,warehouse:wh,userRole,canApprove,canDeliver,canApproveCN,picture:payload.picture||''};
+    state.user={email,name,nickname:nick,displayName,empId,dept,warehouse:wh,userRole,canApprove,canDeliver,canApproveCN,canApprovePallet,picture:payload.picture||''};
     state.role=role;
     persistUser();
     await bootApp();
@@ -1066,6 +1077,7 @@ function checkSession(){
   // v2.25: อนุมัติปิดงาน — Role≥3 ทุกแผนก (รวมคลัง) คำนวณใหม่ทุกครั้ง กัน session เก่าค้างสิทธิ์ (คง grant จากลิสต์หัวหน้าไว้)
   if((state.user.userRole||0)>=3){ state.user.canApprove=true; state.role='supervisor'; }
   state.user.canApproveCN=String(state.user.dept||'').indexOf('คลัง')>=0&&(state.user.userRole||0)>=3;  // v1.99: คำนวณใหม่ทุกครั้ง
+  state.user.canApprovePallet=String(state.user.dept||'').indexOf('บัญชี')>=0&&(state.user.userRole||0)>=3;  // v3.68: ฝ่ายบัญชี — คำนวณใหม่ทุกครั้ง
   if(s.jobs) state.jobs=s.jobs;
   return true;
 }
@@ -1553,7 +1565,12 @@ function updateTabBadges(){
       if(u.canApproveCN&&typeof myCNList==='function'&&typeof cnAwaiting==='function'){
         pendCN=myCNList().filter(cnAwaiting).length;
       }
-      supCount=pendJobs.length+pendCN;
+      // v3.68: ฝ่ายบัญชี — นับค่าพาเลทรออนุมัติ (ทุกคลัง) เข้าไปในตัวเลขรออนุมัติด้วย
+      let pendPallet=0;
+      if(u.canApprovePallet&&typeof allPalletBills==='function'&&typeof palletAwaiting==='function'){
+        pendPallet=allPalletBills().filter(x=>palletAwaiting(x.bill)).length;
+      }
+      supCount=pendJobs.length+pendCN+pendPallet;
     }
     setBadge_('driverJob',mineActive);
     setBadge_('supPending',supCount);
@@ -4175,13 +4192,14 @@ function openBillForm(idx){
         <div class="pay-row" style="margin-top:8px">
           <button type="button" class="btn btn-outline btn-block" id="palletToggle" onclick="togglePalletBox()">📦 กรณีตักพาเลท ${(b.palletCount||b.amountPerPallet)?'▴':'▾'}</button>
           <div id="palletBox" style="display:${(b.palletCount||b.amountPerPallet)?'block':'none'};margin-top:10px">
+            ${(typeof palletStatusOf==='function'&&palletStatusOf(b))?`<div class="txt-xs mb-8" style="font-weight:700">${palletApproved(b)?'<span style="color:var(--success)">🔒 บัญชีอนุมัติค่าพาเลทแล้ว — แก้ไม่ได้</span>':palletRejected(b)?'<span style="color:var(--danger)">↩️ บัญชีตีกลับค่าพาเลท'+(b.palletNote?' · '+esc(b.palletNote):'')+' — แก้แล้วบันทึกใหม่</span>':'<span style="color:var(--gold)">⏳ รอบัญชีอนุมัติค่าพาเลท</span>'}</div>`:''}
             <div class="field">
               <label>จำนวนพาเลท</label>
-              <input class="input input-num" type="number" inputmode="decimal" step="any" min="0" value="${esc(b.palletCount||'')}" ${ro?'disabled':''} oninput="onPalletInput(${idx},'palletCount',this.value)" placeholder="0">
+              <input class="input input-num" type="number" inputmode="decimal" step="any" min="0" value="${esc(b.palletCount||'')}" ${(ro||(typeof palletApproved==='function'&&palletApproved(b)))?'disabled':''} oninput="onPalletInput(${idx},'palletCount',this.value)" placeholder="0">
             </div>
             <div class="field" style="margin-bottom:0">
               <label>ราคาต่อพาเลท</label>
-              <input class="input input-num" type="number" inputmode="decimal" step="any" min="0" value="${esc(b.amountPerPallet||'')}" ${ro?'disabled':''} oninput="onPalletInput(${idx},'amountPerPallet',this.value)" placeholder="0.00">
+              <input class="input input-num" type="number" inputmode="decimal" step="any" min="0" value="${esc(b.amountPerPallet||'')}" ${(ro||(typeof palletApproved==='function'&&palletApproved(b)))?'disabled':''} oninput="onPalletInput(${idx},'amountPerPallet',this.value)" placeholder="0.00">
             </div>
             <div class="txt-right txt-sm txt-muted mt-8">รวม <span class="num txt-gold txt-bold" id="palletSum">${fmt((parseFloat(b.palletCount)||0)*(parseFloat(b.amountPerPallet)||0))}</span> <span class="txt-xs">(บันทึกเพิ่ม ไม่รวมในยอดเก็บเงิน)</span></div>
           </div>
@@ -5134,6 +5152,7 @@ async function renderSupHome(){
   $('pendingList').innerHTML=pending.length?pending.map(j=>renderSupJobRow(j)).join(''):
     '<div class="txt-center txt-muted p-16">ไม่มีงานรออนุมัติ</div>';
   renderCNPending();   // v2.9: CN ของคลังที่รออนุมัติ โผล่ในหน้านี้ด้วย (เฉพาะฝ่ายคลัง)
+  renderPalletPending();   // v3.68: ค่าพาเลทรออนุมัติ (เฉพาะฝ่ายบัญชี)
 }
 /* ===== CN รออนุมัติ ในหน้ารออนุมัติ (เฉพาะฝ่ายคลัง) v2.9 ===== */
 function renderCNPending(){
@@ -5161,6 +5180,116 @@ function refreshCNViews(){
   if(state.currentTab==='sec-sup-home') paintCNPending();
   else paintCNHistory();
   updateTabBadges();   // v2.49: CN เปลี่ยน → อัปเดต badge
+}
+
+/* ===== v3.68: อนุมัติค่าพาเลท (ฝ่ายบัญชี) — mirror flow CN, key ตาม เลขใบคุม+Doc_No, เห็นทุกคลัง =====
+   ค่าพาเลทยังเป็น "บันทึกเพิ่ม" ไม่กระทบยอดเก็บเงิน — การอนุมัติเป็นแค่ sign-off ของบัญชี */
+function palletFeeOf(b){ return (parseFloat(b.palletCount)||0)*(parseFloat(b.amountPerPallet)||0); }
+function palletStatusOf(b){ return String((b&&b.palletStatus)||'').trim(); }
+function palletApproved(b){ const s=palletStatusOf(b); return s.indexOf('อนุมัติ')>=0&&s.indexOf('ตีกลับ')<0&&s.indexOf('รอ')<0; }
+function palletRejected(b){ return palletStatusOf(b).indexOf('ตีกลับ')>=0; }
+function palletAwaiting(b){ const s=palletStatusOf(b); return s===''||s==='รออนุมัติ'; }
+/* บิลค่าพาเลททั้งหมด (ทุกคลัง/ทุกคนขับ) — เฉพาะบิลที่กรอกค่าพาเลทไว้จริง */
+function allPalletBills(){
+  const out=[];
+  (state.jobs||[]).forEach(j=>{ (j.bills||[]).forEach(b=>{ if(palletFeeOf(b)>0.005) out.push({job:j,bill:b}); }); });
+  return out;
+}
+function palletBillTime_(x){ const t=x.bill.savedAt||0; return typeof t==='number'?t:(new Date(t).getTime()||0); }
+function renderPalletPending(){
+  const card=$('palletPendingCard'); if(!card) return;
+  if(!(state.user||{}).canApprovePallet){ card.style.display='none'; return; }
+  card.style.display=''; paintPalletPending();
+}
+function paintPalletPending(){
+  const box=$('palletPendingList'); if(!box) return;
+  const list=allPalletBills().filter(x=>palletAwaiting(x.bill)).sort((a,b)=>palletBillTime_(b)-palletBillTime_(a));
+  state._palletView=list;
+  const cc=$('palletPendingCount'); if(cc) cc.textContent=list.length;
+  box.innerHTML=list.length?list.map((x,i)=>palletCardHTML(x,i,true)).join('')
+    :'<div class="txt-center txt-muted p-16">ไม่มีค่าพาเลทรออนุมัติ</div>';
+}
+function renderPalletHistory(){
+  const card=$('histPalletCard'); if(!card) return;
+  if(!(state.user||{}).canApprovePallet){ card.style.display='none'; return; }
+  card.style.display='';
+  const box=$('palletHistoryList'); if(!box) return;
+  const list=allPalletBills().sort((a,b)=>palletBillTime_(b)-palletBillTime_(a));
+  state._palletView=list;
+  box.innerHTML=list.length?`<div class="txt-xs txt-muted" style="margin-bottom:10px">🧺 ${list.length} รายการ · ทุกคลัง</div>`+list.map((x,i)=>palletCardHTML(x,i,false)).join('')
+    :'<div class="txt-center txt-muted p-16">ยังไม่มีบิลที่กรอกค่าพาเลท</div>';
+}
+function palletStatusBadge(b){
+  if(palletApproved(b)) return `<span class="badge badge-ok">✅ อนุมัติแล้ว</span>`;
+  if(palletRejected(b)) return `<span class="badge badge-danger">↩️ ตีกลับ</span>`;
+  return `<span class="badge badge-gold">⏳ รออนุมัติ</span>`;
+}
+function palletCardHTML(x,i,pendingMode){
+  const b=x.bill, j=x.job, u=state.user||{};
+  const fee=palletFeeOf(b);
+  const approved=palletApproved(b), awaiting=palletAwaiting(b);
+  let actions='';
+  if(u.canApprovePallet){
+    if(awaiting) actions=`<button class="btn btn-success btn-sm" onclick="approvePallet(${i})">✅ อนุมัติ</button>
+        <button class="btn btn-outline txt-danger btn-sm" onclick="rejectPallet(${i})">↩️ ตีกลับ</button>`;
+    else if(approved) actions=`<span class="badge badge-ok">🔒 อนุมัติแล้ว</span> <button class="btn btn-outline txt-danger btn-sm" onclick="unapprovePallet(${i})">↩️ ยกเลิกอนุมัติ</button>`;
+    else actions=`<span class="badge badge-danger">↩️ ตีกลับแล้ว</span> <button class="btn btn-success btn-sm" onclick="approvePallet(${i})">✅ อนุมัติ</button>`;
+  } else actions=palletStatusBadge(b);
+  return `<div class="card" style="margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">
+      <div style="min-width:0">
+        <div class="txt-bold">${esc(b.name||b.code||'-')}</div>
+        <div class="txt-xs txt-muted">บิล ${esc(b.doc||'-')} · ใบคุม ${esc(j.id||'-')} · คลัง ${esc(j.warehouse||'-')}</div>
+        <div class="txt-xs txt-muted">คนขับ ${esc((j.team&&j.team.driver)||j.driver||'-')}</div>
+      </div>
+      <div class="txt-right" style="flex-shrink:0">${pendingMode?'':palletStatusBadge(b)}</div>
+    </div>
+    <div style="display:flex;justify-content:space-between;gap:8px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--border)">
+      <span class="txt-sm">${fmt(parseFloat(b.palletCount)||0)} พาเลท × ${fmt(parseFloat(b.amountPerPallet)||0)}</span>
+      <span class="num txt-gold txt-bold">${fmt(fee)} ฿</span>
+    </div>
+    ${b.palletApprover?`<div class="txt-xs txt-muted mt-4">ผู้อนุมัติ: ${esc(b.palletApprover)}${b.palletNote?' · '+esc(b.palletNote):''}</div>`:''}
+    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${actions}</div>
+  </div>`;
+}
+async function palletPostAction_(action,x,note){
+  return await postSyncGAS_({action,jobId:x.job.id,docNo:x.bill.doc,approver:currentUserName_(),note:note||''});
+}
+function refreshPalletViews(){
+  if(state.currentTab==='sec-sup-home') paintPalletPending();
+  else if(state.currentTab==='sec-sup-history') renderPalletHistory();
+  updateTabBadges();
+}
+async function approvePallet(i){
+  const x=(state._palletView||[])[i]; if(!x) return;
+  if(!await showConfirm(`อนุมัติค่าพาเลท ${fmt(palletFeeOf(x.bill))} ฿\nร้าน: ${x.bill.name||''}\nบิล: ${x.bill.doc}`,{title:'อนุมัติค่าพาเลท?',okLabel:'อนุมัติ',icon:'✅'})) return;
+  showToast('กำลังส่งเข้าชีท…','info');
+  const r=await palletPostAction_('approve_pallet',x,'');
+  if(!r.ok){ showToast('❌ อนุมัติไม่สำเร็จ: '+r.error+' — ลองใหม่ได้','error'); return; }
+  x.bill.palletStatus='อนุมัติแล้ว'; x.bill.palletApprover=currentUserName_(); x.bill.palletNote='';
+  showToast('อนุมัติค่าพาเลท '+x.bill.doc+' ✓','success');
+  refreshPalletViews();
+}
+async function rejectPallet(i){
+  const x=(state._palletView||[])[i]; if(!x) return;
+  const reason=await showPromptModal(`ระบุเหตุผลที่ตีกลับ\nบิล: ${x.bill.doc}`,'',{title:'ตีกลับค่าพาเลท',placeholder:'เหตุผล เช่น จำนวน/ราคาไม่ถูกต้อง',okLabel:'ตีกลับ'});
+  if(reason===null) return;
+  showToast('กำลังส่งเข้าชีท…','info');
+  const r=await palletPostAction_('reject_pallet',x,reason);
+  if(!r.ok){ showToast('❌ ตีกลับไม่สำเร็จ: '+r.error+' — ลองใหม่ได้','error'); return; }
+  x.bill.palletStatus='ตีกลับ'; x.bill.palletApprover=currentUserName_(); x.bill.palletNote=reason;
+  showToast('ตีกลับค่าพาเลท '+x.bill.doc+' แล้ว','info');
+  refreshPalletViews();
+}
+async function unapprovePallet(i){
+  const x=(state._palletView||[])[i]; if(!x) return;
+  if(!await showConfirm(`สถานะจะกลับเป็น "รออนุมัติ"\nบิล: ${x.bill.doc}`,{title:'ยกเลิกอนุมัติค่าพาเลท?',okLabel:'ยกเลิกอนุมัติ',icon:'↩️'})) return;
+  showToast('กำลังส่งเข้าชีท…','info');
+  const r=await palletPostAction_('unapprove_pallet',x,'');
+  if(!r.ok){ showToast('❌ ยกเลิกไม่สำเร็จ: '+r.error+' — ลองใหม่ได้','error'); return; }
+  x.bill.palletStatus=''; x.bill.palletApprover=''; x.bill.palletNote='';
+  showToast('ยกเลิกอนุมัติค่าพาเลท '+x.bill.doc+' แล้ว','info');
+  refreshPalletViews();
 }
 // v2.88/v2.89: บิล "ครบ" — ถือว่า combined-payee (จ่ายผ่านบิลหลัก) เป็นครบด้วย
 // v2.89: ตัด `!types.length` guard ให้บิลจาก sheet ทำงานได้ + fallback ตรวจ 'ไม่ชำระ' จาก b.note
@@ -5534,6 +5663,7 @@ function renderSupHistory(){
   const jobsCard=$('histJobsCard'); if(jobsCard) jobsCard.style.display=canJobs?'':'none';
   // กล่อง ประวัติ CN — เห็นได้ทุกคน (โหลด async แล้ว paintCNHistory จะกรองตาม histFilter)
   renderCNHistory();
+  renderPalletHistory();   // v3.68: ประวัติค่าพาเลท (เฉพาะฝ่ายบัญชี — ฟังก์ชันจะซ่อนการ์ดเองถ้าไม่ใช่)
   if(!canJobs) return;
   // v3.32: pill กรอง → กรองทั้งประวัติงาน + ประวัติ CN (repaint จาก cache ไม่ reload)
   document.querySelectorAll('#histFilter .pill').forEach(p=>{
@@ -5948,6 +6078,11 @@ async function loadJobsFromSheet(){
           palletCount:cleanCell(r['จำนวนพาเลท']),
           amountPerPallet:cleanCell(r['จำนวนเงินต่อเลท']),
           amountTotal:cleanCell(r['จำนวนเงินรวม']),
+          // v3.68: สถานะอนุมัติค่าพาเลท (ฝ่ายบัญชี) — read-only ฝั่งบันทึกบิล, เขียนโดย action approve_pallet เท่านั้น
+          palletStatus:cleanCell(r['สถานะพาเลท']),
+          palletApprover:cleanCell(r['ผู้อนุมัติพาเลท']),
+          palletApprovedAt:cleanCell(r['วันอนุมัติพาเลท']),
+          palletNote:cleanCell(r['หมายเหตุพาเลท']),
           payment:{banknotes,coins,transfer1,transfer2,cheque,creditNote,
             transfer1Bank:cleanCell(r['แบงค์1']),
             transfer1Date:cleanCell(r['วันที่โอนครั้งที่1']),
@@ -6117,7 +6252,7 @@ async function syncJobsFromSheet(opts){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.67 (+ เครื่องมือ backfill: แก้ รวมยอดชำระ แถวเก่า ตัดใบลดหนี้ออก | v3.66 รวมยอดชำระ = เงินจริงล้วน) */
+const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.68 (+ อนุมัติค่าพาเลทโดยฝ่ายบัญชี: action approve_pallet/reject_pallet/unapprove_pallet + คอลัมน์สถานะพาเลท) */
 const SHEET_INPUT='บันทึกเที่ยวส่ง';
 const SHEET_CIN='บันทึกบิลและการชำระ';
 const SHEET_CN='CN';
@@ -6160,12 +6295,13 @@ const HEADERS_CIN=['เลขใบคุม','Doc_Date','Doc_No','Customer_Code
   'ผู้ส่งสินค้า','เครดิต','แก้ไขเมื่อ','จ่ายรวมบิล','วันที่',
   'ไม่ได้ส่ง','สาเหตุไม่ส่ง','ผู้รับผิดชอบส่งวันถัดไป',
   'จำนวนพาเลท','จำนวนเงินต่อเลท','จำนวนเงินรวม','รับใบคุม',
-  'สถานะอนุมัติงาน','ผู้อนุมัติปิดงาน','วันเวลาอนุมัติ'];   // v3.24: โชว์สถานะอนุมัติงานต่อบิล
+  'สถานะอนุมัติงาน','ผู้อนุมัติปิดงาน','วันเวลาอนุมัติ',
+  'สถานะพาเลท','ผู้อนุมัติพาเลท','วันอนุมัติพาเลท','หมายเหตุพาเลท'];   // v3.24: โชว์สถานะอนุมัติงานต่อบิล
 
 function doGet(e){
   let drive='unknown';
   try{ DriveApp.getRootFolder().getName(); drive='OK'; }catch(err){ drive='NOT_AUTHORIZED'; }
-  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.67',drive:drive}))
+  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.68',drive:drive}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -6200,7 +6336,7 @@ function doPost(e){
         fmtColsOpen_(sh,['รหัสร้าน','เลขใบคุม','Doc_No'],'@');   // v3.35: เปิดปลาย คลุมแถวใหม่
         fmtColsOpen_(sh,['Lat','Lng'],'0.000000');
         fmtColsOpen_(sh,['วันเวลา'],'yyyy-mm-dd hh:mm:ss');
-        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.67'})).setMimeType(ContentService.MimeType.JSON);
+        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.68'})).setMimeType(ContentService.MimeType.JSON);
       }finally{ lock.releaseLock(); }
     }
 
@@ -6387,6 +6523,31 @@ function doPost(e){
       } finally { lock.releaseLock(); }
     }
 
+    // ===== v3.68: ฝ่ายบัญชีอนุมัติ/ตีกลับ/ยกเลิกอนุมัติ ค่าพาเลท → อัปเดตแถวใน Cin (เลขใบคุม + Doc_No) =====
+    if(data.action==='approve_pallet'||data.action==='reject_pallet'||data.action==='unapprove_pallet'){
+      const lock=LockService.getScriptLock();
+      lock.waitLock(30000);
+      try{
+        const jobId=String(data.jobId||''), docNo=String(data.docNo||'');
+        const cinSh=ss.getSheetByName(SHEET_CIN);
+        if(cinSh) ensureHeaders_(cinSh,['สถานะพาเลท','ผู้อนุมัติพาเลท','วันอนุมัติพาเลท','หมายเหตุพาเลท']);   // เผื่อยังไม่มีคอลัมน์
+        let fields;
+        if(data.action==='unapprove_pallet'){
+          fields={'สถานะพาเลท':'','ผู้อนุมัติพาเลท':'','วันอนุมัติพาเลท':'','หมายเหตุพาเลท':''};
+        } else {
+          const approved=data.action==='approve_pallet';
+          fields={
+            'สถานะพาเลท':approved?'อนุมัติแล้ว':'ตีกลับ',
+            'ผู้อนุมัติพาเลท':data.approver||'',
+            'วันอนุมัติพาเลท':new Date(),
+            'หมายเหตุพาเลท':data.note||''
+          };
+        }
+        const updated=updateRowsByHeader_(ss,SHEET_CIN,['เลขใบคุม','Doc_No'],[jobId,docNo],fields);
+        return ContentService.createTextOutput(JSON.stringify({ok:true,updated:updated,status:fields['สถานะพาเลท']})).setMimeType(ContentService.MimeType.JSON);
+      } finally { lock.releaseLock(); }
+    }
+
     // ===== รับคืนสินค้า → ชีท CN =====
     if(data.action==='save_return'){
       // v3.5: ล็อคไม่ให้ doPost ทำงานคู่ขนาน — กันบันทึกซ้ำตอนผู้ใช้กดยืนยันรัวๆ
@@ -6489,6 +6650,7 @@ function doPost(e){
     if(Array.isArray(data.bills)){
       // v3.24: เพิ่ม 3 คอลัมน์สถานะอนุมัติงานท้ายชีท Cin (ต่อบิล) — ถ้ายังไม่มีให้สร้างต่อท้าย
       ensureHeaders_(cinSh,['สถานะอนุมัติงาน','ผู้อนุมัติปิดงาน','วันเวลาอนุมัติ']);
+      ensureHeaders_(cinSh,['สถานะพาเลท','ผู้อนุมัติพาเลท','วันอนุมัติพาเลท','หมายเหตุพาเลท']);   // v3.68: คอลัมน์อนุมัติค่าพาเลท (ฝ่ายบัญชี) — save_job ไม่เขียนทับ เขียนโดย action approve_pallet เท่านั้น
       const cinBatch=[];
       // สรุปสถานะอนุมัติของทั้งใบคุม (ใช้เขียนทุกแถวบิลใต้ใบคุมนี้)
       var jobApprovalStatus='';
@@ -6603,7 +6765,7 @@ function doPost(e){
       fmtColsOpen_(cinSh,['วัน+เวลา ที่ส่งสินค้า','U_ADD','วันที่โอนครั้งที่1','วันที่โอนครั้งที่2','แก้ไขเมื่อ','วันที่','วันเวลาอนุมัติ'],'yyyy-mm-dd hh:mm:ss');
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.67'}))
+    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.68'}))
       .setMimeType(ContentService.MimeType.JSON);
   }catch(err){
     return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err)}))
