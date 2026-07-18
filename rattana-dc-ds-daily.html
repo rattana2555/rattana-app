@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.38</title>
+<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.39</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -124,7 +124,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
 
 /* badges */
 .badge{display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap}
-.badge-green{background:var(--green-bg);color:var(--green)}.badge-orange{background:var(--orange-bg);color:var(--orange)}.badge-blue{background:var(--blue-light);color:var(--blue)}.badge-gray{background:var(--bg);color:var(--muted);border:1px solid var(--border)}
+.badge-green{background:var(--green-bg);color:var(--green)}.badge-orange{background:var(--orange-bg);color:var(--orange)}.badge-blue{background:var(--blue-light);color:var(--blue)}.badge-gray{background:var(--bg);color:var(--muted);border:1px solid var(--border)}.badge-red{background:#FFEBEE;color:#C62828}.badge-yellow{background:#FFF8E1;color:#E65100}
 
 /* section header */
 .sec-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
@@ -287,7 +287,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
       <div class="h-title dsk-only">ตรวจส่วนลด <span>DC/DS</span></div>
       <div class="h-title mob-only" id="mobTitle">รัตนไพบูลย์</div>
       <div class="flex gap-6 dsk-only" style="margin-left:auto;align-items:center">
-        <span style="font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap">v3.38 · 18/07/2569</span>
+        <span style="font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap">v3.39 · 18/07/2569</span>
         <button class="btn btn-sm" style="background:rgba(201,168,76,.15);color:var(--gold);border:1px solid rgba(201,168,76,.3);font-size:12px" onclick="exportExcel()">⬇ Excel</button>
         <button class="h-btn" onclick="refreshData()" title="รีเฟรช">⟳</button>
       </div>
@@ -330,6 +330,9 @@ input,select,textarea{font-family:inherit;font-size:16px}
             <select class="dsk-select" id="df-status" onchange="dskFilter()">
               <option value="">🔵 ทุกสถานะ</option>
               <option value="ok">✅ ถูกต้อง</option>
+              <option value="missing">⚠️ ขาดของแถม</option>
+              <option value="abnormal">🔶 แถมผิดปกติ</option>
+              <option value="both">❌ ขาด+แถมผิดปกติ</option>
               <option value="pending">⏳ รอตรวจสอบ</option>
             </select>
             <input type="text" class="search-box" id="df-search" placeholder="🔍 ค้นหาร้าน / เลขที่ใบ..." oninput="dskFilter()">
@@ -728,6 +731,7 @@ async function loadData(force=false){
     allData=dsData;
     const _curM=(()=>{const n=new Date();return`${n.getFullYear()}/${String(n.getMonth()+1).padStart(2,'0')}`;})();
     allInvs=mkInvs(dsData).filter(i=>i.date.startsWith(_curM));
+    allInvs.forEach(i=>delete i._st);
     lastLoad=new Date();
     renderAll();showToast('โหลดข้อมูลเรียบร้อย ✓','success');
   }catch(e){showToast('โหลดไม่สำเร็จ: '+e.message,'error');}
@@ -748,10 +752,44 @@ function mkInvs(data){
   return Object.values(m).sort((a,b)=>b.date>a.date?1:b.date<a.date?-1:0);
 }
 
-function invSt(inv){
-  if(inv.free>0)return{key:'ok',label:'ถูกต้อง',cls:'badge-green'};
-  return{key:'pending',label:'รอตรวจสอบ',cls:'badge-orange'};
+function calcPromoSt(inv){
+  if(inv._st)return inv._st;
+  if(!inv.free){inv._st={key:'pending',label:'รอตรวจสอบ',cls:'badge-orange'};return inv._st;}
+  if(!promoRules.length){inv._st={key:'ok',label:'ถูกต้อง',cls:'badge-green'};return inv._st;}
+  const prods=inv.lines.filter(r=>(parseInt(r['TRD_QTY'])||0)!==0);
+  const ps={};
+  prods.forEach(r=>{
+    const pd=lookupPddt(r['SKU_NAME']);
+    const promo=matchPromo(r['SKU_NAME'],pd,r);
+    if(promo&&promo.gift){
+      const rq=parseInt(promo.qty)||1,gq=parseInt(promo.giftQty)||1;
+      const bought=parseInt(r['TRD_QTY']||0)||0;
+      ps[promo.gift]=(ps[promo.gift]||0)+(Math.floor(bought/rq)*gq||gq);
+    }
+  });
+  const psKeys=Object.keys(ps);
+  if(!psKeys.length){inv._st={key:'ok',label:'ถูกต้อง',cls:'badge-green'};return inv._st;}
+  const fm={};
+  inv.lines.filter(r=>parseInt(r['TRD_Q_FREE'])>0).forEach(r=>{
+    const k=r['SKU_NAME']||r['TRD_SH_CODE']||'–';
+    fm[k]=(fm[k]||0)+(parseInt(r['TRD_Q_FREE'])||0);
+  });
+  const hasMissing=psKeys.some(g=>{
+    const gn=g.replace(/\s+/g,'');
+    const m=Object.entries(fm).find(([n])=>{const fn=n.replace(/\s+/g,'');return fn.includes(gn)||gn.includes(fn);});
+    return (m?m[1]:0)<(ps[g]||0);
+  });
+  const hasAbnormal=Object.keys(fm).some(n=>{
+    const fn=n.replace(/\s+/g,'');
+    return!psKeys.some(g=>{const gn=g.replace(/\s+/g,'');return fn.includes(gn)||gn.includes(fn);});
+  });
+  if(hasMissing&&hasAbnormal)inv._st={key:'both',label:'ขาด+แถมผิดปกติ',cls:'badge-red'};
+  else if(hasMissing)inv._st={key:'missing',label:'ขาดของแถม',cls:'badge-red'};
+  else if(hasAbnormal)inv._st={key:'abnormal',label:'แถมผิดปกติ',cls:'badge-yellow'};
+  else inv._st={key:'ok',label:'ถูกต้อง',cls:'badge-green'};
+  return inv._st;
 }
+function invSt(inv){return calcPromoSt(inv);}
 
 /* ── DATE FORMAT ── */
 function thMonth(ym){
@@ -803,7 +841,7 @@ function buildOpts(){
   fillDD('dd-month-opts',[{v:'',l:'ทุกเดือน'},...months.map(m=>({v:m,l:thMonth(m)}))],mfMonth,v=>{mfMonth=v;updateMBtn();closeDD('dd-month');mobFilter();});
   fillDD('dd-date-opts',[{v:'',l:'ทุกวัน'},...dates.map(d=>({v:d,l:thD(d)}))],mfDate,v=>{mfDate=v;updateMBtn();closeDD('dd-date');mobFilter();});
   fillDD('dd-store-opts',[{v:'',l:'ทุกร้าน'},...stores.map(s=>({v:s,l:s}))],mfStore,v=>{mfStore=v;updateMBtn();closeDD('dd-store');mobFilter();});
-  fillDD('dd-status-opts',[{v:'',l:'ทุกสถานะ'},{v:'ok',l:'✅ ถูกต้อง'},{v:'pending',l:'⏳ รอตรวจสอบ'}],mfStatus,v=>{mfStatus=v;updateMBtn();closeDD('dd-status');mobFilter();});
+  fillDD('dd-status-opts',[{v:'',l:'ทุกสถานะ'},{v:'ok',l:'✅ ถูกต้อง'},{v:'missing',l:'⚠️ ขาดของแถม'},{v:'abnormal',l:'🔶 แถมผิดปกติ'},{v:'both',l:'❌ ขาด+แถมผิดปกติ'},{v:'pending',l:'⏳ รอตรวจสอบ'}],mfStatus,v=>{mfStatus=v;updateMBtn();closeDD('dd-status');mobFilter();});
 
   // Period chips
   const top5=dates.slice(0,5);
@@ -821,7 +859,8 @@ function updateMBtn(){
   txt('mf-month-lbl',mfMonth?'📆 '+thMonth(mfMonth):'📆 ทุกเดือน');
   txt('mf-date-lbl',mfDate?'📅 '+thS(mfDate):'📅 ทุกวัน');
   txt('mf-store-lbl',mfStore||'🏪 ทุกร้าน');
-  txt('mf-status-lbl',mfStatus==='ok'?'✅ ถูกต้อง':mfStatus==='pending'?'⏳ รอตรวจสอบ':'🔵 ทุกสถานะ');
+  const _stLbl={ok:'✅ ถูกต้อง',missing:'⚠️ ขาดของแถม',abnormal:'🔶 แถมผิดปกติ',both:'❌ ขาด+แถมผิดปกติ',pending:'⏳ รอตรวจสอบ'};
+  txt('mf-status-lbl',_stLbl[mfStatus]||'🔵 ทุกสถานะ');
 }
 function selPeriod(d){activePeriod=d;renderMobHome();buildOpts();}
 
