@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.32</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.33</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -541,7 +541,7 @@ body.dragging .trip-drop{border-style:dashed!important;animation:pulse-glow 1.2s
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.32</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.33</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -3013,34 +3013,37 @@ function confirmAutoAssign(){
         return true;
       }
 
-      // Rule S: SLMN pinned truck (v8.21) — HARD PIN
-      // เซลล์ขายปลีก มี "รถประจำ" ในชีท "เลือกรถ" → บังคับใช้รถประจำเสมอ
-      // ห้ามให้บิล PMW หลุดไปรถอื่น (ยอม overload / ตกเที่ยว 2 ถ้าเที่ยว 1 เต็ม)
-      // v8.21: ยกเว้นบิลหนักเกิน 1 ตัน → ปล่อยตกไปกฎอื่น (รถใหญ่รับแทน — รถประจำเป็น 4ล้อจัมโบ้เล็ก)
-      const PIN_MAX_KG=1000;
-      if(b.slmnCode&&slmnTruckMap[b.slmnCode]&&(b.totalW||0)<=PIN_MAX_KG){
+      // Rule S: SLMN pinned truck (v8.21) — HARD PIN · รถประจำจากชีท "เลือกรถ"
+      // v8.33: ใช้ "น้ำหนักรวมทั้งร้าน" (ตรงกับ segOf) + จำกัดเฉพาะรถปลีก
+      //   ร้านรวม >1 ตัน → ห้ามเข้าจัมโบ้/กระบะ (ปล่อยไปรถใหญ่) · ถ้ารถประจำเป็นรถใหญ่ ใส่ได้ทุกน้ำหนัก
+      if(b.slmnCode&&slmnTruckMap[b.slmnCode]){
         const pinned=slmnTruckMap[b.slmnCode];
-        let t=trucks.find(x=>x.plate===pinned);
-        if(!t){
-          const full=TRUCKS.find(x=>x.plate===pinned);
-          if(full){
-            if(!loads[full.plate])loads[full.plate]={w1:0,v1:0,w2:0,v2:0,w3:0,v3:0};
-            t=full;
-            if(!bestTruck._loggedUnlock)bestTruck._loggedUnlock=new Set();
-            if(!bestTruck._loggedUnlock.has(pinned)){
-              console.log(`🔓 Rule S: ใช้รถ ${pinned} (EXCLUDE_AUTO แต่ pin ในชีท "เลือกรถ")`);
-              bestTruck._loggedUnlock.add(pinned);
+        const _pinT=TRUCKS.find(x=>x.plate===pinned);
+        const _grpW=(nm&&nameGroupW[nm]>0)?nameGroupW[nm]:(b.totalW||0);
+        const _pinSmallHeavy=_pinT&&RETAIL_TYPES.includes(_pinT.type)&&_grpW>RETAIL_TL_KG;
+        if(!_pinSmallHeavy){
+          let t=trucks.find(x=>x.plate===pinned);
+          if(!t){
+            const full=TRUCKS.find(x=>x.plate===pinned);
+            if(full){
+              if(!loads[full.plate])loads[full.plate]={w1:0,v1:0,w2:0,v2:0,w3:0,v3:0};
+              t=full;
+              if(!bestTruck._loggedUnlock)bestTruck._loggedUnlock=new Set();
+              if(!bestTruck._loggedUnlock.has(pinned)){
+                console.log(`🔓 Rule S: ใช้รถ ${pinned} (EXCLUDE_AUTO แต่ pin ในชีท "เลือกรถ")`);
+                bestTruck._loggedUnlock.add(pinned);
+              }
+            } else {
+              console.warn(`⚠ Rule S: SLMN ${b.slmnCode} pin ทะเบียน "${pinned}" — ไม่พบใน TRUCKS`);
             }
-          } else {
-            console.warn(`⚠ Rule S: SLMN ${b.slmnCode} pin ทะเบียน "${pinned}" — ไม่พบใน TRUCKS`);
           }
-        }
-        if(t){
-          // HARD PIN: ไม่เช็ค provinceAllowed (คนตั้งใน sheet = ตั้งใจให้ผ่าน)
-          const tr=tryTrip(t,b);
-          if(tr)return{t,tr};
-          // เที่ยว 1+2 เต็ม → บังคับใส่เที่ยว 2 (ยอม overload — ห้ามหลุดไปรถอื่น)
-          return{t,tr:2};
+          if(t){
+            // HARD PIN: ไม่เช็ค provinceAllowed (คนตั้งใน sheet = ตั้งใจให้ผ่าน)
+            const tr=tryTrip(t,b);
+            if(tr)return{t,tr};
+            // เที่ยว 1+2 เต็ม → บังคับใส่เที่ยว 2 (ยอม overload — ห้ามหลุดไปรถอื่น)
+            return{t,tr:2};
+          }
         }
       }
 
@@ -3571,6 +3574,10 @@ function confirmAutoAssign(){
         if(b.lat&&b.lng)return;                     // มี GPS → ให้ engine ปกติจัด
         const pin=b.slmnCode&&slmnTruckMap[b.slmnCode];
         if(!pin)return;
+        const t=TRUCKS.find(x=>x.plate===pin);
+        const nm=normName(b.arName);
+        const w=(nm&&nameGroupW[nm]>0)?nameGroupW[nm]:(b.totalW||0);
+        if(t&&RETAIL_TYPES.includes(t.type)&&w>RETAIL_TL_KG)return; // v8.33: ร้านรวม >1ตัน ห้ามเข้าคันเล็ก → ปล่อยจัดมือ
         if(!loads[pin])loads[pin]={w1:0,v1:0,w2:0,v2:0,w3:0,v3:0};
         newQ[b.ref]=pin; newTripMap[b.ref]=1;
         loads[pin].w1+=(b.totalW||0); loads[pin].v1+=(b.totalV||0);
@@ -4501,14 +4508,23 @@ function confirmAutoAssign(){
       if(moved||filled)console.log(`🏪 มัดร้านเดียวกัน: ย้าย ${moved} + เติมที่ค้าง ${filled} บิล → คัน+เที่ยวเดียวกัน`);
     })();
 
-    // ══ v8.31: รถปลีก (จัมโบ้/กระบะ) มีได้แค่เที่ยว 1 — บังคับบิลบนรถปลีกเป็นเที่ยว 1 ══
-    (function retailOneTrip(){
-      let fixed=0;
+    // ══ v8.33: รถปลีก (จัมโบ้/กระบะ) = เที่ยว 1 เท่านั้น + ร้านรวม >1 ตัน ห้ามอยู่รถปลีก ══
+    (function retailGuard(){
+      let trip1=0, kicked=0;
       Object.keys(newQ).forEach(ref=>{
         const t=TRUCKS.find(x=>x.plate===newQ[ref]);
-        if(t&&RETAIL_TYPES.includes(t.type)&&(newTripMap[ref]||1)!==1){newTripMap[ref]=1;fixed++;}
+        if(!t||!RETAIL_TYPES.includes(t.type))return;
+        const b=billMap[ref]; if(!b)return;
+        const nm=normName(b.arName);
+        const w=(nm&&nameGroupW[nm]>0)?nameGroupW[nm]:(b.totalW||0);
+        if(w>RETAIL_TL_KG){ // ร้านรวม >1 ตัน → ถอดออกจากรถปลีก (ไปจัดมือ/รถใหญ่)
+          const tr=newTripMap[ref]||1, L=loads[newQ[ref]];
+          if(L){if(tr===1){L.w1-=b.totalW||0;L.v1-=b.totalV||0;}else if(tr===2){L.w2-=b.totalW||0;L.v2-=b.totalV||0;}else{L.w3-=b.totalW||0;L.v3-=b.totalV||0;}}
+          delete newQ[ref]; delete newTripMap[ref]; kicked++;
+        } else if((newTripMap[ref]||1)!==1){ newTripMap[ref]=1; trip1++; }
       });
-      if(fixed)console.log(`🚐 รถปลีกมีได้แค่เที่ยว 1 → ย้าย ${fixed} บิลกลับเที่ยว 1`);
+      if(kicked)console.log(`🚫 ร้านรวม >1 ตันบนรถปลีก → ถอด ${kicked} บิล (ไปจัดมือ/รถใหญ่)`);
+      if(trip1)console.log(`🚐 รถปลีกเที่ยว 1 → ย้าย ${trip1} บิล`);
     })();
 
     // คง queue วันอื่น + เขียนทับวันที่เลือก
