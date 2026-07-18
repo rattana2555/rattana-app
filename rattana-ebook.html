@@ -409,7 +409,10 @@ async function renderPdf(buf, name, fromStore){
   showSpinner('กำลังเปิด PDF...');
   try{
     if(!fromStore){ try{ await idbSet('pdfData', buf.slice(0)); await idbSet('pdfName', name||'PDF'); }catch(e){ console.warn('idb store fail',e); } }
-    const pdf=await pdfjsLib.getDocument({data: buf.slice(0), cMapUrl:PDF_CMAP, cMapPacked:true, standardFontDataUrl:PDF_STDFONT}).promise;
+    let fontOpts={};
+    if(await cdnReachable(PDF_STDFONT+'LiberationSans-Regular.ttf')) fontOpts={cMapUrl:PDF_CMAP, cMapPacked:true, standardFontDataUrl:PDF_STDFONT};
+    else console.warn('font CDN ไม่พร้อม — render เฉพาะฟอนต์ที่ฝังใน PDF');
+    const pdf=await pdfjsLib.getDocument(Object.assign({data: buf.slice(0)}, fontOpts)).promise;
     const num=pdf.numPages;
     const pages=[];
     for(let i=1;i<=num;i++){
