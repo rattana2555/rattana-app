@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.43</title>
+<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.44</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -273,6 +273,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
     <div class="sb-nav">
       <div class="sb-item active" id="sb-home" onclick="dskGoto('dsk-home')"><span class="si">🏠</span>หน้าหลัก</div>
       <div class="sb-item" id="sb-check" onclick="dskGoto('dsk-check')"><span class="si">🔍</span>ตรวจสอบ</div>
+      <div class="sb-item" id="sb-report" onclick="dskGoto('dsk-report')"><span class="si">📊</span>สรุป</div>
       <div class="sb-item" id="sb-settings" onclick="dskGoto('dsk-settings')"><span class="si">⚙️</span>ตั้งค่า</div>
     </div>
     <div class="sb-ver">v3.28 · 2026-07-18</div>
@@ -286,7 +287,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
       <div class="h-title dsk-only">ตรวจส่วนลด <span>DC/DS</span></div>
       <div class="h-title mob-only" id="mobTitle">รัตนไพบูลย์</div>
       <div class="flex gap-6 dsk-only" style="margin-left:auto;align-items:center">
-        <span style="font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap">v3.43 · 18/07/2569</span>
+        <span style="font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap">v3.44 · 18/07/2569</span>
         <button class="btn btn-sm" style="background:rgba(201,168,76,.15);color:var(--gold);border:1px solid rgba(201,168,76,.3);font-size:12px" onclick="exportExcel()">⬇ Excel</button>
         <button class="h-btn" onclick="refreshData()" title="รีเฟรช">⟳</button>
       </div>
@@ -358,9 +359,9 @@ input,select,textarea{font-family:inherit;font-size:16px}
           </div>
         </div>
 
-        <!-- DSK Report -->
+        <!-- DSK Report / สรุปของแถม -->
         <div class="dsk-screen" id="dsk-report" style="padding:20px">
-          <div class="sec-head mb-8"><div class="sec-title">รายงานตามวัน</div></div>
+          <div class="sec-head mb-8"><div class="sec-title">📊 สรุปร้านที่ไม่ได้รับของแถม</div></div>
           <div id="ds-report-body"></div>
         </div>
 
@@ -424,13 +425,13 @@ input,select,textarea{font-family:inherit;font-size:16px}
           <div id="mob-check-list" style="flex:1;overflow-y:auto"></div>
         </div>
 
-        <!-- MOB Report -->
+        <!-- MOB Report / สรุปของแถม -->
         <div class="mob-screen" id="mob-report">
-          <div style="background:var(--navy);color:#fff;padding:14px 14px;flex-shrink:0">
-            <div style="font-size:16px;font-weight:700">รายงานตามวัน</div>
-            <div style="font-size:12px;color:rgba(255,255,255,.6)">สรุปรายการส่งสินค้า</div>
+          <div style="background:var(--navy);color:#fff;padding:14px;flex-shrink:0">
+            <div style="font-size:16px;font-weight:700">📊 สรุปร้านที่ไม่ได้รับของแถม</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.6)">รวมทุกใบส่งสินค้าเดือนนี้</div>
           </div>
-          <div style="flex:1;overflow-y:auto;padding:12px 0" id="mob-report-body"></div>
+          <div style="flex:1;overflow-y:auto;padding:12px" id="mob-report-body"></div>
         </div>
 
         <!-- MOB Settings -->
@@ -478,6 +479,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
   <div class="tab-item active" id="tab-home" onclick="mobGoto('mob-home','home')"><span class="ti">🏠</span><span>หน้าหลัก</span></div>
   <div class="tab-item" id="tab-check" onclick="mobGoto('mob-check','check')"><span class="ti">🔍</span><span>ตรวจสอบ</span></div>
   <div class="tab-item tab-center"></div>
+  <div class="tab-item" id="tab-report" onclick="mobGoto('mob-report','report')"><span class="ti">📊</span><span>สรุป</span></div>
   <div class="tab-item" id="tab-settings" onclick="mobGoto('mob-settings','settings')"><span class="ti">⚙️</span><span>ตั้งค่า</span></div>
 </div>
 <button id="fabBtn" onclick="mobGoto('mob-check','check')">🔍</button>
@@ -1141,6 +1143,82 @@ function closeDetail(){
 function reportProblem(){showToast('แจ้งปัญหาเรียบร้อย','error');}
 function confirmOk(){showToast('ยืนยันถูกต้อง ✓','success');closeDetail();}
 
+/* ── SUMMARY ── */
+function buildMissingGiftSummary(){
+  // giftName → [{store, ref, expected, received}]
+  const byGift={};
+  allInvs.forEach(inv=>{
+    const prods=inv.lines.filter(r=>(parseInt(r['TRD_QTY'])||0)!==0);
+    const ps={};
+    prods.forEach(r=>{
+      const pd=lookupPddt(r['SKU_NAME']);
+      const promo=matchPromo(r['SKU_NAME'],pd,r);
+      if(promo&&promo.gift){
+        const rq=parseInt(promo.qty)||1,gq=parseInt(promo.giftQty)||1;
+        const bought=parseInt(r['TRD_QTY']||0)||0;
+        ps[promo.gift]=(ps[promo.gift]||0)+(Math.floor(bought/rq)*gq||gq);
+      }
+    });
+    if(!Object.keys(ps).length)return;
+    const fm={};
+    inv.lines.filter(r=>parseInt(r['TRD_Q_FREE'])>0).forEach(r=>{
+      const k=r['SKU_NAME']||r['TRD_SH_CODE']||'–';
+      fm[k]=(fm[k]||0)+(parseInt(r['TRD_Q_FREE'])||0);
+    });
+    Object.entries(ps).forEach(([g,exp])=>{
+      const gn=g.replace(/\s+/g,'');
+      const match=Object.entries(fm).find(([n])=>{const fn=n.replace(/\s+/g,'');return fn.includes(gn)||gn.includes(fn);});
+      const rec=match?match[1]:0;
+      if(rec<exp){
+        if(!byGift[g])byGift[g]=[];
+        byGift[g].push({store:inv.store,ref:inv.ref,expected:exp,received:rec,short:exp-rec});
+      }
+    });
+  });
+  return byGift;
+}
+function renderSummary(){
+  const byGift=buildMissingGiftSummary();
+  const entries=Object.entries(byGift).sort((a,b)=>b[1].length-a[1].length);
+  const totalStores=entries.reduce((s,[,v])=>s+v.length,0);
+  let html=entries.length?`
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px">
+      <div style="background:var(--card);border-radius:10px;border:1px solid var(--border);border-top:3px solid var(--red);padding:12px;text-align:center">
+        <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:4px">รายการโปรโมชั่น</div>
+        <div style="font-size:22px;font-weight:700;color:var(--red)">${fmtI(entries.length)}</div>
+        <div style="font-size:10px;color:var(--muted)">ที่ยังขาดของแถม</div>
+      </div>
+      <div style="background:var(--card);border-radius:10px;border:1px solid var(--border);border-top:3px solid var(--orange);padding:12px;text-align:center">
+        <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:4px">จำนวนใบ</div>
+        <div style="font-size:22px;font-weight:700;color:var(--orange)">${fmtI(totalStores)}</div>
+        <div style="font-size:10px;color:var(--muted)">ที่ไม่ได้รับครบ</div>
+      </div>
+    </div>
+    ${entries.map(([g,rows])=>{
+      const totalShort=rows.reduce((s,r)=>s+r.short,0);
+      return`<div style="background:var(--card);border-radius:10px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden">
+        <div style="background:#FFEBEE;border-bottom:1px solid #FFCDD2;padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:700;font-size:13px;color:#B71C1C">🎁 ${g}</div>
+          <div style="font-size:11px;color:#C62828;font-weight:600">${fmtI(rows.length)} ร้าน · ขาด ${fmtI(totalShort)} EA</div>
+        </div>
+        ${rows.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px;border-bottom:1px solid var(--border);font-size:12px" onclick="openDetail('${r.ref}');dskGoto('dsk-check')" style="cursor:pointer">
+          <div>
+            <div style="font-weight:600">${r.store}</div>
+            <div style="font-size:11px;color:var(--muted);font-family:monospace">${r.ref}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="color:var(--red);font-weight:700">ขาด ${fmtI(r.short)} EA</div>
+            <div style="font-size:10px;color:var(--muted)">ได้ ${fmtI(r.received)}/${fmtI(r.expected)}</div>
+          </div>
+        </div>`).join('')}
+      </div>`;
+    }).join('')}`
+  :`<div style="text-align:center;padding:48px;color:var(--muted)">🎉 ทุกร้านได้รับของแถมครบแล้ว</div>`;
+  document.getElementById('ds-report-body').innerHTML=html;
+  const mobEl=document.getElementById('mob-report-body');
+  if(mobEl)mobEl.innerHTML=html;
+}
+
 /* ── NAVIGATION ── */
 function dskGoto(id){
   document.querySelectorAll('.dsk-screen').forEach(s=>s.classList.remove('active'));
@@ -1148,6 +1226,7 @@ function dskGoto(id){
   document.querySelectorAll('.sb-item').forEach(n=>n.classList.remove('active'));
   const m={'dsk-home':'sb-home','dsk-check':'sb-check','dsk-report':'sb-report','dsk-settings':'sb-settings'};
   if(m[id])document.getElementById(m[id])?.classList.add('active');
+  if(id==='dsk-report')renderSummary();
 }
 function mobGoto(id,key){
   document.querySelectorAll('.mob-screen').forEach(s=>s.classList.remove('active'));
@@ -1155,7 +1234,8 @@ function mobGoto(id,key){
   document.querySelectorAll('.tab-item:not(.tab-center)').forEach(t=>t.classList.remove('active'));
   const tm={home:'tab-home',check:'tab-check',report:'tab-report',settings:'tab-settings'};
   if(tm[key])document.getElementById(tm[key])?.classList.add('active');
-  const titles={home:'รัตนไพบูลย์',check:'ตรวจสอบ',report:'รายงาน',settings:'ตั้งค่า'};
+  if(key==='report')renderSummary();
+  const titles={home:'รัตนไพบูลย์',check:'ตรวจสอบ',report:'สรุป',settings:'ตั้งค่า'};
   txt('mobTitle',titles[key]||'รัตนไพบูลย์');
   const fab=document.getElementById('fabBtn');
   if(fab)fab.style.display=(key==='settings'||key==='report')?'none':'flex';
