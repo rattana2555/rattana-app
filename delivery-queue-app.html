@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.33</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.34</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -541,7 +541,7 @@ body.dragging .trip-drop{border-style:dashed!important;animation:pulse-glow 1.2s
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.33</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.34</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -4525,6 +4525,58 @@ function confirmAutoAssign(){
       });
       if(kicked)console.log(`🚫 ร้านรวม >1 ตันบนรถปลีก → ถอด ${kicked} บิล (ไปจัดมือ/รถใหญ่)`);
       if(trip1)console.log(`🚐 รถปลีกเที่ยว 1 → ย้าย ${trip1} บิล`);
+    })();
+
+    // ══ v8.34: ร้านรวม >1 ตัน ที่ยังไม่ได้จัด (รวมไม่มี GPS) → ยัดเข้ารถใหญ่ ══
+    //   ลำดับเลือก: ร้านเดียวกันอยู่รถใหญ่แล้ว → GPS ใกล้ centroid → จังหวัดเดียวกัน → โหลดน้อยสุด
+    (function assignHeavyToBig(){
+      const bigTrucks=TRUCKS.filter(t=>!EXCLUDE_AUTO.has(t.plate)&&t.maxW>0&&!RETAIL_TYPES.includes(t.type))
+        .sort((a,b)=>b.maxW-a.maxW);
+      if(!bigTrucks.length)return;
+      const cent=pl=>{const c=truckCent[pl];return c&&c.cnt?{lat:c.latSum/c.cnt,lng:c.lngSum/c.cnt}:null;};
+      const bigHasBills=pl=>{const L=loads[pl];return L&&(L.w1+L.w2+L.w3)>0;};
+      const sameProvOn=(pl,prov)=>prov&&Object.entries(newQ).some(([r,p])=>p===pl&&billMap[r]&&billMap[r].province===prov);
+      let n=0;
+      tmrBills.forEach(b=>{
+        if(newQ[b.ref]!==undefined)return;
+        const nm=normName(b.arName);
+        const w=(nm&&nameGroupW[nm]>0)?nameGroupW[nm]:(b.totalW||0);
+        if(w<=RETAIL_TL_KG)return;                 // เฉพาะร้านรวม >1 ตัน
+        let target=null;
+        // 1) ร้านเดียวกันอยู่รถใหญ่คันไหนแล้ว → ตามไป
+        for(const [r,pl] of Object.entries(newQ)){
+          const bb=billMap[r]; if(!bb)continue;
+          const same=(b.arCode&&bb.arCode===b.arCode)||normName(bb.arName)===nm;
+          if(same){const t=TRUCKS.find(x=>x.plate===pl); if(t&&!RETAIL_TYPES.includes(t.type)){target=pl;break;}}
+        }
+        // 2) มี GPS → รถใหญ่ centroid ใกล้สุด (จังหวัดเดียวกันได้แต้มต่อ)
+        if(!target&&b.lat&&b.lng){
+          let best=null,bd=Infinity;
+          bigTrucks.forEach(t=>{ if(!bigHasBills(t.plate))return; const c=cent(t.plate); if(!c)return;
+            const d=haversine(b.lat,b.lng,c.lat,c.lng)-(sameProvOn(t.plate,b.province)?30:0);
+            if(d<bd){bd=d;best=t.plate;} });
+          target=best;
+        }
+        // 3) ไม่มี GPS → รถใหญ่ที่วิ่งจังหวัดเดียวกันอยู่แล้ว
+        if(!target&&b.province){
+          const t=bigTrucks.find(t=>bigHasBills(t.plate)&&sameProvOn(t.plate,b.province));
+          if(t)target=t.plate;
+        }
+        // 4) สุดท้าย → รถใหญ่ที่โหลดน้อยสุด
+        if(!target){
+          let best=null,room=-1;
+          bigTrucks.forEach(t=>{const L=loads[t.plate]||{w1:0,w2:0,w3:0};const r=t.maxW-(L.w1+L.w2+L.w3);if(r>room){room=r;best=t.plate;}});
+          target=best;
+        }
+        if(!target)return;
+        if(!loads[target])loads[target]={w1:0,v1:0,w2:0,v2:0,w3:0,v3:0};
+        const t=TRUCKS.find(x=>x.plate===target), L=loads[target], wCap=(t?.maxW||0)*1.10;
+        const tr=(L.w1+(b.totalW||0))<=wCap?1:((L.w2+(b.totalW||0))<=wCap?2:1); // พอดี ท.1 ก่อน
+        newQ[b.ref]=target; newTripMap[b.ref]=tr;
+        if(tr===1){L.w1+=b.totalW||0;L.v1+=b.totalV||0;}else{L.w2+=b.totalW||0;L.v2+=b.totalV||0;}
+        n++;
+      });
+      if(n)console.log(`🚛 ร้านรวม >1 ตันตกค้าง → ใส่รถใหญ่ ${n} บิล`);
     })();
 
     // คง queue วันอื่น + เขียนทับวันที่เลือก
