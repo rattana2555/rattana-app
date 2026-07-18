@@ -377,15 +377,29 @@ async function startReader(){
     const override=await idbGet('isOverride'); const buf=await idbGet('pdfData');
     if(override && buf && buf.byteLength){ const nm=await idbGet('pdfName'); await renderPdf(buf, nm||'PDF', true, false); return; }
   }catch(e){}
-  if(BOOK_URL){
-    try{
-      showSpinner('กำลังโหลดหนังสือที่แชร์...');
-      const r=await fetch(BOOK_URL,{cache:'force-cache'});
-      if(r.ok){ const ab=await r.arrayBuffer(); if(ab.byteLength>200){ await renderPdf(ab, BOOK_URL.split('/').pop(), true, true); return; } }
-    }catch(e){/* ไม่มีไฟล์ที่แชร์ → ใช้ demo */}
-    finally{ hideSpinner(); }
-  }
-  BOOK_MODE='manual'; PDF_NAME=''; IS_HOSTED=false; loadBook(); buildBook(); jumpTo(0,false);
+  showSpinner('กำลังโหลดหนังสือ...');
+  const ok=await loadHostedBook();
+  hideSpinner();
+  if(ok) return;
+  BOOK_MODE='manual'; PDF_NAME=''; IS_HOSTED=false; HOSTED_LAZY=false; loadBook(); buildBook(); jumpTo(0,false);
+}
+/* หนังสือที่แชร์ = รูปทีละหน้า (โหลด lazy รอบ ๆ หน้าปัจจุบัน — มือถือไม่ต้องโหลดทั้งเล่ม) */
+async function loadHostedBook(){
+  try{
+    const r=await fetch(BOOK_MANIFEST,{cache:'force-cache'}); if(!r.ok) return false;
+    const m=await r.json(); if(!m || !m.count) return false;
+    const dir=m.dir||'', ext=m.ext||'jpg', pad=m.pad||4, pages=[];
+    for(let i=1;i<=m.count;i++) pages.push({type:'image', img:dir+String(i).padStart(pad,'0')+'.'+ext, lazy:true});
+    PAGES=pages; CHAPTERS=(m.chapters||[]).map(c=>({title:c.title, index:(c.page||1)-1}));
+    BOOK_MODE='pdf'; IS_HOSTED=true; HOSTED_LAZY=true; PDF_NAME=m.title||'หนังสือ';
+    buildBook(); jumpTo(0,false); hydrateImages();
+    return true;
+  }catch(e){ console.warn('hosted book fail',e); return false; }
+}
+function hydrateImages(){
+  if(!HOSTED_LAZY) return;
+  const lo=Math.max(0,currentIndex-2), hi=Math.min(N-1,currentIndex+4);
+  for(let i=lo;i<=hi;i++){ const im=document.querySelector('#book img[data-page="'+i+'"]'); if(im && im.dataset.src){ im.src=im.dataset.src; im.removeAttribute('data-src'); } }
 }
 
 /* ════════ MANUAL BOOK ════════ */
