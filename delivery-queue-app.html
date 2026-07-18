@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.29</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.30</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -541,7 +541,7 @@ body.dragging .trip-drop{border-style:dashed!important;animation:pulse-glow 1.2s
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.29</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.30</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -5136,6 +5136,7 @@ function renderSavedView(){
             ${driver?`<div style="font-size:11px;color:#A0ABBB;margin-top:3px">🧑‍✈️ ${driver}</div>`:''}
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button onclick="copyTruckStores('${plate}')" style="font-family:Kanit;background:#EAF3FF;color:#1A5FA5;border:1px solid #93B8DE;border-radius:9px;padding:6px 13px;font-size:12px;font-weight:700;cursor:pointer">📋 คัดลอกร้าน</button>
             <button onclick="editSavedTruck('${plate}')" style="font-family:Kanit;background:#FEF6E4;color:#7D6428;border:1px solid #E6C26E;border-radius:9px;padding:6px 13px;font-size:12px;font-weight:700;cursor:pointer">✏️ แก้ไข</button>
             ${truck&&anyFree
               ?`<button onclick="gotoTruckQueue('${plate}')" style="font-family:Kanit;background:#15803D;color:#fff;border:none;border-radius:9px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">➕ เพิ่มบิล</button>`
@@ -6194,7 +6195,10 @@ function _renderStopsList(stops){
         <span>🚩 ตั้งร้านแรก · ลาก ⠿ / ▲▼ ปรับเอง</span>
         ${hasManual?`<button onclick="resetStopOrder('${rMapPlate}',null)" style="margin-left:auto;background:#FEF6E4;border:1px solid #E6C26E;color:#7D6428;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:600;cursor:pointer">↺ อัตโนมัติ</button>`:''}
       </div>
-      <button onclick="reorderBySideAllTrips('${rMapPlate}')" style="width:100%;background:#EAF3FF;border:1.5px solid #93B8DE;color:#1A5FA5;border-radius:7px;padding:5px;font-size:11px;font-weight:700;cursor:pointer;font-family:Kanit">↩️ จัดตามฝั่งถนน (ไปฝั่งนึง–กลับอีกฝั่ง)</button>
+      <div style="display:flex;gap:5px">
+        <button onclick="reorderBySideAllTrips('${rMapPlate}')" style="flex:1;background:#EAF3FF;border:1.5px solid #93B8DE;color:#1A5FA5;border-radius:7px;padding:5px;font-size:11px;font-weight:700;cursor:pointer;font-family:Kanit">↩️ จัดตามฝั่งถนน</button>
+        <button onclick="copyTruckStores('${rMapPlate}')" style="flex-shrink:0;background:#F0FDF4;border:1.5px solid #86EFAC;color:#15803D;border-radius:7px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:Kanit">📋 คัดลอกร้าน</button>
+      </div>
       ${anySide?`<div style="display:flex;gap:10px;justify-content:center;margin-top:5px;font-size:10px;color:#6B7A90"><span>🟢 ฝั่งไป</span><span>🟠 ฝั่งกลับ</span></div>`:''}
     </div>`;
   }
@@ -6579,6 +6583,47 @@ function reorderBySideAllTrips(plate){
   else if(currentTab==='saved')renderSavedView();
   else if(typeof renderAll==='function')renderAll();
   showToast('↩️ จัดตามฝั่งถนนแล้ว '+done+' เที่ยว','ok');
+}
+
+// ══ v8.30: คัดลอกรายชื่อร้าน + พิกัด (ชื่อ<TAB>lat,lng ต่อบรรทัด) ตามลำดับวิ่ง ══
+function copyText(text, okMsg){
+  const done=()=>showToast(okMsg||'✅ คัดลอกแล้ว','ok');
+  const fallback=()=>{
+    try{
+      const ta=document.createElement('textarea');
+      ta.value=text; ta.style.position='fixed'; ta.style.left='-9999px';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta); done();
+    }catch(e){ showToast('คัดลอกไม่ได้ — คัดลอกจากกล่องเอง','warn'); window.prompt('คัดลอกข้อความนี้ (Ctrl+C):', text); }
+  };
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done).catch(fallback);
+  else fallback();
+}
+// แหล่งบิลตามหน้าปัจจุบัน (บันทึก=keepData · อื่นๆ=queue)
+function _tripStoreObjs(plate,tr){
+  if(currentTab==='saved')
+    return keepData.filter(r=>r.plate===plate&&(r.trip||1)===tr&&(!dashFilterDate||r.deliveryDate===dashFilterDate));
+  return tripBillsFor(plate,tr);
+}
+function copyTruckStores(plate){
+  const lines=[]; let n=0;
+  [1,2,3].forEach(tr=>{
+    const objs=_tripStoreObjs(plate,tr);
+    if(!objs.length)return;
+    const byRef={}; objs.forEach(o=>byRef[o.ref]=o);
+    let refs=_displayedOrder[plate+'|'+tr];
+    if(!refs||!refs.length) refs=objs.map(o=>o.ref);
+    // เผื่อ ref ที่ไม่อยู่ใน _displayedOrder (บิลใหม่) ต่อท้าย
+    objs.forEach(o=>{ if(refs.indexOf(o.ref)<0) refs=[...refs,o.ref]; });
+    refs.forEach(ref=>{
+      const o=byRef[ref]; if(!o)return;
+      const name=(o.arName||ref||'').trim();
+      const loc=(o.lat&&o.lng)?`${o.lat},${o.lng}`:'';
+      lines.push(name+'\t'+loc); n++;
+    });
+  });
+  if(!n){showToast('รถคันนี้ไม่มีร้าน','warn');return;}
+  copyText(lines.join('\n'), `📋 คัดลอกร้าน ${plate} — ${n} ร้านแล้ว`);
 }
 // v8.21: เรียงตามลำดับวิ่งจริง — ใช้ร่วมกันทุกหน้า (ฝูงรถ/ใบพิมพ์) ให้ตรงกับสายส่ง
 function orderedTripBills(plate,tr){
