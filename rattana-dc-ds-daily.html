@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.29</title>
+<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.30</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -287,7 +287,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
       <div class="h-title dsk-only">ตรวจส่วนลด <span>DC/DS</span></div>
       <div class="h-title mob-only" id="mobTitle">รัตนไพบูลย์</div>
       <div class="flex gap-6 dsk-only" style="margin-left:auto;align-items:center">
-        <span style="font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap">v3.29 · 18/07/2569</span>
+        <span style="font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap">v3.30 · 18/07/2569</span>
         <button class="btn btn-sm" style="background:rgba(201,168,76,.15);color:var(--gold);border:1px solid rgba(201,168,76,.3);font-size:12px" onclick="exportExcel()">⬇ Excel</button>
         <button class="h-btn" onclick="refreshData()" title="รีเฟรช">⟳</button>
       </div>
@@ -1010,17 +1010,28 @@ function openDetail(ref){
         <span style="font-weight:800;color:#E65100;font-size:14px">${promoSummary[g]} EA</span>
       </div>`).join('')}
     </div>`:''}
-    ${freeL.length?`<div class="dp-sec-title">🎁 ของแถม (${fmtI(inv.free)} ชิ้น)</div><div class="dp-prod-grid">${freeL.map(r=>{
-      const pd=lookupPddt(r['SKU_NAME']);
-      return`<div class="dp-prod free">
-        <div class="dp-prod-name free">${r['SKU_NAME']||r['TRD_SH_CODE']||'–'}</div>
-        ${pd?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin:3px 0">
-          ${pd.brand?`<span style="font-size:10px;background:rgba(46,125,50,.15);color:var(--green);border-radius:4px;padding:1px 6px;font-weight:600">${pd.brand}</span>`:''}
-          ${pd.size?`<span style="font-size:10px;background:#F3E5F5;color:#6A1B9A;border-radius:4px;padding:1px 6px;font-weight:600">${pd.size}</span>`:''}
-        </div>`:''}
-        <div class="dp-prod-row"><span style="font-weight:700;color:var(--green)">${fmtI(parseInt(r['TRD_Q_FREE'])||0)} ${(/\(([^)]+)\)/.exec(r['TRD_UTQNAME']||'')?.[1]||r['TRD_UTQNAME']||'')}</span><span style="color:var(--green);font-weight:700">ของแถม</span></div>
-      </div>`;
-    }).join('')}</div>`:''}
+    ${(()=>{
+      if(!freeL.length)return'';
+      const freeMap={};
+      freeL.forEach(r=>{
+        const key=r['SKU_NAME']||r['TRD_SH_CODE']||'–';
+        if(!freeMap[key])freeMap[key]={r,qty:0};
+        freeMap[key].qty+=(parseInt(r['TRD_Q_FREE'])||0);
+      });
+      const freeGroups=Object.values(freeMap);
+      return`<div class="dp-sec-title">🎁 ของแถม (${fmtI(inv.free)} ชิ้น)</div><div class="dp-prod-grid">${freeGroups.map(({r,qty})=>{
+        const pd=lookupPddt(r['SKU_NAME']);
+        const unit=/\(([^)]+)\)/.exec(r['TRD_UTQNAME']||'')?.[1]||r['TRD_UTQNAME']||'';
+        return`<div class="dp-prod free">
+          <div class="dp-prod-name free">${r['SKU_NAME']||r['TRD_SH_CODE']||'–'}</div>
+          ${pd?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin:3px 0">
+            ${pd.brand?`<span style="font-size:10px;background:rgba(46,125,50,.15);color:var(--green);border-radius:4px;padding:1px 6px;font-weight:600">${pd.brand}</span>`:''}
+            ${pd.size?`<span style="font-size:10px;background:#F3E5F5;color:#6A1B9A;border-radius:4px;padding:1px 6px;font-weight:600">${pd.size}</span>`:''}
+          </div>`:''}
+          <div class="dp-prod-row"><span style="font-weight:700;color:var(--green)">${fmtI(qty)} ${unit}</span><span style="color:var(--green);font-weight:700">ของแถม</span></div>
+        </div>`;
+      }).join('')}</div>`;
+    })()}
     ${(()=>{
       const freeNorm=freeL.map(r=>(r['SKU_NAME']||'').replace(/\s+/g,''));
       const missing=promoSumKeys.filter(g=>{
