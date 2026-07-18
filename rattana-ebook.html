@@ -421,7 +421,9 @@ async function renderPdf(buf, name, fromStore){
       canvas.width=Math.floor(vp.width); canvas.height=Math.floor(vp.height);
       const ctx=canvas.getContext('2d',{alpha:false});
       ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height);
-      await page.render({canvasContext:ctx, viewport:vp}).promise;
+      const rt=page.render({canvasContext:ctx, viewport:vp});
+      // freeze-guard: ถ้า render ค้าง (เช่น fetch ฟอนต์ค้าง) เกิน 30 วิ ให้เดินหน้าต่อ ไม่แข็งค้าง
+      await Promise.race([ rt.promise.catch(()=>{}), new Promise(r=>setTimeout(r,30000)) ]);
       pages.push({type:'image', img:canvas.toDataURL('image/jpeg',0.82)});
       canvas.width=canvas.height=0;
     }
