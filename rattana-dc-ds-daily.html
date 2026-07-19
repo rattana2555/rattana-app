@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.49</title>
+<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.50</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -287,7 +287,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
       <div class="h-title dsk-only">ตรวจส่วนลด <span>DC/DS</span></div>
       <div class="h-title mob-only" id="mobTitle">รัตนไพบูลย์</div>
       <div class="flex gap-6 dsk-only" style="margin-left:auto;align-items:center">
-        <span style="font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap">v3.49 · 19/07/2569</span>
+        <span style="font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap">v3.50 · 19/07/2569</span>
         <button class="btn btn-sm" style="background:rgba(201,168,76,.15);color:var(--gold);border:1px solid rgba(201,168,76,.3);font-size:12px" onclick="exportExcel()">⬇ Excel</button>
         <button class="h-btn" onclick="refreshData()" title="รีเฟรช">⟳</button>
       </div>
@@ -1209,6 +1209,30 @@ function buildMissingGiftSummary(){
   });
   return byGift;
 }
+function buildAbnormalGiftSummary(){
+  const agg={};
+  allInvs.forEach(inv=>{
+    const prods=inv.lines.filter(r=>(parseInt(r['TRD_QTY'])||0)!==0);
+    const psKeys=[];
+    prods.forEach(r=>{
+      const pd=lookupPddt(r['SKU_NAME']);
+      const promo=matchPromo(r['SKU_NAME'],pd,r);
+      if(promo&&promo.gift){const gn=promo.gift.replace(/\s+/g,'');if(!psKeys.includes(gn))psKeys.push(gn);}
+    });
+    inv.lines.filter(r=>parseInt(r['TRD_Q_FREE'])>0).forEach(r=>{
+      const name=r['SKU_NAME']||r['TRD_SH_CODE']||'–';
+      const fn=name.replace(/\s+/g,'');
+      const isAbnormal=!psKeys.some(gn=>fn.includes(gn)||gn.includes(fn));
+      if(isAbnormal){
+        if(!agg[name])agg[name]={invCount:0,totalEA:0,invoices:[]};
+        agg[name].invCount++;
+        agg[name].totalEA+=(parseInt(r['TRD_Q_FREE'])||0);
+        agg[name].invoices.push({ref:inv.ref,store:inv.store||inv.ref,ea:parseInt(r['TRD_Q_FREE'])||0});
+      }
+    });
+  });
+  return agg;
+}
 function buildGiftSummary(){
   const agg={};
   allInvs.forEach(inv=>{
@@ -1247,8 +1271,11 @@ function renderSummary(){
   const totalExp=entries.reduce((s,[,v])=>s+v.expected,0);
   const okCount=entries.filter(([,v])=>v.received>=v.expected).length;
   const missCount=entries.filter(([,v])=>v.received<v.expected).length;
+  const abnAgg=buildAbnormalGiftSummary();
+  const abnEntries=Object.entries(abnAgg).sort((a,b)=>b[1].totalEA-a[1].totalEA);
+  const abnTotalEA=abnEntries.reduce((s,[,v])=>s+v.totalEA,0);
   const html=entries.length?`
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
       <div style="background:var(--card);border-radius:10px;border:1px solid var(--border);border-top:3px solid var(--gold);padding:12px;text-align:center">
         <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:2px">ของแถมรวม</div>
         <div style="font-size:26px;font-weight:700;color:var(--gold)">${fmtI(totalRec)}</div>
@@ -1263,6 +1290,11 @@ function renderSummary(){
           <span style="font-size:11px;color:var(--muted)">ยังขาดอยู่</span>
           <span style="font-weight:700;color:var(--red);font-size:16px">${fmtI(missCount)} <span style="font-size:10px;font-weight:400">รายการ</span></span>
         </div>
+      </div>
+      <div style="background:var(--card);border-radius:10px;border:1px solid var(--border);border-top:3px solid #FF8F00;padding:12px;text-align:center">
+        <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:2px">แถมผิดปกติ</div>
+        <div style="font-size:26px;font-weight:700;color:#E65100">${fmtI(abnTotalEA)}</div>
+        <div style="font-size:10px;color:var(--muted)">${fmtI(abnEntries.length)} รายการ</div>
       </div>
     </div>
     <div style="background:var(--card);border-radius:10px;border:1px solid var(--border);overflow:hidden">
@@ -1302,10 +1334,86 @@ function renderSummary(){
         </table>
       </div>
     </div>`
+  ${abnEntries.length?`
+    <div style="background:var(--card);border-radius:10px;border:1px solid var(--border);overflow:hidden;margin-top:14px">
+      <div style="padding:10px 14px;border-bottom:1px solid var(--border);background:#FFF3E0;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-weight:700;font-size:13px;color:#E65100">🔶 รายการแถมผิดปกติ</span>
+        <span style="font-size:11px;color:#BF360C">สินค้าที่แถมแต่ไม่ตรงโปรโมชั่น</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;min-width:340px">
+          <thead>
+            <tr style="background:#BF360C;color:#fff;font-size:11px">
+              <th style="padding:8px 14px;text-align:left;font-weight:600;border-bottom:2px solid #FF8F00">ชื่อสินค้าที่แถม</th>
+              <th style="padding:8px 10px;text-align:center;font-weight:600;border-bottom:2px solid #FF8F00">ใบ</th>
+              <th style="padding:8px 10px;text-align:center;font-weight:600;border-bottom:2px solid #FF8F00">EA รวม</th>
+              <th style="padding:8px 14px;text-align:left;font-weight:600;border-bottom:2px solid #FF8F00"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${abnEntries.map(([name,v],i)=>{
+              const bg=i%2===0?'':'background:rgba(0,0,0,.02)';
+              const esc=name.replace(/'/g,"\\'");
+              return`<tr style="border-top:1px solid var(--border);${bg};cursor:pointer" onclick='showAbnDetail(${JSON.stringify(name)})' onmouseover="this.style.background='rgba(230,81,0,.06)'" onmouseout="this.style.background='${bg?'rgba(0,0,0,.02)':'transparent'}'">
+                <td style="padding:9px 14px;font-size:12px;font-weight:600">${name}</td>
+                <td style="padding:9px 10px;text-align:center;font-size:12px;font-weight:600;color:#E65100">${fmtI(v.invCount)}</td>
+                <td style="padding:9px 10px;text-align:center;font-size:12px;font-weight:700;color:#B71C1C">${fmtI(v.totalEA)}</td>
+                <td style="padding:9px 14px;font-size:11px;color:var(--muted)">ดูรายละเอียด →</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`:''}
+  `
   :`<div style="text-align:center;padding:48px;color:var(--muted)">ไม่มีข้อมูลโปรโมชั่น</div>`;
   document.getElementById('ds-report-body').innerHTML=html;
   const mobEl=document.getElementById('mob-report-body');
   if(mobEl)mobEl.innerHTML=html;
+}
+function showAbnDetail(giftName){
+  const v=buildAbnormalGiftSummary()[giftName];
+  if(!v)return;
+  const body=`
+    <div style="margin-bottom:10px;padding:10px 12px;background:#FFF3E0;border-radius:8px;border:1px solid #FFCC80;font-size:12px">
+      <span style="font-weight:700;color:#E65100">${fmtI(v.invoices.length)} ใบ</span>
+      <span style="color:#795548"> · แถมรวม </span>
+      <span style="font-weight:700;color:#B71C1C">${fmtI(v.totalEA)} EA</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;min-width:280px">
+        <thead>
+          <tr style="background:#BF360C;color:#fff;font-size:11px">
+            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #FF8F00">ร้านค้า / เลขบิล</th>
+            <th style="padding:8px 10px;text-align:center;border-bottom:2px solid #FF8F00">EA</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${v.invoices.map((r,i)=>{
+            const bg=i%2===0?'':'background:rgba(0,0,0,.02)';
+            return`<tr style="border-top:1px solid var(--border);${bg};cursor:pointer" onclick="openDetail('${r.ref}');dskGoto('dsk-check')">
+              <td style="padding:9px 10px">
+                <div style="font-size:12px;font-weight:600">${r.store}</div>
+                <div style="font-size:11px;color:var(--muted);font-family:monospace">${r.ref}</div>
+              </td>
+              <td style="padding:9px 10px;text-align:center;font-size:12px;font-weight:700;color:#B71C1C">${fmtI(r.ea)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  const title=`🔶 ${giftName}`;
+  document.getElementById('dsk-gift-detail-title').textContent=title;
+  document.getElementById('dsk-gift-detail-body').innerHTML=body;
+  document.getElementById('mob-gift-detail-title').textContent=title;
+  document.getElementById('mob-gift-detail-body').innerHTML=body;
+  if(window.innerWidth>=768){
+    dskGoto('dsk-gift-detail');
+  } else {
+    document.querySelectorAll('.mob-screen').forEach(s=>s.classList.remove('active'));
+    document.getElementById('mob-gift-detail').classList.add('active');
+    document.querySelectorAll('.tab-item:not(.tab-center)').forEach(t=>t.classList.remove('active'));
+  }
 }
 function showGiftDetail(giftName){
   const rows=[];
