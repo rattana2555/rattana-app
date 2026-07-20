@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.42</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.43</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -570,7 +570,7 @@ body.dragging .trip-drop{border-style:dashed!important;animation:pulse-glow 1.2s
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.42</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.43</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -1209,6 +1209,11 @@ const ORDER_SHEET_ID = '1NO8sHyDxwHTRqgcLFCxq_g_Rr09lfe4gt_odwkIgiB0';
 const ORDER_SHEET_TAB = 'BK_BV';
 const ORDER_DAYS = 7;   // ย้อนหลังกี่วัน (auto-assign ใช้ cutoff 5 วันอยู่แล้ว เผื่อไว้ 7)
 let ORDER_WL = 'W1';  // v8.38: คลังที่ใช้ — ตั้งตาม currentWarehouse (BK_BV มี W1/W4/W3/W2/SD/C4 ปนกัน)
+// v8.43: พิกัดต้องอยู่ในกรอบประเทศไทย (กันข้อมูลเพี้ยน เช่น lng=983883261 ทำแผนที่ทะลุ)
+function validGps(lat,lng){
+  return typeof lat==='number'&&typeof lng==='number'&&isFinite(lat)&&isFinite(lng)&&
+    lat>=5&&lat<=21&&lng>=96&&lng<=106;
+}
 let customerGpsMap={}; // bpCode (รหัสบีพลัส) → {lat,lng}
 let customerInfoMap={}; // bpCode → {route, days, order, prov, dist} จากชีท Customer
 let drivers=[]; // [{name, nickname, display}]
@@ -1447,7 +1452,7 @@ async function loadData(){
       if(gps&&gps.includes(',')){
         const p=gps.split(',');
         const lat=parseFloat(p[0]),lng=parseFloat(p[1]);
-        if(!isNaN(lat)&&!isNaN(lng))customerGpsMap[code]={lat,lng};
+        if(validGps(lat,lng))customerGpsMap[code]={lat,lng}; // v8.43: กันพิกัดเพี้ยน (นอกกรอบไทย → ไม่เอา)
       }
       // ชื่อรูท-ตำบล + วันส่ง + ลำดับร้าน + ชื่อร้าน (v8.21: col จริงคือ "ชื่อร้านค้า")
       const name=(r['ชื่อร้านค้า']||r['ชื่อร้าน']||r['AR_NAME']||r['ชื่อลูกค้า']||'').toString().trim();
@@ -5057,6 +5062,7 @@ async function loadKeepdata(silent=false){
       status      : r['สถานะ']||'',
       seq         : parseInt(r['ลำดับร้าน']||'0')||0  // v8.26: ลำดับร้านที่บันทึกไว้
     })).filter(r=>r.plate&&r.deliveryDate);  // เก็บเฉพาะแถวที่มีรถและวันส่ง
+    keepData.forEach(r=>{ if(!validGps(r.lat,r.lng)){r.lat=0;r.lng=0;} }); // v8.43: กันพิกัดเพี้ยนในชีท Keepdata
     if(!silent)showToast(`โหลด Keepdata ${keepData.length} แถว`,'ok');
     if(currentTab==='saved')renderSavedView();
     else if(currentTab==='routes')renderRoutesView();
