@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.44</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.45</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -570,7 +570,7 @@ body.dragging .trip-drop{border-style:dashed!important;animation:pulse-glow 1.2s
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.44</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.45</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -4691,6 +4691,43 @@ function confirmAutoAssign(){
           }
         }
       }
+    })();
+
+    // ══ v8.45: สายเดียวกัน (routeCode) แตกหลายรถใหญ่ → รวมเป็นคันเดียว (ถ้าพอใน ≤3 เที่ยว) ══
+    //   กันเคส สาย HSW105R06 (สวนผึ้ง) กระจาย 2 คัน · ร้านใกล้กันควรอยู่คันเดียว
+    (function consolidateByRoute(){
+      const byRoute={};
+      Object.keys(newQ).forEach(ref=>{ const b=billMap[ref]; if(!b||!b.routeCode)return; (byRoute[b.routeCode]||(byRoute[b.routeCode]=[])).push(ref); });
+      Object.entries(byRoute).forEach(([rc,refs])=>{
+        const plates=[...new Set(refs.map(r=>newQ[r]))];
+        // เฉพาะรถใหญ่ (retail มีระบบเอง) · ต้องแตก ≥2 คันใหญ่
+        const bigPlates=plates.filter(pl=>{const t=TRUCKS.find(x=>x.plate===pl);return t&&!RETAIL_TYPES.includes(t.type);});
+        if(bigPlates.length<2)return;
+        // target = คันใหญ่ที่สายนี้หนักสุด
+        const wByPlate={}; refs.forEach(r=>{const pl=newQ[r];if(bigPlates.includes(pl))wByPlate[pl]=(wByPlate[pl]||0)+(billMap[r]?.totalW||0);});
+        let target=null,mx=-1; Object.entries(wByPlate).forEach(([p,w])=>{if(w>mx){mx=w;target=p;}});
+        const t=TRUCKS.find(x=>x.plate===target); if(!t)return;
+        // บิลของสายที่อยู่คันใหญ่อื่น → ย้ายมา target
+        const moveRefs=refs.filter(r=>bigPlates.includes(newQ[r])&&newQ[r]!==target);
+        if(!moveRefs.length)return;
+        // รวมแล้ว target ต้องพอใน ≤3 เที่ยว (ของเดิม target + ที่ย้ายมา)
+        const targetAll=[...new Set([...Object.keys(newQ).filter(r=>newQ[r]===target),...moveRefs])];
+        const totW=targetAll.reduce((s,r)=>s+(billMap[r]?.totalW||0),0);
+        const totV=targetAll.reduce((s,r)=>s+(billMap[r]?.totalV||0),0);
+        if(totW>t.maxW*3*1.10)return;                 // เกิน 3 เที่ยว → ปล่อยแตก (สายใหญ่จริง)
+        if(t.maxV>0&&totV>t.maxV*3*1.10)return;
+        // ถอด load ของ moveRefs จากคันเดิม
+        moveRefs.forEach(r=>{const pl=newQ[r],b=billMap[r],trp=newTripMap[r]||1,L=loads[pl];if(L){if(trp===1){L.w1-=b.totalW||0;L.v1-=b.totalV||0;}else if(trp===2){L.w2-=b.totalW||0;L.v2-=b.totalV||0;}else{L.w3-=b.totalW||0;L.v3-=b.totalV||0;}} newQ[r]=target;});
+        // แพ็คเที่ยว target ใหม่ (หนัก→เบา · ท.1→2→3)
+        const wc=t.maxW*1.10, vc=t.maxV>0?t.maxV*1.10:0;
+        let w1=0,v1=0,w2=0,v2=0,w3=0,v3=0;
+        targetAll.sort((a,b)=>(billMap[b]?.totalW||0)-(billMap[a]?.totalW||0)).forEach(r=>{const b=billMap[r];if(!b)return;const bw=b.totalW||0,bv=b.totalV||0;
+          if(w1+bw<=wc&&(vc<=0||v1+bv<=vc)){w1+=bw;v1+=bv;newTripMap[r]=1;}
+          else if(w2+bw<=wc&&(vc<=0||v2+bv<=vc)){w2+=bw;v2+=bv;newTripMap[r]=2;}
+          else{w3+=bw;v3+=bv;newTripMap[r]=3;}});
+        loads[target]={w1,v1,w2,v2,w3,v3};
+        console.log(`🔗 รวมสาย ${rc} → ${target} (ดึง ${moveRefs.length} บิลจากคันอื่น)`);
+      });
     })();
 
     // ══ v8.41: W3 — รหัสเซลล์ (SLMN) เดียวกัน → คันเดียวกัน ══
