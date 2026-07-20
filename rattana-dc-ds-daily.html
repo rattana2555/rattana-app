@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.60</title>
+<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.61</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -287,7 +287,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
       <div class="h-title dsk-only">ตรวจส่วนลด <span>DC/DS</span></div>
       <div class="h-title mob-only" id="mobTitle">รัตนไพบูลย์</div>
       <div class="flex gap-6 dsk-only" style="margin-left:auto;align-items:center">
-        <span style="font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap">v3.60 · 20/07/2569</span>
+        <span style="font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap">v3.61 · 20/07/2569</span>
         <button class="btn btn-sm" style="background:rgba(201,168,76,.15);color:var(--gold);border:1px solid rgba(201,168,76,.3);font-size:12px" onclick="exportExcel()">⬇ Excel</button>
         <button class="h-btn" onclick="refreshData()" title="รีเฟรช">⟳</button>
       </div>
@@ -330,6 +330,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
             <select class="dsk-select" id="df-status" onchange="dskFilter()">
               <option value="">🔵 ทุกสถานะ</option>
               <option value="ok">✅ ถูกต้อง</option>
+              <option value="over">📦 ได้เกินของแถม</option>
               <option value="missing">⚠️ ขาดของแถม</option>
               <option value="abnormal">🔶 แถมผิดปกติ</option>
               <option value="both">❌ ขาด+แถมผิดปกติ</option>
@@ -852,12 +853,18 @@ function calcPromoSt(inv){
     const m=Object.entries(fm).find(([n])=>{const fn=n.replace(/\s+/g,'');return fn.includes(gn)||gn.includes(fn);});
     return (m?m[1]:0)<(ps[g]||0);
   });
+  const hasOver=psKeys.some(g=>{
+    const gn=g.replace(/\s+/g,'');
+    const m=Object.entries(fm).find(([n])=>{const fn=n.replace(/\s+/g,'');return fn.includes(gn)||gn.includes(fn);});
+    return (m?m[1]:0)>(ps[g]||0);
+  });
   const hasAbnormal=Object.keys(fm).some(n=>{
     const fn=n.replace(/\s+/g,'');
     return!psKeys.some(g=>{const gn=g.replace(/\s+/g,'');return fn.includes(gn)||gn.includes(fn);});
   });
   if(hasMissing&&hasAbnormal)inv._st={key:'both',label:'ขาด+แถมผิดปกติ',cls:'badge-red'};
   else if(hasMissing)inv._st={key:'missing',label:'ขาดของแถม',cls:'badge-red'};
+  else if(hasOver)inv._st={key:'over',label:'ได้เกินของแถม',cls:'badge-blue'};
   else if(hasAbnormal)inv._st={key:'abnormal',label:'แถมผิดปกติ',cls:'badge-yellow'};
   else inv._st={key:'ok',label:'ถูกต้อง',cls:'badge-green'};
   return inv._st;
@@ -914,7 +921,7 @@ function buildOpts(){
   fillDD('dd-month-opts',[{v:'',l:'ทุกเดือน'},...months.map(m=>({v:m,l:thMonth(m)}))],mfMonth,v=>{mfMonth=v;updateMBtn();closeDD('dd-month');mobFilter();});
   fillDD('dd-date-opts',[{v:'',l:'ทุกวัน'},...dates.map(d=>({v:d,l:thD(d)}))],mfDate,v=>{mfDate=v;updateMBtn();closeDD('dd-date');mobFilter();});
   fillDD('dd-store-opts',[{v:'',l:'ทุกร้าน'},...stores.map(s=>({v:s,l:s}))],mfStore,v=>{mfStore=v;updateMBtn();closeDD('dd-store');mobFilter();});
-  fillDD('dd-status-opts',[{v:'',l:'ทุกสถานะ'},{v:'ok',l:'✅ ถูกต้อง'},{v:'missing',l:'⚠️ ขาดของแถม'},{v:'abnormal',l:'🔶 แถมผิดปกติ'},{v:'both',l:'❌ ขาด+แถมผิดปกติ'},{v:'pending',l:'⏳ รอตรวจสอบ'}],mfStatus,v=>{mfStatus=v;updateMBtn();closeDD('dd-status');mobFilter();});
+  fillDD('dd-status-opts',[{v:'',l:'ทุกสถานะ'},{v:'ok',l:'✅ ถูกต้อง'},{v:'over',l:'📦 ได้เกินของแถม'},{v:'missing',l:'⚠️ ขาดของแถม'},{v:'abnormal',l:'🔶 แถมผิดปกติ'},{v:'both',l:'❌ ขาด+แถมผิดปกติ'},{v:'pending',l:'⏳ รอตรวจสอบ'}],mfStatus,v=>{mfStatus=v;updateMBtn();closeDD('dd-status');mobFilter();});
 
   // Period chips
   const top5=dates.slice(0,5);
@@ -932,7 +939,7 @@ function updateMBtn(){
   txt('mf-month-lbl',mfMonth?'📆 '+thMonth(mfMonth):'📆 ทุกเดือน');
   txt('mf-date-lbl',mfDate?'📅 '+thS(mfDate):'📅 ทุกวัน');
   txt('mf-store-lbl',mfStore||'🏪 ทุกร้าน');
-  const _stLbl={ok:'✅ ถูกต้อง',missing:'⚠️ ขาดของแถม',abnormal:'🔶 แถมผิดปกติ',both:'❌ ขาด+แถมผิดปกติ',pending:'⏳ รอตรวจสอบ'};
+  const _stLbl={ok:'✅ ถูกต้อง',over:'📦 ได้เกินของแถม',missing:'⚠️ ขาดของแถม',abnormal:'🔶 แถมผิดปกติ',both:'❌ ขาด+แถมผิดปกติ',pending:'⏳ รอตรวจสอบ'};
   txt('mf-status-lbl',_stLbl[mfStatus]||'🔵 ทุกสถานะ');
 }
 function selPeriod(d){activePeriod=d;renderMobHome();buildOpts();}
