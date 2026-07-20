@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.36</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.37</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -446,6 +446,20 @@ body.dragging .trip-drop{border-style:dashed!important;animation:pulse-glow 1.2s
 </head>
 <body>
 
+<!-- v8.37: LOGIN GATE (Google Sign-In + Rattana Users) — เริ่มด้วย display:flex กันแอปแฟลชก่อนล็อกอิน -->
+<div id="dqLogin" style="position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:linear-gradient(135deg,#0d1b3e,#1a2a52);font-family:'Kanit','Sarabun',sans-serif">
+  <div style="background:rgba(255,255,255,.06);border:1px solid rgba(201,168,76,.4);border-radius:18px;padding:32px 26px;max-width:360px;width:100%;text-align:center;box-shadow:0 16px 48px rgba(0,0,0,.45)">
+    <div style="font-size:46px;line-height:1">🚛</div>
+    <div style="font-family:Kanit;font-size:21px;font-weight:700;color:#fff;margin:10px 0 2px">จัดคิวรถส่งสินค้า</div>
+    <div style="font-size:12px;color:#C9A84C;font-weight:600;margin-bottom:4px">รัตนไพบูลย์ กรุ๊ป</div>
+    <div style="font-size:12px;color:rgba(255,255,255,.65);margin-bottom:22px">เข้าสู่ระบบด้วยอีเมลบริษัทก่อนใช้งาน</div>
+    <div id="g_id_onload" data-client_id="76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
+    <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_blue" data-text="signin_with" data-shape="pill" data-logo_alignment="left" style="display:flex;justify-content:center"></div>
+    <div id="dqLoginBusy" style="display:none;margin-top:14px;color:rgba(255,255,255,.7);font-size:12px">⏳ กำลังตรวจสอบสิทธิ์...</div>
+    <div id="dqLoginErr" style="display:none;margin-top:14px;color:#ffb4b4;font-size:12.5px;background:rgba(255,80,80,.12);border:1px solid rgba(255,80,80,.32);border-radius:8px;padding:8px 10px"></div>
+    <div style="margin-top:22px;font-size:10px;color:rgba(255,255,255,.4)">เฉพาะพนักงานที่มีสิทธิ์ (Rattana Users)</div>
+  </div>
+</div>
 
 <!-- Loading -->
 <div id="loadingBar"></div>
@@ -541,7 +555,7 @@ body.dragging .trip-drop{border-style:dashed!important;animation:pulse-glow 1.2s
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.36</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.37</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -7043,9 +7057,84 @@ function sdBvAssign(val,id){
 // INIT
 // ══════════════════════════════════════════
 
-// ── No login required ──
-let currentUser = null;
-function logout(){location.reload();}
+// ══════════════════════════════════════════
+// v8.37: LOGIN GATE — Google Sign-In + ชีท "Rattana Users for apps" (เหมือน D-MAN)
+// ══════════════════════════════════════════
+const DQ_AUTH={
+  clientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
+  usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
+  usersSheet:'Rattana Users for apps',
+  storeKey:'dq_auth_v1',
+  sessionMs:7*24*3600*1000  // อยู่ได้ 7 วัน
+};
+let currentUser=null;
+function dqDecodeJwt(token){
+  const p=String(token||'').split('.'); if(p.length<2)throw new Error('jwt');
+  let b64=p[1].replace(/-/g,'+').replace(/_/g,'/'); const pad=(4-b64.length%4)%4; if(pad)b64+='='.repeat(pad);
+  const bin=atob(b64),bytes=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+  return JSON.parse(new TextDecoder('utf-8').decode(bytes));
+}
+const dqNormEmail=e=>String(e||'').trim().toLowerCase();
+function dqParseCSV(text){
+  if(!text)return[];
+  if(text.charCodeAt(0)===0xFEFF)text=text.slice(1);
+  const rows=[]; let row=[],cell='',q=false;
+  for(let i=0;i<text.length;i++){const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){cell+='"';i++;} else q=false; } else cell+=c; }
+    else if(c==='"')q=true; else if(c===','){row.push(cell);cell='';}
+    else if(c==='\n'){row.push(cell);rows.push(row);row=[];cell='';}
+    else if(c!=='\r')cell+=c;
+  }
+  if(cell!==''||row.length){row.push(cell);rows.push(row);}
+  if(!rows.length)return[];
+  const hdr=rows[0].map(h=>String(h).trim());
+  return rows.slice(1).map(r=>{const o={};hdr.forEach((h,i)=>o[h]=(r[i]!==undefined?String(r[i]):'').trim());return o;});
+}
+async function dqFetchUsers(){
+  const url=`https://docs.google.com/spreadsheets/d/${DQ_AUTH.usersSheetId}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent(DQ_AUTH.usersSheet)}`;
+  const r=await fetch(url); return dqParseCSV(await r.text());
+}
+function dqLoginMsg(msg,busy){
+  const e=document.getElementById('dqLoginErr'),b=document.getElementById('dqLoginBusy');
+  if(b)b.style.display=busy?'block':'none';
+  if(e){ if(msg){e.textContent=msg;e.style.display='block';} else e.style.display='none'; }
+}
+async function handleGoogleLogin(resp){
+  dqLoginMsg('',true);
+  try{
+    const payload=dqDecodeJwt(resp.credential);
+    const email=dqNormEmail(payload.email);
+    const users=await dqFetchUsers();
+    const u=users.find(x=>dqNormEmail(x['E-mail']||x['Email']||x['อีเมล'])===email);
+    if(!u){ dqLoginMsg('ไม่พบอีเมล '+email+' ในระบบ — ติดต่อ Admin'); return; }
+    if(String(u['Status']||'').trim().toLowerCase()!=='active'){ dqLoginMsg('บัญชีถูกระงับ — ติดต่อ Admin'); return; }
+    currentUser={
+      email,
+      name:(u['ชื่อ - สกุล']||u['ชื่อ-สกุล']||'').trim(),
+      nick:(u['ชื่อเล่น']||'').trim(),
+      warehouse:(u['W']||'').trim().toUpperCase()||'W1',
+      role:parseInt(u['User Role']||'0')||0,
+      picture:payload.picture||''
+    };
+    try{localStorage.setItem(DQ_AUTH.storeKey,JSON.stringify({user:currentUser,exp:Date.now()+DQ_AUTH.sessionMs}));}catch(e){}
+    dqEnterApp();
+  }catch(e){ console.error('login',e); dqLoginMsg('เกิดข้อผิดพลาด ลองอีกครั้ง'); }
+}
+function dqCheckSession(){
+  try{ const s=JSON.parse(localStorage.getItem(DQ_AUTH.storeKey)||'null');
+    if(s&&s.user&&s.exp&&Date.now()<s.exp){currentUser=s.user;return true;} }catch(e){}
+  return false;
+}
+function logout(){ try{localStorage.removeItem(DQ_AUTH.storeKey);}catch(e){} location.reload(); }
+function dqEnterApp(){
+  const lg=document.getElementById('dqLogin'); if(lg)lg.style.display='none';
+  window.currentWarehouse=currentUser?.warehouse||'W1'; // v8.37: คลังของ user (การสลับคลัง = step ถัดไป)
+  const sub=document.querySelector('.logo-sub');
+  if(sub&&currentUser){ sub.textContent=`รัตนไพบูลย์ · คลัง ${currentUser.warehouse}${currentUser.nick?' · '+currentUser.nick:''}`; }
+  loadData();
+}
+window.handleGoogleLogin=handleGoogleLogin;
+
 // v8.21: init saved theme before render (so first paint is right)
 (function initAppTheme(){
   try{
@@ -7059,10 +7148,15 @@ function logout(){location.reload();}
 window.addEventListener('DOMContentLoaded', ()=>{
   const btn=document.getElementById('themeBtn');
   if(btn&&document.body.classList.contains('dark'))btn.textContent='☀️';
-  loadData();
+  // v8.37: ต้องล็อกอินด้วยอีเมลก่อนเข้าใช้แอป
+  if(dqCheckSession()){ dqEnterApp(); }
+  else { const lg=document.getElementById('dqLogin'); if(lg)lg.style.display='flex'; }
 });
 
 </script>
+
+<!-- v8.37: Google Identity Services (Sign-In) -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 
 </body>
 </html>
