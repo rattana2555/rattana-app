@@ -3212,6 +3212,23 @@ function normalizePDDT(r) {
     CS: String(r['UNIT CS']||'').trim(),
   };
 
+  // v6.0 — per-unit prices (for the multi-unit discount tag): price @priceTier + sale @salePriceTier
+  const UNAME = { EA:'ชิ้น', PA:'แพ็ค', BP:'แพ็คใหญ่', CS:'ลัง' };
+  const unitPrices = {};
+  ['EA','PA','BP','CS'].forEach(u => {
+    const pr = parseFloat(String(r[`PRICE ${tier} ${u}`]||'').replace(/,/g,''));
+    if (isNaN(pr) || pr <= 0) return;
+    let sale = 0;
+    if (SHEET_CONFIG.salePriceTier) {
+      const sp = parseFloat(String(r[`PRICE ${SHEET_CONFIG.salePriceTier} ${u}`]||'').replace(/,/g,''));
+      if (!isNaN(sp) && sp > 0 && sp < pr) sale = sp;
+    }
+    const raw = units[u] || '';
+    const nameTh = ((raw.match(/^[^\dxX(]+/) || [''])[0]).trim() || UNAME[u];
+    const pack = raw.replace(/\(?(EA|PA|BP|CS)\)?\s*$/,'').trim();   // "ชิ้นx1" / "ลังx24"
+    unitPrices[u] = { u, price: pr, sale, name: nameTh, pack };
+  });
+
   // Compute sale price from salePriceTier if set
   // Note: We keep tagType='regular' (Rattana Mart premium style) by default
   // even when sale detected — the regular template shows struck-through old price.
