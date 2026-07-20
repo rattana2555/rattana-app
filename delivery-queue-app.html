@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.35</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.36</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -541,7 +541,7 @@ body.dragging .trip-drop{border-style:dashed!important;animation:pulse-glow 1.2s
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.35</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.36</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -4583,6 +4583,55 @@ function confirmAutoAssign(){
         console.log(`🚛 กลุ่ม >1ตัน จ.${prov} (${gb.length} บิล) → ${target}`);
       });
       if(n)console.log(`🚛 ร้านรวม >1 ตันตกค้าง → ใส่รถใหญ่ ${n} บิล (แยกตามจังหวัด)`);
+    })();
+
+    // ══ v8.36: รวมรถใหญ่ 2 คันที่ไป "โซนเดียวกัน" (จังหวัดเดียว + จุดใกล้กัน) ให้เหลือคันเดียว ══
+    //   กันเคส 2 คันวิ่งไปสวนผึ้งเหมือนกัน · รวมเมื่อโหลดรวมพอใน ≤2 เที่ยว · จัดเที่ยวใหม่ตามน้ำหนัก
+    (function mergeCloseBig(){
+      const MERGE_ZONE_KM=30; // centroid 2 คันใกล้กันแค่ไหนถึงถือว่า "โซนเดียวกัน"
+      const isBig=t=>!EXCLUDE_AUTO.has(t.plate)&&t.maxW>0&&!RETAIL_TYPES.includes(t.type);
+      const totW=pl=>{const L=loads[pl];return L?(L.w1+L.w2+L.w3):0;};
+      const cent=pl=>{let la=0,ln=0,c=0;Object.entries(newQ).forEach(([r,p])=>{if(p===pl){const b=billMap[r];if(b&&b.lat&&b.lng){la+=b.lat;ln+=b.lng;c++;}}});return c?{lat:la/c,lng:ln/c}:null;};
+      const provOf=pl=>{const s=new Set();Object.entries(newQ).forEach(([r,p])=>{if(p===pl){const b=billMap[r];if(b&&b.province)s.add(b.province);}});return s.size===1?[...s][0]:null;};
+      let plates=TRUCKS.filter(t=>isBig(t)&&totW(t.plate)>0).map(t=>t.plate);
+      let didMerge=true, guard=0;
+      while(didMerge&&guard++<12){
+        didMerge=false;
+        outer:
+        for(let i=0;i<plates.length;i++){
+          for(let j=i+1;j<plates.length;j++){
+            let A=plates[i],B=plates[j];
+            if(totW(A)===0||totW(B)===0)continue;
+            // จังหวัดเดียวกัน
+            const pa=provOf(A),pb=provOf(B); if(!pa||pa!==pb)continue;
+            // centroid ใกล้กัน (โซนเดียวกัน)
+            const ca=cent(A),cb=cent(B); if(!ca||!cb)continue;
+            if(haversine(ca.lat,ca.lng,cb.lat,cb.lng)>MERGE_ZONE_KM)continue;
+            // A = คันใหญ่กว่า
+            const mA=TRUCKS.find(x=>x.plate===A),mB=TRUCKS.find(x=>x.plate===B);
+            if(mB.maxW>mA.maxW){[A,B]=[B,A];}
+            const tA=TRUCKS.find(x=>x.plate===A);
+            const cW=totW(A)+totW(B), LA=loads[A],LB=loads[B];
+            const cV=(LA.v1+LA.v2+LA.v3)+(LB.v1+LB.v2+LB.v3);
+            if(cW>tA.maxW*2*1.10)continue;                         // เกิน 2 เที่ยว → ไม่รวม (โหลดเยอะจริง)
+            if(tA.maxV>0&&cV>tA.maxV*2*1.10)continue;
+            // ย้าย B → A แล้วจัดเที่ยวใหม่ (หนัก→เบา เติม ท.1 ก่อน)
+            Object.keys(newQ).forEach(r=>{if(newQ[r]===B)newQ[r]=A;});
+            const refsA=Object.keys(newQ).filter(r=>newQ[r]===A).sort((x,y)=>(billMap[y]?.totalW||0)-(billMap[x]?.totalW||0));
+            const wc=tA.maxW*1.10, vc=tA.maxV>0?tA.maxV*1.10:0;
+            let w1=0,v1=0,w2=0,v2=0,w3=0,v3=0;
+            refsA.forEach(r=>{const b=billMap[r];if(!b)return;const bw=b.totalW||0,bv=b.totalV||0;
+              if(w1+bw<=wc&&(vc<=0||v1+bv<=vc)){w1+=bw;v1+=bv;newTripMap[r]=1;}
+              else if(w2+bw<=wc&&(vc<=0||v2+bv<=vc)){w2+=bw;v2+=bv;newTripMap[r]=2;}
+              else{w3+=bw;v3+=bv;newTripMap[r]=3;}});
+            loads[A]={w1,v1,w2,v2,w3,v3};
+            loads[B]={w1:0,v1:0,w2:0,v2:0,w3:0,v3:0};
+            console.log(`🔗 รวมรถโซนเดียวกัน จ.${pa}: ${B} → ${A}`);
+            plates=plates.filter(p=>p!==B);
+            didMerge=true; break outer;
+          }
+        }
+      }
     })();
 
     // คง queue วันอื่น + เขียนทับวันที่เลือก
