@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.41</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.42</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -570,7 +570,7 @@ body.dragging .trip-drop{border-style:dashed!important;animation:pulse-glow 1.2s
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.41</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.42</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -2618,6 +2618,7 @@ function confirmAutoAssign(){
     const _hasSlmn=bills.some(b=>b.slmnCode);
     // v8.21: รับ HS(พรีส่ง) + TL + PM,RO(พรีปลีก) + ที่ pin ในชีทเลือกรถ
     const slmnOK=b=>{
+      if(currentWarehouse==='W3')return true; // v8.42: W3 รับทุกรหัสเซลล์ (RPBC.. ไม่ใช่ TL/HS)
       if(!_hasSlmn)return true;
       const c=(b.slmnCode||'').toUpperCase();
       return c.startsWith('TL')||c.startsWith('HS')||c.startsWith('PM')||c.startsWith('RO')||!!slmnTruckMap[c];
@@ -2630,6 +2631,7 @@ function confirmAutoAssign(){
     //   (nameGroupW/normName ประกาศทีหลังในสโคปเดียวกัน — segOf ถูกเรียกหลังจากนั้นทั้งหมด)
     const RETAIL_TL_KG=1000;
     const segOf=b=>{
+      if(currentWarehouse==='W3')return 'R'; // v8.42: W3 มีแต่รถเล็ก (กระบะ/จัมโบ้) → พรีปลีกทั้งหมด
       const c=(b.slmnCode||'').toUpperCase();
       if(c.startsWith('HS'))return 'D'; // พรีส่ง — 6 ล้อ เสมอ
       if(c.startsWith('TL')||c.startsWith('PM')||c.startsWith('RO')){
@@ -4551,6 +4553,7 @@ function confirmAutoAssign(){
 
     // ══ v8.33: รถปลีก (จัมโบ้/กระบะ) = เที่ยว 1 เท่านั้น + ร้านรวม >1 ตัน ห้ามอยู่รถปลีก ══
     (function retailGuard(){
+      if(currentWarehouse==='W3')return; // v8.42: W3 ไม่มีรถใหญ่ — ห้ามถอด >1ตันออก (rep pass จัดเที่ยวเอง)
       let trip1=0, kicked=0;
       Object.keys(newQ).forEach(ref=>{
         const t=TRUCKS.find(x=>x.plate===newQ[ref]);
@@ -7199,7 +7202,7 @@ async function loadCarFleets(){
     rows.forEach(r=>{
       const plate=(r['ทะเบียน Final']||r['ทะเบียน']||'').trim();
       const wh=(r['คลัง Final']||r['คลัง']||r['W']||'').trim().toUpperCase();
-      const type=(r['ประเภทรถ Fianl']||r['ประเภทรถ Final']||r['ประเภทรถ']||'').trim();
+      const type=(r['ประเภทรถ Fianl']||r['ประเภทรถ Final']||r['ประเภทรถ']||'').trim().replace(/(\d+)\s*ล้อ/,'$1 ล้อ'); // v8.42: "4ล้อจัมโบ้"→"4 ล้อจัมโบ้" ให้ตรง config
       const maxW=num(r['นน.บรรทุก']);
       if(!plate||!wh||!type||!maxW)return;
       if(((r['แผนก']||'')+(r['ขนส่ง']||'')).indexOf('ขนส่ง')<0)return; // เฉพาะรถขนส่ง
