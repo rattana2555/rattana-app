@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.49</title>
+<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.50</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -287,7 +287,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
       <div class="h-title dsk-only">ตรวจส่วนลด <span>DC/DS</span></div>
       <div class="h-title mob-only" id="mobTitle">รัตนไพบูลย์</div>
       <div class="flex gap-6 dsk-only" style="margin-left:auto;align-items:center">
-        <span style="font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap">v3.49 · 19/07/2569</span>
+        <span style="font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap">v3.50 · 19/07/2569</span>
         <button class="btn btn-sm" style="background:rgba(201,168,76,.15);color:var(--gold);border:1px solid rgba(201,168,76,.3);font-size:12px" onclick="exportExcel()">⬇ Excel</button>
         <button class="h-btn" onclick="refreshData()" title="รีเฟรช">⟳</button>
       </div>
@@ -645,7 +645,9 @@ async function fetchPromo(){
         gift:(r['แถมสินค้า']||'').trim(),
         giftQty:(r['จำนวนแถมEA']||'').trim().replace(/,/g,''),
         warehouses:(r['Warehouses']||'').trim(),
-        role:(r['Role']||'').trim()
+        role:(r['Role']||'').trim(),
+        startDate:parsePromoDate((r['เริ่มโปร']||'').trim()),
+        endDate:parsePromoDate((r['จบโปร']||'').trim())
       });
     });
     if(promoRules.length>0)showToast(`โหลดโปรโมชั่น ${promoRules.length} เงื่อนไข ✓`,'success');
@@ -678,6 +680,20 @@ function cleanSlmn(slmn){
   return (slmn||'').replace(/^คุณ\s*/,'').replace(/\s*\(ROO\)\s*$/i,'').replace(/\s*\([^)]*\)\s*$/,'').trim();
 }
 
+function parsePromoDate(s){
+  if(!s)return'';
+  // รองรับ DD/MM/YYYY, YYYY/MM/DD, DD-MM-YYYY, YYYY-MM-DD
+  const sep=s.includes('/')?'/':'-';
+  const p=s.split(sep);
+  if(p.length<3)return'';
+  let y,m,d;
+  if(p[0].length===4){y=parseInt(p[0]);m=parseInt(p[1]);d=parseInt(p[2]);}
+  else{d=parseInt(p[0]);m=parseInt(p[1]);y=parseInt(p[2]);}
+  // ถ้าปีเป็น พ.ศ. (>2400) แปลงเป็น ค.ศ.
+  if(y>2400)y-=543;
+  if(!y||!m||!d)return'';
+  return`${y}/${String(m).padStart(2,'0')}/${String(d).padStart(2,'0')}`;
+}
 function matchPromo(skuName, pd, row){
   if(!promoRules.length)return null;
   const skuN=(skuName||'').replace(/\s+/g,'');
@@ -738,6 +754,18 @@ function matchPromo(skuName, pd, row){
       const eligible=promoRole===3?(userRole===3||userRole>=5):(userRole>=promoRole);
       if(!eligible){
         console.log('[PROMO] Role ไม่ตรง',skuName,'→ พนักงาน:',cleanName,'userRole:',userRole,'promoRole:',promoRole);
+        return false;
+      }
+    }
+    // วันที่: DI_DATE ต้องอยู่ในช่วง เริ่มโปร–จบโปร
+    const diDate=(row['DI_DATE']||'').trim();
+    if(diDate){
+      if(rule.startDate&&diDate<rule.startDate){
+        console.log('[PROMO] วันที่ก่อนเริ่มโปร',skuName,'→ DI_DATE:',diDate,'เริ่มโปร:',rule.startDate);
+        return false;
+      }
+      if(rule.endDate&&diDate>rule.endDate){
+        console.log('[PROMO] วันที่หลังจบโปร',skuName,'→ DI_DATE:',diDate,'จบโปร:',rule.endDate);
         return false;
       }
     }
