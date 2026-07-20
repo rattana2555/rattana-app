@@ -2954,6 +2954,30 @@ function saveCatFlavorOverrides() { safeSetItem('rattanaPriceTag_catFlavorOv', J
 let textOverrides = {};   // "sku::role" → custom text
 function restoreTextOverrides() { try { textOverrides = JSON.parse(localStorage.getItem('rattanaPriceTag_textOv') || '{}'); } catch { textOverrides = {}; } }
 function saveTextOverrides() { safeSetItem('rattanaPriceTag_textOv', JSON.stringify(textOverrides)); }
+
+/* v6.3 — per-product unit choice for the multi-unit tag (which price boxes to show) */
+let multiUnitOverrides = {};   // sku → [units]
+function restoreMultiUnitOverrides() { try { multiUnitOverrides = JSON.parse(localStorage.getItem('rattanaPriceTag_multiUnitOv') || '{}'); } catch { multiUnitOverrides = {}; } }
+function saveMultiUnitOverrides() { safeSetItem('rattanaPriceTag_multiUnitOv', JSON.stringify(multiUnitOverrides)); }
+function availUnits(p) { return ['EA','PA','BP','CS'].filter(u => p.unitPrices && p.unitPrices[u]); }
+function effectiveMultiUnits(p) {
+  const avail = availUnits(p);
+  if (multiUnitOverrides[p.sku]) { const s = multiUnitOverrides[p.sku].filter(u => avail.includes(u)); if (s.length) return s; }
+  const g = (SHEET_CONFIG.multiUnits || []).filter(u => avail.includes(u));   // global default
+  return g.length ? g : avail;
+}
+function toggleProductUnit(sku, u) {
+  const p = products.find(x => x.sku === sku); if (!p) return;
+  let cur = multiUnitOverrides[sku] ? multiUnitOverrides[sku].slice() : effectiveMultiUnits(p).slice();
+  if (cur.includes(u)) cur = cur.filter(x => x !== u); else cur.push(u);
+  if (!cur.length) cur = [u];   // keep at least one box
+  const order = ['EA','PA','BP','CS'];
+  cur.sort((a,b) => order.indexOf(a) - order.indexOf(b));
+  multiUnitOverrides[sku] = cur;
+  saveMultiUnitOverrides();
+  renderDesignStage();
+  if ($('#tab-print')?.classList.contains('active')) buildPdfPreview();
+}
 const EDITABLE_SELECTORS = ['.t-price','.t-price-label','.t-size','.t-unit-pill','.t-old-line','.t-promo-banner','.t-mu-price','.t-mu-unit','.t-mu-old','.t-loc-text','.cat-unit-val'];
 function makeTextsEditable() {
   document.querySelectorAll('#pdfStage [data-sku]').forEach(tagEl => {
