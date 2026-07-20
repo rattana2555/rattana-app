@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.37</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.38</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -555,7 +555,7 @@ body.dragging .trip-drop{border-style:dashed!important;animation:pulse-glow 1.2s
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.37</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.38</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -566,6 +566,7 @@ body.dragging .trip-drop{border-style:dashed!important;animation:pulse-glow 1.2s
       <button class="nav-tab" onclick="switchTab('saved',this)"><span>💾</span><span>บันทึก</span></button>
     </div>
     <div class="topnav-right">
+      <span id="whSelectHost"></span>
       <span id="dateLabel"></span>
       <button id="themeBtn" onclick="toggleAppTheme()" title="สลับโหมด Light/Dark" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);color:#9BAAB8;padding:4px 10px;font-size:13px;border-radius:6px;cursor:pointer">🌙</button>
       <button class="btn" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);color:#9BAAB8;padding:4px 10px;font-size:11px" onclick="refreshData()">🔄</button>
@@ -876,7 +877,17 @@ body.dragging .trip-drop{border-style:dashed!important;animation:pulse-glow 1.2s
 // DATA
 // ══════════════════════════════════════════
 const SHEET_ID = '1OvXga8M0XuUEMYqWPj_AIcBHTEI_vA_WXXNJpqUk0aQ';
-const HQ = {lat:13.444304778884815, lng:100.03838295867146};
+const HQ = {lat:13.444304778884815, lng:100.03838295867146}; // v8.38: ตั้งตามคลังที่เลือก (mutate .lat/.lng)
+// v8.38: ที่ตั้งแต่ละคลัง (จุดเริ่มต้นเส้นทาง)
+const WAREHOUSES = {
+  W1:{lat:13.442313959909535, lng:100.03873000938297, name:'สมุทรสงคราม'},
+  W2:{lat:14.631640484829127, lng:100.15043409590875, name:'W2'},
+  W3:{lat:13.529519226323835, lng:99.84711084403955,  name:'W3'},
+  W4:{lat:13.954564567581475, lng:100.05563194371202, name:'W4'},
+  C4:{lat:13.954564567581475, lng:100.05563194371202, name:'C4 (ที่เดียวกับ W4)'},
+  // SD: รอพิกัด → ใช้ W1 ไปก่อน
+};
+const WAREHOUSE_LIST = ['W1','W2','W3','W4','C4','SD'];
 const STORE_KEY = 'dq_v4_queue';
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwnx2jD8cc5thpaJxdYSCzDW3INtUH37EXnfKqvxPfuBf0PLLLNv7gXDJeAvhfs-LCnWA/exec'; // Google Apps Script URL (hardcoded)
 
@@ -907,7 +918,7 @@ function checkTripRevenue(plate,trip){
   return{ok:amt>=threshold,amt,threshold,type:t.type};
 }
 
-const TRUCKS = [
+let TRUCKS = [
   {id:1,  nick:'แขก',         plate:'806893',  driver:'มนัส รักษาวงศ์',          type:'6 ล้อ',        maxW:9580,  maxV:23.6, e:'🚛'},
   {id:2,  nick:'มนัส2',       plate:'806613',  driver:'มนัส รักษาวงศ์',           type:'6 ล้อ',        maxW:10660, maxV:18.5, e:'🚛'},
   {id:3,  nick:'ไมด์',        plate:'807181',  driver:'นำชัย ทองคำประสาท',        type:'6 ล้อ',        maxW:9150,  maxV:29.4, e:'🚛'},
@@ -931,6 +942,7 @@ const TRUCKS = [
   {id:21, nick:'จักร',        plate:'บฉ272',  driver:'กฤตนัน เจตโพธิ์',           type:'กระบะ',         maxW:2000,  maxV:5.0,  e:'🛻'}, // หัวหน้า ไม่ขับรถส่ง (excluded)
   {id:22, nick:'อั้ม4',       plate:'บจ6918', driver:'อภิวัฒน์ สะทองแก้ว',       type:'กระบะ',         maxW:2000,  maxV:5.0,  e:'🛻'},
 ];
+const FLEET_W1 = TRUCKS; // v8.38: เก็บกองรถ W1 (ปรับจูนไว้แล้ว) ไว้ · คลังอื่นโหลดจากชีท Car
 const TRUCK_COLORS = ['#B45309','#1D4ED8','#15803D','#9333EA','#7C3AED','#BE185D','#0369A1','#92400E','#4338CA','#065F46','#B91C1C','#0E7490','#6D28D9','#047857','#C2410C','#1E40AF','#7E22CE','#0F766E','#B45309','#374151','#6B21A8','#155E75'];
 
 // ── รถที่ไม่ให้จัดอัตโนมัติ (รถพ่วงมีหาง) ──
@@ -1181,7 +1193,7 @@ const CUSTOMER_SHEET_ID = '1dAxF4Mz-zhJIVbuJ_Ql126gt08qvVS1wndJD50pqCZI';
 const ORDER_SHEET_ID = '1NO8sHyDxwHTRqgcLFCxq_g_Rr09lfe4gt_odwkIgiB0';
 const ORDER_SHEET_TAB = 'BK_BV';
 const ORDER_DAYS = 7;   // ย้อนหลังกี่วัน (auto-assign ใช้ cutoff 5 วันอยู่แล้ว เผื่อไว้ 7)
-const ORDER_WL = 'W1';  // คลังที่ใช้ — BK_BV มี W1/W4/W3/W2/SD/C4 ปนกัน
+let ORDER_WL = 'W1';  // v8.38: คลังที่ใช้ — ตั้งตาม currentWarehouse (BK_BV มี W1/W4/W3/W2/SD/C4 ปนกัน)
 let customerGpsMap={}; // bpCode (รหัสบีพลัส) → {lat,lng}
 let customerInfoMap={}; // bpCode → {route, days, order, prov, dist} จากชีท Customer
 let drivers=[]; // [{name, nickname, display}]
@@ -7087,7 +7099,7 @@ function dqParseCSV(text){
   }
   if(cell!==''||row.length){row.push(cell);rows.push(row);}
   if(!rows.length)return[];
-  const hdr=rows[0].map(h=>String(h).trim());
+  const hdr=rows[0].map(h=>String(h).replace(/\s+/g,' ').trim()); // v8.38: ยุบ \n/ช่องว่างในหัวคอลัมน์ (ชีท Car มี "คลัง \nFinal")
   return rows.slice(1).map(r=>{const o={};hdr.forEach((h,i)=>o[h]=(r[i]!==undefined?String(r[i]):'').trim());return o;});
 }
 async function dqFetchUsers(){
@@ -7117,7 +7129,7 @@ async function handleGoogleLogin(resp){
       picture:payload.picture||''
     };
     try{localStorage.setItem(DQ_AUTH.storeKey,JSON.stringify({user:currentUser,exp:Date.now()+DQ_AUTH.sessionMs}));}catch(e){}
-    dqEnterApp();
+    await dqEnterApp();
   }catch(e){ console.error('login',e); dqLoginMsg('เกิดข้อผิดพลาด ลองอีกครั้ง'); }
 }
 function dqCheckSession(){
@@ -7126,14 +7138,65 @@ function dqCheckSession(){
   return false;
 }
 function logout(){ try{localStorage.removeItem(DQ_AUTH.storeKey);}catch(e){} location.reload(); }
-function dqEnterApp(){
-  const lg=document.getElementById('dqLogin'); if(lg)lg.style.display='none';
-  window.currentWarehouse=currentUser?.warehouse||'W1'; // v8.37: คลังของ user (การสลับคลัง = step ถัดไป)
+
+// ══ v8.38: หลายคลัง — โหลดรถจากชีท Car ตามคลัง + สลับคลัง ══
+let currentWarehouse='W1';
+let _carFleets=null; // {W:[trucks]} โหลดครั้งเดียว (W1 ใช้ FLEET_W1 ที่ปรับจูนไว้)
+function _emojiByType(t){ if(/12|10/.test(t))return '🚚'; if(/6\s*ล้อ/.test(t))return '🚛'; if(/จัมโบ้/.test(t))return '🚐'; if(/กระบะ/.test(t))return '🛻'; return '🚛'; }
+async function loadCarFleets(){
+  if(_carFleets)return _carFleets;
+  const out={};
+  try{
+    const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=1&sheet=Car`;
+    const rows=dqParseCSV(await (await fetch(url)).text());
+    const num=s=>parseFloat(String(s||'').replace(/[^\d.]/g,''))||0;
+    rows.forEach(r=>{
+      const plate=(r['ทะเบียน Final']||r['ทะเบียน']||'').trim();
+      const wh=(r['คลัง Final']||r['คลัง']||r['W']||'').trim().toUpperCase();
+      const type=(r['ประเภทรถ Fianl']||r['ประเภทรถ Final']||r['ประเภทรถ']||'').trim();
+      const maxW=num(r['นน.บรรทุก']);
+      if(!plate||!wh||!type||!maxW)return;
+      if(((r['แผนก']||'')+(r['ขนส่ง']||'')).indexOf('ขนส่ง')<0)return; // เฉพาะรถขนส่ง
+      const w=num(r['กว้าง']),l=num(r['ยาว']),h=num(r['สูง']);
+      const maxV=(w&&l&&h)?+(w*l*h/1e6).toFixed(1):0;
+      (out[wh]||(out[wh]=[])).push({plate,driver:(r['ผู้ดูแล-ขับขี่']||'').trim(),type,maxW,maxV,e:_emojiByType(type),nick:''});
+    });
+    Object.keys(out).forEach(w=>out[w].forEach((t,i)=>t.id=i+1));
+    console.log('🚛 Car fleets:',Object.keys(out).map(w=>`${w}:${out[w].length}`).join(' · '));
+  }catch(e){ console.warn('loadCarFleets',e); }
+  _carFleets=out; return out;
+}
+async function applyWarehouse(w){
+  w=(w||'W1').toUpperCase(); currentWarehouse=w; ORDER_WL=w;
+  const loc=WAREHOUSES[w]||WAREHOUSES.W1; HQ.lat=loc.lat; HQ.lng=loc.lng;
+  if(w==='W1'){ TRUCKS=FLEET_W1; }
+  else{ await loadCarFleets(); TRUCKS=(_carFleets&&(_carFleets[w]||(w==='C4'?_carFleets['W4']:null)))||[]; } // C4 ใช้รถ W4 (ที่เดียวกัน)
+  try{localStorage.setItem('dq_cur_wh',w);}catch(e){}
+}
+function buildWarehouseSelector(){
+  const host=document.getElementById('whSelectHost'); if(!host)return;
+  host.innerHTML=`<select id="whSelect" onchange="switchWarehouse(this.value)" title="สลับคลัง" style="background:rgba(255,255,255,.07);border:1px solid rgba(228,196,110,.4);color:#E4C46E;padding:4px 8px;font-size:12px;border-radius:6px;cursor:pointer;font-weight:700">`+
+    WAREHOUSE_LIST.map(w=>`<option value="${w}" ${w===currentWarehouse?'selected':''}>🏭 คลัง ${w}</option>`).join('')+`</select>`;
+}
+async function switchWarehouse(w){
+  if(!w||w===currentWarehouse)return;
+  if(typeof showToast==='function')showToast(`🏭 สลับไปคลัง ${w} — กำลังโหลด...`,'ok');
+  await applyWarehouse(w);
   const sub=document.querySelector('.logo-sub');
-  if(sub&&currentUser){ sub.textContent=`รัตนไพบูลย์ · คลัง ${currentUser.warehouse}${currentUser.nick?' · '+currentUser.nick:''}`; }
+  if(sub)sub.textContent=`รัตนไพบูลย์ · คลัง ${currentWarehouse}${currentUser?.nick?' · '+currentUser.nick:''}`;
+  loadData(); // โหลดออเดอร์คลังใหม่ + วาดใหม่ (รถ/HQ เปลี่ยนแล้ว)
+}
+async function dqEnterApp(){
+  const lg=document.getElementById('dqLogin'); if(lg)lg.style.display='none';
+  const w=(currentUser&&currentUser.warehouse)||localStorage.getItem('dq_cur_wh')||'W1';
+  await applyWarehouse(w);
+  buildWarehouseSelector();
+  const sub=document.querySelector('.logo-sub');
+  if(sub){ sub.textContent=`รัตนไพบูลย์ · คลัง ${currentWarehouse}${currentUser&&currentUser.nick?' · '+currentUser.nick:''}`; }
   loadData();
 }
 window.handleGoogleLogin=handleGoogleLogin;
+window.switchWarehouse=switchWarehouse;
 
 // v8.21: init saved theme before render (so first paint is right)
 (function initAppTheme(){
