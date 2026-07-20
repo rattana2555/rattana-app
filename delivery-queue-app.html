@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.40</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.41</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -570,7 +570,7 @@ body.dragging .trip-drop{border-style:dashed!important;animation:pulse-glow 1.2s
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.40</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.41</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -4673,6 +4673,37 @@ function confirmAutoAssign(){
           }
         }
       }
+    })();
+
+    // ══ v8.41: W3 — รหัสเซลล์ (SLMN) เดียวกัน → คันเดียวกัน ══
+    //   จับกลุ่มตามรหัสเซลล์ · anchor = รถประจำ(slmnTruckMap) → คันที่กลุ่มหนักสุด → คันว่างสุด · แล้วมัดทั้งกลุ่มไปคันเดียว
+    (function consolidateBySalesRep(){
+      if(currentWarehouse!=='W3')return;
+      const groups={};
+      tmrBills.forEach(b=>{ const c=(b.slmnCode||'').trim().toUpperCase(); if(!c)return; (groups[c]||(groups[c]=[])).push(b); });
+      let moved=0,filled=0;
+      Object.entries(groups).forEach(([code,gb])=>{
+        if(gb.length<2)return;
+        let aPlate=null;
+        if(slmnTruckMap[code]&&TRUCKS.some(t=>t.plate===slmnTruckMap[code]))aPlate=slmnTruckMap[code];
+        if(!aPlate){ const w={}; gb.forEach(b=>{const pl=newQ[b.ref];if(pl)w[pl]=(w[pl]||0)+(b.totalW||0);}); let mx=-1; Object.entries(w).forEach(([p,x])=>{if(x>mx){mx=x;aPlate=p;}}); }
+        if(!aPlate){ let best=null,room=-1; TRUCKS.forEach(t=>{const L=loads[t.plate]||{w1:0,w2:0,w3:0};const r=(t.maxW||0)-(L.w1+L.w2+L.w3);if(r>room){room=r;best=t.plate;}}); aPlate=best; }
+        if(!aPlate)return;
+        if(!loads[aPlate])loads[aPlate]={w1:0,v1:0,w2:0,v2:0,w3:0,v3:0};
+        const t=TRUCKS.find(x=>x.plate===aPlate);
+        // ถอดบิลกลุ่มออกจาก loads เดิม
+        gb.forEach(b=>{const pl=newQ[b.ref];if(!pl||!loads[pl])return;const tr=newTripMap[b.ref]||1;const L=loads[pl];if(tr===1){L.w1-=b.totalW||0;L.v1-=b.totalV||0;}else if(tr===2){L.w2-=b.totalW||0;L.v2-=b.totalV||0;}else{L.w3-=b.totalW||0;L.v3-=b.totalV||0;}});
+        const L=loads[aPlate], wc=(t?.maxW||0)*1.10, vc=(t?.maxV||0)>0?(t.maxV*1.10):0;
+        gb.slice().sort((a,b)=>(b.totalW||0)-(a.totalW||0)).forEach(b=>{
+          const bw=b.totalW||0,bv=b.totalV||0;
+          const tr=(L.w1+bw<=wc&&(vc<=0||L.v1+bv<=vc))?1:((L.w2+bw<=wc&&(vc<=0||L.v2+bv<=vc))?2:1);
+          const was=newQ[b.ref];
+          newQ[b.ref]=aPlate; newTripMap[b.ref]=tr;
+          if(tr===1){L.w1+=bw;L.v1+=bv;}else{L.w2+=bw;L.v2+=bv;}
+          if(was===aPlate)return; if(was)moved++; else filled++;
+        });
+      });
+      if(moved||filled)console.log(`🧑‍💼 W3 มัดรหัสเซลล์: ย้าย ${moved} + เติม ${filled} บิล → คันเดียวกัน`);
     })();
 
     // คง queue วันอื่น + เขียนทับวันที่เลือก
