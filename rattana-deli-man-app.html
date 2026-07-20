@@ -751,7 +751,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.69';
+const APP_VERSION='3.70';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -4168,6 +4168,7 @@ function openBillForm(idx){
         </div>
       </div>
     </div>
+    ${ro?'':`<div id="geoWarn"></div>`}
 
     <div class="card">
       <div class="card-body">
@@ -4228,7 +4229,52 @@ function openBillForm(idx){
   renderPayBox();
   recalcPayTotal();
   applyCNCredit(idx);   // v2.11: ถ้ามี CN ตรงเลขบิลนี้ → เติมยอดใบลดหนี้ให้ (แก้ได้)
+  if(!ro) checkBillLocation_(j,b);   // v3.70: จับ GPS เทียบพิกัดร้าน (เงียบๆ) → เตือนถ้าไกลร้าน
 }
+
+/* ===== v3.70: ตรวจ GPS ตอนกรอกบิล เทียบกับพิกัดร้าน — ไกลเกิน 300 ม. = เตือน (แต่บันทึกได้) ===== */
+const GEO_MISMATCH_M=300;
+function geoDistM_(la1,lo1,la2,lo2){
+  const R=6371000, toR=Math.PI/180;
+  const dLa=(la2-la1)*toR, dLo=(lo2-lo1)*toR;
+  const a=Math.sin(dLa/2)**2+Math.cos(la1*toR)*Math.cos(la2*toR)*Math.sin(dLo/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function renderGeoWarn_(html){ const el=$('geoWarn'); if(el) el.innerHTML=html||''; }
+function checkBillLocation_(j,b){
+  const cust=state.customers.find(c=>c.code===b.code);
+  const sLat=(cust&&cust.lat)||b.lat, sLng=(cust&&cust.lng)||b.lng;
+  if(!navigator.geolocation){ b.geoStatus='เช็คไม่ได้'; b.geoDist=''; b.geoCoord=''; renderGeoWarn_(''); return; }
+  renderGeoWarn_(`<div class="banner-gold mb-12" style="opacity:.85">📍 กำลังตรวจตำแหน่งเทียบกับร้าน…</div>`);
+  navigator.geolocation.getCurrentPosition(function(pos){
+    // กันเคสผู้ใช้เปลี่ยนบิล/ปิดฟอร์มไปแล้ว
+    if(_billIdx<0||!state.jobs.some(x=>x.id===state.activeJobId)) return;
+    const myLat=pos.coords.latitude, myLng=pos.coords.longitude, acc=Math.round(pos.coords.accuracy||0);
+    b.geoCoord=myLat.toFixed(6)+','+myLng.toFixed(6); b.geoAcc=acc;
+    if(!(sLat&&sLng)){   // ร้านไม่มีพิกัดในระบบ → เช็คไม่ได้ (ไม่เตือนน่ากลัว)
+      b.geoStatus='ไม่มีพิกัดร้าน'; b.geoDist='';
+      renderGeoWarn_(`<div class="banner-gold mb-12" style="opacity:.8"><b>ℹ️ ร้านนี้ไม่มีพิกัดในระบบ</b> — ตรวจสอบตำแหน่งไม่ได้ (กด 📍 เก็บพิกัดร้าน เพื่อบันทึกไว้)</div>`);
+      return;
+    }
+    const dist=Math.round(geoDistM_(myLat,myLng,sLat,sLng));
+    b.geoDist=dist;
+    if(dist>GEO_MISMATCH_M){
+      b.geoStatus='ไม่ตรง';
+      renderGeoWarn_(`<div class="mb-12" style="background:#FFF1F0;border:1px solid #E8615A;border-radius:10px;padding:10px 12px;color:#a3281f;font-weight:600">
+        ⚠️ ตำแหน่งคุณอยู่ห่างจากร้าน <b>~${fmtInt(dist)} ม.</b> (ต้อง ≤ ${GEO_MISMATCH_M} ม.)<br>
+        <span class="txt-xs" style="font-weight:400">ตรวจสอบว่าอยู่หน้าร้านจริง · บันทึกได้ปกติ แต่ระบบจะจดว่า “กรอกไม่ตรงร้าน”</span></div>`);
+    } else {
+      b.geoStatus='ตรง';
+      renderGeoWarn_(`<div class="mb-12 txt-sm" style="color:var(--success);font-weight:600">📍 ตรงพิกัดร้าน (~${fmtInt(dist)} ม.)</div>`);
+    }
+  },function(err){
+    if(_billIdx<0) return;
+    b.geoStatus='เช็คไม่ได้'; b.geoDist='';
+    const why=err&&err.code===1?'ไม่ได้อนุญาต GPS':err&&err.code===3?'GPS หมดเวลา':'หาตำแหน่งไม่ได้';
+    renderGeoWarn_(`<div class="banner-gold mb-12" style="opacity:.8"><b>📍 ตรวจตำแหน่งไม่ได้</b> (${why}) — บันทึกได้ปกติ ระบบจะจดว่าเช็คไม่ได้</div>`);
+  },{enableHighAccuracy:true,timeout:12000,maximumAge:60000});
+}
+
 /* v3.50: กรณีตักพาเลท — พับ/เปิดช่องกรอก */
 function togglePalletBox(){
   const box=$('palletBox'); if(!box) return;
@@ -4673,12 +4719,12 @@ function saveBillWithVerify_(j,b,saveBtn,changedDocs){
     newStaff:newStaffPayload_(j),   // v3.65: พนง.ใหม่ — ไม่รู้ค่า = ไม่ส่งคีย์ (GAS คงค่าเดิมในชีท)
     warehouse:j.warehouse||'W1',special:j.special||null,
     startedAt:j.startedAt,submittedAt:j.submittedAt,approvedAt:j.approvedAt,approvedBy:j.approvedBy,rejectedAt:j.rejectedAt,rejectedBy:j.rejectedBy,rejectReason:j.rejectReason,
-    bills:j.bills.filter(billFilter).map(x=>({doc:x.doc,docDate:x.docDate,code:x.code,name:x.name,salesman:x.salesman,salesmanCode:x.salesmanCode,amount:x.amount,status:x.status,isCN:!!x.isCN,failReason:x.failReason||'',nextResp:x.nextResp||'',note:x.note||'',creditDays:x.creditDays||0,payment:x.payment,total:payTotal(x.payment),palletCount:x.palletCount||'',amountPerPallet:x.amountPerPallet||'',amountTotal:x.amountTotal||'',savedAt:x.savedAt}))};
+    bills:j.bills.filter(billFilter).map(x=>({doc:x.doc,docDate:x.docDate,code:x.code,name:x.name,salesman:x.salesman,salesmanCode:x.salesmanCode,amount:x.amount,status:x.status,isCN:!!x.isCN,failReason:x.failReason||'',nextResp:x.nextResp||'',note:x.note||'',creditDays:x.creditDays||0,payment:x.payment,total:payTotal(x.payment),palletCount:x.palletCount||'',amountPerPallet:x.amountPerPallet||'',amountTotal:x.amountTotal||'',geoStatus:x.geoStatus||'',geoDist:x.geoDist||'',geoCoord:x.geoCoord||'',savedAt:x.savedAt}))};
   _lastQueuedDoc=b.doc;
   queueSync(payload,'save_job|'+j.id+'|'+[...(changedDocs||[b.doc])].join(','));   // ส่งเข้าคิว → flush เบื้องหลัง
   notifyPalletDiscord(j,b);   // v3.69: มีค่าพาเลท → เด้งแจ้งฝ่ายบัญชี (ห้อง HQ) ทันที
   _restoreSaveBtn_(saveBtn);
-  showToast('บันทึก '+b.doc+' ✓','success');                                       // สำเร็จทันที (ข้อมูลอยู่ในเครื่องแล้ว)
+  showToast('บันทึก '+b.doc+' ✓'+(b.geoStatus==='ไม่ตรง'?' ⚠️ ตำแหน่งไม่ตรงร้าน':''),b.geoStatus==='ไม่ตรง'?'warning':'success');   // v3.70: เตือนถ้าไม่ตรงร้าน (บันทึกได้)
   switchTab('sec-driver-job');
 }
 /* ลบแถวบิลออกจากชีท Cin */
@@ -5637,7 +5683,7 @@ async function approveJob(id){
       newStaff:newStaffPayload_(j),   // v3.65: พนง.ใหม่ — ไม่รู้ค่า = ไม่ส่งคีย์ (GAS คงค่าเดิม)
       warehouse:j.warehouse||'W1',special:j.special||null,
       startedAt:j.startedAt,submittedAt:j.submittedAt,approvedAt:j.approvedAt,approvedBy:j.approvedBy,rejectedAt:j.rejectedAt,rejectedBy:j.rejectedBy,rejectReason:j.rejectReason,
-      bills:j.bills.filter(x=>x.status&&x.status!=='pending').map(x=>({doc:x.doc,docDate:x.docDate,code:x.code,name:x.name,salesman:x.salesman,salesmanCode:x.salesmanCode,amount:x.amount,status:x.status,isCN:!!x.isCN,failReason:x.failReason||'',nextResp:x.nextResp||'',note:x.note||'',creditDays:x.creditDays||0,payment:x.payment,total:payTotal(x.payment),palletCount:x.palletCount||'',amountPerPallet:x.amountPerPallet||'',amountTotal:x.amountTotal||'',savedAt:x.savedAt}))};
+      bills:j.bills.filter(x=>x.status&&x.status!=='pending').map(x=>({doc:x.doc,docDate:x.docDate,code:x.code,name:x.name,salesman:x.salesman,salesmanCode:x.salesmanCode,amount:x.amount,status:x.status,isCN:!!x.isCN,failReason:x.failReason||'',nextResp:x.nextResp||'',note:x.note||'',creditDays:x.creditDays||0,payment:x.payment,total:payTotal(x.payment),palletCount:x.palletCount||'',amountPerPallet:x.amountPerPallet||'',amountTotal:x.amountTotal||'',geoStatus:x.geoStatus||'',geoDist:x.geoDist||'',geoCoord:x.geoCoord||'',savedAt:x.savedAt}))};
     console.log('[approveJob] sending payload',{jobId:payload.jobId,status:payload.status,approvedBy:payload.approvedBy,approvedAt:payload.approvedAt,billCount:payload.bills.length});   // v2.58: debug
     const r=await postSyncGAS_(payload);
     console.log('[approveJob] postSyncGAS_ result',r);   // v2.58: debug
@@ -6026,6 +6072,7 @@ async function syncToSheets(job){
       creditDays:b.creditDays||0,
       payment:b.payment, total:payTotal(b.payment),
       palletCount:b.palletCount||'', amountPerPallet:b.amountPerPallet||'', amountTotal:b.amountTotal||'',   // v3.50
+      geoStatus:b.geoStatus||'', geoDist:b.geoDist||'', geoCoord:b.geoCoord||'',   // v3.70: ตำแหน่งตอนกรอกบิล
       savedAt:b.savedAt,
     })),
   };
@@ -6106,6 +6153,10 @@ async function loadJobsFromSheet(){
           palletApprover:cleanCell(r['ผู้อนุมัติพาเลท']),
           palletApprovedAt:cleanCell(r['วันอนุมัติพาเลท']),
           palletNote:cleanCell(r['หมายเหตุพาเลท']),
+          // v3.70: ตำแหน่งตอนกรอกบิล (อ่านกลับ → re-save/อนุมัติไม่ล้าง)
+          geoStatus:cleanCell(r['ตรงพิกัดร้าน']),
+          geoDist:cleanCell(r['ระยะห่างจากร้าน(ม.)']),
+          geoCoord:cleanCell(r['พิกัดตอนกรอก']),
           payment:{banknotes,coins,transfer1,transfer2,cheque,creditNote,
             transfer1Bank:cleanCell(r['แบงค์1']),
             transfer1Date:cleanCell(r['วันที่โอนครั้งที่1']),
@@ -6275,7 +6326,7 @@ async function syncJobsFromSheet(opts){
   return sheetJobs.length;
 }
 
-const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.69 (+ Discord notify_pallet: คนขับกรอกค่าพาเลท → แจ้งฝ่ายบัญชี ห้อง HQ | v3.68 อนุมัติค่าพาเลท) */
+const APPS_SCRIPT_CODE=`/* D-MAN — Apps Script Backend v3.70 (+ ตรวจพิกัด GPS ตอนกรอกบิล: คอลัมน์ ตรงพิกัดร้าน/ระยะห่าง/พิกัดตอนกรอก | v3.69 Discord ค่าพาเลท) */
 const SHEET_INPUT='บันทึกเที่ยวส่ง';
 const SHEET_CIN='บันทึกบิลและการชำระ';
 const SHEET_CN='CN';
@@ -6319,12 +6370,13 @@ const HEADERS_CIN=['เลขใบคุม','Doc_Date','Doc_No','Customer_Code
   'ไม่ได้ส่ง','สาเหตุไม่ส่ง','ผู้รับผิดชอบส่งวันถัดไป',
   'จำนวนพาเลท','จำนวนเงินต่อเลท','จำนวนเงินรวม','รับใบคุม',
   'สถานะอนุมัติงาน','ผู้อนุมัติปิดงาน','วันเวลาอนุมัติ',
-  'สถานะพาเลท','ผู้อนุมัติพาเลท','วันอนุมัติพาเลท','หมายเหตุพาเลท'];   // v3.24: โชว์สถานะอนุมัติงานต่อบิล
+  'สถานะพาเลท','ผู้อนุมัติพาเลท','วันอนุมัติพาเลท','หมายเหตุพาเลท',
+  'ตรงพิกัดร้าน','ระยะห่างจากร้าน(ม.)','พิกัดตอนกรอก'];   // v3.24: โชว์สถานะอนุมัติงานต่อบิล
 
 function doGet(e){
   let drive='unknown';
   try{ DriveApp.getRootFolder().getName(); drive='OK'; }catch(err){ drive='NOT_AUTHORIZED'; }
-  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.69',drive:drive}))
+  return ContentService.createTextOutput(JSON.stringify({ok:true,ts:new Date(),version:'3.70',drive:drive}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -6359,7 +6411,7 @@ function doPost(e){
         fmtColsOpen_(sh,['รหัสร้าน','เลขใบคุม','Doc_No'],'@');   // v3.35: เปิดปลาย คลุมแถวใหม่
         fmtColsOpen_(sh,['Lat','Lng'],'0.000000');
         fmtColsOpen_(sh,['วันเวลา'],'yyyy-mm-dd hh:mm:ss');
-        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.69'})).setMimeType(ContentService.MimeType.JSON);
+        return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.70'})).setMimeType(ContentService.MimeType.JSON);
       }finally{ lock.releaseLock(); }
     }
 
@@ -6688,6 +6740,7 @@ function doPost(e){
       // v3.24: เพิ่ม 3 คอลัมน์สถานะอนุมัติงานท้ายชีท Cin (ต่อบิล) — ถ้ายังไม่มีให้สร้างต่อท้าย
       ensureHeaders_(cinSh,['สถานะอนุมัติงาน','ผู้อนุมัติปิดงาน','วันเวลาอนุมัติ']);
       ensureHeaders_(cinSh,['สถานะพาเลท','ผู้อนุมัติพาเลท','วันอนุมัติพาเลท','หมายเหตุพาเลท']);   // v3.68: คอลัมน์อนุมัติค่าพาเลท (ฝ่ายบัญชี) — save_job ไม่เขียนทับ เขียนโดย action approve_pallet เท่านั้น
+      ensureHeaders_(cinSh,['ตรงพิกัดร้าน','ระยะห่างจากร้าน(ม.)','พิกัดตอนกรอก']);   // v3.70: ตำแหน่งตอนคนขับกรอกบิล
       const cinBatch=[];
       // สรุปสถานะอนุมัติของทั้งใบคุม (ใช้เขียนทุกแถวบิลใต้ใบคุมนี้)
       var jobApprovalStatus='';
@@ -6789,6 +6842,8 @@ function doPost(e){
         cinObj['จำนวนเงินต่อเลท']=b.amountPerPallet||'';
         cinObj['จำนวนเงินรวม']=b.amountTotal||totalPaid;
         cinObj['รับใบคุม']=b.receivedTicket||'';
+        // v3.70: ตำแหน่งตอนกรอกบิล — เขียนเฉพาะเมื่อแอปส่งมาจริง (ไม่งั้นคง re-save เก่าไว้ ไม่ล้าง)
+        if(b.geoStatus){ cinObj['ตรงพิกัดร้าน']=b.geoStatus; cinObj['ระยะห่างจากร้าน(ม.)']=(b.geoDist===0||b.geoDist)?b.geoDist:''; cinObj['พิกัดตอนกรอก']=b.geoCoord||''; }
         // v3.24: สถานะอนุมัติงานต่อบิล (ทุกบิลใต้ใบคุมเดียวกันได้ค่าเหมือนกัน — สรุปตอนดูชีท Cin ได้เลย)
         cinObj['สถานะอนุมัติงาน']=jobApprovalStatus;
         cinObj['ผู้อนุมัติปิดงาน']=jobApprovedByVal;
@@ -6802,7 +6857,7 @@ function doPost(e){
       fmtColsOpen_(cinSh,['วัน+เวลา ที่ส่งสินค้า','U_ADD','วันที่โอนครั้งที่1','วันที่โอนครั้งที่2','แก้ไขเมื่อ','วันที่','วันเวลาอนุมัติ'],'yyyy-mm-dd hh:mm:ss');
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.69'}))
+    return ContentService.createTextOutput(JSON.stringify({ok:true,version:'3.70'}))
       .setMimeType(ContentService.MimeType.JSON);
   }catch(err){
     return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err)}))
