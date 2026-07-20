@@ -2936,6 +2936,32 @@ function restoreNameOverrides() {
 function saveNameOverrides() { safeSetItem('rattanaPriceTag_nameOv', JSON.stringify(nameOverrides)); }
 function saveCatTitleOverrides() { safeSetItem('rattanaPriceTag_catTitleOv', JSON.stringify(catTitleOverrides)); }
 function saveCatFlavorOverrides() { safeSetItem('rattanaPriceTag_catFlavorOv', JSON.stringify(catFlavorOverrides)); }
+
+/* v6.1 (#8) — make EVERY text bit on a tag editable in the print preview.
+   After each render, turn price / label / size / unit / promo / multi-unit text into
+   contenteditable cells keyed by sku::role, and re-apply saved overrides. */
+let textOverrides = {};   // "sku::role" → custom text
+function restoreTextOverrides() { try { textOverrides = JSON.parse(localStorage.getItem('rattanaPriceTag_textOv') || '{}'); } catch { textOverrides = {}; } }
+function saveTextOverrides() { safeSetItem('rattanaPriceTag_textOv', JSON.stringify(textOverrides)); }
+const EDITABLE_SELECTORS = ['.t-price','.t-price-label','.t-size','.t-unit-pill','.t-old-line','.t-promo-banner','.t-mu-price','.t-mu-unit','.t-mu-old','.t-loc-text','.cat-unit-val'];
+function makeTextsEditable() {
+  document.querySelectorAll('#pdfStage [data-sku]').forEach(tagEl => {
+    const sku = tagEl.getAttribute('data-sku');
+    EDITABLE_SELECTORS.forEach(sel => {
+      const els = tagEl.querySelectorAll(sel);
+      els.forEach((el, i) => {
+        if (el.getAttribute('data-edit')) return;
+        const role = sel.replace(/[^\w]/g, '') + (els.length > 1 ? '_' + i : '');
+        const key = sku + '::' + role;
+        el.setAttribute('data-edit', key);
+        el.setAttribute('contenteditable', 'true');
+        el.setAttribute('spellcheck', 'false');
+        el.classList.add('editable-txt');
+        if (textOverrides[key] != null) el.textContent = textOverrides[key];
+      });
+    });
+  });
+}
 // Product name cell — editable only in the print preview (idPrefix starts with 'pdf-p')
 function nameCellHtml(p, editable) {
   const shown = nameOverrides[p.sku] != null ? nameOverrides[p.sku] : (p.name || '');
