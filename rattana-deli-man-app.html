@@ -751,7 +751,7 @@ body.dark .banner-gold{color:var(--gold-light)}
 
 <script>
 /* ========== CONFIG ========== */
-const APP_VERSION='3.70';
+const APP_VERSION='3.71';
 const CFG = {
   oauthClientId:'76489970297-5qsu90p2tpji1rspau5777cqko1dpmn5.apps.googleusercontent.com',
   usersSheetId:'1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -4274,6 +4274,28 @@ function checkBillLocation_(j,b){
     renderGeoWarn_(`<div class="banner-gold mb-12" style="opacity:.8"><b>📍 ตรวจตำแหน่งไม่ได้</b> (${why}) — บันทึกได้ปกติ ระบบจะจดว่าเช็คไม่ได้</div>`);
   },{enableHighAccuracy:true,timeout:12000,maximumAge:60000});
 }
+/* v3.71: การันตีมี geoStatus ตอน "กดบันทึก" — เดิมจับแค่ตอนเปิดฟอร์ม ถ้ากดเร็ว/GPS ช้า → ค่าว่าง ไม่ลงชีท
+   ตอนกดบันทึก: ถ้ายังไม่มีผล → จับ GPS อีกรอบ (ใช้ fix ที่ warm ไว้ maximumAge 2 นาที = ปกติทันที)
+   ครบ timeout / ไม่มี GPS → บันทึกเป็น 'เช็คไม่ได้' (ไม่ปล่อยว่าง) และไม่บล็อกการบันทึกนานเกิน 7 วิ */
+function ensureGeoAtSave_(j,b){
+  return new Promise(resolve=>{
+    if(b.geoStatus){ resolve(); return; }                       // มีผลจากตอนเปิดฟอร์มแล้ว → ไม่ต้องรอ
+    if(!navigator.geolocation){ b.geoStatus='เช็คไม่ได้'; b.geoDist=''; resolve(); return; }
+    const cust=state.customers.find(c=>c.code===b.code);
+    const sLat=(cust&&cust.lat)||b.lat, sLng=(cust&&cust.lng)||b.lng;
+    let done=false; const fin=()=>{ if(!done){ done=true; resolve(); } };
+    const t=setTimeout(()=>{ if(!b.geoStatus){ b.geoStatus='เช็คไม่ได้'; b.geoDist=''; } fin(); },7000);
+    navigator.geolocation.getCurrentPosition(function(pos){
+      clearTimeout(t);
+      const myLat=pos.coords.latitude, myLng=pos.coords.longitude, acc=Math.round(pos.coords.accuracy||0);
+      b.geoCoord=myLat.toFixed(6)+','+myLng.toFixed(6); b.geoAcc=acc;
+      if(!(sLat&&sLng)){ b.geoStatus='ไม่มีพิกัดร้าน'; b.geoDist=''; }
+      else { const d=Math.round(geoDistM_(myLat,myLng,sLat,sLng)); b.geoDist=d; b.geoStatus=d>GEO_MISMATCH_M?'ไม่ตรง':'ตรง'; }
+      fin();
+    },function(){ clearTimeout(t); if(!b.geoStatus){ b.geoStatus='เช็คไม่ได้'; b.geoDist=''; } fin(); },
+    {enableHighAccuracy:true,timeout:7000,maximumAge:120000});
+  });
+}
 
 /* v3.50: กรณีตักพาเลท — พับ/เปิดช่องกรอก */
 function togglePalletBox(){
@@ -4705,7 +4727,8 @@ function _saveBillInner_(idx,saveBtn){
   }
   // v2.42/v2.76: verify ว่าเขียนลงชีทสำเร็จก่อนสลับหน้า (กันข้อมูลหลุดเมื่อเน็ตล้ม)
   //   ส่ง saveBtn ให้ verify function เพื่อ restore state ถูกปุ่ม (เดิม querySelector ผิด section)
-  saveBillWithVerify_(j,b,saveBtn,changedDocs);
+  // v3.71: การันตีมี geoStatus ก่อนสร้าง payload (ปกติทันทีเพราะ warm ไว้ตอนเปิดฟอร์ม)
+  ensureGeoAtSave_(j,b).then(()=>{ persistJobs(); saveBillWithVerify_(j,b,saveBtn,changedDocs); });
 }
 /* v3.28: optimistic save — กดปุ๊บสำเร็จทันที + สลับหน้า, ส่งเข้าชีทเบื้องหลัง (outbox + retry)
    ข้อมูล persistJobs() ลงเครื่องแล้วก่อนเรียกฟังก์ชันนี้ → ปลอดภัย ไม่มีวันหาย */
