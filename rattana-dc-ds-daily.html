@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.67</title>
+<title>ตรวจส่วนลด DC/DS รัตนไพบูลย์ v3.68</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -287,7 +287,7 @@ input,select,textarea{font-family:inherit;font-size:16px}
       <div class="h-title dsk-only">ตรวจส่วนลด <span>DC/DS</span></div>
       <div class="h-title mob-only" id="mobTitle">รัตนไพบูลย์</div>
       <div class="flex gap-6 dsk-only" style="margin-left:auto;align-items:center">
-        <span style="font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap">v3.67 · 20/07/2569</span>
+        <span style="font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap">v3.68 · 20/07/2569</span>
         <button class="btn btn-sm" style="background:rgba(201,168,76,.15);color:var(--gold);border:1px solid rgba(201,168,76,.3);font-size:12px" onclick="exportExcel()">⬇ Excel</button>
         <button class="h-btn" onclick="refreshData()" title="รีเฟรช">⟳</button>
       </div>
@@ -1525,7 +1525,7 @@ function showGiftDetail(giftName){
   const gn=giftName.replace(/\s+/g,'');
   allInvs.forEach(inv=>{
     const prods=inv.lines.filter(r=>(parseInt(r['TRD_QTY'])||0)!==0);
-    let expQty=0;
+    let expQty=0;const srcProds=[];
     prods.forEach(r=>{
       const pd=lookupPddt(r['SKU_NAME']);
       const promo=matchPromo(r['SKU_NAME'],pd,r);
@@ -1533,7 +1533,9 @@ function showGiftDetail(giftName){
         const pg=promo.gift.replace(/\s+/g,'');
         if(pg.includes(gn)||gn.includes(pg)){
           const rq=parseInt(promo.qty)||1,gq=parseInt(promo.giftQty)||1;
-          expQty+=(Math.floor((parseInt(r['TRD_QTY'])||0)/rq)*gq||gq);
+          const bought=parseInt(r['TRD_QTY'])||0;
+          expQty+=(Math.floor(bought/rq)*gq||gq);
+          srcProds.push(r['SKU_NAME']||'–');
         }
       }
     });
@@ -1545,7 +1547,7 @@ function showGiftDetail(giftName){
     });
     let recQty=0;
     Object.entries(fm).forEach(([n,q])=>{const fn=n.replace(/\s+/g,'');if(fn.includes(gn)||gn.includes(fn))recQty+=q;});
-    rows.push({ref:inv.ref,store:inv.store||inv.ref,exp:expQty,rec:recQty,short:expQty-recQty});
+    rows.push({ref:inv.ref,store:inv.store||inv.ref,exp:expQty,rec:recQty,short:expQty-recQty,srcProds});
   });
   rows.sort((a,b)=>b.short-a.short);
   const totalShort=rows.reduce((s,r)=>s+Math.max(0,r.short),0);
@@ -1574,6 +1576,7 @@ function showGiftDetail(giftName){
               <td style="padding:9px 10px">
                 <div style="font-size:12px;font-weight:600">${r.store}</div>
                 <div style="font-size:11px;color:var(--muted);font-family:monospace">${r.ref}</div>
+                ${r.srcProds&&r.srcProds.length?`<div style="font-size:10px;color:#5C6BC0;margin-top:3px">📦 ${r.srcProds.join(', ')}</div>`:''}
               </td>
               <td style="padding:9px 8px;text-align:center;font-size:12px">${fmtI(r.exp)}</td>
               <td style="padding:9px 8px;text-align:center;font-size:12px;font-weight:700;color:${recCol}">${fmtI(r.rec)}</td>
