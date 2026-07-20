@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.43</title>
+<title>🚛 จัดคิวรถส่งสินค้า Rattana v8.44</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -570,7 +570,7 @@ body.dragging .trip-drop{border-style:dashed!important;animation:pulse-glow 1.2s
   <div class="topnav-inner">
     <div class="logo-box">🚛</div>
     <div class="logo-text">
-      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.43</span></div>
+      <div class="logo-title">จัดคิวรถส่งสินค้า <span class="app-version">v8.44</span></div>
       <div class="logo-sub">รัตนไพบูลย์ กรุ๊ป</div>
     </div>
     <div class="nav-tabs">
@@ -1655,6 +1655,16 @@ async function loadData(){
     });
 
     bills=Object.values(billMap);
+    // v8.43: กันพิกัดเพี้ยน — นอกกรอบไทย หรือไกลจากคลังเกิน 300 กม. → ถือว่าไม่มี GPS (กันแผนที่ทะลุ)
+    (function(){
+      let bad=0;
+      bills.forEach(b=>{
+        if(b.lat&&b.lng&&(!validGps(b.lat,b.lng)||haversine(HQ.lat,HQ.lng,b.lat,b.lng)>300)){
+          b.lat=null; b.lng=null; bad++;
+        }
+      });
+      if(bad)console.warn(`⚠ พิกัดเพี้ยน ${bad} บิล (นอกกรอบไทย/ไกลคลัง>300กม.) → ตัด GPS ทิ้ง`);
+    })();
     // v8.21: diagnostic วันส่ง — เช็คว่า Customer/Route ให้วันส่งกี่บิล
     {
       const withDays=bills.filter(b=>b.days).length;
