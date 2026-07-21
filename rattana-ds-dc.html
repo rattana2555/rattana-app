@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS_DC v2.5 — ใบสั่งสินค้า</title>
+<title>Rattana DS_DC v2.6 — ใบสั่งสินค้า</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -191,7 +191,7 @@ body.dark .spinner-box{background:var(--card-bg)}
       <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln22zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJpacw3bOe+eefdvzx3vmzGFhF/be995Dz0M/DkxXVXdV/6u6uroJACAaY4wxGGO890KIIY6uYFiWZSul1CCEIKWUiPivsz+APWJkua7rApTSY4wxIlLvXcfzPO85b5xzznmMcYwxzjnGWYzxGOM4znlPCGOMc84YY4xzTlVVxRgDAIy1FmOM1hhjrQMAjDFijLHWOgDGGGuttY4xBgBrrQUAjDHGGGNsjLHOWhsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" alt="Rattana" height="34">
       <div>
         <div class="logo-text">Rattana <span>DS_DC</span></div>
-        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v2.5</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v2.6</span></div>
       </div>
     </div>
     <div class="header-actions">
@@ -317,6 +317,7 @@ const PDDT_SHEET_ID   = '16mYDqAqqJma-_0vCIAajy6bcjdOZ7F6VagxkdkqAB2I';
 const PDDT_SHEET_NAME = 'PDDT';
 const PROMO_SHEET_ID   = '1CqHARklgveAeJ6rTkNeyUSku__puTiNE7-c6ebn93W8';
 const PROMO_SHEET_NAME = 'Promotion';
+const USERS_SHEET_NAME = 'Rattana Users';
 
 // ─────────────────────────────────────────────
 // STATE
@@ -329,10 +330,12 @@ let currentPage = 1;
 const PAGE_SIZE = 100;
 let pddt = new Map();     // PRODUCT NAME → { brand, size }
 let pddtLoaded = false;
-let promoByProduct = new Map(); // SKU_NAME → [promoName]
-let promoBySize    = new Map(); // CAT SIZE  → [promoName]
-let promoByCat     = new Map(); // CAT BRAND → [promoName]
+let promoByProduct = new Map();
+let promoBySize    = new Map();
+let promoByCat     = new Map();
 let promosLoaded = false;
+let usersMap  = new Map(); // cleanName → { warehouse, role }
+let usersLoaded = false;
 
 // ─────────────────────────────────────────────
 // MONTH PICKER
@@ -426,6 +429,30 @@ async function loadPDDT() {
 // ─────────────────────────────────────────────
 // PROMO LOOKUP
 // ─────────────────────────────────────────────
+function cleanSlmn(name) {
+  return String(name || '')
+    .replace(/^คุณ\s*/, '')
+    .replace(/\s*\([^)]*\)\s*$/, '')
+    .trim();
+}
+
+async function loadUsers() {
+  if (usersLoaded) return;
+  try {
+    const rows = await fetchCSV(PROMO_SHEET_ID, USERS_SHEET_NAME);
+    usersMap.clear();
+    for (const r of rows) {
+      const name = String(r['ชื่อ - สกุล'] || '').trim();
+      if (!name) continue;
+      usersMap.set(name, {
+        warehouse: String(r['W']         || '').trim(),
+        role:      String(r['User Role'] || '').trim(),
+      });
+    }
+    usersLoaded = true;
+  } catch(e) { console.warn('Users load failed:', e.message); }
+}
+
 function parsePromoDate(s) {
   if (!s) return null;
   const p = String(s).trim().split('/');
@@ -453,9 +480,11 @@ async function loadPromos() {
       if (!val || !promo) continue;
       const entry = {
         promo,
-        price: parseFloat(r['ราคาขายกำหนด']) || 0,
-        qty:   parseFloat(r['จำนวน'])         || 0,
-        unit:  String(r['รูปแบบขาย'] || '').trim(),
+        price:      parseFloat(r['ราคาขายกำหนด']) || 0,
+        qty:        parseFloat(r['จำนวน'])         || 0,
+        unit:       String(r['รูปแบบขาย']  || '').trim(),
+        warehouses: String(r['Warehouses'] || '').trim(),
+        role:       String(r['Role']       || '').trim(),
       };
       if (method === 'PRODUCT NAME') addToMap(promoByProduct, val, entry);
       else if (method === 'CAT SIZE')  addToMap(promoBySize,  val, entry);
@@ -464,16 +493,24 @@ async function loadPromos() {
     promosLoaded = true;
   } catch(e) { console.warn('Promo load failed:', e.message); }
 }
-function getPromos(skuName, brand, size, wlCode, unitPrc, qty, utqname) {
+function getPromos(skuName, brand, size, wlCode, unitPrc, qty, utqname, slmnName) {
   const lineUnit  = fmtUnit(utqname);
   const linePrice = parseFloat(unitPrc) || 0;
   const lineQty   = parseFloat(qty)     || 0;
+  const userInfo  = usersMap.get(cleanSlmn(slmnName)) || {};
+  const userWH    = userInfo.warehouse || '';
+  const userRole  = userInfo.role      || '';
   const names = new Set();
   const pick = (map, key) => {
     for (const e of (map.get(key) || [])) {
       if (e.price && linePrice < e.price) continue;
       if (e.qty   && lineQty  < e.qty)   continue;
-      if (e.unit  && lineUnit !== e.unit)                   continue;
+      if (e.unit  && lineUnit !== e.unit) continue;
+      if (e.warehouses) {
+        const whList = e.warehouses.split(',').map(w => w.trim());
+        if (!whList.includes(userWH)) continue;
+      }
+      if (e.role && e.role !== userRole) continue;
       names.add(e.promo);
     }
   };
@@ -493,6 +530,7 @@ async function loadData() {
   setLoadingBar(true);
   try {
     await loadPDDT();
+    await loadUsers();
     await loadPromos();
     const rows = await fetchCSV(SHEET_ID, SHEET_NAME, query);
     allRows = rows;
@@ -648,7 +686,7 @@ function renderTable() {
       const info = pddt.get(r.SKU_NAME);
       const catParts = [info?.brand, info?.size].filter(Boolean);
       const catRow   = catParts.length ? `<div class="prod-cat">${escHtml(catParts.join(' · '))}</div>` : '';
-      const promos   = getPromos(r.SKU_NAME, info?.brand, info?.size, g.WL_CODE, r.TRD_U_PRC, r.TRD_QTY, r.TRD_UTQNAME);
+      const promos   = getPromos(r.SKU_NAME, info?.brand, info?.size, g.WL_CODE, r.TRD_U_PRC, r.TRD_QTY, r.TRD_UTQNAME, g.SLMN_NAME);
       const promoZone = promos.length
         ? `<div class="promo-zone"><span class="badge-promo">มีโปร</span><div class="promo-names">${promos.map(p=>escHtml(p)).join('<br>')}</div></div>`
         : `<div class="promo-zone"></div>`;
