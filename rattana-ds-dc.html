@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS_DC v2.3 — ใบสั่งสินค้า</title>
+<title>Rattana DS_DC v2.4 — ใบสั่งสินค้า</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -191,7 +191,7 @@ body.dark .spinner-box{background:var(--card-bg)}
       <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln22zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJpacw3bOe+eefdvzx3vmzGFhF/be995Dz0M/DkxXVXdV/6u6uroJACAaY4wxGGO890KIIY6uYFiWZSul1CCEIKWUiPivsz+APWJkua7rApTSY4wxIlLvXcfzPO85b5xzznmMcYwxzjnGWYzxGOM4znlPCGOMc84YY4xzTlVVxRgDAIy1FmOM1hhjrQMAjDFijLHWOgDGGGuttY4xBgBrrQUAjDHGGGNsjLHOWhsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" alt="Rattana" height="34">
       <div>
         <div class="logo-text">Rattana <span>DS_DC</span></div>
-        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v2.3</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v2.4</span></div>
       </div>
     </div>
     <div class="header-actions">
@@ -431,10 +431,10 @@ function parsePromoDate(s) {
   const p = String(s).trim().split('/');
   return p.length === 3 ? new Date(+p[0], +p[1]-1, +p[2]) : null;
 }
-function addToMap(map, key, val) {
+function addToMap(map, key, entry) {
   if (!key) return;
   if (!map.has(key)) map.set(key, []);
-  if (!map.get(key).includes(val)) map.get(key).push(val);
+  map.get(key).push(entry);
 }
 async function loadPromos() {
   if (promosLoaded) return;
@@ -451,17 +451,31 @@ async function loadPromos() {
       const val    = String(r['ชื่อ']    || '').trim();
       const promo  = String(r['ชื่อโปร'] || '').trim();
       if (!val || !promo) continue;
-      if (method === 'PRODUCT NAME') addToMap(promoByProduct, val, promo);
-      else if (method === 'CAT SIZE')  addToMap(promoBySize,    val, promo);
-      else if (method === 'CAT BRAND') addToMap(promoByCat,     val, promo);
+      const entry = {
+        promo,
+        price: parseFloat(r['ราคาขายกำหนด']) || 0,
+        qty:   parseFloat(r['จำนวน'])         || 0,
+        unit:  String(r['รูปแบบขาย'] || '').trim(),
+      };
+      if (method === 'PRODUCT NAME') addToMap(promoByProduct, val, entry);
+      else if (method === 'CAT SIZE')  addToMap(promoBySize,  val, entry);
+      else if (method === 'CAT BRAND') addToMap(promoByCat,   val, entry);
     }
     promosLoaded = true;
   } catch(e) { console.warn('Promo load failed:', e.message); }
 }
-function getPromos(skuName, brand, size, wlCode) {
+function getPromos(skuName, brand, size, wlCode, unitPrc, qty, utqname) {
+  const lineUnit  = fmtUnit(utqname);
+  const linePrice = parseFloat(unitPrc) || 0;
+  const lineQty   = parseFloat(qty)     || 0;
   const names = new Set();
   const pick = (map, key) => {
-    for (const p of (map.get(key) || [])) names.add(p);
+    for (const e of (map.get(key) || [])) {
+      if (e.price && Math.abs(linePrice - e.price) > 0.01) continue;
+      if (e.qty   && lineQty !== e.qty)                     continue;
+      if (e.unit  && lineUnit !== e.unit)                   continue;
+      names.add(e.promo);
+    }
   };
   pick(promoByProduct, skuName);
   pick(promoBySize,    size);
@@ -634,7 +648,7 @@ function renderTable() {
       const info = pddt.get(r.SKU_NAME);
       const catParts = [info?.brand, info?.size].filter(Boolean);
       const catRow   = catParts.length ? `<div class="prod-cat">${escHtml(catParts.join(' · '))}</div>` : '';
-      const promos   = getPromos(r.SKU_NAME, info?.brand, info?.size, g.WL_CODE);
+      const promos   = getPromos(r.SKU_NAME, info?.brand, info?.size, g.WL_CODE, r.TRD_U_PRC, r.TRD_QTY, r.TRD_UTQNAME);
       const promoZone = promos.length
         ? `<div class="promo-zone"><span class="badge-promo">มีโปร</span><div class="promo-names">${promos.map(p=>escHtml(p)).join('<br>')}</div></div>`
         : `<div class="promo-zone"></div>`;
