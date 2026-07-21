@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS_DC v2.9 — ใบสั่งสินค้า</title>
+<title>Rattana DS_DC v3.0 — ใบสั่งสินค้า</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -191,7 +191,7 @@ body.dark .spinner-box{background:var(--card-bg)}
       <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln22zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJpacw3bOe+eefdvzx3vmzGFhF/be995Dz0M/DkxXVXdV/6u6uroJACAaY4wxGGO890KIIY6uYFiWZSul1CCEIKWUiPivsz+APWJkua7rApTSY4wxIlLvXcfzPO85b5xzznmMcYwxzjnGWYzxGOM4znlPCGOMc84YY4xzTlVVxRgDAIy1FmOM1hhjrQMAjDFijLHWOgDGGGuttY4xBgBrrQUAjDHGGGNsjLHOWhsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" alt="Rattana" height="34">
       <div>
         <div class="logo-text">Rattana <span>DS_DC</span></div>
-        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v2.9</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v3.0</span></div>
       </div>
     </div>
     <div class="header-actions">
@@ -488,6 +488,8 @@ async function loadPromos() {
         role:       String(r['Role']       || '').trim(),
         startStr:   addDays(String(r['เริ่มโปร'] || '').trim(), 1),
         endStr:     addDays(String(r['จบโปร']   || '').trim(), 1),
+        gift:       String(r['แถมสินค้า']    || '').trim(),
+        giftQty:    String(r['จำนวนแถมEA']   || '').trim(),
       };
       if (method === 'PRODUCT NAME') addToMap(promoByProduct, val, entry);
       else if (method === 'CAT SIZE')  addToMap(promoBySize,  val, entry);
@@ -503,7 +505,7 @@ function getPromos(skuName, brand, size, wlCode, unitPrc, qty, utqname, slmnName
   const userInfo  = usersMap.get(cleanSlmn(slmnName)) || {};
   const userWH    = userInfo.warehouse || '';
   const userRole  = userInfo.role      || '';
-  const names = new Set();
+  const names = new Map();
   const pick = (map, key) => {
     for (const e of (map.get(key) || [])) {
       if (e.startStr && diDate < e.startStr) continue;
@@ -520,13 +522,13 @@ function getPromos(skuName, brand, size, wlCode, unitPrc, qty, utqname, slmnName
         const ur = parseInt(userRole);
         if (isNaN(pr) || isNaN(ur) || ur < pr) continue;
       }
-      names.add(e.promo);
+      names.set(e.promo, { promo: e.promo, gift: e.gift, giftQty: e.giftQty });
     }
   };
   pick(promoByProduct, skuName);
   pick(promoBySize,    size);
   pick(promoByCat,     brand);
-  return [...names];
+  return [...names.values()];
 }
 
 // ─────────────────────────────────────────────
@@ -697,7 +699,7 @@ function renderTable() {
       const catRow   = catParts.length ? `<div class="prod-cat">${escHtml(catParts.join(' · '))}</div>` : '';
       const promos   = getPromos(r.SKU_NAME, info?.brand, info?.size, g.WL_CODE, r.TRD_U_PRC, r.TRD_QTY, r.TRD_UTQNAME, g.SLMN_NAME, g.DI_DATE);
       const promoZone = promos.length
-        ? `<div class="promo-zone"><span class="badge-promo">มีโปร</span><div class="promo-names">${promos.map(p=>escHtml(p)).join('<br>')}</div></div>`
+        ? `<div class="promo-zone"><span class="badge-promo">มีโปร</span><div class="promo-names">${promos.map(p=>`${escHtml(p.promo)}${p.gift?`<br><span style="color:var(--success);font-weight:600">🎁 ${escHtml(p.gift)}${p.giftQty?' ×'+escHtml(p.giftQty):''}</span>`:''}`).join('<br>')}</div></div>`
         : `<div class="promo-zone"></div>`;
       return `
         <div class="prod-item">
