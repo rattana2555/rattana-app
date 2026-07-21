@@ -1,0 +1,819 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Rattana Shipping Tracker v1.1</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+:root{
+  --navy:#0d1b3e;--navy-mid:#1a2f5e;--navy-light:#243b73;
+  --gold:#c9a84c;--gold-light:#e8c86a;
+  --success:#2ecc71;--danger:#e74c3c;--warning:#f39c12;--info:#3498db;
+  --bg:#f4f6fb;--text:#0d1b3e;--card-bg:#ffffff;--border:#dde3f0;--muted:#6b7896;--row-alt:#fafbfd;
+  --radius-sm:6px;--radius-md:12px;--radius-lg:16px;--radius-xl:20px;
+  --shadow-md:0 2px 8px rgba(0,0,0,.08);--shadow-lg:0 8px 24px rgba(13,27,62,.12);--shadow-gold:0 4px 12px rgba(201,168,76,.35);
+}
+body.dark{--bg:#0a1020;--text:#e8eaf0;--card-bg:#111c35;--border:#243b73;--muted:#8a98b8;--row-alt:#0f1830}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;min-height:100dvh;overflow-x:hidden;background:var(--bg);color:var(--text);transition:background .25s,color .25s}
+button{font-family:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+input,select{font-family:inherit;font-size:16px}
+
+/* Header */
+header{background:var(--navy);color:#fff;padding:12px 16px;position:sticky;top:0;z-index:200;display:flex;align-items:center;gap:10px;border-bottom:3px solid var(--gold);padding-top:max(12px,env(safe-area-inset-top))}
+.logo-text{font-weight:700;font-size:17px;color:#fff;flex:1}
+.logo-text span{color:var(--gold)}
+.icon-btn{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.2);width:38px;height:38px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.icon-btn:hover{background:rgba(255,255,255,.12)}
+
+/* Tabs */
+.tab-nav{display:flex;background:var(--navy);border-bottom:3px solid var(--gold);padding:0 8px;overflow-x:auto;scrollbar-width:none}
+.tab-nav::-webkit-scrollbar{display:none}
+.tab-btn{background:transparent;border:none;color:rgba(255,255,255,.6);padding:10px 18px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;flex-shrink:0;transition:all .18s;margin-bottom:-3px;border-radius:var(--radius-sm) var(--radius-sm) 0 0}
+.tab-btn.active{color:var(--navy);background:var(--gold);font-weight:700;border-bottom-color:var(--gold)}
+.tab-pane{display:none}.tab-pane.active{display:block}
+
+/* Search */
+.search-bar{background:var(--navy-mid);padding:14px 16px;display:flex;gap:8px}
+.search-input{flex:1;height:48px;padding:0 16px;border-radius:var(--radius-md);border:1.5px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);color:#fff;font-size:16px;font-family:inherit;outline:none;transition:border-color .15s}
+.search-input::placeholder{color:rgba(255,255,255,.4)}
+.search-input:focus{border-color:var(--gold)}
+.search-btn{height:48px;padding:0 20px;background:var(--gold);color:var(--navy);border:none;border-radius:var(--radius-md);font-size:14px;font-weight:700;font-family:inherit;flex-shrink:0}
+
+/* Cards */
+.card{background:var(--card-bg);border-radius:var(--radius-md);border:1px solid var(--border);box-shadow:var(--shadow-md)}
+.card-gold{border-top:3px solid var(--gold)}
+.card-success{border-top:3px solid var(--success)}
+.card-warn{border-top:3px solid var(--warning)}
+.card-info{border-top:3px solid var(--info)}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid transparent;min-height:44px;transition:opacity .15s,transform .1s}
+.btn:active{transform:scale(.97)}
+.btn-navy{background:var(--navy);color:#fff}
+.btn-gold{background:var(--gold);color:var(--navy)}
+.btn-outline{background:transparent;color:var(--text);border-color:var(--border)}
+.btn-sm{padding:5px 10px;font-size:12px;min-height:30px}
+.btn-block{width:100%;justify-content:center}
+.btn-lg{padding:14px 24px;font-size:15px;min-height:52px}
+
+/* Input */
+.input{height:44px;padding:0 14px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:16px;font-family:inherit;outline:none;width:100%;transition:border-color .15s}
+.input:focus{border-color:var(--gold)}
+select.input{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7896' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:36px}
+
+/* Badges */
+.badge{display:inline-block;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap}
+.badge-ok{background:#e8f7ee;color:#1e8449}
+.badge-warn{background:#fef3d7;color:#a87800}
+.badge-info{background:#e3f0fd;color:#1a6fb8}
+.badge-muted{background:#eef0f6;color:var(--muted)}
+body.dark .badge-ok{background:#1a3a25;color:#7be0a3}
+body.dark .badge-warn{background:#3a2e15;color:#e8c86a}
+body.dark .badge-muted{background:#1a2545;color:var(--muted)}
+
+/* Table */
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tbl{width:100%;border-collapse:collapse;min-width:600px}
+.tbl thead{background:var(--navy);color:#fff;position:sticky;top:0;z-index:5}
+.tbl thead th{padding:10px;text-align:left;font-size:12px;font-weight:600;border-bottom:2px solid var(--gold);white-space:nowrap;cursor:pointer;user-select:none}
+.tbl thead th:hover{background:var(--navy-mid)}
+.tbl tbody tr{border-bottom:1px solid var(--border);transition:background .12s}
+.tbl tbody tr:nth-child(even){background:var(--row-alt)}
+.tbl tbody tr:hover{background:rgba(201,168,76,.08);cursor:pointer}
+.tbl td{padding:9px 10px;font-size:13px;vertical-align:middle}
+.tbl .empty-row td{text-align:center;padding:48px;color:var(--muted);font-size:14px}
+.sort-ind{font-size:10px;color:var(--gold);margin-left:4px}
+
+/* Status chips */
+.s-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700}
+.s-chip.pending{background:#fef3d7;color:#a87800}
+.s-chip.transit{background:#e3f0fd;color:#1a6fb8}
+.s-chip.delivered{background:#e8f7ee;color:#1e8449}
+body.dark .s-chip.pending{background:#3a2e15;color:#e8c86a}
+body.dark .s-chip.transit{background:#0d2040;color:#5ab4ff}
+body.dark .s-chip.delivered{background:#1a3a25;color:#7be0a3}
+
+/* Progress Steps */
+.steps{display:flex;align-items:flex-start;padding:16px 8px 8px}
+.step{display:flex;flex-direction:column;align-items:center;flex:1;position:relative}
+.step:not(:last-child)::after{content:'';position:absolute;top:15px;left:50%;width:100%;height:3px;background:var(--border);z-index:0}
+.step.done:not(:last-child)::after{background:var(--success)}
+.step.active:not(:last-child)::after{background:linear-gradient(to right,var(--warning) 40%,var(--border))}
+.step-dot{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;position:relative;z-index:1;border:3px solid var(--border);background:var(--card-bg);color:var(--muted)}
+.step.done .step-dot{background:var(--success);border-color:var(--success);color:#fff}
+.step.active .step-dot{background:var(--warning);border-color:var(--warning);color:#fff;animation:pulse 1.5s infinite}
+.step-label{font-size:10px;color:var(--muted);margin-top:5px;text-align:center;font-weight:500;max-width:72px;line-height:1.3}
+.step.done .step-label{color:var(--success);font-weight:600}
+.step.active .step-label{color:var(--warning);font-weight:700}
+
+/* Info rows */
+.info-row{display:flex;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);align-items:flex-start}
+.info-row:last-child{border-bottom:none}
+.info-icon{font-size:18px;flex-shrink:0;width:24px;text-align:center;margin-top:1px}
+.info-body{flex:1}
+.info-label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+.info-value{font-size:14px;font-weight:600;margin-top:2px;line-height:1.4}
+
+/* Trip card (admin) */
+.trip-card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);margin-bottom:12px;overflow:hidden;box-shadow:var(--shadow-md)}
+.trip-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:linear-gradient(135deg,var(--navy),var(--navy-mid));color:#fff;cursor:pointer;gap:10px}
+.trip-head:hover{background:linear-gradient(135deg,var(--navy-mid),var(--navy-light))}
+.trip-code{font-size:15px;font-weight:700;font-family:'Courier New',monospace;color:var(--gold-light)}
+.trip-meta{font-size:12px;color:rgba(255,255,255,.7);margin-top:2px}
+.trip-body{display:none;padding:0}
+.trip-body.open{display:block}
+.trip-toggle{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2);color:#fff;width:30px;height:30px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;font-family:inherit;cursor:pointer}
+
+/* COD box */
+.cod-box{background:linear-gradient(135deg,rgba(201,168,76,.12),rgba(201,168,76,.04));border:1.5px solid rgba(201,168,76,.3);border-radius:var(--radius-md);padding:14px 16px;display:flex;align-items:center;justify-content:space-between}
+.cod-amount{font-size:24px;font-weight:700;color:var(--navy)}
+body.dark .cod-amount{color:var(--gold-light)}
+
+/* Stat cards */
+.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+@media(min-width:640px){.stat-grid{grid-template-columns:repeat(4,1fr)}}
+.stat-card{background:var(--card-bg);border-radius:var(--radius-md);padding:14px 16px;border:1px solid var(--border);border-top:3px solid var(--gold);text-align:center}
+.stat-card .s-val{font-size:22px;font-weight:700}
+.stat-card .s-lbl{font-size:11px;color:var(--muted);margin-top:3px}
+
+/* Login */
+#loginModal{display:none;position:fixed;inset:0;background:rgba(13,27,62,.8);z-index:9000;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)}
+#loginModal.open{display:flex}
+.login-box{background:var(--card-bg);border-radius:var(--radius-xl);padding:36px 28px;max-width:340px;width:100%;text-align:center;border-top:4px solid var(--gold)}
+
+/* Modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.65);z-index:8000;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--card-bg);border-radius:var(--radius-lg);max-width:540px;width:100%;max-height:90dvh;overflow-y:auto;border-top:4px solid var(--gold);animation:slideUp .2s ease}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
+.modal-head h3{font-size:16px;font-weight:700}
+.modal-close{background:transparent;border:none;font-size:22px;color:var(--muted);cursor:pointer;padding:4px 8px}
+.modal-body{padding:18px}
+.modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+
+/* Spinner */
+#spinner{display:none;position:fixed;inset:0;background:rgba(13,27,62,.6);align-items:center;justify-content:center;z-index:99999;backdrop-filter:blur(3px)}
+#spinner.show{display:flex}
+.spinner-box{background:var(--card-bg);border-radius:var(--radius-lg);padding:30px 40px;text-align:center;border-top:4px solid var(--gold)}
+.spinner-ring{width:48px;height:48px;border:5px solid #dde3f0;border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px}
+
+/* Toast */
+.toast{position:fixed;bottom:max(24px,env(safe-area-inset-bottom));right:16px;padding:12px 20px;border-radius:var(--radius-md);color:#fff;z-index:99998;animation:slideIn .3s ease;font-weight:500;box-shadow:var(--shadow-lg);max-width:90vw;font-size:13px}
+.toast-success{background:var(--success)}.toast-error{background:var(--danger)}.toast-warning{background:var(--warning);color:var(--navy)}.toast-info{background:var(--navy-mid);border-left:3px solid var(--gold)}
+
+/* Utils */
+.content{padding:12px;max-width:960px;margin:0 auto}
+.flex-between{display:flex;align-items:center;justify-content:space-between}
+.mt-8{margin-top:8px}.mt-12{margin-top:12px}.mt-16{margin-top:16px}
+.txt-muted{color:var(--muted)}.txt-gold{color:var(--gold)}.txt-bold{font-weight:700}.txt-center{text-align:center}.txt-sm{font-size:12px}
+.hidden{display:none!important}.w-full{width:100%}
+.section-title{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;padding:12px 16px 6px}
+.num{font-variant-numeric:tabular-nums;font-weight:600}
+
+#backToTop{position:fixed;bottom:max(24px,calc(16px + env(safe-area-inset-bottom)));right:16px;background:var(--gold);color:var(--navy);border:none;border-radius:50%;width:46px;height:46px;display:none;align-items:center;justify-content:center;box-shadow:var(--shadow-gold);z-index:90;font-size:20px;cursor:pointer}
+#backToTop.show{display:flex}
+
+/* Empty state */
+.empty-state{text-align:center;padding:52px 24px;color:var(--muted)}
+.empty-state .icon{font-size:52px;margin-bottom:14px}
+.empty-state h3{font-size:16px;font-weight:600;color:var(--text)}
+.empty-state p{font-size:13px;margin-top:6px}
+
+/* Loading shimmer */
+.shimmer{background:linear-gradient(90deg,var(--border) 25%,var(--row-alt) 50%,var(--border) 75%);background-size:200% 100%;animation:shimmer 1.2s infinite;border-radius:var(--radius-sm);height:16px}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 4px rgba(243,156,18,.2)}50%{box-shadow:0 0 0 8px rgba(243,156,18,.1)}}
+@keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:none;opacity:1}}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:none;opacity:1}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+
+<!-- Spinner -->
+<div id="spinner"><div class="spinner-box"><div class="spinner-ring"></div><p id="spinnerMsg">กำลังโหลด...</p></div></div>
+
+<!-- Login Modal -->
+<div id="loginModal">
+  <div class="login-box">
+    <div style="font-size:44px;margin-bottom:12px">🚚</div>
+    <h2 style="font-size:20px;font-weight:700">Rattana <span style="color:var(--gold)">Track</span></h2>
+    <p style="font-size:13px;color:var(--muted);margin:8px 0 24px">เข้าสู่ระบบเพื่อดูข้อมูลจัดส่ง</p>
+    <div id="g_id_onload"
+      data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com"
+      data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
+    <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with" data-locale="th"></div>
+    <p id="loginError" style="color:var(--danger);font-size:12px;margin-top:12px;display:none"></p>
+    <button class="btn btn-outline btn-block mt-16" onclick="closeLoginModal()">ยกเลิก</button>
+    <p style="font-size:11px;color:var(--muted);margin-top:16px">v1.1 · 21/07/2569</p>
+  </div>
+</div>
+
+<!-- Doc Detail Modal -->
+<div id="docModal" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="docModalTitle">รายละเอียดเอกสาร</h3>
+      <button class="modal-close" onclick="closeDocModal()">×</button>
+    </div>
+    <div class="modal-body" id="docModalBody"></div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeDocModal()">ปิด</button>
+      <button class="btn btn-gold" onclick="shareLink()">🔗 แชร์ลิงก์</button>
+    </div>
+  </div>
+</div>
+
+<!-- Header -->
+<header>
+  <div class="logo-text">Rattana <span>Track</span></div>
+  <button class="icon-btn" onclick="loadData()" title="รีเฟรช">🔄</button>
+  <button class="icon-btn" id="darkBtn" onclick="toggleDark()">🌙</button>
+  <button class="icon-btn" id="adminBtn" onclick="handleAdminClick()">👤</button>
+</header>
+
+<!-- Tabs -->
+<div class="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('track',this)">🔍 ติดตามสินค้า</button>
+  <button class="tab-btn" id="adminTabBtn" onclick="switchTab('admin',this)" style="display:none">📋 ภาพรวมทริป</button>
+</div>
+
+<!-- ═══ TAB: TRACK ═══ -->
+<div id="tab-track" class="tab-pane active">
+  <div class="search-bar">
+    <input class="search-input" id="trackInput" type="text" placeholder="🔍  พิมพ์เลขเอกสาร เช่น DSI16907/01003" oninput="liveSearch()" onkeydown="if(event.key==='Enter')doTrack()">
+    <button class="search-btn" onclick="doTrack()">ค้นหา</button>
+  </div>
+
+  <!-- Suggestions -->
+  <div id="trackSuggest" class="hidden" style="background:var(--card-bg);border-bottom:1px solid var(--border);max-height:220px;overflow-y:auto"></div>
+
+  <!-- Empty -->
+  <div id="trackEmpty" class="empty-state" style="animation:fadeIn .3s">
+    <div class="icon">📦</div>
+    <h3>ติดตามสถานะการจัดส่ง</h3>
+    <p>พิมพ์เลขเอกสาร (Doc No) เพื่อดูสถานะ</p>
+    <p class="mt-8 txt-sm">เช่น <strong style="color:var(--gold)">DSI16907/01003</strong></p>
+  </div>
+
+  <!-- Result -->
+  <div id="trackResult" class="hidden">
+    <div class="content" style="max-width:600px;padding-bottom:32px">
+
+      <!-- Status card -->
+      <div class="card card-gold mt-8" id="resCard">
+        <div style="padding:16px 16px 0;display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+          <div>
+            <div style="font-size:12px;color:var(--muted);font-weight:600">เลขเอกสาร</div>
+            <div style="font-size:20px;font-weight:700;font-family:'Courier New',monospace;margin-top:2px" id="resDocNo"></div>
+          </div>
+          <div id="resChip" style="margin-top:4px"></div>
+        </div>
+        <!-- Progress -->
+        <div class="steps" id="resSteps"></div>
+      </div>
+
+      <!-- COD -->
+      <div class="mt-12" id="resCod"></div>
+
+      <!-- Info -->
+      <div class="card mt-12" id="resInfo"></div>
+
+      <!-- Trip info (admin only) -->
+      <div class="card mt-12" id="resTripInfo" style="display:none">
+        <div class="section-title">🚛 ข้อมูลทริป</div>
+        <div id="resTripBody"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TAB: ADMIN ═══ -->
+<div id="tab-admin" class="tab-pane">
+  <div class="content" style="padding-bottom:32px">
+
+    <!-- Filters -->
+    <div class="card card-gold mt-8" style="padding:12px 14px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div>
+          <label style="font-size:11px;color:var(--muted);font-weight:600;display:block;margin-bottom:4px">สถานะ</label>
+          <select class="input" id="fStatus" onchange="renderAdmin()" style="height:40px;font-size:13px">
+            <option value="">ทั้งหมด</option>
+            <option value="pending">รอส่ง</option>
+            <option value="transit">กำลังส่ง (วันนี้)</option>
+            <option value="delivered">ส่งแล้ว</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);font-weight:600;display:block;margin-bottom:4px">เซลส์</label>
+          <select class="input" id="fSalesman" onchange="renderAdmin()" style="height:40px;font-size:13px">
+            <option value="">ทั้งหมด</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:8px">
+        <input class="input" id="fSearch" type="text" placeholder="🔍 ค้นหา Trans_Code / ลูกค้า / Doc_No..." oninput="renderAdmin()" style="height:40px;font-size:13px">
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stat-grid mt-12" id="adminStats"></div>
+
+    <!-- View toggle -->
+    <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
+      <span style="font-size:12px;color:var(--muted);font-weight:600">มุมมอง:</span>
+      <button class="btn btn-gold btn-sm" id="viewTripBtn" onclick="setView('trip')">🚛 แยกทริป</button>
+      <button class="btn btn-outline btn-sm" id="viewTblBtn" onclick="setView('table')">📋 ตาราง</button>
+      <span style="font-size:11px;color:var(--muted);margin-left:auto" id="adminCount"></span>
+    </div>
+
+    <!-- Trip view -->
+    <div id="tripView" class="mt-8"></div>
+
+    <!-- Table view -->
+    <div id="tableView" class="card mt-8 tbl-wrap hidden">
+      <table class="tbl" id="adminTbl">
+        <thead><tr>
+          <th data-key="Trans_Code" data-type="str">Trans Code <span class="sort-ind"></span></th>
+          <th data-key="Doc_No" data-type="str">Doc No <span class="sort-ind"></span></th>
+          <th data-key="Customer_Name" data-type="str">ลูกค้า <span class="sort-ind"></span></th>
+          <th data-key="TotalBaht" data-type="num">ยอด (บาท) <span class="sort-ind"></span></th>
+          <th data-key="Salesman_Name" data-type="str">เซลส์ <span class="sort-ind"></span></th>
+          <th data-key="วันที่ส่งสินค้า" data-type="date">วันที่ส่ง <span class="sort-ind"></span></th>
+          <th data-key="_status" data-type="str">สถานะ <span class="sort-ind"></span></th>
+        </tr></thead>
+        <tbody id="adminTbody"></tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<button id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+<script>
+/* ════════════════════════════════
+   CONFIG
+════════════════════════════════ */
+const SHEET_ID   = '1HoyuILDm8aOrUaLjo1YFbfZOoEiejaxRhh1ahR79Oeo';
+const SHEET_NAME = 'Sheet1';   // เปลี่ยนถ้าชีทชื่อต่าง
+const AUTH_CONFIG = {
+  clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
+  usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
+  usersSheetName: 'Rattana Users for apps',
+};
+const TODAY_STR = (() => { const d=new Date(); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; })();
+
+/* ════════════════════════════════
+   STATE
+════════════════════════════════ */
+let allRows     = [];   // raw rows from sheet
+let currentUser = null;
+let currentDocNo= null;
+let adminView   = 'trip';  // 'trip' | 'table'
+const sortState = { key:'วันที่ส่งสินค้า', dir:'desc' };
+
+/* ════════════════════════════════
+   BOOT
+════════════════════════════════ */
+window.onload = () => {
+  applyDark(localStorage.getItem('rattana_dark')==='1');
+  checkSession();
+  loadData();
+  window.addEventListener('scroll',()=>document.getElementById('backToTop').classList.toggle('show',scrollY>300));
+  document.addEventListener('click',e=>{ if(!e.target.closest('.search-bar'))closeSuggest(); });
+  const p=new URLSearchParams(location.search);
+  if(p.get('doc')){ document.getElementById('trackInput').value=p.get('doc'); }
+};
+
+/* ════════════════════════════════
+   DATA
+════════════════════════════════ */
+async function loadData() {
+  showSpinner('กำลังโหลดข้อมูล...');
+  try {
+    const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent(SHEET_NAME)}`;
+    const res=await fetch(url);
+    if(!res.ok) throw new Error('fetch failed');
+    allRows = parseCsv(await res.text());
+    allRows.forEach(r=>{ r._status=computeStatus(r['วันที่ส่งสินค้า']); r._amount=parseAmount(r['TotalBaht']); });
+    populateSalesmanFilter();
+    renderAdmin();
+    // auto-track if URL param
+    const p=new URLSearchParams(location.search);
+    if(p.get('doc')) doTrack();
+  } catch(e) {
+    showToast('โหลดข้อมูลไม่สำเร็จ: '+e.message,'error');
+  } finally { hideSpinner(); }
+}
+
+function computeStatus(dateStr) {
+  if(!dateStr) return 'pending';
+  // dateStr format: DD/MM/YYYY
+  const parts=dateStr.split('/');
+  if(parts.length<3) return 'pending';
+  const d=new Date(parseInt(parts[2]),parseInt(parts[1])-1,parseInt(parts[0]));
+  const today=new Date(); today.setHours(0,0,0,0);
+  if(d<today) return 'delivered';
+  if(d.getTime()===today.getTime()) return 'transit';
+  return 'pending';
+}
+
+function parseAmount(s) {
+  return parseFloat(String(s||'0').replace(/,/g,''))||0;
+}
+
+function parseCsv(text) {
+  if(!text)return[];
+  if(text.charCodeAt(0)===0xFEFF)text=text.slice(1);
+  const rows=[];let row=[],cell='',inQ=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(inQ){if(c==='"'){if(text[i+1]==='"'){cell+='"';i++;}else inQ=false;}else cell+=c;}
+    else{if(c==='"')inQ=true;else if(c===','){row.push(cell);cell='';}else if(c==='\r'){}else if(c==='\n'){row.push(cell);rows.push(row);row=[];cell='';}else cell+=c;}
+  }
+  if(cell.length||row.length){row.push(cell);rows.push(row);}
+  if(!rows.length)return[];
+  const clean=s=>String(s||'').replace(/[​‌‍﻿]/g,'').replace(/ /g,' ').trim();
+  const headers=rows[0].map(clean);
+  return rows.slice(1).filter(r=>r.some(c=>clean(c))).map(r=>Object.fromEntries(headers.map((k,i)=>[k,clean(r[i])])));
+}
+
+/* ════════════════════════════════
+   TRACKING (public)
+════════════════════════════════ */
+function liveSearch() {
+  const q=document.getElementById('trackInput').value.trim();
+  if(q.length<3){closeSuggest();return;}
+  const matches=allRows.filter(r=>(r['Doc_No']||'').toLowerCase().includes(q.toLowerCase())||(r['Customer_Name']||'').toLowerCase().includes(q.toLowerCase())).slice(0,8);
+  if(!matches.length){closeSuggest();return;}
+  const sug=document.getElementById('trackSuggest');
+  sug.innerHTML=matches.map(r=>`
+    <div onclick="pickSuggest('${r['Doc_No']}')" style="padding:10px 16px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px" onmouseover="this.style.background='rgba(201,168,76,.08)'" onmouseout="this.style.background=''">
+      <span style="font-size:16px">📄</span>
+      <div><div style="font-size:13px;font-weight:600;font-family:'Courier New',monospace">${r['Doc_No']}</div><div style="font-size:12px;color:var(--muted)">${r['Customer_Name']} · ฿${r['TotalBaht']}</div></div>
+      <div style="margin-left:auto">${statusChip(r['_status'])}</div>
+    </div>`).join('');
+  sug.classList.remove('hidden');
+}
+
+function pickSuggest(docNo) {
+  document.getElementById('trackInput').value=docNo;
+  closeSuggest();
+  doTrack();
+}
+function closeSuggest() { document.getElementById('trackSuggest').classList.add('hidden'); }
+
+function doTrack() {
+  closeSuggest();
+  const q=document.getElementById('trackInput').value.trim();
+  if(!q){showToast('กรุณาใส่เลขเอกสาร','warning');return;}
+  const row=allRows.find(r=>(r['Doc_No']||'').toLowerCase()===q.toLowerCase());
+  if(!row){showToast(`ไม่พบเอกสาร "${q}" กรุณาตรวจสอบเลขอีกครั้ง`,'error');return;}
+  currentDocNo=row['Doc_No'];
+  showTrackResult(row);
+  history.replaceState({},'',`?doc=${encodeURIComponent(q)}`);
+}
+
+function showTrackResult(row) {
+  document.getElementById('trackEmpty').classList.add('hidden');
+  document.getElementById('trackResult').classList.remove('hidden');
+
+  // Doc No + chip
+  document.getElementById('resDocNo').textContent=row['Doc_No'];
+  document.getElementById('resChip').innerHTML=statusChip(row['_status']);
+
+  // Steps
+  const steps=[
+    {label:'รับออเดอร์',     icon:'📋'},
+    {label:'จัดเตรียมสินค้า',icon:'📦'},
+    {label:'กำลังส่ง',       icon:'🚚'},
+    {label:'ส่งสำเร็จ',      icon:'✅'},
+  ];
+  const idx={pending:1, transit:2, delivered:3};
+  const cur=idx[row['_status']]??0;
+  document.getElementById('resSteps').innerHTML=steps.map((s,i)=>{
+    const cls=i<cur?'done':i===cur?'active':'';
+    return `<div class="step ${cls}"><div class="step-dot">${cls==='done'?'✓':s.icon}</div><div class="step-label">${s.label}</div></div>`;
+  }).join('');
+
+  // COD
+  document.getElementById('resCod').innerHTML=`
+    <div class="cod-box">
+      <div>
+        <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-bottom:4px">💰 ยอดรวม</div>
+        <div class="cod-amount">฿${row['TotalBaht']}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">เอกสาร ${row['Doc_Date']} · ส่ง ${row['วันที่ส่งสินค้า']}</div>
+      </div>
+      <div style="font-size:42px">💵</div>
+    </div>`;
+
+  // Info
+  document.getElementById('resInfo').innerHTML=`
+    <div class="section-title">ℹ️ รายละเอียดการจัดส่ง</div>
+    <div class="info-row"><div class="info-icon">👤</div><div class="info-body"><div class="info-label">ลูกค้า</div><div class="info-value">${row['Customer_Name']}</div><div style="font-size:12px;color:var(--muted)">รหัส ${row['Customer_Code']}</div></div></div>
+    <div class="info-row"><div class="info-icon">📄</div><div class="info-body"><div class="info-label">เลขเอกสาร</div><div class="info-value" style="font-family:'Courier New',monospace">${row['Doc_No']}</div></div></div>
+    <div class="info-row"><div class="info-icon">🚛</div><div class="info-body"><div class="info-label">เลขทริป</div><div class="info-value" style="font-family:'Courier New',monospace">${row['Trans_Code']}</div></div></div>
+    <div class="info-row"><div class="info-icon">👨‍💼</div><div class="info-body"><div class="info-label">เซลส์ที่รับผิดชอบ</div><div class="info-value">${row['Salesman_Name']} (${row['Salesman_Code']})</div></div></div>
+    <div class="info-row"><div class="info-icon">📅</div><div class="info-body"><div class="info-label">วันที่ส่งสินค้า</div><div class="info-value">${row['วันที่ส่งสินค้า']}${row['_status']==='transit'?' <span style="color:var(--warning);font-size:12px">● วันนี้</span>':''}</div></div></div>
+  `;
+
+  // Trip info (show only if admin logged in)
+  const tripDiv=document.getElementById('resTripInfo');
+  if(currentUser) {
+    const tripRows=allRows.filter(r=>r['Trans_Code']===row['Trans_Code']);
+    const tripTotal=tripRows.reduce((s,r)=>s+r._amount,0);
+    tripDiv.style.display='block';
+    document.getElementById('resTripBody').innerHTML=`
+      <div class="info-row"><div class="info-icon">📦</div><div class="info-body"><div class="info-label">จำนวนร้านในทริปนี้</div><div class="info-value">${tripRows.length} ร้าน</div></div></div>
+      <div class="info-row"><div class="info-icon">💰</div><div class="info-body"><div class="info-label">ยอดรวมทั้งทริป</div><div class="info-value">฿${tripTotal.toLocaleString('th-TH',{minimumFractionDigits:2})}</div></div></div>
+      <div style="padding:8px 16px 12px">
+        ${tripRows.map((r,i)=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:${i<tripRows.length-1?'1px solid var(--border)':'none'}">
+          <div>
+            <div style="font-size:12px;font-family:'Courier New',monospace;color:var(--muted)">${r['Doc_No']}</div>
+            <div style="font-size:13px;font-weight:600;margin-top:2px">${r['Customer_Name']}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:13px;font-weight:600" class="num">฿${r['TotalBaht']}</div>
+            ${r['Doc_No']===row['Doc_No']?'<div style="font-size:10px;color:var(--gold);font-weight:700">◀ รายการนี้</div>':''}
+          </div>
+        </div>`).join('')}
+      </div>`;
+  } else {
+    tripDiv.style.display='none';
+  }
+
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function statusChip(status) {
+  const cfg={
+    pending :{cls:'pending', icon:'🕐', txt:'รอส่ง'},
+    transit :{cls:'transit', icon:'🚚', txt:'กำลังส่ง (วันนี้)'},
+    delivered:{cls:'delivered',icon:'✅', txt:'ส่งแล้ว'},
+  };
+  const c=cfg[status]||cfg.pending;
+  return `<span class="s-chip ${c.cls}">${c.icon} ${c.txt}</span>`;
+}
+
+/* ════════════════════════════════
+   ADMIN
+════════════════════════════════ */
+function populateSalesmanFilter() {
+  const names=[...new Set(allRows.map(r=>r['Salesman_Name']).filter(Boolean))].sort();
+  const sel=document.getElementById('fSalesman');
+  names.forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
+}
+
+function filteredRows() {
+  const fs=document.getElementById('fStatus')?.value||'';
+  const fsal=document.getElementById('fSalesman')?.value||'';
+  const fsrch=(document.getElementById('fSearch')?.value||'').toLowerCase();
+  return allRows.filter(r=>{
+    if(fs && r['_status']!==fs) return false;
+    if(fsal && r['Salesman_Name']!==fsal) return false;
+    if(fsrch && !r['Trans_Code'].toLowerCase().includes(fsrch)&&!r['Customer_Name'].toLowerCase().includes(fsrch)&&!r['Doc_No'].toLowerCase().includes(fsrch)) return false;
+    return true;
+  });
+}
+
+function renderAdmin() {
+  const rows=filteredRows();
+  // stats
+  const stats={total:rows.length, pending:0, transit:0, delivered:0, baht:0};
+  rows.forEach(r=>{ stats[r._status]=(stats[r._status]||0)+1; stats.baht+=r._amount; });
+  document.getElementById('adminStats').innerHTML=[
+    {lbl:'เอกสารทั้งหมด', val:stats.total, color:'var(--gold)'},
+    {lbl:'รอส่ง', val:stats.pending||0, color:'var(--warning)'},
+    {lbl:'กำลังส่ง', val:stats.transit||0, color:'var(--info)'},
+    {lbl:'ส่งแล้ว', val:stats.delivered||0, color:'var(--success)'},
+  ].map(s=>`<div class="stat-card" style="border-top-color:${s.color}"><div class="s-val" style="color:${s.color}">${s.val}</div><div class="s-lbl">${s.lbl}</div></div>`).join('');
+  document.getElementById('adminCount').textContent=`${rows.length} รายการ · ฿${stats.baht.toLocaleString('th-TH',{minimumFractionDigits:2})}`;
+
+  if(adminView==='trip') renderTripView(rows);
+  else renderTableView(rows);
+}
+
+function setView(v) {
+  adminView=v;
+  document.getElementById('viewTripBtn').className='btn btn-sm '+(v==='trip'?'btn-gold':'btn-outline');
+  document.getElementById('viewTblBtn').className='btn btn-sm '+(v==='table'?'btn-gold':'btn-outline');
+  document.getElementById('tripView').classList.toggle('hidden',v!=='trip');
+  document.getElementById('tableView').classList.toggle('hidden',v!=='table');
+  renderAdmin();
+}
+
+function renderTripView(rows) {
+  const trips={};
+  rows.forEach(r=>{ const k=r['Trans_Code']; if(!trips[k])trips[k]=[]; trips[k].push(r); });
+  const tripArr=Object.entries(trips).sort((a,b)=>a[0].localeCompare(b[0]));
+  if(!tripArr.length){ document.getElementById('tripView').innerHTML='<div class="empty-state"><div class="icon">🔍</div><h3>ไม่พบข้อมูล</h3><p>ลองเปลี่ยนตัวกรอง</p></div>'; return; }
+  document.getElementById('tripView').innerHTML=tripArr.map(([code,rrows])=>{
+    const total=rrows.reduce((s,r)=>s+r._amount,0);
+    const statuses=[...new Set(rrows.map(r=>r._status))];
+    const mainStatus=statuses.includes('transit')?'transit':statuses.includes('pending')?'pending':'delivered';
+    const delivDate=rrows[0]['วันที่ส่งสินค้า'];
+    const salesman=rrows[0]['Salesman_Name'];
+    return `<div class="trip-card">
+      <div class="trip-head" onclick="toggleTrip('${code}')">
+        <div style="flex:1;min-width:0">
+          <div class="trip-code">${code}</div>
+          <div class="trip-meta">${salesman} · ${rrows.length} ร้าน · วันส่ง ${delivDate}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          ${statusChip(mainStatus)}
+          <div style="font-size:13px;font-weight:700;color:var(--gold-light)" class="num">฿${total.toLocaleString('th-TH',{minimumFractionDigits:0})}</div>
+          <button class="trip-toggle" id="tog-${code}">▼</button>
+        </div>
+      </div>
+      <div class="trip-body" id="body-${code}">
+        <table style="width:100%;border-collapse:collapse">
+          <thead style="background:var(--row-alt)">
+            <tr>
+              <th style="padding:8px 12px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border)">Doc No</th>
+              <th style="padding:8px 12px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border)">ลูกค้า</th>
+              <th style="padding:8px 12px;text-align:right;font-size:11px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border)">ยอด (บาท)</th>
+              <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border)">ลิงก์</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rrows.map(r=>`<tr style="border-bottom:1px solid var(--border)" onmouseover="this.style.background='rgba(201,168,76,.06)'" onmouseout="this.style.background=''">
+              <td style="padding:9px 12px;font-size:12px;font-family:'Courier New',monospace;font-weight:600">${r['Doc_No']}</td>
+              <td style="padding:9px 12px;font-size:13px">${r['Customer_Name']}</td>
+              <td style="padding:9px 12px;font-size:13px;text-align:right;font-weight:600" class="num">฿${r['TotalBaht']}</td>
+              <td style="padding:9px 12px;text-align:center"><button class="btn btn-outline btn-sm" onclick="shareDocLink('${r['Doc_No']}')">🔗</button></td>
+            </tr>`).join('')}
+            <tr style="background:rgba(201,168,76,.06)">
+              <td colspan="2" style="padding:8px 12px;font-size:12px;color:var(--muted)">รวม ${rrows.length} รายการ</td>
+              <td style="padding:8px 12px;text-align:right;font-weight:700;font-size:14px;color:var(--navy)" class="num">฿${total.toLocaleString('th-TH',{minimumFractionDigits:2})}</td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleTrip(code) {
+  const body=document.getElementById('body-'+code);
+  const tog=document.getElementById('tog-'+code);
+  const open=body.classList.toggle('open');
+  tog.textContent=open?'▲':'▼';
+}
+
+function renderTableView(rows) {
+  const m=sortState.dir==='asc'?1:-1;
+  const type=sortState.key==='TotalBaht'||sortState.key==='_amount'?'num':sortState.key==='วันที่ส่งสินค้า'||sortState.key==='Doc_Date'?'date':'str';
+  const sorted=[...rows].sort((a,b)=>{
+    const va=a[sortState.key],vb=b[sortState.key];
+    if(type==='num')return ((parseAmount(va))-(parseAmount(vb)))*m;
+    if(type==='date'){const pa=va?.split('/'),pb=vb?.split('/');
+      if(pa?.length===3&&pb?.length===3){const da=new Date(+pa[2],+pa[1]-1,+pa[0]),db=new Date(+pb[2],+pb[1]-1,+pb[0]);return(da-db)*m;}
+    }
+    return String(va||'').localeCompare(String(vb||''),'th')*m;
+  });
+  const tbody=document.getElementById('adminTbody');
+  if(!sorted.length){tbody.innerHTML='<tr class="empty-row"><td colspan="7">ไม่พบข้อมูล</td></tr>';return;}
+  tbody.innerHTML=sorted.map(r=>`<tr onclick="trackFromAdmin('${r['Doc_No']}')">
+    <td style="font-family:'Courier New',monospace;font-size:12px;font-weight:600">${r['Trans_Code']}</td>
+    <td style="font-family:'Courier New',monospace;font-size:12px">${r['Doc_No']}</td>
+    <td>${r['Customer_Name']}</td>
+    <td style="text-align:right" class="num">฿${r['TotalBaht']}</td>
+    <td>${r['Salesman_Name']}</td>
+    <td>${r['วันที่ส่งสินค้า']}</td>
+    <td>${statusChip(r['_status'])}</td>
+  </tr>`).join('');
+  updateSortIndicators();
+}
+
+function trackFromAdmin(docNo) {
+  document.getElementById('trackInput').value=docNo;
+  switchTab('track',document.querySelector('.tab-btn'));
+  doTrack();
+}
+
+function updateSortIndicators() {
+  document.querySelectorAll('#adminTbl thead th').forEach(th=>{
+    const ind=th.querySelector('.sort-ind');
+    if(ind) ind.textContent=th.dataset.key===sortState.key?(sortState.dir==='asc'?'▲':'▼'):'';
+  });
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('#adminTbl thead th[data-key]').forEach(th=>{
+    th.addEventListener('click',()=>{
+      const k=th.dataset.key,t=th.dataset.type||'str';
+      if(sortState.key===k)sortState.dir=sortState.dir==='asc'?'desc':'asc';
+      else{sortState.key=k;sortState.dir=(t==='date'||t==='num')?'desc':'asc';}
+      renderTableView(filteredRows());
+    });
+  });
+});
+
+/* ════════════════════════════════
+   SHARE
+════════════════════════════════ */
+function shareDocLink(docNo) {
+  const url=`${location.origin}${location.pathname}?doc=${encodeURIComponent(docNo)}`;
+  if(navigator.share){ navigator.share({title:`ติดตามสินค้า ${docNo}`,url}).catch(()=>{}); }
+  else { navigator.clipboard.writeText(url).then(()=>showToast('คัดลอกลิงก์แล้ว ✓','success')).catch(()=>prompt('ลิงก์สำหรับลูกค้า:',url)); }
+}
+function shareLink() { if(currentDocNo) shareDocLink(currentDocNo); }
+
+/* ════════════════════════════════
+   AUTH
+════════════════════════════════ */
+const decodeJwt=token=>{
+  const p=String(token||'').split('.');
+  if(p.length<2)throw new Error('bad jwt');
+  let b=p[1].replace(/-/g,'+').replace(/_/g,'/');
+  const pad=(4-b.length%4)%4;if(pad)b+='='.repeat(pad);
+  const bin=atob(b),bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+  return JSON.parse(new TextDecoder('utf-8').decode(bytes));
+};
+const normEmail=s=>String(s||'').replace(/[​‌‍﻿]/g,'').replace(/\s+/g,'').toLowerCase();
+
+function openLoginModal(){document.getElementById('loginModal').classList.add('open');}
+function closeLoginModal(){document.getElementById('loginModal').classList.remove('open');}
+
+async function handleGoogleLogin(r){
+  showSpinner('กำลังตรวจสอบ...');
+  try{
+    const email=normEmail(decodeJwt(r.credential).email);
+    const url=`https://docs.google.com/spreadsheets/d/${AUTH_CONFIG.usersSheetId}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent(AUTH_CONFIG.usersSheetName)}`;
+    const res=await fetch(url);
+    const users=parseCsv(await res.text());
+    const user=users.find(u=>normEmail(u['E-mail']||u['email']||'')===email);
+    if(!user){showLoginErr('ไม่พบ email นี้ในระบบ');return;}
+    if(String(user['Status']||'').trim().toLowerCase()!=='active'){showLoginErr('บัญชีถูกระงับ');return;}
+    currentUser={email,name:user['ชื่อ - สกุล'],nickname:user['ชื่อเล่น'],role:parseInt(user['User Role'])||1,warehouse:user['W']};
+    localStorage.setItem('rattana_track_u',JSON.stringify({data:currentUser,exp:Date.now()+30*24*60*60*1000}));
+    closeLoginModal();
+    showAdminUI();
+    showToast(`ยินดีต้อนรับ ${currentUser.nickname||currentUser.name} 👋`,'success');
+  }catch(e){showLoginErr('เกิดข้อผิดพลาด ลองใหม่');}
+  finally{hideSpinner();}
+}
+function showLoginErr(m){const el=document.getElementById('loginError');el.textContent=m;el.style.display='block';}
+
+function checkSession(){
+  try{
+    const raw=localStorage.getItem('rattana_track_u');
+    if(!raw)return;
+    const{data,exp}=JSON.parse(raw);
+    if(Date.now()>exp){localStorage.removeItem('rattana_track_u');return;}
+    currentUser=data;showAdminUI();
+  }catch{localStorage.removeItem('rattana_track_u');}
+}
+
+function showAdminUI(){
+  document.getElementById('adminTabBtn').style.display='block';
+  document.getElementById('adminBtn').textContent='🔓';
+  document.getElementById('adminBtn').title='ออกจากระบบ';
+}
+
+function handleAdminClick(){
+  if(currentUser){
+    if(confirm(`ออกจากระบบ (${currentUser.name||currentUser.email})?`)){
+      localStorage.removeItem('rattana_track_u');currentUser=null;
+      document.getElementById('adminTabBtn').style.display='none';
+      document.getElementById('adminBtn').textContent='👤';
+      switchTab('track',document.querySelector('.tab-btn'));
+      showToast('ออกจากระบบแล้ว','info');
+    }
+  } else { openLoginModal(); }
+}
+
+function openDocModal(){document.getElementById('docModal').classList.add('open');}
+function closeDocModal(){document.getElementById('docModal').classList.remove('open');}
+
+/* ════════════════════════════════
+   TABS / DARK / UTILS
+════════════════════════════════ */
+function switchTab(id,btn){
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  if(btn)btn.classList.add('active');
+}
+
+function applyDark(on){document.body.classList.toggle('dark',on);document.getElementById('darkBtn').textContent=on?'☀️':'🌙';}
+function toggleDark(){const on=!document.body.classList.contains('dark');applyDark(on);localStorage.setItem('rattana_dark',on?'1':'0');}
+
+function showSpinner(m='กำลังโหลด...'){document.getElementById('spinnerMsg').textContent=m;document.getElementById('spinner').classList.add('show');}
+function hideSpinner(){document.getElementById('spinner').classList.remove('show');}
+function showToast(msg,type='info'){
+  const t=document.createElement('div');t.className=`toast toast-${type}`;t.textContent=msg;
+  document.body.appendChild(t);setTimeout(()=>t.remove(),3500);
+}
+</script>
+</body>
+</html>
