@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS_DC v1.5 — ใบสั่งสินค้า</title>
+<title>Rattana DS_DC v2.0 — ใบสั่งสินค้า</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -102,6 +102,11 @@ body.dark .det-cell{background:#07101f!important}
 body.dark .prod-meta .x{color:#a0b0d0}
 .prod-price{font-size:14px;font-weight:700;color:var(--gold);white-space:nowrap;text-align:right;min-width:80px}
 .prod-free{font-size:11px;color:var(--success);font-weight:600;margin-left:6px}
+.prod-cat{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px;margin-bottom:2px}
+.cat-brand{font-size:11px;font-weight:600;padding:1px 7px;border-radius:8px;background:rgba(201,168,76,.15);color:var(--navy);border:1px solid rgba(201,168,76,.35)}
+.cat-size{font-size:11px;font-weight:600;padding:1px 7px;border-radius:8px;background:rgba(52,152,219,.12);color:#1a6fb8;border:1px solid rgba(52,152,219,.3)}
+body.dark .cat-brand{background:rgba(201,168,76,.2);color:var(--gold-light);border-color:rgba(201,168,76,.4)}
+body.dark .cat-size{background:rgba(52,152,219,.15);color:#7ecbf7;border-color:rgba(52,152,219,.35)}
 .prod-total-row{display:flex;align-items:center;justify-content:space-between;padding:9px 16px;background:rgba(201,168,76,.08);border-top:1.5px solid var(--gold)}
 .prod-total-row .label{font-size:12px;color:var(--muted);font-weight:600}
 .prod-total-row .total-amt{font-size:15px;font-weight:700;color:var(--success)}
@@ -185,7 +190,7 @@ body.dark .spinner-box{background:var(--card-bg)}
       <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln22zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJpacw3bOe+eefdvzx3vmzGFhF/be995Dz0M/DkxXVXdV/6u6uroJACAaY4wxGGO890KIIY6uYFiWZSul1CCEIKWUiPivsz+APWJkua7rApTSY4wxIlLvXcfzPO85b5xzznmMcYwxzjnGWYzxGOM4znlPCGOMc84YY4xzTlVVxRgDAIy1FmOM1hhjrQMAjDFijLHWOgDGGGuttY4xBgBrrQUAjDHGGGNsjLHOWhsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" alt="Rattana" height="34">
       <div>
         <div class="logo-text">Rattana <span>DS_DC</span></div>
-        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v1.5</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v2.0</span></div>
       </div>
     </div>
     <div class="header-actions">
@@ -307,6 +312,8 @@ body.dark .spinner-box{background:var(--card-bg)}
 // ─────────────────────────────────────────────
 const SHEET_ID   = '1NO8sHyDxwHTRqgcLFCxq_g_Rr09lfe4gt_odwkIgiB0';
 const SHEET_NAME = 'DS_DC';
+const PDDT_SHEET_ID   = '16mYDqAqqJma-_0vCIAajy6bcjdOZ7F6VagxkdkqAB2I';
+const PDDT_SHEET_NAME = 'PDDT';
 
 // ─────────────────────────────────────────────
 // STATE
@@ -317,6 +324,8 @@ let groups = [];          // grouped by DI_REF
 let sortState = { key: 'DI_DATE', dir: 'desc' };
 let currentPage = 1;
 const PAGE_SIZE = 100;
+let pddt = new Map();     // PRODUCT NAME → { brand, size }
+let pddtLoaded = false;
 
 // ─────────────────────────────────────────────
 // MONTH PICKER
@@ -385,6 +394,29 @@ async function fetchCSV(sheetId, sheetName, query = '') {
 }
 
 // ─────────────────────────────────────────────
+// PDDT LOOKUP
+// ─────────────────────────────────────────────
+async function loadPDDT() {
+  if (pddtLoaded) return;
+  try {
+    const rows = await fetchCSV(PDDT_SHEET_ID, PDDT_SHEET_NAME);
+    pddt.clear();
+    for (const r of rows) {
+      const name = String(r['PRODUCT NAME'] || '').trim();
+      if (name) {
+        pddt.set(name, {
+          brand: String(r['CAT BRAND'] || '').trim(),
+          size:  String(r['CAT SIZE']  || '').trim(),
+        });
+      }
+    }
+    pddtLoaded = true;
+  } catch(e) {
+    console.warn('PDDT load failed:', e.message);
+  }
+}
+
+// ─────────────────────────────────────────────
 // LOAD DATA
 // ─────────────────────────────────────────────
 async function loadData() {
@@ -393,6 +425,7 @@ async function loadData() {
   showSpinner('กำลังโหลดข้อมูล...');
   setLoadingBar(true);
   try {
+    await loadPDDT();
     const rows = await fetchCSV(SHEET_ID, SHEET_NAME, query);
     allRows = rows;
     document.getElementById('resultInfo').textContent =
@@ -543,10 +576,15 @@ function renderTable() {
       const amt  = parseFloat(r.TRD_G_AMT) || 0;
       const freeTag = free > 0 ? `<span class="prod-free">+แถม ${fmt(free)}</span>` : '';
       const remark  = r.DI_REMARK ? `<span style="margin-left:8px;color:var(--muted);font-size:11px">${escHtml(r.DI_REMARK)}</span>` : '';
+      const info = pddt.get(r.SKU_NAME);
+      const brandTag = info?.brand ? `<span class="cat-brand">${escHtml(info.brand)}</span>` : '';
+      const sizeTag  = info?.size  ? `<span class="cat-size">${escHtml(info.size)}</span>`   : '';
+      const catRow   = (brandTag || sizeTag) ? `<div class="prod-cat">${brandTag}${sizeTag}</div>` : '';
       return `
         <div class="prod-item">
           <div class="prod-info">
             <div class="prod-name" title="${escHtml(r.SKU_NAME)}">${escHtml(r.SKU_NAME)}</div>
+            ${catRow}
             <div class="prod-meta">
               ${fmt(qty)} ${escHtml(r.TRD_UTQNAME)}
               <span class="x">×</span>
