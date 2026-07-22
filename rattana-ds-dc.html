@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS_DC v3.0 — ใบสั่งสินค้า</title>
+<title>Rattana DS_DC v3.1 — ใบสั่งสินค้า</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -183,6 +183,7 @@ body.dark .det-status-wrap.s-danger{background:#3a1a17;border-color:#e74c3c}
 body.dark .det-status-wrap.s-warn{background:#3a2e15;border-color:#f39c12}
 .det-status-icon{font-size:22px}
 .det-status-text{font-size:15px;font-weight:700}
+.promo-detail{font-size:11px;color:var(--danger);font-weight:600;margin-top:3px}
 .det-prod-header{display:flex;align-items:center;justify-content:space-between;padding:10px 0 6px;border-bottom:2px solid var(--gold);margin-bottom:8px}
 .det-prod-header span{font-size:13px;font-weight:700;color:var(--text)}
 .det-prod-header .det-total{font-size:15px;font-weight:700;color:var(--success)}
@@ -215,7 +216,7 @@ body.dark .det-status-wrap.s-warn{background:#3a2e15;border-color:#f39c12}
       <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln22zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJpacw3bOe+eefdvzx3vmzGFhF/be995Dz0M/DkxXVXdV/6u6uroJACAaY4wxGGO890KIIY6uYFiWZSul1CCEIKWUiPivsz+APWJkua7rApTSY4wxIlLvXcfzPO85b5xzznmMcYwxzjnGWYzxGOM4znlPCGOMc84YY4xzTlVVxRgDAIy1FmOM1hhjrQMAjDFijLHWOgDGGGuttY4xBgBrrQUAjDHGGGNsjLHOWhsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" alt="Rattana" height="34">
       <div>
         <div class="logo-text">Rattana <span>DS_DC</span></div>
-        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v3.0</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v3.1</span></div>
       </div>
     </div>
     <div class="header-actions">
@@ -789,6 +790,41 @@ window.addEventListener('hashchange', router);
 // ─────────────────────────────────────────────
 // DETAIL PAGE
 // ─────────────────────────────────────────────
+function getPromoDetails(r, g) {
+  if (!promoLoaded || !promoRules.length) return [];
+  const info  = pddt.get(r.SKU_NAME);
+  const brand = info?.brand || '';
+  const size  = info?.size  || '';
+  const unit  = fmtUnit(r.TRD_UTQNAME);
+  const qty   = parseFloat(r.TRD_QTY) || 0;
+  const slmnRole = roleMap.get(cleanSlmn(g.SLMN_NAME));
+  return promoRules.filter(rule => {
+    if (rule.method === 'PRODUCT NAME' && rule.value !== r.SKU_NAME) return false;
+    if (rule.method === 'CAT SIZE'     && rule.value !== size)        return false;
+    if (rule.method === 'CAT BRAND'    && rule.value !== brand)       return false;
+    if (rule.unit && rule.unit !== unit) return false;
+    if (rule.warehouses && g.WL_CODE) {
+      if (!rule.warehouses.split(',').map(w=>w.trim()).includes(g.WL_CODE)) return false;
+    }
+    if (rule.startDate || rule.endDate) {
+      const d = parseDateStr(g.DI_DATE);
+      if (!d) return false;
+      if (rule.startDate && d < rule.startDate) return false;
+      if (rule.endDate && d > new Date(rule.endDate.getTime() + 86400000)) return false;
+    }
+    if (rule.role !== null) {
+      if (slmnRole == null) return false;
+      if (rule.role === 3 && !(slmnRole === 3 || slmnRole >= 5)) return false;
+      if (rule.role === 4 && !(slmnRole >= 4)) return false;
+    }
+    const sets = Math.floor(qty / rule.qty);
+    return sets > 0 && rule.freeProduct;
+  }).map(rule => ({
+    freeProduct: rule.freeProduct,
+    freeQty: Math.floor(qty / rule.qty) * rule.freeQtyEA,
+  }));
+}
+
 function renderDetail(diRef) {
   const g = groups.find(x => x.DI_REF === diRef);
   const el = document.getElementById('detailContent');
@@ -818,6 +854,10 @@ function renderDetail(diRef) {
     const remark  = r.DI_REMARK ? `<span style="margin-left:8px;color:var(--muted);font-size:11px">${escHtml(r.DI_REMARK)}</span>` : '';
     const promoTag = hasPromo(r.SKU_NAME, info?.brand||'', info?.size||'')
       ? `<span class="badge-promo">🎁 มีโปร</span>` : '';
+    const promoDetails = getPromoDetails(r, g);
+    const promoDetailHtml = promoDetails.map(d =>
+      `<div class="promo-detail">🎁 แถม: ${escHtml(d.freeProduct)} ${fmtInt(d.freeQty)} EA</div>`
+    ).join('');
     return `
       <div class="prod-item">
         <div class="prod-info">
@@ -830,6 +870,7 @@ function renderDetail(diRef) {
             <span class="x">×</span> ฿${fmt(prc)}
             ${freeTag}${remark}
           </div>
+          ${promoDetailHtml}
         </div>
         <div class="prod-price">${promoTag}<div class="amt">฿${fmt(amt)}</div></div>
       </div>`;
