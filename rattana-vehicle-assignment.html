@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Rattana เลือกรถส่งสินค้า v1.2</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<style>
+:root{--navy:#0d1b3e;--navy-mid:#1a2f5e;--navy-light:#243b73;--gold:#c9a84c;--gold-light:#e8c86a;--success:#2ecc71;--danger:#e74c3c;--warning:#f39c12;--info:#3498db;--bg:#f4f6fb;--text:#0d1b3e;--card-bg:#ffffff;--border:#dde3f0;--muted:#6b7896;--row-alt:#fafbfd;--radius-sm:6px;--radius-md:12px;--radius-lg:16px;--shadow-md:0 2px 8px rgba(0,0,0,.08);--shadow-lg:0 8px 24px rgba(13,27,62,.12);--shadow-gold:0 4px 12px rgba(201,168,76,.35)}
+body.dark{--bg:#0a1020;--text:#e8eaf0;--card-bg:#111c35;--border:#243b73;--muted:#8a98b8;--row-alt:#0f1830}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;min-height:100dvh;background:var(--bg);color:var(--text);transition:background .25s,color .25s;overflow-x:hidden}
+button{font-family:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+input,select{font-family:inherit;font-size:16px}
+
+header{background:var(--navy);color:#fff;padding:12px 16px;position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:10px;border-bottom:3px solid var(--gold)}
+.logo-text{font-weight:700;font-size:16px;color:#fff;flex:1;line-height:1.2}
+.logo-text span{color:var(--gold)}
+.ver{font-size:10px;color:rgba(255,255,255,.4);display:block;font-weight:400}
+.icon-btn{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.2);width:38px;height:38px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:17px;transition:background .15s;flex-shrink:0}
+.icon-btn:hover{background:rgba(255,255,255,.12)}
+
+.content{padding:12px;max-width:1300px;margin:0 auto}
+@media(min-width:640px){.content{padding:16px}}
+
+.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px}
+@media(min-width:640px){.stat-grid{grid-template-columns:repeat(4,1fr)}}
+.stat-card{background:var(--card-bg);border-radius:var(--radius-md);padding:14px 16px;border:1px solid var(--border);border-top:3px solid var(--gold)}
+.stat-card.s4{border-top-color:var(--info)}.stat-card.s6{border-top-color:var(--danger)}.stat-card.sn{border-top-color:var(--muted)}
+.s-label{font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin-bottom:4px}
+.s-value{font-size:24px;font-weight:700}.s-value.blue{color:var(--info)}.s-value.red{color:var(--danger)}.s-value.gray{color:var(--muted)}
+
+.filter-bar{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.search-input{flex:1;min-width:160px;height:40px;padding:0 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;outline:none;transition:border-color .15s}
+.search-input:focus{border-color:var(--gold)}
+.fsel{height:40px;padding:0 10px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:13px;cursor:pointer;outline:none}
+.fsel:focus{border-color:var(--gold)}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid transparent;min-height:36px}
+.btn-gold{background:var(--gold);color:var(--navy)}.btn-gold:hover{background:var(--gold-light)}
+.btn-outline{background:transparent;color:var(--text);border-color:var(--border)}.btn-outline:hover{background:var(--border)}
+
+.card{background:var(--card-bg);border-radius:var(--radius-md);border:1px solid var(--border);box-shadow:var(--shadow-md);overflow:hidden;margin-bottom:12px}
+.card-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);background:linear-gradient(to right,rgba(201,168,76,.07),transparent)}
+.card-head h3{font-size:14px;font-weight:700}
+
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tbl{width:100%;border-collapse:collapse;min-width:650px}
+.tbl thead{background:var(--navy);color:#fff;position:sticky;top:0;z-index:5}
+.tbl thead th{padding:10px 12px;text-align:left;font-size:12px;font-weight:600;white-space:nowrap;border-bottom:2px solid var(--gold);user-select:none}
+.tbl thead th.sortable{cursor:pointer}.tbl thead th.sortable:hover{background:var(--navy-mid)}
+.sort-ind{font-size:10px;color:var(--gold);margin-left:3px}
+.tbl tbody tr{border-bottom:1px solid var(--border);transition:background .12s}
+.tbl tbody tr:nth-child(even){background:var(--row-alt)}
+.tbl tbody tr:hover{background:rgba(201,168,76,.07)}
+.tbl td{padding:8px 12px;font-size:13px;vertical-align:middle}
+.tbl .empty-row td{text-align:center;padding:40px;color:var(--muted)}
+
+.veh-btns{display:flex;gap:6px}
+.veh-btn{padding:5px 14px;border-radius:20px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;border:1.5px solid var(--border);background:var(--card-bg);color:var(--muted);transition:all .15s;white-space:nowrap;min-height:30px}
+.veh-btn:hover{border-color:var(--gold);color:var(--gold)}
+.veh-btn.sel-4{background:#e3f0fd;border-color:var(--info);color:#1a6fb8;font-weight:700}
+.veh-btn.sel-6{background:#ffd5d0;border-color:var(--danger);color:#c0392b;font-weight:700}
+body.dark .veh-btn{background:var(--navy-light);border-color:var(--border)}
+body.dark .veh-btn.sel-4{background:#1a3a5e;border-color:var(--info);color:#7bc0f8}
+body.dark .veh-btn.sel-6{background:#3a1a17;border-color:var(--danger);color:#ff8a7e}
+
+#spinner{display:none;position:fixed;inset:0;background:rgba(13,27,62,.6);align-items:center;justify-content:center;z-index:99999;backdrop-filter:blur(3px)}
+#spinner.show{display:flex}
+.sp-box{background:#fff;border-radius:var(--radius-lg);padding:32px 40px;text-align:center;border-top:4px solid var(--gold)}
+.sp-ring{width:48px;height:48px;border:5px solid #dde3f0;border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px}
+body.dark .sp-box{background:var(--card-bg)}
+
+.toast{position:fixed;bottom:24px;right:16px;padding:12px 20px;border-radius:var(--radius-md);color:#fff;z-index:9999;animation:slideIn .3s ease;font-weight:500;box-shadow:var(--shadow-lg);max-width:90vw;font-size:13px}
+.toast-success{background:var(--success)}.toast-error{background:var(--danger)}.toast-info{background:var(--navy-mid);border-left:3px solid var(--gold)}
+
+#backToTop{position:fixed;bottom:24px;right:16px;background:var(--gold);color:var(--navy);border:none;border-radius:50%;width:46px;height:46px;display:none;align-items:center;justify-content:center;box-shadow:var(--shadow-gold);z-index:90;font-size:20px;cursor:pointer;font-weight:700}
+#backToTop.show{display:flex}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+</style>
+</head>
+<body>
+
+<header>
+  <img src="data:image/png;base64,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" alt="Rattana" height="36" style="object-fit:contain;flex-shrink:0;border-radius:4px">
+  <div class="logo-text">
+    <span>Rattana</span> เลือกรถส่งสินค้า
+    <span class="ver">v1.2 · 22/07/2569</span>
+  </div>
+  <button class="icon-btn" onclick="refreshData()" id="btnRefresh" title="รีเฟรช">↻</button>
+  <button class="icon-btn" onclick="toggleDark()" title="สลับธีม">🌙</button>
+</header>
+
+<div class="content">
+
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="s-label">ร้านค้าทั้งหมด</div>
+      <div class="s-value" id="statTotal">—</div>
+    </div>
+    <div class="stat-card s4">
+      <div class="s-label">รถ 4 ล้อ</div>
+      <div class="s-value blue" id="stat4">—</div>
+    </div>
+    <div class="stat-card s6">
+      <div class="s-label">รถ 6 ล้อ</div>
+      <div class="s-value red" id="stat6">—</div>
+    </div>
+    <div class="stat-card sn">
+      <div class="s-label">ยังไม่กำหนด</div>
+      <div class="s-value gray" id="statNone">—</div>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <input class="search-input" type="text" id="searchInput" placeholder="🔍 ค้นหาร้านค้า / เซลล์ / รูท..." oninput="applyFilters()">
+    <select class="fsel" id="filterRoute" onchange="applyFilters()">
+      <option value="">— ทุกรูท —</option>
+    </select>
+    <select class="fsel" id="filterSales" onchange="applyFilters()">
+      <option value="">— ทุกเซลล์ —</option>
+    </select>
+    <select class="fsel" id="filterVeh" onchange="applyFilters()">
+      <option value="">— ทุกประเภทรถ —</option>
+      <option value="4">รถ 4 ล้อ</option>
+      <option value="6">รถ 6 ล้อ</option>
+      <option value="none">ยังไม่กำหนด</option>
+    </select>
+    <button class="btn btn-gold" onclick="exportExcel()">📥 Excel</button>
+    <button class="btn btn-outline" onclick="clearAll()" title="ล้างการกำหนดรถทั้งหมด">🗑 ล้างทั้งหมด</button>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h3>🚚 รายชื่อร้านค้า — กำหนดประเภทรถ</h3>
+      <span id="rowCount" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl" id="mainTbl">
+        <thead>
+          <tr>
+            <th style="width:40px">#</th>
+            <th class="sortable" data-key="storeName">ชื่อร้านค้า <span class="sort-ind"></span></th>
+            <th class="sortable" data-key="wh">WH <span class="sort-ind"></span></th>
+            <th class="sortable" data-key="route">ชื่อรูท <span class="sort-ind"></span></th>
+            <th class="sortable" data-key="sales">เซลล์ผู้ดูแล <span class="sort-ind"></span></th>
+            <th style="min-width:200px">ประเภทรถ</th>
+          </tr>
+        </thead>
+        <tbody id="mainTbody">
+          <tr class="empty-row"><td colspan="5">กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<div id="spinner">
+  <div class="sp-box">
+    <div class="sp-ring"></div>
+    <p id="spinnerMsg">กำลังโหลดข้อมูล...</p>
+  </div>
+</div>
+
+<button id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+<script>
+const SHEET_ID   = '1_QyRBMnUJM244i0yFOMGqWMW4iDVb86oX-SDPtxJ9pE';
+const SHEET_NAME = 'Cus';
+const ASSIGN_KEY = 'rattana-veh-assign';
+const CACHE_KEY  = 'rattana-veh-cache';
+const TTL        = 5 * 60 * 1000;
+
+let allStores       = [];
+let filteredStores  = [];
+let assignments     = {};
+const sortState     = { key: 'storeName', dir: 'asc' };
+
+/* ── helpers ── */
+const showSpinner = m => { document.getElementById('spinnerMsg').textContent = m || 'Loading...'; document.getElementById('spinner').classList.add('show'); };
+const hideSpinner = () => document.getElementById('spinner').classList.remove('show');
+function showToast(msg, type = 'info') {
+  const t = document.createElement('div');
+  t.className = 'toast toast-' + type;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3200);
+}
+function getCached() { try { const i = JSON.parse(localStorage.getItem(CACHE_KEY)); return i && Date.now() - i.ts < TTL ? i.data : null; } catch { return null; } }
+function setCache(d)  { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: d })); }
+function loadAssign() { try { return JSON.parse(localStorage.getItem(ASSIGN_KEY)) || {}; } catch { return {}; } }
+function saveAssign() { localStorage.setItem(ASSIGN_KEY, JSON.stringify(assignments)); }
+
+/* ── CSV parser ── */
+function parseCsv(text) {
+  if (!text) return [];
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const rows = []; let row = [], cell = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQ) { if (ch === '"') { if (text[i+1]==='"'){cell+='"';i++;}else inQ=false; } else cell+=ch; }
+    else if (ch==='"') inQ=true;
+    else if (ch===',') { row.push(cell); cell=''; }
+    else if (ch==='\r') {}
+    else if (ch==='\n') { row.push(cell); rows.push(row); row=[]; cell=''; }
+    else cell+=ch;
+  }
+  if (cell||row.length) { row.push(cell); rows.push(row); }
+  if (!rows.length) return [];
+  const clean = s => String(s||'').replace(/[​‌‍﻿]/g,'').replace(/ /g,' ').trim();
+  const hdrs = rows[0].map(clean);
+  return rows.slice(1).filter(r=>r.some(c=>clean(c))).map(r=>Object.fromEntries(hdrs.map((k,i)=>[k,clean(r[i]||'')])));
+}
+
+/* ── fetch ── */
+async function fetchSheet() {
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return parseCsv(await res.text());
+}
+
+/* ── process: deduplicate by store name ── */
+function processRows(rows) {
+  const seen = new Set();
+  const out  = [];
+  for (const r of rows) {
+    const name = r['ชื่อร้านค้า'] || '';
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    out.push({
+      storeName : name,
+      route     : r['ชื่อรูท'] || '',
+      sales     : r['เซลล์ผู้ดูแล'] || '',
+      wh        : r['WH'] || '',
+    });
+  }
+  return out.sort((a,b) => a.storeName.localeCompare(b.storeName, 'th'));
+}
+
+/* ── load data ── */
+async function loadData(force = false) {
+  showSpinner('กำลังโหลดข้อมูลจาก Google Sheets...');
+  try {
+    let rows = force ? null : getCached();
+    if (!rows) { rows = await fetchSheet(); setCache(rows); }
+    allStores   = processRows(rows);
+    assignments = loadAssign();
+    populateFilters();
+    applyFilters();
+    showToast(`โหลดแล้ว ${allStores.length} ร้าน ✓`, 'success');
+  } catch (e) {
+    showToast('โหลดไม่สำเร็จ: ' + e.message, 'error');
+  } finally {
+    hideSpinner();
+  }
+}
+
+/* ── populate dropdowns ── */
+function populateFilters() {
+  const routes = [...new Set(allStores.map(s=>s.route).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));
+  const sales  = [...new Set(allStores.map(s=>s.sales).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));
+  document.getElementById('filterRoute').innerHTML =
+    '<option value="">— ทุกรูท —</option>' + routes.map(r=>`<option value="${esc(r)}">${r}</option>`).join('');
+  document.getElementById('filterSales').innerHTML =
+    '<option value="">— ทุกเซลล์ —</option>' + sales.map(s=>`<option value="${esc(s)}">${s}</option>`).join('');
+}
+
+/* ── filter + sort ── */
+function applyFilters() {
+  const q     = document.getElementById('searchInput').value.toLowerCase();
+  const route = document.getElementById('filterRoute').value;
+  const sales = document.getElementById('filterSales').value;
+  const veh   = document.getElementById('filterVeh').value;
+
+  filteredStores = allStores.filter(s => {
+    if (q && ![s.storeName,s.route,s.sales].some(v=>v.toLowerCase().includes(q))) return false;
+    if (route && s.route !== route) return false;
+    if (sales && s.sales !== sales) return false;
+    if (veh) {
+      const a = assignments[s.storeName];
+      if (veh === 'none' && a)        return false;
+      if (veh === '4'    && a !== '4') return false;
+      if (veh === '6'    && a !== '6') return false;
+    }
+    return true;
+  });
+
+  const m = sortState.dir === 'asc' ? 1 : -1;
+  const k = sortState.key;
+  filteredStores.sort((a,b) => String(a[k]||'').localeCompare(String(b[k]||''),'th') * m);
+
+  renderTable();
+  updateStats();
+}
+
+/* ── render ── */
+function renderTable() {
+  const tbody = document.getElementById('mainTbody');
+  document.getElementById('rowCount').textContent = filteredStores.length + ' ร้าน';
+
+  if (!filteredStores.length) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="6">ไม่พบข้อมูล</td></tr>';
+    updateSortInds();
+    return;
+  }
+
+  tbody.innerHTML = filteredStores.map((s, i) => {
+    const a  = assignments[s.storeName];
+    const c4 = a === '4' ? 'sel-4' : '';
+    const c6 = a === '6' ? 'sel-6' : '';
+    const sn = esc(s.storeName);
+    return `<tr>
+      <td style="color:var(--muted);font-size:11px">${i+1}</td>
+      <td><strong>${s.storeName}</strong></td>
+      <td>${s.wh || '<span style="color:var(--muted)">—</span>'}</td>
+      <td>${s.route || '<span style="color:var(--muted)">—</span>'}</td>
+      <td>${s.sales || '<span style="color:var(--muted)">—</span>'}</td>
+      <td>
+        <div class="veh-btns">
+          <button class="veh-btn ${c4}" onclick="assign('${sn}','4')">🚛 4 ล้อ</button>
+          <button class="veh-btn ${c6}" onclick="assign('${sn}','6')">🚚 6 ล้อ</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  updateSortInds();
+}
+
+/* ── assign vehicle ── */
+function assign(name, type) {
+  // decode html entities that esc() created
+  const decoded = name.replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+  if (assignments[decoded] === type) delete assignments[decoded];
+  else assignments[decoded] = type;
+  saveAssign();
+  applyFilters();
+}
+
+/* ── stats ── */
+function updateStats() {
+  const total = allStores.length;
+  const c4    = allStores.filter(s => assignments[s.storeName] === '4').length;
+  const c6    = allStores.filter(s => assignments[s.storeName] === '6').length;
+  document.getElementById('statTotal').textContent = total;
+  document.getElementById('stat4').textContent     = c4;
+  document.getElementById('stat6').textContent     = c6;
+  document.getElementById('statNone').textContent  = Math.max(0, total - c4 - c6);
+}
+
+/* ── sort headers ── */
+function bindSort() {
+  document.querySelectorAll('#mainTbl thead th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.key;
+      if (sortState.key === key) sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+      else { sortState.key = key; sortState.dir = 'asc'; }
+      applyFilters();
+    });
+  });
+}
+function updateSortInds() {
+  document.querySelectorAll('#mainTbl thead th[data-key]').forEach(th => {
+    const ind = th.querySelector('.sort-ind');
+    if (ind) ind.textContent = th.dataset.key === sortState.key ? (sortState.dir === 'asc' ? '▲' : '▼') : '';
+  });
+}
+
+/* ── export ── */
+function exportExcel() {
+  if (!filteredStores.length) { showToast('ไม่มีข้อมูล', 'error'); return; }
+  const data = filteredStores.map((s, i) => ({
+    '#'             : i + 1,
+    'ชื่อร้านค้า'  : s.storeName,
+    'WH'            : s.wh || '',
+    'ชื่อรูท'       : s.route || '',
+    'เซลล์ผู้ดูแล' : s.sales || '',
+    'ประเภทรถ'      : assignments[s.storeName] ? 'รถ ' + assignments[s.storeName] + ' ล้อ' : 'ยังไม่กำหนด',
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'VehicleAssignment');
+  XLSX.writeFile(wb, 'Rattana-VehicleAssignment.xlsx');
+  showToast('Export Excel เรียบร้อย ✓', 'success');
+}
+
+/* ── clear all ── */
+function clearAll() {
+  if (!confirm('ล้างการกำหนดรถทั้งหมด?')) return;
+  assignments = {};
+  saveAssign();
+  applyFilters();
+  showToast('ล้างการกำหนดรถเรียบร้อย', 'info');
+}
+
+/* ── refresh ── */
+async function refreshData() {
+  const btn = document.getElementById('btnRefresh');
+  btn.disabled = true;
+  btn.style.transform = 'rotate(360deg)';
+  btn.style.transition = 'transform .6s';
+  await loadData(true);
+  btn.disabled = false;
+  setTimeout(() => { btn.style.transform = ''; btn.style.transition = ''; }, 700);
+}
+
+/* ── dark mode ── */
+function toggleDark() {
+  document.body.classList.toggle('dark');
+  localStorage.setItem('rattana-dark', document.body.classList.contains('dark') ? '1' : '0');
+}
+
+/* ── utils ── */
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ── back to top ── */
+window.addEventListener('scroll', () => {
+  document.getElementById('backToTop').classList.toggle('show', window.scrollY > 300);
+});
+
+/* ── init ── */
+if (localStorage.getItem('rattana-dark') === '1') document.body.classList.add('dark');
+bindSort();
+loadData();
+</script>
+</body>
+</html>
