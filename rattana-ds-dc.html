@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS_DC v4.2 — ใบสั่งสินค้า</title>
+<title>Rattana DS_DC v4.3 — ใบสั่งสินค้า</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -271,7 +271,7 @@ body.dark .det-status-wrap.s-warn{background:#3a2e15;border-color:#f39c12}
       <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln22zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJpacw3bOe+eefdvzx3vmzGFhF/be995Dz0M/DkxXVXdV/6u6uroJACAaY4wxGGO890KIIY6uYFiWZSul1CCEIKWUiPivsz+APWJkua7rApTSY4wxIlLvXcfzPO85b5xzznmMcYwxzjnGWYzxGOM4znlPCGOMc84YY4xzTlVVxRgDAIy1FmOM1hhjrQMAjDFijLHWOgDGGGuttY4xBgBrrQUAjDHGGGNsjLHOWhsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" alt="Rattana" height="34">
       <div>
         <div class="logo-text">Rattana <span>DS_DC</span></div>
-        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v4.2</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v4.3</span></div>
       </div>
     </div>
     <div class="header-actions">
@@ -379,7 +379,7 @@ body.dark .det-status-wrap.s-warn{background:#3a2e15;border-color:#f39c12}
 // ─────────────────────────────────────────────
 // CONFIG
 // ─────────────────────────────────────────────
-const GAS_URL    = 'https://script.google.com/macros/s/AKfycbyvFmROf_0A463KPgWoTk1venzkTkDrQ1-wCiyYeh6G1GgA1g7lLsg-TBpY1tJiAZ0-kg/exec';
+const GAS_URL    = 'https://script.google.com/macros/s/AKfycbyf4dx7zD3zxJVFC8bJXgku6SLm_0omrLVMzY7amCd1OkLqvdrlSZarKEEssyt4yHgD/exec';
 const SHEET_ID   = '1NO8sHyDxwHTRqgcLFCxq_g_Rr09lfe4gt_odwkIgiB0';
 const SHEET_NAME = 'DS_DC';
 const PDDT_SHEET_ID   = '16mYDqAqqJma-_0vCIAajy6bcjdOZ7F6VagxkdkqAB2I';
@@ -388,6 +388,9 @@ const PROMO_SHEET_ID   = '1CqHARklgveAeJ6rTkNeyUSku__puTiNE7-c6ebn93W8';
 const PROMO_SHEET_NAME = 'Promotion';
 const ROLE_SHEET_ID   = '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ';
 const ROLE_SHEET_NAME = 'Sheet1';
+
+// เดือนที่ดึงจาก BigQuery (อัพเดตเมื่อมีข้อมูลใหม่)
+const BQ_MONTHS = new Set(['2025/11','2025/12','2026/01','2026/02','2026/03','2026/04','2026/05','2026/06']);
 
 // ─────────────────────────────────────────────
 // STATE
@@ -472,6 +475,32 @@ async function fetchCSV(sheetId, sheetName, query = '') {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return parseCsv(await res.text());
+}
+
+async function fetchFromBQ(monthKey) {
+  const url = `${GAS_URL}?action=bq&month=${encodeURIComponent(monthKey)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`BigQuery HTTP ${res.status}`);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  // แปลง BQ columns → format เดิมของแอพ
+  return (data.rows || []).map(r => ({
+    DI_DATE:     (r.Month_Year || '').slice(0,7) + '/01',
+    DI_REF:      r.Doc_No       || '',
+    AR_CODE:     r.Customer_Code || '',
+    AR_NAME:     r.Customer_Name || '',
+    SLMN_CODE:   r.Saleman_Code || '',
+    SLMN_NAME:   r.Saleman_Name || '',
+    WL_CODE:     r.WH           || '',
+    TRD_SH_CODE: r.Product_Code || '',
+    SKU_NAME:    r.Product_Name || '',
+    TRD_UTQNAME: r.Unit         || '',
+    TRD_QTY:     r.Sell_EA      || '0',
+    TRD_Q_FREE:  r.Free_EA      || '0',
+    TRD_U_PRC:   r.Unit_Price   || '0',
+    TRD_G_AMT:   r.TotalBaht    || '0',
+    DI_REMARK:   '',
+  }));
 }
 
 // ─────────────────────────────────────────────
@@ -624,11 +653,20 @@ async function loadData() {
   try {
     await Promise.all([loadPDDT(), loadPromo(), loadRoles()]);
     const { fromStr, toStr } = getDateRange();
-    const query = `SELECT * WHERE A >= '${fromStr}' AND A <= '${toStr}'`;
-    const rows = await fetchCSV(SHEET_ID, SHEET_NAME, query);
+    const monthKey = `${pickerYear}/${String(pickerMonth + 1).padStart(2, '0')}`;
+    let rows;
+    if (BQ_MONTHS.has(monthKey)) {
+      showSpinner('กำลังโหลดจาก BigQuery...');
+      rows = await fetchFromBQ(monthKey);
+      document.getElementById('resultInfo').textContent =
+        `โหลดแล้ว ${rows.length.toLocaleString()} แถว | ${monthKey} (BigQuery)`;
+    } else {
+      const query = `SELECT * WHERE A >= '${fromStr}' AND A <= '${toStr}'`;
+      rows = await fetchCSV(SHEET_ID, SHEET_NAME, query);
+      document.getElementById('resultInfo').textContent =
+        `โหลดแล้ว ${rows.length.toLocaleString()} แถว | ${fromStr} ถึง ${toStr}`;
+    }
     allRows = rows;
-    document.getElementById('resultInfo').textContent =
-      `โหลดแล้ว ${rows.length.toLocaleString()} แถว | ${fromStr} ถึง ${toStr}`;
     applyFilter();
     showToast(`โหลด ${allRows.length.toLocaleString()} แถว ✓`, 'success');
   } catch(e) {
