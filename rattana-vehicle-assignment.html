@@ -191,7 +191,7 @@ function showToast(msg, type = 'info') {
   setTimeout(() => t.remove(), 3200);
 }
 function getCached() { try { const i = JSON.parse(localStorage.getItem(CACHE_KEY)); return i && Date.now() - i.ts < TTL ? i.data : null; } catch { return null; } }
-function setCache(d)  { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: d })); }
+function setCache(d)  { try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: d })); } catch { /* quota exceeded — skip cache */ } }
 function loadAssign() { try { return JSON.parse(localStorage.getItem(ASSIGN_KEY)) || {}; } catch { return {}; } }
 function saveAssign() { localStorage.setItem(ASSIGN_KEY, JSON.stringify(assignments)); }
 
@@ -246,9 +246,14 @@ function processRows(rows) {
 async function loadData(force = false) {
   showSpinner('กำลังโหลดข้อมูลจาก Google Sheets...');
   try {
-    let rows = force ? null : getCached();
-    if (!rows) { rows = await fetchSheet(); setCache(rows); }
-    allStores   = processRows(rows);
+    let cached = force ? null : getCached();
+    if (cached) {
+      allStores = cached;
+    } else {
+      const rows = await fetchSheet();
+      allStores  = processRows(rows);
+      setCache(allStores); // cache processed (4 fields) not raw CSV
+    }
     assignments = loadAssign();
     populateFilters();
     applyFilters();
