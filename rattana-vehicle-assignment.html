@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana เลือกรถส่งสินค้า v1.8</title>
+<title>Rattana เลือกรถส่งสินค้า v1.9</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -80,18 +80,54 @@ body.dark .sp-box{background:var(--card-bg)}
 
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── Login overlay ── */
+#loginOverlay{display:none;position:fixed;inset:0;background:var(--navy);z-index:99990;align-items:center;justify-content:center;padding:16px}
+#loginOverlay.show{display:flex}
+.login-card{background:var(--card-bg);border-radius:20px;padding:36px 32px;width:100%;max-width:400px;text-align:center;border-top:4px solid var(--gold);box-shadow:0 16px 48px rgba(0,0,0,.3);animation:fadeUp .35s ease}
+.login-card img{width:64px;height:64px;object-fit:contain;border-radius:8px;margin-bottom:16px}
+.login-card h2{font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px}
+.login-card p.sub{font-size:13px;color:var(--muted);margin-bottom:24px}
+.login-input{width:100%;height:48px;padding:0 16px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;font-family:inherit;outline:none;transition:border-color .15s;text-align:left}
+.login-input:focus{border-color:var(--gold)}
+.login-btn{width:100%;height:48px;margin-top:12px;border-radius:10px;background:var(--gold);color:var(--navy);font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;border:none;transition:background .15s}
+.login-btn:hover{background:var(--gold-light)}
+.login-btn:disabled{opacity:.5;cursor:not-allowed}
+.login-err{margin-top:10px;font-size:13px;color:var(--danger);min-height:20px}
+/* ── Header user chip ── */
+.user-chip{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:20px;padding:4px 10px 4px 6px;font-size:12px;color:#fff;white-space:nowrap;max-width:140px;overflow:hidden}
+.user-chip .av{width:24px;height:24px;border-radius:50%;background:var(--gold);color:var(--navy);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.user-chip .uname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 </head>
 <body>
+
+<!-- ── Login overlay ── -->
+<div id="loginOverlay" class="show">
+  <div class="login-card">
+    <img src="data:image/png;base64,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" alt="Rattana" style="width:56px;height:56px;object-fit:contain;border-radius:8px;margin-bottom:16px">
+    <h2>Rattana <span style="color:var(--gold)">เลือกรถส่งสินค้า</span></h2>
+    <p class="sub">กรอก Email เพื่อเข้าใช้งาน</p>
+    <input id="loginEmail" class="login-input" type="email" placeholder="yourname@company.com" autocomplete="email" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="login-btn" id="loginBtn" onclick="doLogin()">เข้าสู่ระบบ</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
 
 <header>
   <img src="data:image/png;base64,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" alt="Rattana" height="36" style="object-fit:contain;flex-shrink:0;border-radius:4px">
   <div class="logo-text">
     <span>Rattana</span> เลือกรถส่งสินค้า
-    <span class="ver">v1.7 · 22/07/2569</span>
+    <span class="ver">v1.9 · 22/07/2569</span>
+  </div>
+  <div id="userChip" class="user-chip" style="display:none">
+    <div class="av" id="userAv"></div>
+    <span class="uname" id="userName"></span>
   </div>
   <button class="icon-btn" onclick="refreshData()" id="btnRefresh" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" title="สลับธีม">🌙</button>
+  <button class="icon-btn" id="logoutBtn" onclick="logout()" title="ออกจากระบบ" style="display:none">🚪</button>
 </header>
 
 <div class="content">
@@ -166,6 +202,8 @@ body.dark .sp-box{background:var(--card-bg)}
 <button id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
 
 <script>
+const USERS_SHEET_ID = '1M6HdlSsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ';
+const USER_KEY       = 'rattana-user';
 const SHEET_ID   = '1_QyRBMnUJM244i0yFOMGqWMW4iDVb86oX-SDPtxJ9pE';
 const SHEET_NAME = 'Cus';
 const ASSIGN_KEY = 'rattana-veh-assign';
@@ -464,10 +502,82 @@ window.addEventListener('scroll', () => {
   document.getElementById('backToTop').classList.toggle('show', window.scrollY > 300);
 });
 
+/* ── login ── */
+async function fetchUsers() {
+  const url = `https://docs.google.com/spreadsheets/d/${USERS_SHEET_ID}/gviz/tq?tqx=out:csv`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return parseCsv(await res.text());
+}
+
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+  const errEl = document.getElementById('loginErr');
+  const btn   = document.getElementById('loginBtn');
+  errEl.textContent = '';
+  if (!email) { errEl.textContent = 'กรุณากรอก Email'; return; }
+  btn.disabled = true;
+  btn.textContent = 'กำลังตรวจสอบ...';
+  try {
+    const rows = await fetchUsers();
+    const user = rows.find(r => {
+      const e = (r['E-mail'] || r['Email'] || r['email'] || '').trim().toLowerCase();
+      return e === email;
+    });
+    if (!user) { errEl.textContent = '❌ ไม่พบ Email นี้ในระบบ'; return; }
+    const status = (user['Status'] || '').trim();
+    if (status !== 'Active') { errEl.textContent = `❌ บัญชีนี้ไม่ได้รับอนุญาต (Status: ${status || 'ไม่มีข้อมูล'})`; return; }
+    const profile = {
+      email        : email,
+      name         : user['ชื่อ - สกุล'] || user['ชื่อ-สกุล'] || '',
+      nickname     : user['ชื่อเล่น'] || '',
+      company      : user['บริษัท'] || '',
+      warehouse    : user['W'] || '',
+      empId        : user['รหัสพนักงาน'] || '',
+      role         : user['User Role'] || '',
+      approvalStage: user['Approval Stage'] || '',
+      dept         : user['แผนก'] || '',
+    };
+    sessionStorage.setItem(USER_KEY, JSON.stringify(profile));
+    showApp(profile);
+  } catch(e) {
+    errEl.textContent = 'เกิดข้อผิดพลาด: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'เข้าสู่ระบบ';
+  }
+}
+
+function showApp(profile) {
+  document.getElementById('loginOverlay').classList.remove('show');
+  const nick = profile.nickname || profile.name.split(' ')[0] || profile.email;
+  document.getElementById('userAv').textContent   = nick.charAt(0).toUpperCase();
+  document.getElementById('userName').textContent = nick;
+  document.getElementById('userChip').style.display  = '';
+  document.getElementById('logoutBtn').style.display  = '';
+}
+
+function logout() {
+  if (!confirm('ออกจากระบบ?')) return;
+  sessionStorage.removeItem(USER_KEY);
+  document.getElementById('loginEmail').value = '';
+  document.getElementById('loginErr').textContent = '';
+  document.getElementById('loginOverlay').classList.add('show');
+  document.getElementById('userChip').style.display  = 'none';
+  document.getElementById('logoutBtn').style.display  = 'none';
+}
+
 /* ── init ── */
 if (localStorage.getItem('rattana-dark') === '1') document.body.classList.add('dark');
 bindSort();
-loadData();
+const _savedUser = (() => { try { return JSON.parse(sessionStorage.getItem(USER_KEY)); } catch { return null; } })();
+if (_savedUser && _savedUser.email) {
+  showApp(_savedUser);
+  loadData();
+} else {
+  document.getElementById('loginOverlay').classList.add('show');
+  document.getElementById('loginEmail').focus();
+}
 </script>
 </body>
 </html>
