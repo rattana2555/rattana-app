@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS_DC v3.9 — ใบสั่งสินค้า</title>
+<title>Rattana DS_DC v4.0 — ใบสั่งสินค้า</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -271,7 +271,7 @@ body.dark .det-status-wrap.s-warn{background:#3a2e15;border-color:#f39c12}
       <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln22zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJpacw3bOe+eefdvzx3vmzGFhF/be995Dz0M/DkxXVXdV/6u6uroJACAaY4wxGGO890KIIY6uYFiWZSul1CCEIKWUiPivsz+APWJkua7rApTSY4wxIlLvXcfzPO85b5xzznmMcYwxzjnGWYzxGOM4znlPCGOMc84YY4xzTlVVxRgDAIy1FmOM1hhjrQMAjDFijLHWOgDGGGuttY4xBgBrrQUAjDHGGGNsjLHOWhsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" alt="Rattana" height="34">
       <div>
         <div class="logo-text">Rattana <span>DS_DC</span></div>
-        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v3.9</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v4.0</span></div>
       </div>
     </div>
     <div class="header-actions">
@@ -379,6 +379,7 @@ body.dark .det-status-wrap.s-warn{background:#3a2e15;border-color:#f39c12}
 // ─────────────────────────────────────────────
 // CONFIG
 // ─────────────────────────────────────────────
+const GAS_URL    = 'https://script.google.com/macros/s/AKfycbyvFmROf_0A463KPgWoTk1venzkTkDrQ1-wCiyYeh6G1GgA1g7lLsg-TBpY1tJiAZ0-kg/exec';
 const SHEET_ID   = '1NO8sHyDxwHTRqgcLFCxq_g_Rr09lfe4gt_odwkIgiB0';
 const SHEET_NAME = 'DS_DC';
 const PDDT_SHEET_ID   = '16mYDqAqqJma-_0vCIAajy6bcjdOZ7F6VagxkdkqAB2I';
@@ -394,6 +395,8 @@ const ROLE_SHEET_NAME = 'Sheet1';
 let allRows = [];
 let filteredRows = [];
 let groups = [];          // grouped by DI_REF
+let cachedRows = [];
+let cachedYear  = null;
 let sortState = { key: 'DI_DATE', dir: 'desc' };
 let currentPage = 1;
 const PAGE_SIZE = 100;
@@ -424,7 +427,11 @@ function shiftMonth(delta) {
   if (pickerMonth > 11) { pickerMonth = 0;  pickerYear++; }
   if (pickerMonth < 0)  { pickerMonth = 11; pickerYear--; }
   updateMonthLabel();
-  loadData();
+  if (cachedYear === pickerYear.toString() && cachedRows.length > 0) {
+    filterByMonth();
+  } else {
+    loadData();
+  }
 }
 function initDateRange() {
   pickerYear  = new Date().getFullYear();
@@ -617,19 +624,31 @@ async function loadPDDT() {
 // ─────────────────────────────────────────────
 // LOAD DATA
 // ─────────────────────────────────────────────
-async function loadData() {
+function filterByMonth() {
+  const mm = String(pickerMonth + 1).padStart(2, '0');
+  const monthKey = `${pickerYear}/${mm}`;
+  allRows = cachedRows.filter(r => r.Month_Year === monthKey);
   const { fromStr, toStr } = getDateRange();
-  const query = `SELECT * WHERE A >= '${fromStr}' AND A <= '${toStr}'`;
+  document.getElementById('resultInfo').textContent =
+    `โหลดแล้ว ${allRows.length.toLocaleString()} แถว | ${fromStr} ถึง ${toStr}`;
+  applyFilter();
+}
+
+async function loadData() {
+  const year = pickerYear.toString();
   showSpinner('กำลังโหลดข้อมูล...');
   setLoadingBar(true);
   try {
     await Promise.all([loadPDDT(), loadPromo(), loadRoles()]);
-    const rows = await fetchCSV(SHEET_ID, SHEET_NAME, query);
-    allRows = rows;
-    document.getElementById('resultInfo').textContent =
-      `โหลดแล้ว ${rows.length.toLocaleString()} แถว | ${fromStr} ถึง ${toStr}`;
-    applyFilter();
-    showToast(`โหลด ${rows.length.toLocaleString()} แถว ✓`, 'success');
+    if (cachedYear !== year || cachedRows.length === 0) {
+      const res = await fetch(`${GAS_URL}?year=${year}`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      cachedRows = data.rows || [];
+      cachedYear = year;
+    }
+    filterByMonth();
+    showToast(`โหลด ${allRows.length.toLocaleString()} แถว ✓`, 'success');
   } catch(e) {
     console.error(e);
     showToast('โหลดข้อมูลล้มเหลว: ' + e.message, 'error');
