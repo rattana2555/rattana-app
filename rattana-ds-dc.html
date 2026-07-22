@@ -1,10 +1,10 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS_DC v2.4 — ใบสั่งสินค้า</title>
+<title>Rattana DS_DC v2.5 — ใบสั่งสินค้า</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -190,7 +190,7 @@ body.dark .spinner-box{background:var(--card-bg)}
       <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln22zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJpacw3bOe+eefdvzx3vmzGFhF/be995Dz0M/DkxXVXdV/6u6uroJACAaY4wxGGO890KIIY6uYFiWZSul1CCEIKWUiPivsz+APWJkua7rApTSY4wxIlLvXcfzPO85b5xzznmMcYwxzjnGWYzxGOM4znlPCGOMc84YY4xzTlVVxRgDAIy1FmOM1hhjrQMAjDFijLHWOgDGGGuttY4xBgBrrQUAjDHGGGNsjLHOWhsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" alt="Rattana" height="34">
       <div>
         <div class="logo-text">Rattana <span>DS_DC</span></div>
-        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v2.4</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v2.5</span></div>
       </div>
     </div>
     <div class="header-actions">
@@ -282,10 +282,11 @@ body.dark .spinner-box{background:var(--card-bg)}
               <th data-key="SLMN_NAME" data-type="str">พนักงานขาย <span class="sort-ind"></span></th>
               <th data-key="WL_CODE" data-type="str">คลัง <span class="sort-ind"></span></th>
               <th data-key="_amt" data-type="num" style="text-align:right">มูลค่ารวม <span class="sort-ind"></span></th>
+              <th style="text-align:center">สถานะ</th>
             </tr>
           </thead>
           <tbody id="tblBody">
-            <tr class="empty-row"><td colspan="9">กรุณากด "โหลด" เพื่อดูข้อมูล</td></tr>
+            <tr class="empty-row"><td colspan="10">กรุณากด "โหลด" เพื่อดูข้อมูล</td></tr>
           </tbody>
         </table>
       </div>
@@ -331,6 +332,7 @@ let pddtLoaded = false;
 let promoByProduct = new Map();
 let promoBySize    = new Map();
 let promoByCat     = new Map();
+let promoRules     = [];
 let promoLoaded = false;
 
 // ─────────────────────────────────────────────
@@ -407,20 +409,80 @@ async function loadPromo() {
   try {
     const rows = await fetchCSV(PROMO_SHEET_ID, PROMO_SHEET_NAME);
     promoByProduct.clear(); promoBySize.clear(); promoByCat.clear();
+    promoRules = [];
     for (const r of rows) {
       const method = String(r['วิธีวัด'] || '').trim();
       const val    = String(r['ชื่อ']    || '').trim();
       if (!val || !method) continue;
       const m = method.toUpperCase();
-      if (m === 'PRODUCT NAME') { if (!promoByProduct.has(val)) promoByProduct.set(val, true); }
-      else if (m === 'CAT SIZE')  { if (!promoBySize.has(val))    promoBySize.set(val, true); }
-      else if (m === 'CAT BRAND') { if (!promoByCat.has(val))     promoByCat.set(val, true); }
+      if (m === 'PRODUCT NAME') promoByProduct.set(val, true);
+      else if (m === 'CAT SIZE')  promoBySize.set(val, true);
+      else if (m === 'CAT BRAND') promoByCat.set(val, true);
+      const rule = {
+        method: m,
+        value:  val,
+        qty:    parseFloat(r['จำนวน']) || 1,
+        unit:   String(r['รูปแบบขาย'] || '').trim().toUpperCase(),
+        freeProduct: String(r['แถมสินค้า'] || '').trim(),
+        barcode:     String(r['Barcode สินค้าแถมEA'] || '').trim(),
+        freeQtyEA:   parseFloat(r['จำนวนแถมEA']) || 0,
+        warehouses:  String(r['Warehouses'] || '').trim(),
+      };
+      if (rule.freeQtyEA > 0) promoRules.push(rule);
     }
     promoLoaded = true;
   } catch(e) { console.warn('Promo load failed:', e.message); }
 }
 function hasPromo(skuName, brand, size) {
   return promoByProduct.has(skuName) || promoBySize.has(size) || promoByCat.has(brand);
+}
+function normBarcode(s) {
+  const n = parseFloat(String(s).replace(/,/g,''));
+  if (!isNaN(n) && n > 0) return String(Math.round(n));
+  return String(s).replace(/\D/g,'');
+}
+function computeStatus(g) {
+  if (!promoLoaded || !promoRules.length) return null;
+  let expTotal = 0, actTotal = 0, matched = false;
+  for (const r of g.lines) {
+    const info  = pddt.get(r.SKU_NAME);
+    const brand = info?.brand || '';
+    const size  = info?.size  || '';
+    const unit  = fmtUnit(r.TRD_UTQNAME);
+    const qty   = parseFloat(r.TRD_QTY) || 0;
+    const rules = promoRules.filter(rule => {
+      if (rule.method === 'PRODUCT NAME' && rule.value !== r.SKU_NAME) return false;
+      if (rule.method === 'CAT SIZE'     && rule.value !== size)        return false;
+      if (rule.method === 'CAT BRAND'    && rule.value !== brand)       return false;
+      if (rule.unit && rule.unit !== unit) return false;
+      if (rule.warehouses && g.WL_CODE) {
+        const wls = rule.warehouses.split(',').map(w => w.trim());
+        if (!wls.includes(g.WL_CODE)) return false;
+      }
+      return true;
+    });
+    for (const rule of rules) {
+      matched = true;
+      const sets = Math.floor(qty / rule.qty);
+      if (sets <= 0) continue;
+      const exp = sets * rule.freeQtyEA;
+      expTotal += exp;
+      const normBC = normBarcode(rule.barcode);
+      let act = 0;
+      for (const fl of g.lines) {
+        const flBC = normBarcode(fl.TRD_SH_CODE || '');
+        const bcMatch = normBC.length >= 8 && flBC.length >= 8 && normBC.slice(-8) === flBC.slice(-8);
+        const nameKey = rule.freeProduct.split(' ').slice(0,2).join(' ').toLowerCase();
+        const nameMatch = nameKey.length > 3 && fl.SKU_NAME && fl.SKU_NAME.toLowerCase().includes(nameKey);
+        if (bcMatch || nameMatch) act += parseFloat(fl.TRD_Q_FREE) || 0;
+      }
+      actTotal += act;
+    }
+  }
+  if (!matched || expTotal === 0) return null;
+  if (actTotal > expTotal) return 'ผิดปกติ';
+  if (actTotal >= expTotal) return 'ครบ';
+  return 'ขาด';
 }
 
 // ─────────────────────────────────────────────
@@ -582,7 +644,7 @@ function renderTable() {
   const tbody = document.getElementById('tblBody');
 
   if (!pageGrps.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="9">ไม่พบข้อมูล</td></tr>`;
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="10">ไม่พบข้อมูล</td></tr>`;
     document.getElementById('pagination').innerHTML = '';
     updateSortIndicators();
     return;
@@ -635,9 +697,17 @@ function renderTable() {
         <td style="font-size:12px;white-space:nowrap">${escHtml(g.SLMN_NAME)}</td>
         <td>${wlBadge(g.WL_CODE)}</td>
         <td class="num" style="color:var(--success);font-weight:700">${fmtInt(g._amt)}</td>
+        <td style="text-align:center">${(() => {
+          const st = computeStatus(g);
+          if (!st) return '';
+          if (st === 'ครบ')     return '<span class="badge badge-ok">ครบ</span>';
+          if (st === 'ขาด')     return '<span class="badge badge-danger">ขาด</span>';
+          if (st === 'ผิดปกติ') return '<span class="badge badge-warn">ผิดปกติ</span>';
+          return '';
+        })()}</td>
       </tr>
       <tr class="det-row" id="det_${gid}">
-        <td colspan="9" class="det-cell">
+        <td colspan="10" class="det-cell">
           <div class="det-inner">
             <div class="prod-list">
               ${subRows}
