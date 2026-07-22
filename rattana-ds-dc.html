@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS_DC v2.3 — ใบสั่งสินค้า</title>
+<title>Rattana DS_DC v2.4 — ใบสั่งสินค้า</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -104,6 +104,9 @@ body.dark .prod-meta .x{color:#a0b0d0}
 .prod-free{font-size:11px;color:var(--success);font-weight:600;margin-left:6px}
 .prod-name-row{display:flex;align-items:baseline;gap:8px;min-width:0}
 .prod-cat{font-size:11px;color:var(--muted);white-space:nowrap;flex-shrink:0}
+.promo-zone{display:flex;align-items:center;flex:1;padding:0 12px}
+.badge-promo{font-size:11px;font-weight:700;color:var(--danger);border:1.5px solid var(--danger);border-radius:6px;padding:1px 8px;background:rgba(231,76,60,.07);white-space:nowrap}
+body.dark .badge-promo{background:rgba(231,76,60,.15)}
 .prod-total-row{display:flex;align-items:center;justify-content:space-between;padding:9px 16px;background:rgba(201,168,76,.08);border-top:1.5px solid var(--gold)}
 .prod-total-row .label{font-size:12px;color:var(--muted);font-weight:600}
 .prod-total-row .total-amt{font-size:15px;font-weight:700;color:var(--success)}
@@ -187,7 +190,7 @@ body.dark .spinner-box{background:var(--card-bg)}
       <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln22zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJpacw3bOe+eefdvzx3vmzGFhF/be995Dz0M/DkxXVXdV/6u6uroJACAaY4wxGGO890KIIY6uYFiWZSul1CCEIKWUiPivsz+APWJkua7rApTSY4wxIlLvXcfzPO85b5xzznmMcYwxzjnGWYzxGOM4znlPCGOMc84YY4xzTlVVxRgDAIy1FmOM1hhjrQMAjDFijLHWOgDGGGuttY4xBgBrrQUAjDHGGGNsjLHOWhsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" alt="Rattana" height="34">
       <div>
         <div class="logo-text">Rattana <span>DS_DC</span></div>
-        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v2.3</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v2.4</span></div>
       </div>
     </div>
     <div class="header-actions">
@@ -311,6 +314,8 @@ const SHEET_ID   = '1NO8sHyDxwHTRqgcLFCxq_g_Rr09lfe4gt_odwkIgiB0';
 const SHEET_NAME = 'DS_DC';
 const PDDT_SHEET_ID   = '16mYDqAqqJma-_0vCIAajy6bcjdOZ7F6VagxkdkqAB2I';
 const PDDT_SHEET_NAME = 'PDDT';
+const PROMO_SHEET_ID   = '1CqHARklgveAeJ6rTkNeyUSku__puTiNE7-c6ebn93W8';
+const PROMO_SHEET_NAME = 'Promotion';
 
 // ─────────────────────────────────────────────
 // STATE
@@ -323,6 +328,10 @@ let currentPage = 1;
 const PAGE_SIZE = 100;
 let pddt = new Map();
 let pddtLoaded = false;
+let promoByProduct = new Map();
+let promoBySize    = new Map();
+let promoByCat     = new Map();
+let promoLoaded = false;
 
 // ─────────────────────────────────────────────
 // MONTH PICKER
@@ -391,6 +400,30 @@ async function fetchCSV(sheetId, sheetName, query = '') {
 }
 
 // ─────────────────────────────────────────────
+// PROMO LOOKUP
+// ─────────────────────────────────────────────
+async function loadPromo() {
+  if (promoLoaded) return;
+  try {
+    const rows = await fetchCSV(PROMO_SHEET_ID, PROMO_SHEET_NAME);
+    promoByProduct.clear(); promoBySize.clear(); promoByCat.clear();
+    for (const r of rows) {
+      const method = String(r['วิธีวัด'] || '').trim();
+      const val    = String(r['ชื่อ']    || '').trim();
+      if (!val || !method) continue;
+      const m = method.toUpperCase();
+      if (m === 'PRODUCT NAME') { if (!promoByProduct.has(val)) promoByProduct.set(val, true); }
+      else if (m === 'CAT SIZE')  { if (!promoBySize.has(val))    promoBySize.set(val, true); }
+      else if (m === 'CAT BRAND') { if (!promoByCat.has(val))     promoByCat.set(val, true); }
+    }
+    promoLoaded = true;
+  } catch(e) { console.warn('Promo load failed:', e.message); }
+}
+function hasPromo(skuName, brand, size) {
+  return promoByProduct.has(skuName) || promoBySize.has(size) || promoByCat.has(brand);
+}
+
+// ─────────────────────────────────────────────
 // PDDT LOOKUP
 // ─────────────────────────────────────────────
 async function loadPDDT() {
@@ -415,7 +448,7 @@ async function loadData() {
   showSpinner('กำลังโหลดข้อมูล...');
   setLoadingBar(true);
   try {
-    await loadPDDT();
+    await Promise.all([loadPDDT(), loadPromo()]);
     const rows = await fetchCSV(SHEET_ID, SHEET_NAME, query);
     allRows = rows;
     document.getElementById('resultInfo').textContent =
@@ -570,6 +603,8 @@ function renderTable() {
       const info = pddt.get(r.SKU_NAME);
       const catParts = [info?.brand, info?.size].filter(Boolean);
       const catRow = catParts.length ? `<div class="prod-cat">${escHtml(catParts.join(' · '))}</div>` : '';
+      const promoTag = hasPromo(r.SKU_NAME, info?.brand||'', info?.size||'')
+        ? `<div class="promo-zone"><span class="badge-promo">🎁 มีโปร</span></div>` : `<div class="promo-zone"></div>`;
       return `
         <div class="prod-item">
           <div class="prod-info">
@@ -584,6 +619,7 @@ function renderTable() {
               ${freeTag}${remark}
             </div>
           </div>
+          ${promoTag}
           <div class="prod-price">฿${fmt(amt)}</div>
         </div>`;
     }).join('');
