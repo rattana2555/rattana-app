@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS_DC v2.7 — ใบสั่งสินค้า</title>
+<title>Rattana DS_DC v2.8 — ใบสั่งสินค้า</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -190,7 +190,7 @@ body.dark .spinner-box{background:var(--card-bg)}
       <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln22zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJpacw3bOe+eefdvzx3vmzGFhF/be995Dz0M/DkxXVXdV/6u6uroJACAaY4wxGGO890KIIY6uYFiWZSul1CCEIKWUiPivsz+APWJkua7rApTSY4wxIlLvXcfzPO85b5xzznmMcYwxzjnGWYzxGOM4znlPCGOMc84YY4xzTlVVxRgDAIy1FmOM1hhjrQMAjDFijLHWOgDGGGuttY4xBgBrrQUAjDHGGGNsjLHOWhsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" alt="Rattana" height="34">
       <div>
         <div class="logo-text">Rattana <span>DS_DC</span></div>
-        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v2.7</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v2.8</span></div>
       </div>
     </div>
     <div class="header-actions">
@@ -446,6 +446,8 @@ async function loadPromo() {
         freeQtyEA:   parseFloat(r['จำนวนแถมEA']) || 0,
         warehouses:  String(r['Warehouses'] || '').trim(),
         role:        isNaN(roleVal) ? null : roleVal,
+        startDate:   parseDateStr(r['เริ่มโปร']),
+        endDate:     parseDateStr(r['จบโปร']),
       };
       if (rule.freeQtyEA > 0) promoRules.push(rule);
     }
@@ -454,6 +456,15 @@ async function loadPromo() {
 }
 function hasPromo(skuName, brand, size) {
   return promoByProduct.has(skuName) || promoBySize.has(size) || promoByCat.has(brand);
+}
+function parseDateStr(s) {
+  if (!s) return null;
+  const str = String(s).trim();
+  let m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); // DD/MM/YYYY
+  if (m) return new Date(+m[3], +m[2]-1, +m[1]);
+  m = str.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);     // YYYY/MM/DD
+  if (m) return new Date(+m[1], +m[2]-1, +m[3]);
+  return null;
 }
 function cleanSlmn(name) {
   return String(name || '').replace(/^คุณ\s*/, '').replace(/\s*\(ROO\)\s*$/i, '').trim();
@@ -481,6 +492,12 @@ function computeStatus(g) {
       if (rule.warehouses && g.WL_CODE) {
         const wls = rule.warehouses.split(',').map(w => w.trim());
         if (!wls.includes(g.WL_CODE)) return false;
+      }
+      if (rule.startDate || rule.endDate) {
+        const diDate = parseDateStr(g.DI_DATE);
+        if (!diDate) return false;
+        if (rule.startDate && diDate < rule.startDate) return false;
+        if (rule.endDate && diDate > new Date(rule.endDate.getTime() + 86400000)) return false;
       }
       if (rule.role !== null) {
         if (slmnRole == null) return false;
