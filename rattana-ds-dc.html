@@ -389,8 +389,10 @@ const PROMO_SHEET_NAME = 'Promotion';
 const ROLE_SHEET_ID   = '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ';
 const ROLE_SHEET_NAME = 'Sheet1';
 
-// เดือนที่ดึงจาก BigQuery (อัพเดตเมื่อมีข้อมูลใหม่)
-const BQ_MONTHS = new Set(['2025/11','2025/12','2026/01','2026/02','2026/03']);
+// Google Sheets ที่ export จาก BigQuery
+const BQ_HISTORY_SHEET_ID   = '1JBMIiYcpqFDamj5TFdHvrm9dxSG8sxiOu3fFGf9qFds';
+const BQ_HISTORY_SHEET_NAME = 'Sheet1';
+const BQ_MONTHS = new Set(['2025/11','2025/12','2026/01','2026/02','2026/03','2026/04','2026/05','2026/06']);
 
 // ─────────────────────────────────────────────
 // STATE
@@ -478,26 +480,22 @@ async function fetchCSV(sheetId, sheetName, query = '') {
 }
 
 async function fetchFromBQ(monthKey) {
-  const url = `${GAS_URL}?action=bq&month=${encodeURIComponent(monthKey)}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`BigQuery HTTP ${res.status}`);
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  // แปลง BQ columns → format เดิมของแอพ
-  return (data.rows || []).map(r => ({
+  const query = `SELECT * WHERE A = '${monthKey}'`;
+  const rows = await fetchCSV(BQ_HISTORY_SHEET_ID, BQ_HISTORY_SHEET_NAME, query);
+  return rows.map(r => ({
     DI_DATE:     (r.Month_Year || '').slice(0,7) + '/01',
-    DI_REF:      r.Doc_No       || '',
-    AR_CODE:     r.Customer_Code || '',
-    AR_NAME:     r.Customer_Name || '',
-    SLMN_CODE:   r.Saleman_Code || '',
-    SLMN_NAME:   r.Saleman_Name || '',
-    WL_CODE:     r.WH           || '',
-    TRD_SH_CODE: r.Product_Code || '',
-    SKU_NAME:    r.Product_Name || '',
-    TRD_UTQNAME: r.Unit         || '',
-    TRD_QTY:     r.Sell_EA      || '0',
-    TRD_Q_FREE:  r.Free_EA      || '0',
-    TRD_U_PRC:   r.Unit_Price   || '0',
+    DI_REF:      r.Doc_No        || '',
+    AR_CODE:     r.Customer_Code  || '',
+    AR_NAME:     r.Customer_Name  || '',
+    SLMN_CODE:   r.Saleman_Code   || '',
+    SLMN_NAME:   r.Saleman_Name   || '',
+    WL_CODE:     r.WH             || '',
+    TRD_SH_CODE: r.Product_Code   || '',
+    SKU_NAME:    r.Product_Name   || '',
+    TRD_UTQNAME: r.Unit           || '',
+    TRD_QTY:     r.Sell_EA        || '0',
+    TRD_Q_FREE:  r.Free_EA        || '0',
+    TRD_U_PRC:   r.Unit_Price     || '0',
     TRD_G_AMT:   r.TotalBaht    || '0',
     DI_REMARK:   '',
   }));
