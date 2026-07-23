@@ -4428,7 +4428,9 @@ async function exportPDF() {
   pages.forEach(p => p.style.display = 'none');   // v4.8 — isolate: render one page at a time (peak memory ≈ 1 page)
   try {
     const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const isFlash = SHEET_CONFIG.perPage === 'flash6';   // v6.12 — Flash Sale is landscape A4
+    const pdf = new jsPDF({ orientation: isFlash ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
+    const pw = isFlash ? 297 : 210, ph = isFlash ? 210 : 297;
     const scale = exportScaleFor(pages.length);   // v4.8 — adaptive scale (fewer pages = sharper)
     for (let i = 0; i < pages.length; i++) {
       pages[i].style.display = '';
@@ -4437,7 +4439,7 @@ async function exportPDF() {
       const imgData = canvas.toDataURL('image/jpeg', 0.9);
       freeCanvas(canvas);   // v4.8 — release memory before next page
       if (i > 0) pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
+      pdf.addImage(imgData, 'JPEG', 0, 0, pw, ph);
       pages[i].style.display = 'none';
       // v4.8 — yield between pages so the browser repaints the spinner + reclaims memory (prevents freeze)
       await new Promise(r => setTimeout(r, 50));
