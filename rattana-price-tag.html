@@ -4050,10 +4050,14 @@ function renderCatalogCard(sizeName, prods) {
 function buildCatalogPreview() {
   const stage = $('#pdfStage');
   const wh = SHEET_CONFIG.warehouse || 'W1';
-  // v4.7 — filter selected products → have STOCK > 0 OR sales > 0 in the chosen warehouse (either one)
-  const sel = getSortedSelection().filter(p => (p.stk && p.stk[wh]) || (p.sold && p.sold[wh]));
+  const isNew = SHEET_CONFIG.perPage === 'newsku';
+  // v6.8 — filter by the active mode's eligibility (catalog: stock/sales · New SKU: FIRST STOCK DATE ≤ 2 weeks)
+  const sel = getSortedSelection().filter(catalogEligible);
   if (!sel.length) {
-    stage.innerHTML = `<div class="empty-state"><div class="emoji">📚</div><h3>ไม่มีสินค้าที่ผ่านเงื่อนไข</h3><div class="empty-sub">โหมดแค็ตตาล็อกแสดงเฉพาะสินค้าที่ <b>มีสต๊อก หรือ มียอดขาย</b> ในคลัง ${wh}<br>ลองเลือกสินค้าเพิ่ม หรือเปลี่ยนคลังในแท็บตั้งค่า</div></div>`;
+    const msg = isNew
+      ? `โหมด <b>สินค้าใหม่ (New SKU)</b> แสดงเฉพาะสินค้าที่เข้าใหม่ใน <b>${NEWSKU_DAYS} วันล่าสุด</b> (คอลัมน์ FIRST STOCK DATE)<br>ลองเลือกสินค้าเพิ่ม`
+      : `โหมดแค็ตตาล็อกแสดงเฉพาะสินค้าที่ <b>มีสต๊อก หรือ มียอดขาย</b> ในคลัง ${wh}<br>ลองเลือกสินค้าเพิ่ม หรือเปลี่ยนคลังในแท็บตั้งค่า`;
+    stage.innerHTML = `<div class="empty-state"><div class="emoji">${isNew?'🆕':'📚'}</div><h3>ไม่มีสินค้าที่ผ่านเงื่อนไข</h3><div class="empty-sub">${msg}</div></div>`;
     return;
   }
   // group by CAT SIZE (keep group order by first appearance in the sorted selection)
