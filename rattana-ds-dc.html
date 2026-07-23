@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS_DC v5.19 — ใบสั่งสินค้า</title>
+<title>Rattana DS_DC v5.20 — ใบสั่งสินค้า</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -316,7 +316,7 @@ body.dark .det-status-wrap.s-warn{background:#3a2e15;border-color:#f39c12}
       <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln22zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJpacw3bOe+eefdvzx3vmzGFhF/be995Dz0M/DkxXVXdV/6u6uroJACAaY4wxGGO890KIIY6uYFiWZSul1CCEIKWUiPivsz+APWJkua7rApTSY4wxIlLvXcfzPO85b5xzznmMcYwxzjnGWYzxGOM4znlPCGOMc84YY4xzTlVVxRgDAIy1FmOM1hhjrQMAjDFijLHWOgDGGGuttY4xBgBrrQUAjDHGGGNsjLHOWhsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" alt="Rattana" height="34">
       <div>
         <div class="logo-text">Rattana <span>DS_DC</span></div>
-        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v5.19</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v5.20</span></div>
       </div>
     </div>
     <div class="header-actions">
@@ -424,8 +424,8 @@ body.dark .det-status-wrap.s-warn{background:#3a2e15;border-color:#f39c12}
             <thead>
               <tr>
                 <th>#</th>
-                <th>ชื่อ / เงื่อนไข</th>
                 <th>สินค้าแถม</th>
+                <th>Vendor</th>
                 <th style="text-align:right">จำนวนใบ</th>
                 <th style="text-align:right">แถมรวม (EA)</th>
               </tr>
@@ -649,6 +649,7 @@ async function loadPromo() {
         qty:    parseFloat(String(r['จำนวน'] || '').replace(/,/g, '')) || 1,
         unit:   String(r['รูปแบบขาย'] || '').trim().toUpperCase(),
         freeProduct: String(r['แถมสินค้า'] || '').trim(),
+        freeSKU:     String(r['SKU_NAME']  || '').trim(),
         claim:       String(r['การเคลม']   || '').trim(),
         barcode:     String(r['Barcode สินค้าแถมEA'] || '').trim(),
         freeQtyEA:   parseFloat(String(r['จำนวนแถมEA'] || '').replace(/,/g, '')) || 0,
@@ -718,7 +719,7 @@ async function loadPDDT() {
     pddt.clear();
     for (const r of rows) {
       const name = String(r['PRODUCT NAME'] || '').trim();
-      if (name) pddt.set(name, { brand: String(r['CAT BRAND']||'').trim(), size: String(r['CAT SIZE']||'').trim() });
+      if (name) pddt.set(name, { brand: String(r['CAT BRAND']||'').trim(), size: String(r['CAT SIZE']||'').trim(), vendor: String(r['VENDOR NAME']||'').trim() });
     }
     pddtLoaded = true;
   } catch(e) { console.warn('PDDT load failed:', e.message); }
@@ -960,7 +961,7 @@ function renderClaim() {
     claimVals.forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
   }
   const claimQ = sel.value;
-  const results = promoRules
+  const ruleResults = promoRules
     .filter(rule => !claimQ || rule.claim === claimQ)
     .map(rule => {
       const matchLines = allRows.filter(r => {
@@ -973,42 +974,86 @@ function renderClaim() {
         if (rule.method === 'CAT BRAND')    return brand === rule.value;
         return false;
       });
-      const invoices = new Set(matchLines.map(r => r.DI_REF)).size;
-      const totalFree = matchLines.reduce((s, r) => s + (parseFloat(r.TRD_Q_FREE) || 0), 0);
-      return { rule, invoices, totalFree };
+      return { rule, matchLines };
     });
-  const hasData = results.filter(x => x.invoices > 0);
+  // Group by freeProduct
+  const groupMap = new Map();
+  for (const { rule, matchLines } of ruleResults) {
+    const fp = rule.freeProduct;
+    if (!fp) continue;
+    if (!groupMap.has(fp)) {
+      const info = pddt.get(fp);
+      groupMap.set(fp, { freeProduct: fp, vendor: info?.vendor || '', lineKeys: new Set(), invoiceSet: new Set(), totalFree: 0 });
+    }
+    const g = groupMap.get(fp);
+    for (const r of matchLines) {
+      const key = r.DI_REF + '|' + r.SKU_NAME + '|' + (r.TRD_Q_FREE || '');
+      if (!g.lineKeys.has(key)) {
+        g.lineKeys.add(key);
+        g.invoiceSet.add(r.DI_REF);
+        g.totalFree += parseFloat(r.TRD_Q_FREE) || 0;
+      }
+    }
+  }
+  const grouped = [...groupMap.values()].filter(g => g.totalFree > 0).sort((a, b) => b.totalFree - a.totalFree);
   document.getElementById('claimCount').textContent =
-    `${hasData.length} รายการมีของแถม / ${results.length} รายการทั้งหมด`;
-  tbody.innerHTML = hasData.length === 0
+    `${grouped.length} รายการมีของแถม / ${new Set(promoRules.filter(r => !claimQ || r.claim === claimQ).map(r => r.freeProduct).filter(Boolean)).size} รายการทั้งหมด`;
+  tbody.innerHTML = grouped.length === 0
     ? '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted)">ไม่พบรายการแถม</td></tr>'
-    : hasData.map((x, i) => `
+    : grouped.map((g, i) => `
     <tr>
       <td class="txt-muted txt-sm">${i+1}</td>
-      <td style="font-weight:600">${escHtml(x.rule.value)}</td>
-      <td>${escHtml(x.rule.freeProduct)}</td>
-      <td class="num" style="text-align:right">${x.invoices.toLocaleString('th-TH')}</td>
-      <td class="num" style="text-align:right;color:var(--success);font-weight:700">${x.totalFree.toLocaleString('th-TH')}</td>
+      <td style="font-weight:600">${escHtml(g.freeProduct)}</td>
+      <td style="font-size:12px;color:var(--muted)">${escHtml(g.vendor)}</td>
+      <td class="num" style="text-align:right">${g.invoiceSet.size.toLocaleString('th-TH')}</td>
+      <td class="num" style="text-align:right;color:var(--success);font-weight:700">${g.totalFree.toLocaleString('th-TH')}</td>
     </tr>`).join('');
 }
 function exportClaimExcel() {
   if (!promoRules.length) { showToast('ยังไม่มีข้อมูล','warning'); return; }
   const month = getActiveMonthLabel();
-  const data = promoRules.map((rule, i) => {
-    const matchLines = allRows.filter(r => {
-      if ((parseFloat(r.TRD_Q_FREE) || 0) <= 0) return false;
-      const info = pddt.get(r.SKU_NAME);
-      const brand = info?.brand || '';
-      const size  = fmtUnit(r.TRD_UTQNAME);
-      if (rule.method === 'PRODUCT NAME') return r.SKU_NAME === rule.value;
-      if (rule.method === 'CAT SIZE')     return size  === rule.value;
-      if (rule.method === 'CAT BRAND')    return brand === rule.value;
-      return false;
+  const claimQ = document.getElementById('claimFilter').value;
+  const ruleResults = promoRules
+    .filter(rule => !claimQ || rule.claim === claimQ)
+    .map(rule => {
+      const matchLines = allRows.filter(r => {
+        if ((parseFloat(r.TRD_Q_FREE) || 0) <= 0) return false;
+        const info = pddt.get(r.SKU_NAME);
+        const brand = info?.brand || '';
+        const size  = fmtUnit(r.TRD_UTQNAME);
+        if (rule.method === 'PRODUCT NAME') return r.SKU_NAME === rule.value;
+        if (rule.method === 'CAT SIZE')     return size  === rule.value;
+        if (rule.method === 'CAT BRAND')    return brand === rule.value;
+        return false;
+      });
+      return { rule, matchLines };
     });
-    const invoices = new Set(matchLines.map(r => r.DI_REF)).size;
-    const totalFree = matchLines.reduce((s, r) => s + (parseFloat(r.TRD_Q_FREE) || 0), 0);
-    return { '#': i+1, 'ชื่อ/เงื่อนไข': rule.value, 'สินค้าแถม': rule.freeProduct, 'การเคลม': rule.claim, 'จำนวนใบ': invoices || 0, 'แถมรวม EA': totalFree || 0 };
-  });
+  const groupMap = new Map();
+  for (const { rule, matchLines } of ruleResults) {
+    const fp = rule.freeProduct;
+    if (!fp) continue;
+    if (!groupMap.has(fp)) {
+      const info = pddt.get(fp);
+      groupMap.set(fp, { freeProduct: fp, vendor: info?.vendor || '', lineKeys: new Set(), invoiceSet: new Set(), totalFree: 0 });
+    }
+    const g = groupMap.get(fp);
+    for (const r of matchLines) {
+      const key = r.DI_REF + '|' + r.SKU_NAME + '|' + (r.TRD_Q_FREE || '');
+      if (!g.lineKeys.has(key)) {
+        g.lineKeys.add(key);
+        g.invoiceSet.add(r.DI_REF);
+        g.totalFree += parseFloat(r.TRD_Q_FREE) || 0;
+      }
+    }
+  }
+  const grouped = [...groupMap.values()].filter(g => g.totalFree > 0).sort((a, b) => b.totalFree - a.totalFree);
+  const data = grouped.map((g, i) => ({
+    '#': i + 1,
+    'สินค้าแถม': g.freeProduct,
+    'Vendor': g.vendor,
+    'จำนวนใบ': g.invoiceSet.size,
+    'แถมรวม EA': g.totalFree,
+  }));
   const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'เคลม Vendor');
@@ -1082,7 +1127,9 @@ function calcFreeByProduct(g) {
           const nameMatch = key.length > 3 && fl.SKU_NAME && fl.SKU_NAME.trim().toLowerCase().includes(key);
           if (bcMatch || nameMatch) act += parseFloat(fl.TRD_Q_FREE) || 0;
         }
-        map.set(key, { freeProduct: rule.freeProduct, exp: 0, act });
+        const freePddt = pddt.get(rule.freeSKU) || pddt.get(rule.freeProduct);
+        const vendor = freePddt?.vendor || '';
+        map.set(key, { freeProduct: rule.freeProduct, freeSKU: rule.freeSKU, vendor, exp: 0, act });
       }
       map.get(key).exp += sets * rule.freeQtyEA;
     }
@@ -1093,8 +1140,8 @@ function calcFreeByProduct(g) {
 function getMissingFree(g) {
   const map = calcFreeByProduct(g);
   const result = [];
-  for (const { freeProduct, exp, act } of map.values()) {
-    if (act < exp) result.push({ prodName: freeProduct, freeProduct, exp, act, diff: exp - act });
+  for (const { freeProduct, freeSKU, vendor, exp, act } of map.values()) {
+    if (act < exp) result.push({ prodName: freeProduct, freeProduct, freeSKU, vendor, exp, act, diff: exp - act });
   }
   return result;
 }
@@ -1102,8 +1149,8 @@ function getMissingFree(g) {
 function getExcessFree(g) {
   const map = calcFreeByProduct(g);
   const result = [];
-  for (const { freeProduct, exp, act } of map.values()) {
-    if (act > exp) result.push({ freeProduct, exp, act, excess: act - exp });
+  for (const { freeProduct, freeSKU, vendor, exp, act } of map.values()) {
+    if (act > exp) result.push({ freeProduct, freeSKU, vendor, exp, act, excess: act - exp });
   }
   return result;
 }
@@ -1223,18 +1270,24 @@ function renderDetail(diRef) {
   const normalFreeLines   = freeLines.filter(r => validFreeNamesD.some(nk => nk.length > 3 && r.SKU_NAME.trim().toLowerCase().includes(nk)));
   const abnormalFreeLines = freeLines.filter(r => !validFreeNamesD.some(nk => nk.length > 3 && r.SKU_NAME.trim().toLowerCase().includes(nk)));
 
-  const freeRows = normalFreeLines.map(r => {
-    const freeQty = parseFloat(r.TRD_Q_FREE) || 0;
-    const info    = pddt.get(r.SKU_NAME);
-    const catParts = [info?.brand, info?.size].filter(Boolean);
-    const catRow   = catParts.length ? `<div class="free-item-cat">${escHtml(catParts.join(' · '))}</div>` : '';
+  // Group normalFreeLines by SKU_NAME and sum qty
+  const freeGroupMap = new Map();
+  for (const r of normalFreeLines) {
+    const key = r.SKU_NAME;
+    if (!freeGroupMap.has(key)) freeGroupMap.set(key, { r, qty: 0 });
+    freeGroupMap.get(key).qty += parseFloat(r.TRD_Q_FREE) || 0;
+  }
+  const freeRows = [...freeGroupMap.values()].map(({ r, qty }) => {
+    const info = pddt.get(r.SKU_NAME);
+    const catParts = [info?.vendor, info?.brand, info?.size].filter(Boolean);
+    const catRow = catParts.length ? `<div class="free-item-cat">${escHtml(catParts.join(' · '))}</div>` : '';
     return `
       <div class="free-item">
         <div>
           <div class="free-item-name">${escHtml(r.SKU_NAME)}</div>
           ${catRow}
         </div>
-        <div class="free-qty">+${fmtInt(freeQty)} EA</div>
+        <div class="free-qty">+${fmtInt(qty)} EA</div>
       </div>`;
   }).join('');
 
@@ -1247,6 +1300,7 @@ function renderDetail(diRef) {
       ${excess.map(x => `
         <div class="missing-row" style="padding:10px 16px;border-bottom:1px solid var(--border)">
           <div class="missing-free-name">🎁 ${escHtml(x.freeProduct)}</div>
+          ${x.vendor ? `<div style="font-size:11px;color:var(--muted);margin-bottom:2px">${escHtml(x.vendor)}</div>` : ''}
           <div class="missing-nums">
             <span class="missing-exp">ควรได้ ${fmtInt(x.exp)} EA</span>
             <span class="missing-act">ได้แล้ว ${fmtInt(x.act)} EA</span>
@@ -1272,6 +1326,7 @@ function renderDetail(diRef) {
           ${rows.map(x => `
             <div class="missing-row">
               <div class="missing-free-name">🎁 ${escHtml(x.freeProduct)}</div>
+              ${x.vendor ? `<div style="font-size:11px;color:var(--muted);margin-bottom:2px">${escHtml(x.vendor)}</div>` : ''}
               <div class="missing-nums">
                 <span class="missing-exp">ควรได้ ${fmtInt(x.exp)} EA</span>
                 <span class="missing-act">ได้แล้ว ${fmtInt(x.act)} EA</span>
@@ -1281,27 +1336,34 @@ function renderDetail(diRef) {
         </div>`).join('')}
     </div>` : '';
 
-  const freeCardHtml = normalFreeLines.length ? `
+  const freeCardHtml = freeGroupMap.size ? `
     <div class="free-card">
       <div class="free-card-head">
-        <span>🎁 ของแถม (${normalFreeLines.length} รายการ)</span>
+        <span>🎁 ของแถม (${freeGroupMap.size} รายการ)</span>
       </div>
       ${freeRows}
     </div>` : '';
-  const abnormalFreeCardHtml = abnormalFreeLines.length ? `
+
+  // Group abnormalFreeLines by SKU_NAME and sum qty
+  const abnGroupMap = new Map();
+  for (const r of abnormalFreeLines) {
+    const key = r.SKU_NAME;
+    if (!abnGroupMap.has(key)) abnGroupMap.set(key, { r, qty: 0 });
+    abnGroupMap.get(key).qty += parseFloat(r.TRD_Q_FREE) || 0;
+  }
+  const abnormalFreeCardHtml = abnGroupMap.size ? `
     <div class="abnormal-free-card">
       <div class="abnormal-free-head">
-        <span>🚨 แถมสินค้าผิดปกติ (${abnormalFreeLines.length} รายการ)</span>
+        <span>🚨 แถมสินค้าผิดปกติ (${abnGroupMap.size} รายการ)</span>
         <span style="font-size:11px;font-weight:400;opacity:.8">ของแถมที่ไม่มีโปรโมชั่นรองรับ</span>
       </div>
-      ${abnormalFreeLines.map(r => {
-        const freeQty = parseFloat(r.TRD_Q_FREE) || 0;
+      ${[...abnGroupMap.values()].map(({ r, qty }) => {
         const info = pddt.get(r.SKU_NAME);
-        const catParts = [info?.brand, info?.size].filter(Boolean);
+        const catParts = [info?.vendor, info?.brand, info?.size].filter(Boolean);
         const catHtml = catParts.length ? `<div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:2px">${escHtml(catParts.join(' · '))}</div>` : '';
         return `<div class="abnormal-free-item">
           <div>${escHtml(r.SKU_NAME)}${catHtml}</div>
-          <div class="abnormal-free-qty">+${fmtInt(freeQty)} EA</div>
+          <div class="abnormal-free-qty">+${fmtInt(qty)} EA</div>
         </div>`;
       }).join('')}
     </div>` : '';
