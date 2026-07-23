@@ -4146,6 +4146,47 @@ function buildCatalogPreview() {
   reapplyImgScales();   // v4.0 — restore per-image + page-wide scales
 }
 
+/* v6.14 — Flash Sale Canva-style editing: drag any element to move, drag its corner handle to resize.
+   Offsets stored as a fraction of the page (scale-independent → identical in preview & export). */
+const FS_PW = 1122.5, FS_PH = 793.7;   // flash-page CSS px (297mm × 210mm @96dpi)
+let flashLayout = {};                  // sku -> role -> { dx, dy, s }
+let flashPreviewScale = 1;             // current .pdf-wrap-inner scale
+let fsSelectedEl = null;
+function restoreFlashLayout(){ try { flashLayout = JSON.parse(localStorage.getItem('rattanaPriceTag_flashLayout') || '{}'); } catch { flashLayout = {}; } }
+function saveFlashLayout(){ safeSetItem('rattanaPriceTag_flashLayout', JSON.stringify(flashLayout)); }
+function fsGet(sku, role){
+  if (!flashLayout[sku]) flashLayout[sku] = {};
+  if (!flashLayout[sku][role]) flashLayout[sku][role] = { dx:0, dy:0, s:1 };
+  return flashLayout[sku][role];
+}
+function applyFsEl(el){
+  const t = fsGet(el.dataset.fsSku, el.dataset.fsRole);
+  el.style.transform = `translate(${((t.dx||0)*FS_PW).toFixed(1)}px,${((t.dy||0)*FS_PH).toFixed(1)}px) scale(${t.s||1})`;
+  el.style.transformOrigin = 'center center';
+}
+function applyAllFsEls(){ document.querySelectorAll('#pdfStage .flash-slot [data-fs-role]').forEach(applyFsEl); }
+function fsDeselect(){
+  if (!fsSelectedEl) return;
+  fsSelectedEl.classList.remove('fs-sel');
+  const h = fsSelectedEl.querySelector(':scope > .fs-handle'); if (h) h.remove();
+  fsSelectedEl = null;
+}
+function fsSelect(el){
+  if (fsSelectedEl === el) return;
+  fsDeselect();
+  fsSelectedEl = el;
+  el.classList.add('fs-sel');
+  const h = document.createElement('div');
+  h.className = 'fs-handle';
+  h.setAttribute('contenteditable', 'false');
+  el.appendChild(h);
+}
+function resetFlashLayout(){
+  flashLayout = {}; saveFlashLayout(); fsSelectedEl = null;
+  if (SHEET_CONFIG.perPage === 'flash6') buildFlashPreview();
+  showToast('↩ รีเซ็ตตำแหน่ง/ขนาดทั้งหมดแล้ว', 'success');
+}
+
 /* v6.12 — Flash Sale poster: template image as page background + product overlays (6 per landscape A4) */
 // Card regions as % of the landscape page (measured from the template image 2000×1410)
 const FLASH_CARDS = [
