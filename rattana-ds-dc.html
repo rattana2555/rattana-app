@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS_DC v5.14 — ใบสั่งสินค้า</title>
+<title>Rattana DS_DC v5.15 — ใบสั่งสินค้า</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -1231,7 +1231,31 @@ function renderDetail(diRef) {
       </div>`;
   }).join('');
 
-  const freeRows = freeLines.map(r => {
+  // แยก valid promo names สำหรับ invoice นี้
+  const slmnRoleD = roleMap.get(cleanSlmn(g.SLMN_NAME));
+  const validFreeNamesD = promoRules.filter(rule => {
+    if (rule.warehouses && g.WL_CODE) {
+      const wls = rule.warehouses.split(',').map(w => w.trim());
+      if (!wls.includes(g.WL_CODE)) return false;
+    }
+    if (rule.startDate || rule.endDate) {
+      const diDate = parseDateStr(g.DI_DATE);
+      if (!diDate) return false;
+      if (rule.startDate && diDate < rule.startDate) return false;
+      if (rule.endDate && diDate > new Date(rule.endDate.getTime() + 86400000)) return false;
+    }
+    if (rule.role !== null) {
+      if (slmnRoleD == null) return false;
+      if (rule.role === 3 && !(slmnRoleD === 3 || slmnRoleD >= 5)) return false;
+      if (rule.role === 4 && !(slmnRoleD >= 4)) return false;
+    }
+    return true;
+  }).map(rule => rule.freeProduct.trim().toLowerCase());
+
+  const normalFreeLines   = freeLines.filter(r => validFreeNamesD.some(nk => nk.length > 3 && r.SKU_NAME.trim().toLowerCase().includes(nk)));
+  const abnormalFreeLines = freeLines.filter(r => !validFreeNamesD.some(nk => nk.length > 3 && r.SKU_NAME.trim().toLowerCase().includes(nk)));
+
+  const freeRows = normalFreeLines.map(r => {
     const freeQty = parseFloat(r.TRD_Q_FREE) || 0;
     const info    = pddt.get(r.SKU_NAME);
     const catParts = [info?.brand, info?.size].filter(Boolean);
@@ -1272,38 +1296,13 @@ function renderDetail(diRef) {
         </div>`).join('')}
     </div>` : '';
 
-  const freeCardHtml = freeLines.length ? `
+  const freeCardHtml = normalFreeLines.length ? `
     <div class="free-card">
       <div class="free-card-head">
-        <span>🎁 ของแถม (${freeLines.length} รายการ)</span>
+        <span>🎁 ของแถม (${normalFreeLines.length} รายการ)</span>
       </div>
       ${freeRows}
     </div>` : '';
-
-  const slmnRoleD = roleMap.get(cleanSlmn(g.SLMN_NAME));
-  const validFreeNamesD = promoRules.filter(rule => {
-    if (rule.warehouses && g.WL_CODE) {
-      const wls = rule.warehouses.split(',').map(w => w.trim());
-      if (!wls.includes(g.WL_CODE)) return false;
-    }
-    if (rule.startDate || rule.endDate) {
-      const diDate = parseDateStr(g.DI_DATE);
-      if (!diDate) return false;
-      if (rule.startDate && diDate < rule.startDate) return false;
-      if (rule.endDate && diDate > new Date(rule.endDate.getTime() + 86400000)) return false;
-    }
-    if (rule.role !== null) {
-      if (slmnRoleD == null) return false;
-      if (rule.role === 3 && !(slmnRoleD === 3 || slmnRoleD >= 5)) return false;
-      if (rule.role === 4 && !(slmnRoleD >= 4)) return false;
-    }
-    return true;
-  }).map(rule => rule.freeProduct.trim().toLowerCase());
-
-  const abnormalFreeLines = freeLines.filter(r => {
-    const skuLower = r.SKU_NAME.trim().toLowerCase();
-    return !validFreeNamesD.some(nk => nk.length > 3 && skuLower.includes(nk));
-  });
   const abnormalFreeCardHtml = abnormalFreeLines.length ? `
     <div class="abnormal-free-card">
       <div class="abnormal-free-head">
