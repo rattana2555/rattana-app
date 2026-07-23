@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS_DC v5.17 — ใบสั่งสินค้า</title>
+<title>Rattana DS_DC v5.18 — ใบสั่งสินค้า</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -684,81 +684,23 @@ function normBarcode(s) {
 }
 function computeStatus(g) {
   if (!promoLoaded || !promoRules.length) return null;
-  const slmnRole = roleMap.get(cleanSlmn(g.SLMN_NAME));
-  let expTotal = 0, actTotal = 0, matched = false;
-  for (const r of g.lines) {
-    const info  = pddt.get(r.SKU_NAME);
-    const brand = info?.brand || '';
-    const size  = info?.size  || '';
-    const unit  = fmtUnit(r.TRD_UTQNAME);
-    const qty   = parseFloat(r.TRD_QTY) || 0;
-    const rules = promoRules.filter(rule => {
-      if (rule.method === 'PRODUCT NAME' && rule.value !== r.SKU_NAME) return false;
-      if (rule.method === 'CAT SIZE'     && rule.value !== size)        return false;
-      if (rule.method === 'CAT BRAND'    && rule.value !== brand)       return false;
-      if (rule.unit && rule.unit !== unit) return false;
-      if (rule.warehouses && g.WL_CODE) {
-        const wls = rule.warehouses.split(',').map(w => w.trim());
-        if (!wls.includes(g.WL_CODE)) return false;
-      }
-      if (rule.startDate || rule.endDate) {
-        const diDate = parseDateStr(g.DI_DATE);
-        if (!diDate) return false;
-        if (rule.startDate && diDate < new Date(rule.startDate.getTime() + 86400000)) return false;
-        if (rule.endDate && diDate > new Date(rule.endDate.getTime() + 86400000)) return false;
-      }
-      if (rule.role !== null) {
-        if (slmnRole == null) return false;
-        if (rule.role === 3 && !(slmnRole === 3 || slmnRole >= 5)) return false;
-        if (rule.role === 4 && !(slmnRole >= 4)) return false;
-      }
-      return true;
-    });
-    for (const rule of rules) {
-      matched = true;
-      const sets = Math.floor(qty / rule.qty);
-      if (sets <= 0) continue;
-      const exp = sets * rule.freeQtyEA;
-      expTotal += exp;
-      const normBC = normBarcode(rule.barcode);
-      let act = 0;
-      for (const fl of g.lines) {
-        const flBC = normBarcode(fl.TRD_SH_CODE || '');
-        const bcMatch = normBC.length >= 8 && flBC.length >= 8 && normBC.slice(-8) === flBC.slice(-8);
-        const nameKey = rule.freeProduct.trim().toLowerCase();
-        const nameMatch = nameKey.length > 3 && fl.SKU_NAME && fl.SKU_NAME.trim().toLowerCase().includes(nameKey);
-        if (bcMatch || nameMatch) act += parseFloat(fl.TRD_Q_FREE) || 0;
-      }
-      actTotal += act;
-    }
+  // ใช้ calcFreeByProduct เพื่อให้ act นับครั้งเดียวต่อ freeProduct
+  const map = calcFreeByProduct(g);
+  if (!map.size) {
+    // ไม่มีโปร — ตรวจ free line ผิดปกติ
+    const freeLines = g.lines.filter(r => (parseFloat(r.TRD_QTY)||0) === 0 && (parseFloat(r.TRD_Q_FREE)||0) > 0);
+    return freeLines.length ? 'ผิดปกติ' : null;
   }
-  // ตรวจ free line ที่ไม่มีโปรที่ valid รองรับ (รวมตรวจ date/warehouse/role)
-  const validPromoFreeNames = promoRules.filter(rule => {
-    if (rule.warehouses && g.WL_CODE) {
-      const wls = rule.warehouses.split(',').map(w => w.trim());
-      if (!wls.includes(g.WL_CODE)) return false;
-    }
-    if (rule.startDate || rule.endDate) {
-      const diDate = parseDateStr(g.DI_DATE);
-      if (!diDate) return false;
-      if (rule.startDate && diDate < rule.startDate) return false;
-      if (rule.endDate && diDate > new Date(rule.endDate.getTime() + 86400000)) return false;
-    }
-    if (rule.role !== null) {
-      if (slmnRole == null) return false;
-      if (rule.role === 3 && !(slmnRole === 3 || slmnRole >= 5)) return false;
-      if (rule.role === 4 && !(slmnRole >= 4)) return false;
-    }
-    return true;
-  }).map(rule => rule.freeProduct.trim().toLowerCase());
-
+  // ตรวจ free line ที่ไม่มีโปร valid รองรับ
+  const validKeys = new Set(map.keys());
   const freeLines = g.lines.filter(r => (parseFloat(r.TRD_QTY)||0) === 0 && (parseFloat(r.TRD_Q_FREE)||0) > 0);
   const hasAbnormal = freeLines.some(r => {
-    const skuLower = r.SKU_NAME.trim().toLowerCase();
-    return !validPromoFreeNames.some(nk => nk.length > 3 && skuLower.includes(nk));
+    const sk = r.SKU_NAME.trim().toLowerCase();
+    return ![...validKeys].some(nk => nk.length > 3 && sk.includes(nk));
   });
   if (hasAbnormal) return 'ผิดปกติ';
-  if (!matched || expTotal === 0) return null;
+  let expTotal = 0, actTotal = 0;
+  for (const { exp, act } of map.values()) { expTotal += exp; actTotal += act; }
   if (actTotal > expTotal) return 'เกิน';
   if (actTotal < expTotal) return 'ขาด';
   return 'ครบ';
@@ -1091,10 +1033,12 @@ window.addEventListener('hashchange', router);
 // ─────────────────────────────────────────────
 // DETAIL PAGE
 // ─────────────────────────────────────────────
-function getMissingFree(g) {
-  if (!promoLoaded || !promoRules.length) return [];
-  const result = [];
+
+// คืน Map: freeProductKey → {freeProduct, exp (รวมทุก purchase line), act (นับครั้งเดียว)}
+function calcFreeByProduct(g) {
+  if (!promoLoaded || !promoRules.length) return new Map();
   const slmnRole = roleMap.get(cleanSlmn(g.SLMN_NAME));
+  const map = new Map();
   const visLines = g.lines.filter(r => (parseFloat(r.TRD_QTY) || 0) !== 0);
   for (const r of visLines) {
     const info  = pddt.get(r.SKU_NAME);
@@ -1102,7 +1046,7 @@ function getMissingFree(g) {
     const size  = info?.size  || '';
     const unit  = fmtUnit(r.TRD_UTQNAME);
     const qty   = parseFloat(r.TRD_QTY) || 0;
-    const matchedRules = promoRules.filter(rule => {
+    const rules = promoRules.filter(rule => {
       if (rule.method === 'PRODUCT NAME' && rule.value !== r.SKU_NAME) return false;
       if (rule.method === 'CAT SIZE'     && rule.value !== size)        return false;
       if (rule.method === 'CAT BRAND'    && rule.value !== brand)       return false;
@@ -1123,72 +1067,41 @@ function getMissingFree(g) {
       }
       return Math.floor(qty / rule.qty) > 0 && rule.freeProduct;
     });
-    for (const rule of matchedRules) {
-      const exp = Math.floor(qty / rule.qty) * rule.freeQtyEA;
-      const normBC = normBarcode(rule.barcode);
-      let act = 0;
-      for (const fl of g.lines) {
-        const flBC = normBarcode(fl.TRD_SH_CODE || '');
-        const bcMatch = normBC.length >= 8 && flBC.length >= 8 && normBC.slice(-8) === flBC.slice(-8);
-        const nameKey = rule.freeProduct.trim().toLowerCase();
-        const nameMatch = nameKey.length > 3 && fl.SKU_NAME && fl.SKU_NAME.trim().toLowerCase().includes(nameKey);
-        if (bcMatch || nameMatch) act += parseFloat(fl.TRD_Q_FREE) || 0;
+    for (const rule of rules) {
+      const sets = Math.floor(qty / rule.qty);
+      if (sets <= 0) continue;
+      const key = rule.freeProduct.trim().toLowerCase();
+      if (!map.has(key)) {
+        const normBC = normBarcode(rule.barcode);
+        let act = 0;
+        for (const fl of g.lines) {
+          const flBC = normBarcode(fl.TRD_SH_CODE || '');
+          const bcMatch = normBC.length >= 8 && flBC.length >= 8 && normBC.slice(-8) === flBC.slice(-8);
+          const nameMatch = key.length > 3 && fl.SKU_NAME && fl.SKU_NAME.trim().toLowerCase().includes(key);
+          if (bcMatch || nameMatch) act += parseFloat(fl.TRD_Q_FREE) || 0;
+        }
+        map.set(key, { freeProduct: rule.freeProduct, exp: 0, act });
       }
-      if (act < exp) {
-        result.push({ prodName: r.SKU_NAME, freeProduct: rule.freeProduct, exp, act, diff: exp - act });
-      }
+      map.get(key).exp += sets * rule.freeQtyEA;
     }
+  }
+  return map;
+}
+
+function getMissingFree(g) {
+  const map = calcFreeByProduct(g);
+  const result = [];
+  for (const { freeProduct, exp, act } of map.values()) {
+    if (act < exp) result.push({ prodName: freeProduct, freeProduct, exp, act, diff: exp - act });
   }
   return result;
 }
 
 function getExcessFree(g) {
-  if (!promoLoaded || !promoRules.length) return [];
+  const map = calcFreeByProduct(g);
   const result = [];
-  const slmnRole = roleMap.get(cleanSlmn(g.SLMN_NAME));
-  const visLines = g.lines.filter(r => (parseFloat(r.TRD_QTY) || 0) !== 0);
-  for (const r of visLines) {
-    const info  = pddt.get(r.SKU_NAME);
-    const brand = info?.brand || '';
-    const size  = info?.size  || '';
-    const unit  = fmtUnit(r.TRD_UTQNAME);
-    const qty   = parseFloat(r.TRD_QTY) || 0;
-    const matchedRules = promoRules.filter(rule => {
-      if (rule.method === 'PRODUCT NAME' && rule.value !== r.SKU_NAME) return false;
-      if (rule.method === 'CAT SIZE'     && rule.value !== size)        return false;
-      if (rule.method === 'CAT BRAND'    && rule.value !== brand)       return false;
-      if (rule.unit && rule.unit !== unit) return false;
-      if (rule.warehouses && g.WL_CODE) {
-        if (!rule.warehouses.split(',').map(w=>w.trim()).includes(g.WL_CODE)) return false;
-      }
-      if (rule.startDate || rule.endDate) {
-        const d = parseDateStr(g.DI_DATE);
-        if (!d) return false;
-        if (rule.startDate && d < new Date(rule.startDate.getTime() + 86400000)) return false;
-        if (rule.endDate && d > new Date(rule.endDate.getTime() + 86400000)) return false;
-      }
-      if (rule.role !== null) {
-        if (slmnRole == null) return false;
-        if (rule.role === 3 && !(slmnRole === 3 || slmnRole >= 5)) return false;
-        if (rule.role === 4 && !(slmnRole >= 4)) return false;
-      }
-      return Math.floor(qty / rule.qty) > 0 && rule.freeProduct;
-    });
-    for (const rule of matchedRules) {
-      const exp = Math.floor(qty / rule.qty) * rule.freeQtyEA;
-      const normBC = normBarcode(rule.barcode);
-      let act = 0;
-      for (const fl of g.lines) {
-        const flBC = normBarcode(fl.TRD_SH_CODE || '');
-        const bcMatch = normBC.length >= 8 && flBC.length >= 8 && normBC.slice(-8) === flBC.slice(-8);
-        const nameKey = rule.freeProduct.trim().toLowerCase();
-        const nameMatch = nameKey.length > 3 && fl.SKU_NAME && fl.SKU_NAME.trim().toLowerCase().includes(nameKey);
-        if (bcMatch || nameMatch) act += parseFloat(fl.TRD_Q_FREE) || 0;
-      }
-      if (act > exp) {
-        result.push({ prodName: r.SKU_NAME, freeProduct: rule.freeProduct, exp, act, excess: act - exp });
-      }
-    }
+  for (const { freeProduct, exp, act } of map.values()) {
+    if (act > exp) result.push({ freeProduct, exp, act, excess: act - exp });
   }
   return result;
 }
@@ -1324,24 +1237,19 @@ function renderDetail(diRef) {
   }).join('');
 
   const excess = getExcessFree(g);
-  const excessByProd = excess.reduce((m, x) => { if (!m[x.prodName]) m[x.prodName] = []; m[x.prodName].push(x); return m; }, {});
   const excessCardHtml = excess.length ? `
     <div class="excess-card">
       <div class="excess-card-head">
         <span>📦 ของแถมที่เกิน (${excess.length} รายการ)</span>
       </div>
-      ${Object.entries(excessByProd).map(([prod, rows]) => `
-        <div class="missing-item">
-          <div class="missing-prod">${escHtml(prod)}</div>
-          ${rows.map(x => `
-            <div class="missing-row">
-              <div class="missing-free-name">🎁 ${escHtml(x.freeProduct)}</div>
-              <div class="missing-nums">
-                <span class="missing-exp">ควรได้ ${fmtInt(x.exp)} EA</span>
-                <span class="missing-act">ได้แล้ว ${fmtInt(x.act)} EA</span>
-                <span style="font-size:11px;font-weight:700;color:#a87800;background:rgba(243,156,18,.15);padding:2px 7px;border-radius:4px">เกิน ${fmtInt(x.excess)} EA</span>
-              </div>
-            </div>`).join('')}
+      ${excess.map(x => `
+        <div class="missing-row" style="padding:10px 16px;border-bottom:1px solid var(--border)">
+          <div class="missing-free-name">🎁 ${escHtml(x.freeProduct)}</div>
+          <div class="missing-nums">
+            <span class="missing-exp">ควรได้ ${fmtInt(x.exp)} EA</span>
+            <span class="missing-act">ได้แล้ว ${fmtInt(x.act)} EA</span>
+            <span style="font-size:11px;font-weight:700;color:#a87800;background:rgba(243,156,18,.15);padding:2px 7px;border-radius:4px">เกิน ${fmtInt(x.excess)} EA</span>
+          </div>
         </div>`).join('')}
     </div>` : '';
 
