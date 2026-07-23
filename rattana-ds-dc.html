@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS_DC v5.11 — ใบสั่งสินค้า</title>
+<title>Rattana DS_DC v5.12 — ใบสั่งสินค้า</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -730,10 +730,19 @@ function computeStatus(g) {
       actTotal += act;
     }
   }
+  // ตรวจ free line ที่ไม่มีโปรใดรองรับ
+  const freeLines = g.lines.filter(r => (parseFloat(r.TRD_QTY)||0) === 0 && (parseFloat(r.TRD_Q_FREE)||0) > 0);
+  const hasAbnormal = freeLines.some(r => {
+    const skuLower = r.SKU_NAME.trim().toLowerCase();
+    return !promoRules.some(rule => {
+      const nk = rule.freeProduct.trim().toLowerCase();
+      return nk.length > 3 && skuLower.includes(nk);
+    });
+  });
+  if (hasAbnormal) return 'ผิดปกติ';
   if (!matched || expTotal === 0) return null;
-  if (actTotal > expTotal) return 'ผิดปกติ';
-  if (actTotal >= expTotal) return 'ครบ';
-  return 'ขาด';
+  if (actTotal < expTotal) return 'ขาด';
+  return 'ครบ';
 }
 
 // ─────────────────────────────────────────────
@@ -1163,7 +1172,7 @@ function renderDetail(diRef) {
   else if (st === 'ขาด')
     statusHtml = `<div class="det-status-wrap s-danger"><span class="det-status-icon">⚠️</span><div><div class="det-status-text" style="color:#c0392b">โปรโมชั่น: ขาดของแถม</div><div style="font-size:12px;color:var(--muted)">ของแถมน้อยกว่าที่ควรได้รับ</div></div></div>`;
   else if (st === 'ผิดปกติ')
-    statusHtml = `<div class="det-status-wrap s-warn"><span class="det-status-icon">❗</span><div><div class="det-status-text" style="color:#a87800">โปรโมชั่น: ผิดปกติ</div><div style="font-size:12px;color:var(--muted)">ของแถมมากกว่าที่ควรได้รับ</div></div></div>`;
+    statusHtml = `<div class="det-status-wrap s-warn"><span class="det-status-icon">❗</span><div><div class="det-status-text" style="color:#a87800">โปรโมชั่น: ผิดปกติ</div><div style="font-size:12px;color:var(--muted)">มีสินค้าแถมที่ไม่มีโปรโมชั่นรองรับ</div></div></div>`;
 
   const visibleLines = g.lines.filter(r => (parseFloat(r.TRD_QTY) || 0) !== 0);
   const freeLines    = g.lines.filter(r => (parseFloat(r.TRD_QTY) || 0) === 0 && (parseFloat(r.TRD_Q_FREE) || 0) > 0);
