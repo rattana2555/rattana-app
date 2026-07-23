@@ -4319,32 +4319,35 @@ function flashCard(p) {
 }
 function buildFlashPreview() {
   const stage = $('#pdfStage');
+  const isM = SHEET_CONFIG.perPage === 'flash12';   // v6.16 — monthly (portrait, 12 cards)
+  const cards = flashCardsFor(), per = flashPerPage(), tpl = flashTemplateFor();
+  const D = fsDims();
   const sel = getSortedSelection();
-  if (!sel.length) { stage.innerHTML = `<div class="empty-state"><div class="emoji">🔥</div><h3>ยังไม่ได้เลือกสินค้า</h3><div class="empty-sub">โหมด Flash Sale — เลือกสินค้าที่จะโชว์ (6 ตัว/หน้า)</div></div>`; return; }
-  if (!SHEET_CONFIG.flashTemplate) { stage.innerHTML = `<div class="empty-state"><div class="emoji">🖼️</div><h3>ยังไม่ได้ใส่รูปเทมเพลต Flash Sale</h3><div class="empty-sub">ไปแท็บ "ตั้งค่า" → วางลิงก์รูปเทมเพลต Flash Sale ก่อน</div></div>`; return; }
-  const tpl = SHEET_CONFIG.flashTemplate;
+  const modeName = isM ? 'รายเดือน' : 'รายวัน/สัปดาห์';
+  if (!sel.length) { stage.innerHTML = `<div class="empty-state"><div class="emoji">🔥</div><h3>ยังไม่ได้เลือกสินค้า</h3><div class="empty-sub">Flash Sale ${modeName} — เลือกสินค้าที่จะโชว์ (${per} ตัว/หน้า)</div></div>`; return; }
+  if (!tpl) { stage.innerHTML = `<div class="empty-state"><div class="emoji">🖼️</div><h3>ยังไม่ได้ใส่รูปเทมเพลต Flash Sale ${modeName}</h3><div class="empty-sub">ไปแท็บ "ตั้งค่า" → วางลิงก์รูปเทมเพลต Flash Sale ${modeName} ก่อน</div></div>`; return; }
   const fmt = d => d ? formatThaiDate(d).split(' ')[0] : '';
   const ds = SHEET_CONFIG.promoStart, de = SHEET_CONFIG.promoEnd;
   const dateRange = (ds || de) ? `${fmt(ds) || '—'} → ${fmt(de) || '—'}` : '';
   const pages = [];
-  for (let i = 0; i < sel.length; i += 6) pages.push(sel.slice(i, i+6));
+  for (let i = 0; i < sel.length; i += per) pages.push(sel.slice(i, i+per));
   const inner = pages.map((items, pi) => {
     const dateKey = `__page${pi}::fsdate`;   // v6.15 — date is editable & movable
     const dateShown = textOverrides[dateKey] != null ? escapeHtml(textOverrides[dateKey]) : escapeHtml(dateRange);
     const showDate = dateShown !== '';
     return `
-    <div class="flash-page" id="pdf-page-${pi}" style="background-image:url('${escapeAttr(tpl)}')">
+    <div class="flash-page${isM ? ' flash-page-m' : ''}" id="pdf-page-${pi}" style="background-image:url('${escapeAttr(tpl)}')">
       ${showDate ? `<div class="flash-date editable-txt" data-fs-sku="__page${pi}" data-fs-role="date" data-edit="${dateKey}" contenteditable="true" spellcheck="false">${dateShown}</div>` : ''}
-      ${items.map((p, idx) => { const c = FLASH_CARDS[idx]; return `<div class="flash-slot" style="left:${c.x}%;top:${c.y}%;width:${c.w}%;height:${c.h}%">${flashCard(p)}</div>`; }).join('')}
+      ${items.map((p, idx) => { const c = cards[idx]; return c ? `<div class="flash-slot" style="left:${c.x}%;top:${c.y}%;width:${c.w}%;height:${c.h}%">${flashCard(p)}</div>` : ''; }).join('')}
     </div>`;
   }).join('');
   const vw = window.innerWidth;
-  const scale = Math.min(0.72, Math.max(0.24, (vw - 60) / 1123));   // landscape page ≈ 1123px wide
-  const totalH = (794 * scale + 14) * pages.length;
+  const scale = Math.min(0.72, Math.max(0.24, (vw - 60) / D.w));   // fit page width to viewport
+  const totalH = (D.h * scale + 14) * pages.length;
   stage.innerHTML = `<div class="pdf-wrap" style="width:100%"><div class="pdf-wrap-inner" style="transform:scale(${scale.toFixed(3)});height:${totalH}px">${inner}</div></div>`;
   flashPreviewScale = scale;   // v6.14 — drag math needs the live preview scale
   fsSelectedEl = null;         // fresh DOM → drop any stale selection
-  $('#heroSub') && ($('#heroSub').textContent = `Flash Sale: ${sel.length} สินค้า · ${pages.length} หน้า · ✋ ลากเพื่อย้าย · ลากจุดสีน้ำเงินเพื่อปรับขนาด`);
+  $('#heroSub') && ($('#heroSub').textContent = `Flash Sale ${modeName}: ${sel.length} สินค้า · ${pages.length} หน้า · ✋ ลากเพื่อย้าย · ลากจุดสีน้ำเงินเพื่อปรับขนาด`);
   reapplyImgScales();
   bakeImages('#pdfStage .flash-img img').then(reapplyImgScales);
   makeTextsEditable();
