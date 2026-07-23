@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS_DC v4.6 — ใบสั่งสินค้า</title>
+<title>Rattana DS_DC v4.7 — ใบสั่งสินค้า</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -271,7 +271,7 @@ body.dark .det-status-wrap.s-warn{background:#3a2e15;border-color:#f39c12}
       <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln22zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJpacw3bOe+eefdvzx3vmzGFhF/be995Dz0M/DkxXVXdV/6u6uroJACAaY4wxGGO890KIIY6uYFiWZSul1CCEIKWUiPivsz+APWJkua7rApTSY4wxIlLvXcfzPO85b5xzznmMcYwxzjnGWYzxGOM4znlPCGOMc84YY4xzTlVVxRgDAIy1FmOM1hhjrQMAjDFijLHWOgDGGGuttY4xBgBrrQUAjDHGGGNsjLHOWhsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" alt="Rattana" height="34">
       <div>
         <div class="logo-text">Rattana <span>DS_DC</span></div>
-        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v4.6</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v4.7</span></div>
       </div>
     </div>
     <div class="header-actions">
@@ -392,7 +392,16 @@ const ROLE_SHEET_NAME = 'Sheet1';
 // Google Sheets ที่ export จาก BigQuery
 const BQ_HISTORY_SHEET_ID   = '1JBMIiYcpqFDamj5TFdHvrm9dxSG8sxiOu3fFGf9qFds';
 const BQ_HISTORY_SHEET_NAME = 'results-20260723-041242';
-const BQ_MONTHS = new Set(['2025/11','2025/12','2026/01','2026/02','2026/03','2026/04','2026/05','2026/06']);
+// คำนวณ 3 เดือนล่าสุดอัตโนมัติ (ไม่ต้องอัพเดต list เอง)
+const BQ_MONTHS = (() => {
+  const s = new Set();
+  const now = new Date();
+  for (let i = 1; i <= 3; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    s.add(`${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}`);
+  }
+  return s;
+})();
 
 // ─────────────────────────────────────────────
 // STATE
@@ -483,7 +492,7 @@ async function fetchFromBQ(monthKey) {
   const rows = await fetchCSV(BQ_HISTORY_SHEET_ID, BQ_HISTORY_SHEET_NAME);
   const filtered = rows.filter(r => String(r.Month_Year || '').trim().startsWith(monthKey));
   return filtered.map(r => ({
-    DI_DATE:     (r.Month_Year || '').slice(0,7) + '/01',
+    DI_DATE:     (r.Month_Year || '').slice(0,7),
     DI_REF:      r.Doc_No        || '',
     AR_CODE:     r.Customer_Code  || '',
     AR_NAME:     r.Customer_Name  || '',
@@ -560,6 +569,8 @@ function parseDateStr(s) {
   if (m) return new Date(+m[3], +m[2]-1, +m[1]);
   m = str.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);     // YYYY/MM/DD
   if (m) return new Date(+m[1], +m[2]-1, +m[3]);
+  m = str.match(/^(\d{4})\/(\d{1,2})$/);                // YYYY/MM → first day
+  if (m) return new Date(+m[1], +m[2]-1, 1);
   return null;
 }
 function cleanSlmn(name) {
@@ -748,7 +759,9 @@ const fmtInt  = n => { const v=parseFloat(n); return isNaN(v)?'-':v.toLocaleStri
 const fmtDate = s => {
   if (!s) return '-';
   const p = s.split('/');
-  return p.length===3 ? `${p[2]}/${p[1]}/${parseInt(p[0])+543}` : s;
+  if (p.length===3) return `${p[2]}/${p[1]}/${parseInt(p[0])+543}`;
+  if (p.length===2) return `${p[1]}/${parseInt(p[0])+543}`; // YYYY/MM → MM/BYYY
+  return s;
 };
 const wlBadge = wl => {
   const cls = {W1:'badge-w1',W2:'badge-w2',W3:'badge-w3',W4:'badge-w4',HQ:'badge-hq',E1:'badge-info'}[wl]||'badge-info';
@@ -1126,7 +1139,7 @@ document.querySelectorAll('#mainTbl thead th[data-key]').forEach(th => {
 function exportExcel() {
   if (!filteredRows.length) { showToast('ไม่มีข้อมูลให้ Export','warning'); return; }
   const { fromStr: df, toStr: dt } = getDateRange();
-  const fmtD = s => { if(!s) return ''; const p=s.split('/'); return p.length===3?`${p[2]}/${p[1]}/${parseInt(p[0])+543}`:s; };
+  const fmtD = s => { if(!s) return ''; const p=s.split('/'); if(p.length===3) return `${p[2]}/${p[1]}/${parseInt(p[0])+543}`; if(p.length===2) return `${p[1]}/${parseInt(p[0])+543}`; return s; };
   const data = filteredRows.map(r => ({
     'วันที่': fmtD(r.DI_DATE), 'เลขที่': r.DI_REF,
     'รหัสลูกค้า': r.AR_CODE, 'ชื่อลูกค้า': r.AR_NAME,
