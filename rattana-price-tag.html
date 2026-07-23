@@ -4293,11 +4293,16 @@ function buildFlashPreview() {
   const dateRange = (ds || de) ? `${fmt(ds) || '—'} → ${fmt(de) || '—'}` : '';
   const pages = [];
   for (let i = 0; i < sel.length; i += 6) pages.push(sel.slice(i, i+6));
-  const inner = pages.map((items, pi) => `
+  const inner = pages.map((items, pi) => {
+    const dateKey = `__page${pi}::fsdate`;   // v6.15 — date is editable & movable
+    const dateShown = textOverrides[dateKey] != null ? escapeHtml(textOverrides[dateKey]) : escapeHtml(dateRange);
+    const showDate = dateShown !== '';
+    return `
     <div class="flash-page" id="pdf-page-${pi}" style="background-image:url('${escapeAttr(tpl)}')">
-      ${dateRange ? `<div class="flash-date">${escapeHtml(dateRange)}</div>` : ''}
+      ${showDate ? `<div class="flash-date editable-txt" data-fs-sku="__page${pi}" data-fs-role="date" data-edit="${dateKey}" contenteditable="true" spellcheck="false">${dateShown}</div>` : ''}
       ${items.map((p, idx) => { const c = FLASH_CARDS[idx]; return `<div class="flash-slot" style="left:${c.x}%;top:${c.y}%;width:${c.w}%;height:${c.h}%">${flashCard(p)}</div>`; }).join('')}
-    </div>`).join('');
+    </div>`;
+  }).join('');
   const vw = window.innerWidth;
   const scale = Math.min(0.72, Math.max(0.24, (vw - 60) / 1123));   // landscape page ≈ 1123px wide
   const totalH = (794 * scale + 14) * pages.length;
