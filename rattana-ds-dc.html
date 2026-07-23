@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS_DC v5.10 — ใบสั่งสินค้า</title>
+<title>Rattana DS_DC v5.11 — ใบสั่งสินค้า</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -208,6 +208,11 @@ body.dark .det-status-wrap.s-warn{background:#3a2e15;border-color:#f39c12}
 .free-item-name{font-size:13px;font-weight:600;color:var(--text)}
 .free-item-cat{font-size:11px;color:var(--muted);margin-top:2px}
 .free-qty{font-size:14px;font-weight:700;color:var(--success);white-space:nowrap}
+.abnormal-free-card{background:#7a1010;border-radius:var(--radius-md);border:1px solid #c0392b;border-top:3px solid #e74c3c;box-shadow:var(--shadow-md);margin-top:12px;color:#fff}
+.abnormal-free-head{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 8px;border-bottom:1px solid rgba(255,255,255,.2);font-size:13px;font-weight:700}
+.abnormal-free-item{display:flex;align-items:center;justify-content:space-between;padding:9px 16px;border-bottom:1px solid rgba(255,255,255,.1);font-size:13px}
+.abnormal-free-item:last-child{border-bottom:none}
+.abnormal-free-qty{font-weight:700;font-size:14px;color:#ff8a7e;white-space:nowrap}
 .missing-card{background:var(--card-bg);border-radius:var(--radius-md);border:1px solid var(--border);border-top:3px solid var(--danger);box-shadow:var(--shadow-md);margin-top:12px}
 .missing-card-head{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 6px;border-bottom:2px solid var(--danger)}
 .missing-card-head span{font-size:13px;font-weight:700;color:var(--text)}
@@ -1246,6 +1251,31 @@ function renderDetail(diRef) {
       ${freeRows}
     </div>` : '';
 
+  const abnormalFreeLines = freeLines.filter(r => {
+    const skuLower = r.SKU_NAME.trim().toLowerCase();
+    return !promoRules.some(rule => {
+      const nk = rule.freeProduct.trim().toLowerCase();
+      return nk.length > 3 && skuLower.includes(nk);
+    });
+  });
+  const abnormalFreeCardHtml = abnormalFreeLines.length ? `
+    <div class="abnormal-free-card">
+      <div class="abnormal-free-head">
+        <span>🚨 แถมสินค้าผิดปกติ (${abnormalFreeLines.length} รายการ)</span>
+        <span style="font-size:11px;font-weight:400;opacity:.8">ของแถมที่ไม่มีโปรโมชั่นรองรับ</span>
+      </div>
+      ${abnormalFreeLines.map(r => {
+        const freeQty = parseFloat(r.TRD_Q_FREE) || 0;
+        const info = pddt.get(r.SKU_NAME);
+        const catParts = [info?.brand, info?.size].filter(Boolean);
+        const catHtml = catParts.length ? `<div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:2px">${escHtml(catParts.join(' · '))}</div>` : '';
+        return `<div class="abnormal-free-item">
+          <div>${escHtml(r.SKU_NAME)}${catHtml}</div>
+          <div class="abnormal-free-qty">+${fmtInt(freeQty)} EA</div>
+        </div>`;
+      }).join('')}
+    </div>` : '';
+
   el.innerHTML = `
     <div class="det-bar">
       <button class="back-btn" onclick="history.back()">← กลับ</button>
@@ -1280,6 +1310,7 @@ function renderDetail(diRef) {
         <div class="prod-list">${prodRows}</div>
       </div>
       ${freeCardHtml}
+      ${abnormalFreeCardHtml}
       ${missingCardHtml}
     </div>`;
 }
