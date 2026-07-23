@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS_DC v4.9 — ใบสั่งสินค้า</title>
+<title>Rattana DS_DC v5.0 — ใบสั่งสินค้า</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -271,11 +271,12 @@ body.dark .det-status-wrap.s-warn{background:#3a2e15;border-color:#f39c12}
       <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln22zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJpacw3bOe+eefdvzx3vmzGFhF/be995Dz0M/DkxXVXdV/6u6uroJACAaY4wxGGO890KIIY6uYFiWZSul1CCEIKWUiPivsz+APWJkua7rApTSY4wxIlLvXcfzPO85b5xzznmMcYwxzjnGWYzxGOM4znlPCGOMc84YY4xzTlVVxRgDAIy1FmOM1hhjrQMAjDFijLHWOgDGGGuttY4xBgBrrQUAjDHGGGNsjLHOWhsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" alt="Rattana" height="34">
       <div>
         <div class="logo-text">Rattana <span>DS_DC</span></div>
-        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v4.9</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v5.0</span></div>
       </div>
     </div>
     <div class="header-actions">
       <button class="icon-btn" onclick="refreshData()" id="btnRefresh" title="รีเฟรช">⟳</button>
+      <button class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,.3);font-size:12px;padding:5px 10px;min-height:34px" onclick="showClaim()" title="รายงานเคลม">📋 เคลม</button>
       <button class="icon-btn" onclick="toggleDark()" title="Dark mode">🌙</button>
     </div>
   </header>
@@ -360,6 +361,40 @@ body.dark .det-status-wrap.s-warn{background:#3a2e15;border-color:#f39c12}
   <!-- Detail view -->
   <div id="viewDetail" style="display:none">
     <div id="detailContent"></div>
+    <div style="height:80px"></div>
+  </div>
+
+  <!-- Claim view -->
+  <div id="viewClaim" style="display:none">
+    <div class="filter-bar" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-outline btn-sm" onclick="showList()">← กลับ</button>
+      <span style="font-weight:700;font-size:15px">📋 รายงานการเคลม Vendor</span>
+      <span id="claimMonthLabel" style="font-size:12px;color:var(--muted)"></span>
+      <button class="btn btn-outline btn-sm" onclick="exportClaimExcel()" style="margin-left:auto">📥 Excel</button>
+    </div>
+    <div class="content">
+      <div class="card card-gold section-gap">
+        <div class="card-head">
+          <span style="font-weight:700;font-size:14px">สรุปรายการแถมตามโปรโมชั่น</span>
+          <span id="claimCount" style="font-size:12px;color:var(--muted)"></span>
+        </div>
+        <div class="tbl-wrap">
+          <table class="tbl" id="claimTbl">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>ชื่อ / เงื่อนไข</th>
+                <th>สินค้าแถม</th>
+                <th>การเคลม</th>
+                <th style="text-align:right">จำนวนใบ</th>
+                <th style="text-align:right">แถมรวม (EA)</th>
+              </tr>
+            </thead>
+            <tbody id="claimTblBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
     <div style="height:80px"></div>
   </div>
 
@@ -547,6 +582,7 @@ async function loadPromo() {
         qty:    parseFloat(String(r['จำนวน'] || '').replace(/,/g, '')) || 1,
         unit:   String(r['รูปแบบขาย'] || '').trim().toUpperCase(),
         freeProduct: String(r['แถมสินค้า'] || '').trim(),
+        claim:       String(r['การเคลม']   || '').trim(),
         barcode:     String(r['Barcode สินค้าแถมEA'] || '').trim(),
         freeQtyEA:   parseFloat(String(r['จำนวนแถมEA'] || '').replace(/,/g, '')) || 0,
         warehouses:  String(r['Warehouses'] || '').trim(),
@@ -843,7 +879,76 @@ function goDetail(encodedRef) {
 function showList() {
   document.getElementById('viewList').style.display = '';
   document.getElementById('viewDetail').style.display = 'none';
+  document.getElementById('viewClaim').style.display = 'none';
   window.scrollTo(0, 0);
+}
+function showClaim() {
+  document.getElementById('viewList').style.display = 'none';
+  document.getElementById('viewDetail').style.display = 'none';
+  document.getElementById('viewClaim').style.display = '';
+  renderClaim();
+  window.scrollTo(0, 0);
+}
+function renderClaim() {
+  const monthLabel = document.getElementById('monthLabel');
+  document.getElementById('claimMonthLabel').textContent = monthLabel ? monthLabel.innerText.replace(/\n/g,' ') : '';
+  const tbody = document.getElementById('claimTblBody');
+  if (!promoRules.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)">ยังไม่ได้โหลดข้อมูลโปรโมชั่น — กลับไปกด โหลด ก่อนครับ</td></tr>';
+    return;
+  }
+  // นับรายการแถมใน allRows ที่ TRD_Q_FREE > 0 และตรงกับแต่ละ rule
+  const results = promoRules.map(rule => {
+    const matchLines = allRows.filter(r => {
+      if ((parseFloat(r.TRD_Q_FREE) || 0) <= 0) return false;
+      const info = pddt.get(r.SKU_NAME);
+      const brand = info?.brand || '';
+      const size  = fmtUnit(r.TRD_UTQNAME);
+      if (rule.method === 'PRODUCT NAME') return r.SKU_NAME === rule.value;
+      if (rule.method === 'CAT SIZE')     return size  === rule.value;
+      if (rule.method === 'CAT BRAND')    return brand === rule.value;
+      return false;
+    });
+    const invoices = new Set(matchLines.map(r => r.DI_REF)).size;
+    const totalFree = matchLines.reduce((s, r) => s + (parseFloat(r.TRD_Q_FREE) || 0), 0);
+    return { rule, matchLines, invoices, totalFree };
+  });
+  document.getElementById('claimCount').textContent =
+    `${results.filter(x => x.invoices > 0).length} รายการมีข้อมูล / ${results.length} รายการทั้งหมด`;
+  tbody.innerHTML = results.map((x, i) => `
+    <tr style="${x.invoices === 0 ? 'opacity:.45' : ''}">
+      <td class="txt-muted txt-sm">${i+1}</td>
+      <td style="font-weight:600">${escHtml(x.rule.value)}</td>
+      <td>${escHtml(x.rule.freeProduct)}</td>
+      <td>${escHtml(x.rule.claim)}</td>
+      <td class="num" style="text-align:right">${x.invoices > 0 ? x.invoices.toLocaleString('th-TH') : '-'}</td>
+      <td class="num" style="text-align:right;color:${x.totalFree > 0 ? 'var(--success)' : 'var(--muted)'};font-weight:${x.totalFree > 0 ? '700' : '400'}">${x.totalFree > 0 ? x.totalFree.toLocaleString('th-TH') : '-'}</td>
+    </tr>`).join('');
+}
+function exportClaimExcel() {
+  if (!promoRules.length) { showToast('ยังไม่มีข้อมูล','warning'); return; }
+  const monthLabel = document.getElementById('monthLabel');
+  const month = monthLabel ? monthLabel.innerText.replace(/\n/g,' ') : '';
+  const data = promoRules.map((rule, i) => {
+    const matchLines = allRows.filter(r => {
+      if ((parseFloat(r.TRD_Q_FREE) || 0) <= 0) return false;
+      const info = pddt.get(r.SKU_NAME);
+      const brand = info?.brand || '';
+      const size  = fmtUnit(r.TRD_UTQNAME);
+      if (rule.method === 'PRODUCT NAME') return r.SKU_NAME === rule.value;
+      if (rule.method === 'CAT SIZE')     return size  === rule.value;
+      if (rule.method === 'CAT BRAND')    return brand === rule.value;
+      return false;
+    });
+    const invoices = new Set(matchLines.map(r => r.DI_REF)).size;
+    const totalFree = matchLines.reduce((s, r) => s + (parseFloat(r.TRD_Q_FREE) || 0), 0);
+    return { '#': i+1, 'ชื่อ/เงื่อนไข': rule.value, 'สินค้าแถม': rule.freeProduct, 'การเคลม': rule.claim, 'จำนวนใบ': invoices || 0, 'แถมรวม EA': totalFree || 0 };
+  });
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'เคลม Vendor');
+  XLSX.writeFile(wb, `claim-vendor-${month}.xlsx`);
+  showToast('Export เรียบร้อย ✓', 'success');
 }
 function showDetail(diRef) {
   document.getElementById('viewList').style.display = 'none';
