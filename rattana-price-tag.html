@@ -4261,18 +4261,20 @@ function flashCard(p) {
   if (sel.length >= 2) { leftU = sel[0]; rightU = sel[sel.length-1]; }
   else if (sel.length === 1) { const u = sel[0]; if (order.indexOf(u) <= 1) leftU = u; else rightU = u; }
   const sk = escapeAttr(p.sku);
+  const ovr = (key, def) => textOverrides[key] != null ? escapeHtml(textOverrides[key]) : def;   // v6.15 — editable text with saved override
   const box = (u, side) => {
     const up = u && p.unitPrices && p.unitPrices[u];
     if (!up) return '';
     const show = up.sale || up.price;
     const R = side === 'left' ? 'L' : 'R';
+    const oldKey = `${sk}::fsold${R}`, priceKey = `${sk}::fsprice${R}`, unitKey = `${sk}::fsunit${R}`;
     const oldHtml = up.sale
-      ? `<div class="flash-old flash-old-${side}" data-fs-sku="${sk}" data-fs-role="old${R}">ปกติ <s>${fmtThaiBaht(up.price)}</s></div>` : '';
-    const boxHtml = `<div class="flash-pbox flash-${side}" data-fs-sku="${sk}" data-fs-role="box${R}">
-      <div class="flash-price">${fmtThaiBaht(show)}<span class="flash-baht">.-</span></div>
-      <div class="flash-unit">${escapeHtml(up.pack || up.name || up.u)}</div>
+      ? `<div class="flash-old">ปกติ <s class="editable-txt" data-edit="${oldKey}" contenteditable="true" spellcheck="false">${ovr(oldKey, fmtThaiBaht(up.price))}</s></div>` : '';
+    return `<div class="flash-pbox flash-${side}" data-fs-sku="${sk}" data-fs-role="box${R}">
+      ${oldHtml}
+      <div class="flash-price"><span class="flash-num editable-txt" data-edit="${priceKey}" contenteditable="true" spellcheck="false">${ovr(priceKey, fmtThaiBaht(show))}</span><span class="flash-baht">.-</span></div>
+      <div class="flash-unit editable-txt" data-edit="${unitKey}" contenteditable="true" spellcheck="false">${ovr(unitKey, escapeHtml(up.pack || up.name || up.u))}</div>
     </div>`;
-    return oldHtml + boxHtml;
   };
   const imgHtml = p.image
     ? `<img src="${escapeAttr(imgAtWidth(p.image,300))}" data-imgsku="${sk}" onerror="this.style.display='none'" crossorigin="anonymous">` : '';
