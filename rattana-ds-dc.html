@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS_DC v5.20 — ใบสั่งสินค้า</title>
+<title>Rattana DS_DC v5.21 — ใบสั่งสินค้า</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -316,7 +316,7 @@ body.dark .det-status-wrap.s-warn{background:#3a2e15;border-color:#f39c12}
       <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln22zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJpacw3bOe+eefdvzx3vmzGFhF/be995Dz0M/DkxXVXdV/6u6uroJACAaY4wxGGO890KIIY6uYFiWZSul1CCEIKWUiPivsz+APWJkua7rApTSY4wxIlLvXcfzPO85b5xzznmMcYwxzjnGWYzxGOM4znlPCGOMc84YY4xzTlVVxRgDAIy1FmOM1hhjrQMAjDFijLHWOgDGGGuttY4xBgBrrQUAjDHGGGNsjLHOWhsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" alt="Rattana" height="34">
       <div>
         <div class="logo-text">Rattana <span>DS_DC</span></div>
-        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v5.20</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v5.21</span></div>
       </div>
     </div>
     <div class="header-actions">
@@ -420,14 +420,13 @@ body.dark .det-status-wrap.s-warn{background:#3a2e15;border-color:#f39c12}
           <span id="claimCount" style="font-size:12px;color:var(--muted)"></span>
         </div>
         <div class="tbl-wrap">
-          <table class="tbl" id="claimTbl">
-            <thead>
+          <table class="tbl" id="claimTbl" style="min-width:400px">
+            <thead id="claimThead" style="position:sticky;top:0;z-index:10">
               <tr>
-                <th>#</th>
+                <th style="width:40px">#</th>
                 <th>สินค้าแถม</th>
-                <th>Vendor</th>
-                <th style="text-align:right">จำนวนใบ</th>
-                <th style="text-align:right">แถมรวม (EA)</th>
+                <th style="text-align:right;width:90px">จำนวนใบ</th>
+                <th style="text-align:right;width:120px">แถมรวม (EA)</th>
               </tr>
             </thead>
             <tbody id="claimTblBody"></tbody>
@@ -982,7 +981,7 @@ function renderClaim() {
     const fp = rule.freeProduct;
     if (!fp) continue;
     if (!groupMap.has(fp)) {
-      const info = pddt.get(fp);
+      const info = pddt.get(rule.freeSKU) || pddt.get(fp);
       groupMap.set(fp, { freeProduct: fp, vendor: info?.vendor || '', lineKeys: new Set(), invoiceSet: new Set(), totalFree: 0 });
     }
     const g = groupMap.get(fp);
@@ -995,19 +994,32 @@ function renderClaim() {
       }
     }
   }
-  const grouped = [...groupMap.values()].filter(g => g.totalFree > 0).sort((a, b) => b.totalFree - a.totalFree);
+  const grouped = [...groupMap.values()].filter(g => g.totalFree > 0)
+    .sort((a, b) => (a.vendor || '').localeCompare(b.vendor || '', 'th') || b.totalFree - a.totalFree);
   document.getElementById('claimCount').textContent =
     `${grouped.length} รายการมีของแถม / ${new Set(promoRules.filter(r => !claimQ || r.claim === claimQ).map(r => r.freeProduct).filter(Boolean)).size} รายการทั้งหมด`;
-  tbody.innerHTML = grouped.length === 0
-    ? '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted)">ไม่พบรายการแถม</td></tr>'
-    : grouped.map((g, i) => `
-    <tr>
-      <td class="txt-muted txt-sm">${i+1}</td>
+  if (!grouped.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted)">ไม่พบรายการแถม</td></tr>';
+    return;
+  }
+  let lastVendor = null, num = 0;
+  const rows = [];
+  for (const g of grouped) {
+    if (g.vendor !== lastVendor) {
+      rows.push(`<tr style="background:var(--navy);color:#fff">
+        <td colspan="4" style="font-weight:700;font-size:12px;padding:7px 14px;letter-spacing:.4px;border-bottom:2px solid var(--gold)">🏢 ${escHtml(g.vendor || '— ไม่ระบุ Vendor —')}</td>
+      </tr>`);
+      lastVendor = g.vendor;
+    }
+    num++;
+    rows.push(`<tr>
+      <td class="txt-muted txt-sm">${num}</td>
       <td style="font-weight:600">${escHtml(g.freeProduct)}</td>
-      <td style="font-size:12px;color:var(--muted)">${escHtml(g.vendor)}</td>
       <td class="num" style="text-align:right">${g.invoiceSet.size.toLocaleString('th-TH')}</td>
       <td class="num" style="text-align:right;color:var(--success);font-weight:700">${g.totalFree.toLocaleString('th-TH')}</td>
-    </tr>`).join('');
+    </tr>`);
+  }
+  tbody.innerHTML = rows.join('');
 }
 function exportClaimExcel() {
   if (!promoRules.length) { showToast('ยังไม่มีข้อมูล','warning'); return; }
