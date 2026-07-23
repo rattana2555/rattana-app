@@ -4289,7 +4289,33 @@ function fsSelect(el){
 function resetFlashLayout(){
   flashLayout = {}; saveFlashLayout(); fsSelectedEl = null;
   if (isFlashMode()) buildFlashPreview();
+  if ($('#flashSize')) $('#flashSize').value = 100;
+  if ($('#flashSizeVal')) $('#flashSizeVal').textContent = '100%';
   showToast('↩ รีเซ็ตตำแหน่ง/ขนาดทั้งหมดแล้ว', 'success');
+}
+
+/* v6.18 — Flash Sale size control: the slider resizes a chosen element type (รูป/ชื่อ/ราคา) on EVERY card */
+let flashSizeTarget = 'img';
+function flashRolesFor(t){ return t === 'price' ? ['boxL','boxR'] : [t]; }
+function setFlashSizeTarget(t){
+  flashSizeTarget = t;
+  document.querySelectorAll('#flashSizeBar .fs-tbtn').forEach(b => b.classList.toggle('active', b.dataset.t === t));
+  // reflect the current scale of that type (from the first selected product)
+  const skus = [...selectedSkus];
+  let s = 1;
+  if (skus.length) { const L = flashLayout[skus[0]]; const r = flashRolesFor(t)[0]; if (L && L[r] && L[r].s) s = L[r].s; }
+  const pct = Math.round(s * 100);
+  if ($('#flashSize')) $('#flashSize').value = pct;
+  if ($('#flashSizeVal')) $('#flashSizeVal').textContent = pct + '%';
+}
+function applyFlashSize(pct){
+  const v = Math.max(40, Math.min(300, parseInt(pct) || 100));
+  const roles = flashRolesFor(flashSizeTarget);
+  [...selectedSkus].forEach(sku => roles.forEach(r => { fsGet(sku, r).s = v/100; }));
+  if ($('#flashSize')) $('#flashSize').value = v;
+  if ($('#flashSizeVal')) $('#flashSizeVal').textContent = v + '%';
+  applyAllFsEls();
+  saveFlashLayout();
 }
 
 /* v6.12 — Flash Sale poster: template image as page background + product overlays (6 per landscape A4) */
