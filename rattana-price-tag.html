@@ -4363,9 +4363,66 @@ const FLASH_CARDS_M = (() => {
   rows.forEach(y => cols.forEach(x => out.push({ x, y, w, h })));
   return out;
 })();
-function flashCardsFor(){ return SHEET_CONFIG.perPage === 'flash12' ? FLASH_CARDS_M : FLASH_CARDS; }
-function flashPerPage(){ return SHEET_CONFIG.perPage === 'flash12' ? 12 : 6; }
-function flashTemplateFor(){ return SHEET_CONFIG.perPage === 'flash12' ? SHEET_CONFIG.flashTemplateM : SHEET_CONFIG.flashTemplate; }
+// v6.19 — Flash Sale รายวัน/สัปดาห์: 6 DRAWN cards on the cream area (2 cols × 3 rows), y 23–90%
+const FLASH_WEEK_SLOTS = (() => {
+  const cols = [2.5, 51.0], rows = [23.5, 46.0, 68.5], w = 46.5, h = 21.0;
+  const out = [];
+  rows.forEach(y => cols.forEach(x => out.push({ x, y, w, h })));
+  return out;
+})();
+// v6.19 — selectable weekly backgrounds (same layout, different colours) from the shared Drive folder
+const FLASH_BG_PRESETS = [
+  { id:'1iPyFyxD4-_0-EJMz9vRAN2W_mFGcdU5i', name:'มาตรฐาน',   color:'#1b2a6b' },
+  { id:'1mKPB-5fGCFHd7ccUJBCG6o-xurqSYkkO', name:'น้ำเงินดำ', color:'#0d1b3e' },
+  { id:'1vcfZj7FOW5X4yxZy7U0jaCw3fJgy_3wM', name:'เขียวฟ้า',   color:'#0e8a8a' },
+  { id:'1oiiXMsFaGQKkw3neK8RoON654lrsBorQ', name:'ชมพูส้ม',   color:'#e8632b' },
+  { id:'14bsGx-NVKKsm-5j_mMUVWDWrX1Wpk7j-', name:'ม่วงเหลือง', color:'#7a4bbf' },
+  { id:'1tmMxUJAa9OQz24tWX5jXnM4LeByWFP6E', name:'ม่วง',       color:'#5b2d8f' },
+];
+function flashBgUrl(id){ return `https://lh3.googleusercontent.com/d/${id}=w1600`; }
+// Mode config: flash12 = monthly (overlay on template), flash6 = weekly (drawn cards on selectable bg)
+function flashModeCfg(){
+  if (SHEET_CONFIG.perPage === 'flash12')
+    return { slots:FLASH_CARDS_M, per:12, tpl:SHEET_CONFIG.flashTemplateM, pageCls:'flash-page-m', render:flashCard, name:'รายเดือน' };
+  return { slots:FLASH_WEEK_SLOTS, per:6, tpl:SHEET_CONFIG.flashTemplate, pageCls:'flash-page-w', render:flashWeekCard, name:'รายวัน/สัปดาห์' };
+}
+
+/* v6.19 — Weekly card: white rounded card drawn on the cream area (image-2 style).
+   Left = price box(es), right = product image, bottom = name (dotted separator). */
+function flashWeekCard(p) {
+  if (!p) return '';
+  const sk = escapeAttr(p.sku);
+  const ovr = (key, def) => textOverrides[key] != null ? escapeHtml(textOverrides[key]) : def;
+  const order = ['EA','PA','BP','CS'];
+  const sel = effectiveMultiUnits(p).slice().sort((a,b) => order.indexOf(a) - order.indexOf(b));
+  let units = [];
+  if (sel.length >= 2) units = [sel[0], sel[sel.length-1]];   // smallest + largest
+  else if (sel.length === 1) units = [sel[0]];
+  const solo = units.length <= 1;
+  const pbox = (u, pos, R) => {
+    const up = u && p.unitPrices && p.unitPrices[u];
+    if (!up) return '';
+    const show = up.sale || up.price;
+    const oldKey = `${sk}::fwold${R}`, priceKey = `${sk}::fwprice${R}`, unitKey = `${sk}::fwunit${R}`;
+    const oldHtml = up.sale
+      ? `<span class="fxw-old">ปกติ <s class="editable-txt" data-edit="${oldKey}" contenteditable="true" spellcheck="false">${ovr(oldKey, fmtThaiBaht(up.price))}</s></span>` : '';
+    const unitTxt = ovr(unitKey, escapeHtml((up.pack || up.name || u) + '(' + u + ')'));
+    return `<div class="fxw-pbox ${pos}" data-fs-sku="${sk}" data-fs-role="box${R}">
+      <div class="fxw-plabel">ราคาเพียง</div>
+      <div class="fxw-prow">${oldHtml}<span class="fxw-big"><span class="editable-txt" data-edit="${priceKey}" contenteditable="true" spellcheck="false">${ovr(priceKey, fmtThaiBaht(show))}</span><span class="fxw-baht">.-</span></span></div>
+      <div class="fxw-unit editable-txt" data-edit="${unitKey}" contenteditable="true" spellcheck="false">${unitTxt}</div>
+    </div>`;
+  };
+  const boxes = solo ? pbox(units[0], 'solo', 'L') : pbox(units[0], 'top', 'L') + pbox(units[1], 'bot', 'R');
+  const imgHtml = p.image
+    ? `<img src="${escapeAttr(imgAtWidth(p.image,300))}" data-imgsku="${sk}" onerror="this.style.display='none'" crossorigin="anonymous">` : '';
+  return `<div class="fxw-card">
+    <div class="fxw-tab">FLASH<small>SALE</small></div>
+    ${boxes}
+    <div class="fxw-img" data-fs-sku="${sk}" data-fs-role="img">${imgHtml}</div>
+    <div class="fxw-name" data-fs-sku="${sk}" data-fs-role="name">${nameCellHtml(p, true)}</div>
+  </div>`;
+}
 function flashCard(p) {
   if (!p) return '';
   // smaller unit (EA/PA) → left gold box · larger unit (BP/CS) → right gold box
