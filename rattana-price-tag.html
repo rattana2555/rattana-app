@@ -4359,28 +4359,47 @@ function resetFlashLayout(){
   showToast('↩ รีเซ็ตตำแหน่ง/ขนาดทั้งหมดแล้ว', 'success');
 }
 
-/* v6.24 — Flash Sale size control: the slider resizes ONLY the element you clicked (per-item, not all) */
-const FS_ROLE_LABEL = { img:'รูปสินค้า', name:'ชื่อสินค้า', boxL:'กล่องราคา', boxR:'กล่องราคา', date:'วันที่' };
+/* v6.25 — Flash Sale size control: TYPE buttons resize all of that type (bulk) · clicking an element resizes just it.
+   Price is split into กรอบ (frame boxL/boxR) + ตัวเลข (text txtL/txtR); the ราคา button scales both together. */
+const FS_ROLE_LABEL = { img:'รูปสินค้า', name:'ชื่อสินค้า', boxL:'กรอบราคา', boxR:'กรอบราคา', txtL:'ตัวเลขราคา', txtR:'ตัวเลขราคา', date:'วันที่' };
+const FS_TYPE_LABEL = { img:'รูป', name:'ชื่อ', price:'ราคา' };
+let flashSizeTarget = null;   // active bulk type ('img'|'name'|'price') or null (per-clicked-element)
+function flashRolesFor(t){ return t === 'price' ? ['boxL','boxR','txtL','txtR'] : [t]; }
+function setSliderVal(pct){ if ($('#flashSize')) $('#flashSize').value = pct; if ($('#flashSizeVal')) $('#flashSizeVal').textContent = pct + '%'; }
+function setFlashSizeTarget(t){
+  flashSizeTarget = t;
+  fsDeselect();   // bulk mode → clear any single-element selection
+  document.querySelectorAll('#flashSizeBar .fs-tbtn').forEach(b => b.classList.toggle('active', b.dataset.t === t));
+  const sk = [...selectedSkus][0]; const r = flashRolesFor(t)[0];
+  let s = 1; if (sk && flashLayout[sk] && flashLayout[sk][r]) s = flashLayout[sk][r].s || 1;
+  setSliderVal(Math.round(s * 100));
+  if ($('#flashSizeSel')) $('#flashSizeSel').textContent = '📐 ปรับทุก' + (FS_TYPE_LABEL[t] || '');
+}
 function updateFlashSizeUI(){
   const el = fsSelectedEl && fsSelectedEl.dataset.fsRole ? fsSelectedEl : null;
-  const s = el ? (fsGet(el.dataset.fsSku, el.dataset.fsRole).s || 1) : 1;
-  const pct = Math.round(s * 100);
-  if ($('#flashSize')) $('#flashSize').value = pct;
-  if ($('#flashSizeVal')) $('#flashSizeVal').textContent = pct + '%';
-  if ($('#flashSizeSel')) $('#flashSizeSel').textContent = el ? ('🎯 ' + (FS_ROLE_LABEL[el.dataset.fsRole] || 'ชิ้นนี้')) : '👆 คลิกเลือกชิ้นในพรีวิว';
+  if (el) {
+    flashSizeTarget = null;
+    document.querySelectorAll('#flashSizeBar .fs-tbtn').forEach(b => b.classList.remove('active'));
+    setSliderVal(Math.round((fsGet(el.dataset.fsSku, el.dataset.fsRole).s || 1) * 100));
+    if ($('#flashSizeSel')) $('#flashSizeSel').textContent = '🎯 ' + (FS_ROLE_LABEL[el.dataset.fsRole] || 'ชิ้นนี้');
+  } else if (!flashSizeTarget) {
+    setSliderVal(100);
+    if ($('#flashSizeSel')) $('#flashSizeSel').textContent = '👆 คลิกเลือกชิ้น หรือกดปุ่มด้านบน';
+  }
 }
 function applyFlashSize(pct){
   const v = Math.max(40, Math.min(300, parseInt(pct) || 100));
-  if ($('#flashSize')) $('#flashSize').value = v;
-  if ($('#flashSizeVal')) $('#flashSizeVal').textContent = v + '%';
-  if (!fsSelectedEl || !fsSelectedEl.dataset.fsRole) {
-    if ($('#flashSizeSel')) $('#flashSizeSel').textContent = '👆 คลิกเลือกชิ้นในพรีวิวก่อน';
-    return;   // nothing selected → the slider has no target
+  setSliderVal(v);
+  if (fsSelectedEl && fsSelectedEl.dataset.fsRole) {   // 1) a clicked element wins
+    const t = fsGet(fsSelectedEl.dataset.fsSku, fsSelectedEl.dataset.fsRole);
+    t.s = v/100; applyFsEl(fsSelectedEl); saveFlashLayout(); return;
   }
-  const t = fsGet(fsSelectedEl.dataset.fsSku, fsSelectedEl.dataset.fsRole);
-  t.s = v/100;
-  applyFsEl(fsSelectedEl);
-  saveFlashLayout();
+  if (flashSizeTarget) {   // 2) bulk by type button
+    const roles = flashRolesFor(flashSizeTarget);
+    [...selectedSkus].forEach(sku => roles.forEach(r => { fsGet(sku, r).s = v/100; }));
+    applyAllFsEls(); saveFlashLayout(); return;
+  }
+  if ($('#flashSizeSel')) $('#flashSizeSel').textContent = '👆 คลิกเลือกชิ้น หรือกดปุ่มด้านบนก่อน';
 }
 
 /* v6.12 — Flash Sale poster: template image as page background + product overlays (6 per landscape A4) */
