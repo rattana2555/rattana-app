@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS_DC v5.39 — ใบสั่งสินค้า</title>
+<title>Rattana DS_DC v5.40 — ใบสั่งสินค้า</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -319,7 +319,7 @@ body.dark .det-status-wrap.s-warn{background:#3a2e15;border-color:#f39c12}
       <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln22zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJpacw3bOe+eefdvzx3vmzGFhF/be995Dz0M/DkxXVXdV/6u6uroJACAaY4wxGGO890KIIY6uYFiWZSul1CCEIKWUiPivsz+APWJkua7rApTSY4wxIlLvXcfzPO85b5xzznmMcYwxzjnGWYzxGOM4znlPCGOMc84YY4xzTlVVxRgDAIy1FmOM1hhjrQMAjDFijLHWOgDGGGuttY4xBgBrrQUAjDHGGGNsjLHOWhsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" alt="Rattana" height="34">
       <div>
         <div class="logo-text">Rattana <span>DS_DC</span></div>
-        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v5.39</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v5.40</span></div>
       </div>
     </div>
     <div class="header-actions">
@@ -851,13 +851,38 @@ function renderTable() {
           <div style="display:flex;align-items:center;gap:6px;margin-top:2px">${wlBadge(g.WL_CODE)}<span style="font-size:11px;color:var(--muted)">${escHtml(g.SLMN_NAME)}</span><span style="font-size:12px;color:var(--success);font-weight:700;white-space:nowrap">${fmtInt(g._amt)}</span></div>
         </td>
         <td style="vertical-align:middle;font-size:12px">${(() => {
-            const freeLines = g.lines.filter(r => (parseFloat(r.TRD_Q_FREE) || 0) > 0);
+            // free lines = TRD_QTY=0 and TRD_Q_FREE>0 (pure free item lines)
+            const freeLines = g.lines.filter(r => (parseFloat(r.TRD_QTY)||0) === 0 && (parseFloat(r.TRD_Q_FREE)||0) > 0);
             if (!freeLines.length) return '';
-            return freeLines.map(r => {
-              const qty = parseFloat(r.TRD_Q_FREE) || 0;
-              return `<div style="margin-bottom:4px">
-                <div style="font-weight:600;color:var(--text)">${escHtml(r.SKU_NAME || '')}</div>
-                <div style="color:#1565a8;font-size:11px">🎁 แถม ×${fmtInt(qty)}</div>
+            // build freeProduct→rule map
+            const freeRuleMap = new Map();
+            for (const rule of promoRules) {
+              if (rule.freeProduct) freeRuleMap.set(rule.freeProduct, rule);
+              if (rule.freeSKU)     freeRuleMap.set(rule.freeSKU, rule);
+            }
+            // group free lines by free SKU_NAME
+            const grouped = new Map();
+            for (const r of freeLines) {
+              const key = r.SKU_NAME || '';
+              grouped.set(key, (grouped.get(key) || 0) + (parseFloat(r.TRD_Q_FREE) || 0));
+            }
+            return [...grouped.entries()].map(([freeName, freeQty]) => {
+              // find what bought product triggers this free item
+              const rule = freeRuleMap.get(freeName);
+              let boughtLine = null;
+              if (rule) {
+                if (rule.method === 'PRODUCT NAME') {
+                  boughtLine = g.lines.find(l => (parseFloat(l.TRD_QTY)||0) > 0 && l.SKU_NAME === rule.value);
+                } else if (rule.method === 'CAT SIZE') {
+                  boughtLine = g.lines.find(l => (parseFloat(l.TRD_QTY)||0) > 0 && (pddt.get(l.SKU_NAME)?.size === rule.value));
+                } else if (rule.method === 'CAT BRAND') {
+                  boughtLine = g.lines.find(l => (parseFloat(l.TRD_QTY)||0) > 0 && (pddt.get(l.SKU_NAME)?.brand === rule.value));
+                }
+              }
+              const boughtName = boughtLine ? boughtLine.SKU_NAME : (rule ? rule.value : '');
+              return `<div style="margin-bottom:6px">
+                ${boughtName ? `<div style="font-weight:600;color:var(--text);font-size:12px">${escHtml(boughtName)}</div>` : ''}
+                <div style="color:#1565a8;font-size:11px;margin-top:1px">🎁 ${escHtml(freeName)} ×${fmtInt(freeQty)}</div>
               </div>`;
             }).join('');
           })()}</td>
