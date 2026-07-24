@@ -4455,13 +4455,12 @@ function flashCard(p) {
 }
 function buildFlashPreview() {
   const stage = $('#pdfStage');
-  const isM = SHEET_CONFIG.perPage === 'flash12';   // v6.16 — monthly (portrait, 12 cards)
-  const cards = flashCardsFor(), per = flashPerPage(), tpl = flashTemplateFor();
+  const cfg = flashModeCfg();
+  const cards = cfg.slots, per = cfg.per, tpl = cfg.tpl, render = cfg.render, modeName = cfg.name;
   const D = fsDims();
   const sel = getSortedSelection();
-  const modeName = isM ? 'รายเดือน' : 'รายวัน/สัปดาห์';
-  if (!sel.length) { stage.innerHTML = `<div class="empty-state"><div class="emoji">🔥</div><h3>ยังไม่ได้เลือกสินค้า</h3><div class="empty-sub">Flash Sale ${modeName} — เลือกสินค้าที่จะโชว์ (${per} ตัว/หน้า)</div></div>`; return; }
-  if (!tpl) { stage.innerHTML = `<div class="empty-state"><div class="emoji">🖼️</div><h3>ยังไม่ได้ใส่รูปเทมเพลต Flash Sale ${modeName}</h3><div class="empty-sub">ไปแท็บ "ตั้งค่า" → วางลิงก์รูปเทมเพลต Flash Sale ${modeName} ก่อน</div></div>`; return; }
+  if (!sel.length) { stage.innerHTML = `<div class="empty-state"><div class="emoji">🔥</div><h3>ยังไม่ได้เลือกสินค้า</h3><div class="empty-sub">Flash Sale ${modeName} — เลือกสินค้าที่จะโชว์ (สูงสุด ${per} ตัว/หน้า)</div></div>`; return; }
+  if (!tpl) { stage.innerHTML = `<div class="empty-state"><div class="emoji">🖼️</div><h3>ยังไม่ได้ใส่รูปพื้นหลัง Flash Sale ${modeName}</h3><div class="empty-sub">ไปแท็บ "ตั้งค่า" → ใส่/เลือกรูปพื้นหลัง Flash Sale ${modeName} ก่อน</div></div>`; return; }
   const fmt = d => d ? formatThaiDate(d).split(' ')[0] : '';
   const ds = SHEET_CONFIG.promoStart, de = SHEET_CONFIG.promoEnd;
   const dateRange = (ds || de) ? `${fmt(ds) || '—'} → ${fmt(de) || '—'}` : '';
@@ -4472,9 +4471,9 @@ function buildFlashPreview() {
     const dateShown = textOverrides[dateKey] != null ? escapeHtml(textOverrides[dateKey]) : escapeHtml(dateRange);
     const showDate = dateShown !== '';
     return `
-    <div class="flash-page${isM ? ' flash-page-m' : ''}" id="pdf-page-${pi}" style="background-image:url('${escapeAttr(tpl)}')">
+    <div class="flash-page ${cfg.pageCls}" id="pdf-page-${pi}" style="background-image:url('${escapeAttr(tpl)}')">
       ${showDate ? `<div class="flash-date editable-txt" data-fs-sku="__page${pi}" data-fs-role="date" data-edit="${dateKey}" contenteditable="true" spellcheck="false">${dateShown}</div>` : ''}
-      ${items.map((p, idx) => { const c = cards[idx]; return c ? `<div class="flash-slot" style="left:${c.x}%;top:${c.y}%;width:${c.w}%;height:${c.h}%">${flashCard(p)}</div>` : ''; }).join('')}
+      ${items.map((p, idx) => { const c = cards[idx]; return c ? `<div class="flash-slot" style="left:${c.x}%;top:${c.y}%;width:${c.w}%;height:${c.h}%">${render(p)}</div>` : ''; }).join('')}
     </div>`;
   }).join('');
   const vw = window.innerWidth;
