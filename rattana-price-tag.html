@@ -4390,13 +4390,25 @@ const FLASH_CARDS_M = (() => {
   rows.forEach(y => cols.forEach(x => out.push({ x, y, w, h })));
   return out;
 })();
-// v6.19 — Flash Sale รายวัน/สัปดาห์: 6 DRAWN cards on the cream area (2 cols × 3 rows), y 23–90%
-const FLASH_WEEK_SLOTS = (() => {
-  const cols = [2.5, 51.0], rows = [23.5, 46.0, 68.5], w = 46.5, h = 21.0;
+// v6.21 — weekly card slots computed from the count on the page, distributed to fill the cream area (y 23.5–90.5%)
+function flashWeekSlots(n) {
+  const Ytop = 23.5, Ybot = 90.5, Xl = 2.5, Xr = 97.5, gapY = 2.5, gapX = 2, maxH = 27;
+  const cols = n <= 1 ? 1 : 2;
+  const rows = Math.max(1, Math.ceil(n / cols));
+  const colW = (Xr - Xl - (cols - 1) * gapX) / cols;
+  const cardH = Math.min(maxH, (Ybot - Ytop - (rows - 1) * gapY) / rows);
+  const blockH = rows * cardH + (rows - 1) * gapY;
+  const startY = Ytop + ((Ybot - Ytop) - blockH) / 2;   // centre the block of rows vertically
   const out = [];
-  rows.forEach(y => cols.forEach(x => out.push({ x, y, w, h })));
+  for (let i = 0; i < n; i++) {
+    const r = Math.floor(i / cols), c = i % cols;
+    const inRow = Math.min(cols, n - r * cols);
+    const rowW = inRow * colW + (inRow - 1) * gapX;
+    const sx = Xl + ((Xr - Xl) - rowW) / 2;   // centre a partial last row horizontally
+    out.push({ x: sx + c * (colW + gapX), y: startY + r * (cardH + gapY), w: colW, h: cardH });
+  }
   return out;
-})();
+}
 // v6.19 — selectable weekly backgrounds (same layout, different colours) from the shared Drive folder
 const FLASH_BG_PRESETS = [
   { id:'1iPyFyxD4-_0-EJMz9vRAN2W_mFGcdU5i', name:'มาตรฐาน',   color:'#1b2a6b' },
