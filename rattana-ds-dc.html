@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS_DC v5.33 — ใบสั่งสินค้า</title>
+<title>Rattana DS_DC v5.34 — ใบสั่งสินค้า</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -140,6 +140,9 @@ body.dark .badge-w1{background:#1a2a3a;color:#7ecbf7}
 
 /* ── Filter bar ── */
 .filter-bar{background:var(--card-bg);border-bottom:1px solid var(--border);padding:10px 12px;position:sticky;top:67px;z-index:50;box-shadow:var(--shadow-sm)}
+.date-chip{background:transparent;border:1.5px solid var(--border);color:var(--muted);border-radius:20px;padding:4px 14px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .15s}
+.date-chip:hover{border-color:var(--gold);color:var(--text)}
+.date-chip.active{background:var(--gold);border-color:var(--gold);color:var(--navy)}
 .filter-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .field{display:flex;flex-direction:column;gap:4px}
 .field label{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.3px;text-transform:uppercase}
@@ -316,7 +319,7 @@ body.dark .det-status-wrap.s-warn{background:#3a2e15;border-color:#f39c12}
       <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln22zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJpacw3bOe+eefdvzx3vmzGFhF/be995Dz0M/DkxXVXdV/6u6uroJACAaY4wxGGO890KIIY6uYFiWZSul1CCEIKWUiPivsz+APWJkua7rApTSY4wxIlLvXcfzPO85b5xzznmMcYwxzjnGWYzxGOM4znlPCGOMc84YY4xzTlVVxRgDAIy1FmOM1hhjrQMAjDFijLHWOgDGGGuttY4xBgBrrQUAjDHGGGNsjLHOWhsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" alt="Rattana" height="34">
       <div>
         <div class="logo-text">Rattana <span>DS_DC</span></div>
-        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v5.33</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px">ใบสั่งสินค้า (DSI) · <span style="color:var(--gold)">v5.34</span></div>
       </div>
     </div>
     <div class="header-actions">
@@ -357,7 +360,12 @@ body.dark .det-status-wrap.s-warn{background:#3a2e15;border-color:#f39c12}
       <button class="btn btn-gold" onclick="loadData()">🔎 โหลด</button>
       <button class="btn btn-outline" onclick="exportExcel()">📥 Excel</button>
     </div>
-    <div id="resultInfo" style="font-size:12px;color:var(--muted);margin-top:6px"></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
+      <button class="date-chip active" id="chip-today"   onclick="setDateMode('today')"  >วันนี้</button>
+      <button class="date-chip"        id="chip-week"    onclick="setDateMode('week')"   >สัปดาห์นี้</button>
+      <button class="date-chip"        id="chip-month"   onclick="setDateMode('month')"  >เดือนนี้</button>
+      <span id="resultInfo" style="font-size:12px;color:var(--muted);margin-left:4px"></span>
+    </div>
   </div>
 
   <!-- Content -->
@@ -485,20 +493,45 @@ const MONTH_SHORT_TH  = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.
                          'ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 let pickerYear  = new Date().getFullYear();
 let pickerMonth = new Date().getMonth();
+let dateMode    = 'today';
 
 function initDateRange() {
   pickerYear  = new Date().getFullYear();
   pickerMonth = new Date().getMonth();
+  dateMode    = 'today';
 }
-// compat: claimMonthLabel อ่านจาก chip active
+
+function setDateMode(mode) {
+  dateMode = mode;
+  document.querySelectorAll('.date-chip').forEach(c => c.classList.remove('active'));
+  document.getElementById('chip-' + mode).classList.add('active');
+  loadData();
+}
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+function getDateRange() {
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
+  if (dateMode === 'today') {
+    const ds = `${y}/${pad2(m+1)}/${pad2(d)}`;
+    return { fromStr: ds, toStr: ds };
+  }
+  if (dateMode === 'week') {
+    const day = now.getDay(); // 0=sun
+    const diffMon = (day === 0) ? -6 : 1 - day;
+    const mon = new Date(now); mon.setDate(d + diffMon);
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    const fmt = dt => `${dt.getFullYear()}/${pad2(dt.getMonth()+1)}/${pad2(dt.getDate())}`;
+    return { fromStr: fmt(mon), toStr: fmt(sun) };
+  }
+  // month
+  const lastDay = new Date(y, m + 1, 0).getDate();
+  return { fromStr: `${y}/${pad2(m+1)}/01`, toStr: `${y}/${pad2(m+1)}/${pad2(lastDay)}` };
+}
+
 function getActiveMonthLabel() {
   return `${MONTH_NAMES_TH[pickerMonth]} พ.ศ. ${pickerYear + 543}`;
-}
-function getDateRange() {
-  const y = pickerYear, m = pickerMonth;
-  const mm = String(m + 1).padStart(2, '0');
-  const lastDay = new Date(y, m + 1, 0).getDate();
-  return { fromStr: `${y}/${mm}/01`, toStr: `${y}/${mm}/${String(lastDay).padStart(2,'0')}` };
 }
 
 // ─────────────────────────────────────────────
