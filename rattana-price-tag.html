@@ -4360,31 +4360,27 @@ function resetFlashLayout(){
   showToast('↩ รีเซ็ตตำแหน่ง/ขนาดทั้งหมดแล้ว', 'success');
 }
 
-/* v6.18 — Flash Sale size control: the slider resizes a chosen element type (รูป/ชื่อ/ราคา) on EVERY card */
-let flashSizeTarget = 'img';
-function flashRolesFor(t){
-  if (t === 'price') return ['numL','numR'];   // v6.22 — the price NUMBERS only (not the frame)
-  if (t === 'box')   return ['boxL','boxR'];   // the whole price frame
-  return [t];                                  // img / name
-}
-function setFlashSizeTarget(t){
-  flashSizeTarget = t;
-  document.querySelectorAll('#flashSizeBar .fs-tbtn').forEach(b => b.classList.toggle('active', b.dataset.t === t));
-  // reflect the current scale of that type (from the first selected product)
-  const skus = [...selectedSkus];
-  let s = 1;
-  if (skus.length) { const L = flashLayout[skus[0]]; const r = flashRolesFor(t)[0]; if (L && L[r] && L[r].s) s = L[r].s; }
+/* v6.24 — Flash Sale size control: the slider resizes ONLY the element you clicked (per-item, not all) */
+const FS_ROLE_LABEL = { img:'รูปสินค้า', name:'ชื่อสินค้า', boxL:'กล่องราคา', boxR:'กล่องราคา', date:'วันที่' };
+function updateFlashSizeUI(){
+  const el = fsSelectedEl && fsSelectedEl.dataset.fsRole ? fsSelectedEl : null;
+  const s = el ? (fsGet(el.dataset.fsSku, el.dataset.fsRole).s || 1) : 1;
   const pct = Math.round(s * 100);
   if ($('#flashSize')) $('#flashSize').value = pct;
   if ($('#flashSizeVal')) $('#flashSizeVal').textContent = pct + '%';
+  if ($('#flashSizeSel')) $('#flashSizeSel').textContent = el ? ('🎯 ' + (FS_ROLE_LABEL[el.dataset.fsRole] || 'ชิ้นนี้')) : '👆 คลิกเลือกชิ้นในพรีวิว';
 }
 function applyFlashSize(pct){
   const v = Math.max(40, Math.min(300, parseInt(pct) || 100));
-  const roles = flashRolesFor(flashSizeTarget);
-  [...selectedSkus].forEach(sku => roles.forEach(r => { fsGet(sku, r).s = v/100; }));
   if ($('#flashSize')) $('#flashSize').value = v;
   if ($('#flashSizeVal')) $('#flashSizeVal').textContent = v + '%';
-  applyAllFsEls();
+  if (!fsSelectedEl || !fsSelectedEl.dataset.fsRole) {
+    if ($('#flashSizeSel')) $('#flashSizeSel').textContent = '👆 คลิกเลือกชิ้นในพรีวิวก่อน';
+    return;   // nothing selected → the slider has no target
+  }
+  const t = fsGet(fsSelectedEl.dataset.fsSku, fsSelectedEl.dataset.fsRole);
+  t.s = v/100;
+  applyFsEl(fsSelectedEl);
   saveFlashLayout();
 }
 
