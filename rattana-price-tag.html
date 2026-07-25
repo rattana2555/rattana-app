@@ -4565,6 +4565,129 @@ function flashCard(p) {
     <div class="flash-name" data-fs-sku="${sk}" data-fs-role="name">${nameCellHtml(p, true)}</div>
     ${box(leftU,'left')}${box(rightU,'right')}`;
 }
+/* ══════ v6.30 — โปรแถมประจำเดือน (buy-get-free) ══════ */
+const PROMO_BG_PRESETS = [   // monthly backgrounds (manual list — add new months here)
+  { id:'1IiK9YhXodG4FT5xMBetMIC0Bt83gv4pU', name:'สิงหาคม',   color:'#1f8ff0' },
+  { id:'1DwmFGr79riIlVTaHXOOYqmWpSSHfbuFa', name:'กันยายน',   color:'#26a69a' },
+  { id:'1F5aFY3MiHAGMftpMJkT-RSzXbLIGFepZ', name:'ตุลาคม',    color:'#ff7043' },
+  { id:'1uS08xsofg2G5BQLwzcU3ctSZ42KZk3yI', name:'พฤศจิกายน', color:'#7e57c2' },
+];
+function promoBgUrl(id){ return `https://lh3.googleusercontent.com/d/${id}=w1600`; }
+function isPromoMode(){ return SHEET_CONFIG.perPage === 'promo'; }
+let promoPairs = [];   // [{ buySku, buyText, freeSku, freeText }]
+function restorePromoPairs(){ try { promoPairs = JSON.parse(localStorage.getItem('rattanaPriceTag_promoPairs') || '[]'); } catch { promoPairs = []; } if (!Array.isArray(promoPairs)) promoPairs = []; }
+function savePromoPairs(){ safeSetItem('rattanaPriceTag_promoPairs', JSON.stringify(promoPairs)); }
+function promoProduct(sku){ return sku ? products.find(p => p.sku === sku) : null; }
+
+// ── Pair builder UI ──
+function applyPromoBg(id){
+  SHEET_CONFIG.promoTemplate = promoBgUrl(id);
+  const cfg = JSON.parse(localStorage.getItem(STORAGE.config) || '{}');
+  cfg.promoTemplate = SHEET_CONFIG.promoTemplate; safeSetItem(STORAGE.config, JSON.stringify(cfg));
+  document.querySelectorAll('#promoBgSwatches .fxw-swatch').forEach(b => b.classList.toggle('active', b.dataset.id === id));
+  if ($('#tab-print')?.classList.contains('active')) buildPdfPreview();
+  showToast('🗓️ เปลี่ยนพื้นหลังเดือนแล้ว', 'success');
+}
+function initPromoBgSwatches(){
+  const wrap = $('#promoBgSwatches'); if (!wrap) return;
+  const cur = SHEET_CONFIG.promoTemplate || '';
+  wrap.innerHTML = PROMO_BG_PRESETS.map(b =>
+    `<button type="button" class="fxw-swatch${cur.includes(b.id) ? ' active' : ''}" data-id="${b.id}" style="background:${b.color}" title="${escapeAttr(b.name)}" onclick="applyPromoBg('${b.id}')"></button><small style="font-size:10px;color:var(--muted);margin:0 4px 0 -2px">${escapeHtml(b.name)}</small>`
+  ).join('');
+}
+function renderPromoBuilder(){
+  const box = $('#promoBuilderRows'); if (!box) return;
+  if (!promoPairs.length) promoPairs.push({ buySku:'', buyText:'', freeSku:'', freeText:'' });
+  box.innerHTML = promoPairs.map((pr, i) => {
+    const bp = promoProduct(pr.buySku), fp = promoProduct(pr.freeSku);
+    return `<div class="promo-row" data-i="${i}">
+      <div class="promo-half">
+        <span class="promo-badge buy">ซื้อ</span>
+        <div class="promo-search-wrap">
+          <input class="input input-sm promo-search" data-i="${i}" data-role="buy" placeholder="🔍 ค้นหาสินค้าที่ต้องซื้อ" value="${bp ? escapeAttr(bp.name) : ''}">
+          <div class="promo-dropdown" data-i="${i}" data-role="buy"></div>
+        </div>
+        <input class="input input-sm promo-text" data-i="${i}" data-field="buyText" placeholder="ข้อความ เช่น ซื้อ...ขนาด...1 แพ็ค" value="${escapeAttr(pr.buyText || '')}">
+      </div>
+      <span class="promo-arrow">➜</span>
+      <div class="promo-half">
+        <span class="promo-badge free">แถมฟรี</span>
+        <div class="promo-search-wrap">
+          <input class="input input-sm promo-search" data-i="${i}" data-role="free" placeholder="🔍 ค้นหาของแถม" value="${fp ? escapeAttr(fp.name) : ''}">
+          <div class="promo-dropdown" data-i="${i}" data-role="free"></div>
+        </div>
+        <input class="input input-sm promo-text" data-i="${i}" data-field="freeText" placeholder="ข้อความของแถม เช่น ...100ก. 1 ชิ้น" value="${escapeAttr(pr.freeText || '')}">
+      </div>
+      <button class="btn btn-sm btn-outline promo-del" data-i="${i}" title="ลบโปรนี้">🗑</button>
+    </div>`;
+  }).join('');
+}
+function promoShowMatches(input){
+  const dd = input.parentElement.querySelector('.promo-dropdown');
+  const q = input.value.trim().toLowerCase();
+  if (q.length < 2) { dd.innerHTML = ''; return; }
+  const i = input.dataset.i, role = input.dataset.role;
+  const matches = products.filter(p => p.image && ((p.name || '').toLowerCase().includes(q) || (p.sku || '').includes(q))).slice(0, 8);
+  dd.innerHTML = matches.length
+    ? matches.map(p => `<div class="promo-opt" data-i="${i}" data-role="${role}" data-sku="${escapeAttr(p.sku)}"><img src="${escapeAttr(imgAtWidth(p.image,80))}" onerror="this.style.visibility='hidden'" crossorigin="anonymous"><span>${escapeHtml((p.name || '').slice(0,44))}</span></div>`).join('')
+    : '<div class="promo-opt" style="color:#999;cursor:default">— ไม่พบสินค้า —</div>';
+}
+function promoPickProduct(i, role, sku){
+  const p = promoProduct(sku); if (!p) return;
+  if (role === 'buy') { promoPairs[i].buySku = sku; if (!promoPairs[i].buyText) promoPairs[i].buyText = 'ซื้อ' + (p.name || '') + ' '; }
+  else { promoPairs[i].freeSku = sku; if (!promoPairs[i].freeText) promoPairs[i].freeText = (p.name || '') + ' '; }
+  savePromoPairs(); renderPromoBuilder();
+}
+
+// ── Render the promo poster ──
+function promoSlots(n){
+  const Ytop = 23.5, Ybot = 86, Xl = 9, Xr = 91, gapX = 2, gapY = 1.5;
+  const cols = 2, rows = Math.max(1, Math.ceil(n / cols));
+  const colW = (Xr - Xl - (cols - 1) * gapX) / cols;
+  const rowH = (Ybot - Ytop - (rows - 1) * gapY) / rows;
+  const out = [];
+  for (let i = 0; i < n; i++) { const r = Math.floor(i / cols), c = i % cols; out.push({ x: Xl + c*(colW+gapX), y: Ytop + r*(rowH+gapY), w: colW, h: rowH }); }
+  return out;
+}
+function promoItemHtml(pr, c, gi){
+  const bp = promoProduct(pr.buySku), fp = promoProduct(pr.freeSku);
+  const img = p => p && p.image ? `<img src="${escapeAttr(imgAtWidth(p.image,300))}" onerror="this.style.display='none'" crossorigin="anonymous">` : '';
+  return `<div class="promo-slot" style="left:${c.x}%;top:${c.y}%;width:${c.w}%;height:${c.h}%">
+    <div class="promo-imgs">
+      <div class="promo-cell"><span class="pbadge buy">BUY</span>${img(bp)}</div>
+      <span class="promo-plus">+</span>
+      <div class="promo-cell"><span class="pbadge free">FREE</span>${img(fp)}</div>
+    </div>
+    <div class="promo-txt">
+      <div class="promo-line1 editable-txt" data-promoi="${gi}" data-promof="buyText" contenteditable="true" spellcheck="false">${escapeHtml(pr.buyText || '')}</div>
+      <div class="promo-line2"><span class="lbl">แถมฟรี </span><span class="editable-txt" data-promoi="${gi}" data-promof="freeText" contenteditable="true" spellcheck="false">${escapeHtml(pr.freeText || '')}</span></div>
+    </div>
+  </div>`;
+}
+function buildPromoPreview(){
+  const stage = $('#pdfStage');
+  const tpl = SHEET_CONFIG.promoTemplate;
+  const empty = (emoji, h, s) => `<div class="empty-state"><div class="emoji">${emoji}</div><h3>${h}</h3><div class="empty-sub">${s}</div></div>`;
+  const shown = promoPairs.map((pr, idx) => ({ pr, idx })).filter(x => x.pr.buySku || x.pr.freeSku || x.pr.buyText || x.pr.freeText);
+  if (!shown.length) { stage.innerHTML = empty('🎁', 'ยังไม่ได้เพิ่มโปรแถม', 'ด้านบน กด "เพิ่มโปร" แล้วเลือกสินค้าที่ซื้อ → ของแถม'); return; }
+  if (!tpl) { stage.innerHTML = empty('🗓️', 'ยังไม่ได้เลือกพื้นหลังเดือน', 'เลือกเดือนจากแถบ "พื้นหลัง" ในแท็บนี้'); return; }
+  const per = 8;
+  const pages = []; for (let i = 0; i < shown.length; i += per) pages.push(shown.slice(i, i + per));
+  const inner = pages.map((items, pi) => {
+    const slots = promoSlots(items.length);
+    return `<div class="promo-page" id="pdf-page-${pi}" style="background-image:url('${escapeAttr(tpl)}')">
+      ${items.map((x, k) => promoItemHtml(x.pr, slots[k], x.idx)).join('')}
+    </div>`;
+  }).join('');
+  const vw = window.innerWidth, D = { w:793.7, h:1122.5 };
+  const scale = Math.min(0.72, Math.max(0.24, (vw - 60) / D.w));
+  const totalH = (D.h * scale + 14) * pages.length;
+  stage.innerHTML = `<div class="pdf-wrap" style="width:100%"><div class="pdf-wrap-inner" style="transform:scale(${scale.toFixed(3)});height:${totalH}px">${inner}</div></div>`;
+  $('#heroSub') && ($('#heroSub').textContent = `โปรแถมประจำเดือน: ${shown.length} รายการ · ${pages.length} หน้า`);
+  reapplyImgScales();
+  bakeImages('#pdfStage .promo-cell img').then(reapplyImgScales);
+}
+
 function buildFlashPreview() {
   const stage = $('#pdfStage');
   const cfg = flashModeCfg();
