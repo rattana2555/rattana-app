@@ -2816,6 +2816,33 @@ function initApp() {
   // v6.14: Flash Sale Canva-style editing — drag any element to move, drag its corner handle to resize.
   restoreFlashLayout();
   initFlashBgSwatches();   // v6.19 — populate the weekly background colour picker
+  // v6.30: โปรแถมประจำเดือน — restore pairs, populate month picker, wire the builder
+  restorePromoPairs();
+  initPromoBgSwatches();
+  (function initPromoBuilder(){
+    const panel = $('#promoBuilderPanel'); if (!panel) return;
+    panel.addEventListener('input', (e) => {
+      const s = e.target.closest('.promo-search'); if (s) { promoShowMatches(s); return; }
+      const t = e.target.closest('.promo-text');
+      if (t) { const i = +t.dataset.i, f = t.dataset.field; if (promoPairs[i]) { promoPairs[i][f] = t.value; savePromoPairs(); } }
+    });
+    panel.addEventListener('click', (e) => {
+      const opt = e.target.closest('.promo-opt[data-sku]');
+      if (opt) { promoPickProduct(+opt.dataset.i, opt.dataset.role, opt.dataset.sku); return; }
+      const del = e.target.closest('.promo-del');
+      if (del) { promoPairs.splice(+del.dataset.i, 1); if (!promoPairs.length) promoPairs.push({ buySku:'', buyText:'', freeSku:'', freeText:'' }); savePromoPairs(); renderPromoBuilder(); return; }
+      if (e.target.closest('#promoAddRow')) { promoPairs.push({ buySku:'', buyText:'', freeSku:'', freeText:'' }); savePromoPairs(); renderPromoBuilder(); }
+    });
+    document.addEventListener('click', (e) => { if (!e.target.closest('.promo-search-wrap')) document.querySelectorAll('.promo-dropdown').forEach(d => d.innerHTML = ''); });
+    // edit the "ซื้อ.../แถมฟรี..." lines directly on the poster preview
+    const stage = $('#pdfStage');
+    if (stage) stage.addEventListener('input', (e) => {
+      const el = e.target.closest('[data-promoi]'); if (!el) return;
+      const i = +el.dataset.promoi, f = el.dataset.promof;
+      if (promoPairs[i]) { promoPairs[i][f] = el.textContent.replace(/\s*\n\s*/g,' ').trim(); savePromoPairs(); }
+      if (f && $('#promoBuilderRows')) { const inp = $(`#promoBuilderRows .promo-text[data-i="${i}"][data-field="${f}"]`); if (inp) inp.value = el.textContent.trim(); }
+    });
+  })();
   (function initFlashCanvas(){
     const stage = $('#pdfStage');
     if (!stage) return;
