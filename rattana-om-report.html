@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Rattana OM Report v8.60</title>
+  <title>Rattana OM Report v8.61</title>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
@@ -239,7 +239,7 @@
 
 <header>
   
-  <div class="logo-text">Rattana <span>OM Report</span> <span class="ver-badge">v8.60 · 2026-07-28</span></div>
+  <div class="logo-text">Rattana <span>OM Report</span> <span class="ver-badge">v8.61 · 2026-07-28</span></div>
   <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรชข้อมูล">↻</button>
   <button class="icon-btn" id="btnDark" onclick="toggleDark()" title="Dark mode">🌙</button>
   <button class="icon-btn" onclick="exportExcel()" title="Export Excel">📥</button>
@@ -346,9 +346,29 @@
     </div>
   </div>
 
+  <!-- Customer master table (filtered by selected salesperson) -->
+  <div class="card" style="margin-top:14px">
+    <div class="card-head">
+      <div class="card-head-title">🏪 รายชื่อร้านค้า</div>
+      <span id="custMasterCount" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="tbl-wrap" style="max-height:calc(100vh - 200px);overflow-y:auto">
+      <table class="tbl" id="custMasterTbl" style="min-width:400px">
+        <thead>
+          <tr>
+            <th style="width:60px">#</th>
+            <th>ชื่อร้านค้า</th>
+          </tr>
+        </thead>
+        <tbody id="custMasterTblBody">
+          <tr class="empty-row"><td colspan="2">— กรุณาเลือกพนักงานขาย —</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 
   <div style="text-align:center;padding:20px 0;color:var(--muted);font-size:11px">
-    Rattana OM Report v8.60 · 2026-07-28
+    Rattana OM Report v8.61 · 2026-07-28
   </div>
 
 </div><!-- /pane-summary -->
@@ -452,7 +472,7 @@
   </div>
 
   <div style="text-align:center;padding:20px 0;color:var(--muted);font-size:11px">
-    Rattana OM Report v8.60 · 2026-07-28
+    Rattana OM Report v8.61 · 2026-07-28
   </div>
 
 </div><!-- /pane-quarter -->
@@ -555,7 +575,7 @@
   </div>
 
   <div style="text-align:center;padding:20px 0;color:var(--muted);font-size:11px">
-    Rattana OM Report v8.60 · 2026-07-28
+    Rattana OM Report v8.61 · 2026-07-28
   </div>
 
 </div><!-- /pane-latest -->
@@ -734,7 +754,7 @@
   </div>
 
   <div style="text-align:center;padding:20px 0;color:var(--muted);font-size:11px">
-    Rattana OM Report v8.60 · 2026-07-28
+    Rattana OM Report v8.61 · 2026-07-28
   </div>
 
 </div><!-- /pane-sumdata -->
@@ -775,6 +795,8 @@ async function fetchCustMaster() {
       if (!custMasterMap[sale]) custMasterMap[sale] = new Set();
       custMasterMap[sale].add(cust);
     });
+    // อัพเดตตารางรายชื่อร้านค้าเมื่อ Customer master โหลดเสร็จ
+    if (activeTab === 'summary' && typeof renderCustMasterTable === 'function') renderCustMasterTable();
   } catch(e) { console.warn('Customer master load failed:', e.message); }
 }
 
@@ -1416,6 +1438,7 @@ function renderSummaryTab() {
   const data = filteredData;
   if (!data.length) {
     document.getElementById('infoBar2').innerHTML = '⚠️ ไม่มีข้อมูล';
+    renderCustMasterTable();
     return;
   }
 
@@ -1650,6 +1673,28 @@ function renderSummaryTab() {
     top15PosByCust[c] = top15PosByCust[c].slice(0,15);
   });
 
+  // ── Customer master table: รายชื่อร้านค้าจากชีต Customer ─
+  renderCustMasterTable();
+}
+
+function renderCustMasterTable() {
+  const tbody = document.getElementById('custMasterTblBody');
+  const cnt   = document.getElementById('custMasterCount');
+  if (!tbody) return;
+  if (!currentSheet) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="2">— กรุณาเลือกพนักงานขาย —</td></tr>';
+    if (cnt) cnt.textContent = '';
+    return;
+  }
+  const masterCusts = custMasterMap[normSale(currentSheet)] || new Set();
+  const list = [...masterCusts].sort((a,b) => String(a).localeCompare(String(b), 'th'));
+  if (cnt) cnt.textContent = `${list.length.toLocaleString()} ร้าน`;
+  tbody.innerHTML = list.length
+    ? list.map((name, i) => `<tr>
+        <td style="color:var(--muted);font-size:11px">${i+1}</td>
+        <td><strong>${escHtml(name)}</strong></td>
+      </tr>`).join('')
+    : '<tr class="empty-row"><td colspan="2">ไม่พบร้านค้าสำหรับพนักงานนี้ใน Customer master</td></tr>';
 }
 
 // ── Render quarter tab ────────────────────────────
