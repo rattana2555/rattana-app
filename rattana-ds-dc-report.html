@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v1.6</title>
+<title>Rattana DS-DC Report v1.8</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -117,7 +117,7 @@ header{background:var(--navy);color:#fff;padding:12px 16px;position:sticky;top:0
   <div class="logo-text">Rattana <span>DS-DC</span> Report</div>
   <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" title="Dark mode">◑</button>
-  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v1.6</span>
+  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v1.8</span>
 </header>
 
 <div class="content">
@@ -538,6 +538,8 @@ function enrichWithFreeStatus(rows) {
   // Build map: DI_REF → [{skuLower, qFree}] for rows with TRD_Q_FREE > 0
   const freeByRef = {};
   rows.forEach(r => {
+    r.FREE_STATUS = '';
+    r.FREE_FROM   = '';
     if ((parseFloat(r.TRD_Q_FREE) || 0) > 0) {
       const key = r.DI_REF || '';
       (freeByRef[key] = freeByRef[key] || []).push({
@@ -546,16 +548,31 @@ function enrichWithFreeStatus(rows) {
       });
     }
   });
+  // parentMap: "DI_REF|skuLower" → Set of parent SKU_NAMEs
+  const parentMap = {};
   rows.forEach(r => {
-    if (!r.FREE_ITEMS || !r.FREE_ITEMS.length) { r.FREE_STATUS = ''; return; }
+    if (!r.FREE_ITEMS || !r.FREE_ITEMS.length) return;
     const freeRows = freeByRef[r.DI_REF || ''] || [];
     let allFound = true;
     for (const fi of r.FREE_ITEMS) {
       const fiKey = (fi.name || '').toLowerCase();
       const match = freeRows.find(fr => fr.skuLower === fiKey);
-      if (!match || match.qFree < (fi.qty || 1)) { allFound = false; break; }
+      if (!match || match.qFree < (fi.qty || 1)) { allFound = false; }
+      if (match) {
+        const mk = (r.DI_REF || '') + '|' + fiKey;
+        if (!parentMap[mk]) parentMap[mk] = new Set();
+        parentMap[mk].add(r.SKU_NAME || '');
+      }
     }
     r.FREE_STATUS = allFound ? 'ครบ' : 'ขาด';
+  });
+  // Set FREE_FROM on free-item rows that belong to a promotion
+  rows.forEach(r => {
+    if ((parseFloat(r.TRD_Q_FREE) || 0) > 0) {
+      const mk = (r.DI_REF || '') + '|' + (r.SKU_NAME || '').toLowerCase();
+      const parents = parentMap[mk];
+      if (parents && parents.size) r.FREE_FROM = [...parents].join(', ');
+    }
   });
 }
 
@@ -670,9 +687,11 @@ function renderTable() {
     return;
   }
 
+  // Hide promo free-item rows (FREE_FROM set = matched promotion แถมสินค้า)
+  const visibleData = filteredData.filter(r => !r.FREE_FROM);
   // For large data, limit display to 2000 rows with note
-  const display = filteredData.length > 2000 ? filteredData.slice(0, 2000) : filteredData;
-  const hasMore = filteredData.length > 2000;
+  const display = visibleData.length > 2000 ? visibleData.slice(0, 2000) : visibleData;
+  const hasMore = visibleData.length > 2000;
 
   let html = '';
   display.forEach(r => {
