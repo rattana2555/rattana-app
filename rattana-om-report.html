@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Rattana OM Report v8.60</title>
+  <title>Rattana OM Report v8.59</title>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
@@ -239,7 +239,7 @@
 
 <header>
   
-  <div class="logo-text">Rattana <span>OM Report</span> <span class="ver-badge">v8.60 · 2026-07-28</span></div>
+  <div class="logo-text">Rattana <span>OM Report</span> <span class="ver-badge">v8.59 · 2026-07-28</span></div>
   <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรชข้อมูล">↻</button>
   <button class="icon-btn" id="btnDark" onclick="toggleDark()" title="Dark mode">🌙</button>
   <button class="icon-btn" onclick="exportExcel()" title="Export Excel">📥</button>
@@ -347,8 +347,40 @@
   </div>
 
 
+  <!-- Customer table -->
+  <div class="card" style="margin-top:14px">
+    <div class="card-head">
+      <div class="card-head-title">🏪 รายชื่อร้านค้า (ไม่ซ้ำ)</div>
+      <span id="custCount" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div id="custTopScroll" style="overflow-x:auto;overflow-y:hidden;height:12px"><div id="custTopScrollInner" style="height:1px"></div></div>
+    <div class="tbl-wrap" id="custTblWrap" style="max-height:calc(100vh - 150px);overflow-y:auto">
+      <table class="tbl" id="custTbl">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th style="min-width:180px">ชื่อร้าน</th>
+            <th id="thAvgLabel" style="text-align:right">AVG ไตรมาสก่อน (฿)</th>
+            <th id="thLatestLabel" style="text-align:right">ยอดล่าสุด (฿)</th>
+            <th style="text-align:center">โต/ตก</th>
+            <th id="thTop15Label" style="text-align:center">Top 15 Cat_Brand ติดลบ</th>
+            <th id="thTop15PosLabel" style="text-align:center">Top 15 Cat_Brand บวก</th>
+            <th id="thSkuLabel" style="text-align:center">SKU</th>
+            <th id="thSkuLatestLabel" style="text-align:center">SKU เดือนล่าสุด</th>
+            <th id="thNewSkuLabel" style="text-align:center;color:var(--warning)">NEW<br>SKU</th>
+            <th id="thNewProdLabel" style="text-align:center;color:var(--warning)">NEW<br>SKU</th>
+            <th style="text-align:center;color:var(--gold);padding-right:16px;min-width:110px">Budget</th>
+          </tr>
+        </thead>
+        <tbody id="custTblBody">
+          <tr class="empty-row"><td colspan="11">⏳ กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <div style="text-align:center;padding:20px 0;color:var(--muted);font-size:11px">
-    Rattana OM Report v8.60 · 2026-07-28
+    Rattana OM Report v8.59 · 2026-07-28
   </div>
 
 </div><!-- /pane-summary -->
@@ -452,7 +484,7 @@
   </div>
 
   <div style="text-align:center;padding:20px 0;color:var(--muted);font-size:11px">
-    Rattana OM Report v8.60 · 2026-07-28
+    Rattana OM Report v8.59 · 2026-07-28
   </div>
 
 </div><!-- /pane-quarter -->
@@ -555,7 +587,7 @@
   </div>
 
   <div style="text-align:center;padding:20px 0;color:var(--muted);font-size:11px">
-    Rattana OM Report v8.60 · 2026-07-28
+    Rattana OM Report v8.59 · 2026-07-28
   </div>
 
 </div><!-- /pane-latest -->
@@ -734,7 +766,7 @@
   </div>
 
   <div style="text-align:center;padding:20px 0;color:var(--muted);font-size:11px">
-    Rattana OM Report v8.60 · 2026-07-28
+    Rattana OM Report v8.59 · 2026-07-28
   </div>
 
 </div><!-- /pane-sumdata -->
@@ -1416,6 +1448,7 @@ function renderSummaryTab() {
   const data = filteredData;
   if (!data.length) {
     document.getElementById('infoBar2').innerHTML = '⚠️ ไม่มีข้อมูล';
+    document.getElementById('custTblBody').innerHTML = '<tr class="empty-row"><td colspan="6">ไม่พบข้อมูล</td></tr>';
     return;
   }
 
@@ -1650,6 +1683,42 @@ function renderSummaryTab() {
     top15PosByCust[c] = top15PosByCust[c].slice(0,15);
   });
 
+  document.getElementById('custCount').textContent = `${custRows.length.toLocaleString()} ร้าน`;
+  document.getElementById('custTblBody').innerHTML = custRows.map((r, i) => {
+    const isUp = r.delta !== null ? r.delta >= 0 : null;
+    const deltaHtml = r.delta !== null
+      ? `<span style="color:${isUp?'var(--success)':'var(--danger)'};font-weight:600">${isUp?'+':''}${fmtFull(r.delta)}</span>`
+      : '—';
+    const negBrands = top15ByCust[r.name] || [];
+    const chunkOf5 = (arr, renderFn) => {
+      const rows = [];
+      for (let i = 0; i < arr.length; i += 5) rows.push(arr.slice(i, i + 5));
+      return rows.map(row => `<div style="white-space:nowrap;margin-bottom:2px">${row.map(renderFn).join('<span style="color:var(--border)"> · </span>')}</div>`).join('');
+    };
+    const top15Html = negBrands.length
+      ? chunkOf5(negBrands, b => `<span style="display:inline-block;margin:1px 3px 1px 0;white-space:nowrap"><span style="font-weight:600">${escHtml(b.brand)}</span> <span style="color:var(--danger);font-weight:700">${fmt2(b.delta)}</span></span>`)
+      : '<span style="color:var(--muted);font-size:11px">—</span>';
+    const posBrands = top15PosByCust[r.name] || [];
+    const top15PosHtml = posBrands.length
+      ? chunkOf5(posBrands, b => `<span style="display:inline-block;margin:1px 3px 1px 0;white-space:nowrap"><span style="font-weight:600">${escHtml(b.brand)}</span> <span style="color:var(--success);font-weight:700">+${fmt2(b.delta)}</span></span>`)
+      : '<span style="color:var(--muted);font-size:11px">—</span>';
+    return `<tr>
+      <td style="color:var(--muted);font-size:11px">${i+1}</td>
+      <td><strong>${escHtml(r.name)}</strong></td>
+      <td class="num" style="color:var(--info)">${fmtFull(r.avg)}</td>
+      <td class="num">${fmtFull(r.latest)}</td>
+      <td class="num">${deltaHtml}</td>
+      <td style="line-height:1.8;font-size:12px">${top15Html}</td>
+      <td style="line-height:1.8;font-size:12px">${top15PosHtml}</td>
+      <td style="font-weight:700;text-align:center;vertical-align:middle">${(skuByCust[r.name] ? skuByCust[r.name].size : 0).toLocaleString('th-TH')}</td>
+      <td style="font-weight:700;text-align:center;vertical-align:middle">${(skuLatestByCust[r.name] ? skuLatestByCust[r.name].size : 0).toLocaleString('th-TH')}</td>
+      <td style="font-weight:700;color:var(--warning);text-align:center;vertical-align:middle">${(newSkuCountByCust[r.name] || 0).toLocaleString('th-TH')}</td>
+      <td style="font-size:12px;min-width:500px;max-width:812px;line-height:1.9">${(() => { const prods = newProdNamesByCust[r.name]; if (!prods) return '<span style="color:var(--muted)">—</span>'; return prods.map((p,i)=>`<span style="font-weight:600;color:${i%2===0?'var(--text)':'var(--info)'}">${escHtml(p)}</span>`).join('<span style="color:var(--muted)"> , </span>'); })()}</td>
+      <td style="font-weight:700;color:var(--gold);text-align:center;padding:9px 16px;white-space:nowrap">${(() => { const b = getBudget(currentSheet, r.name); return b !== undefined ? b.toLocaleString('th-TH',{minimumFractionDigits:0,maximumFractionDigits:0}) : '—'; })()}</td>
+    </tr>`;
+  }).join('');
+
+  setTimeout(initCustDualScroll, 50);
 }
 
 // ── Render quarter tab ────────────────────────────
