@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Rattana OM Report v8.61</title>
+  <title>Rattana OM Report v8.62</title>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
@@ -239,7 +239,7 @@
 
 <header>
   
-  <div class="logo-text">Rattana <span>OM Report</span> <span class="ver-badge">v8.61 · 2026-07-28</span></div>
+  <div class="logo-text">Rattana <span>OM Report</span> <span class="ver-badge">v8.62 · 2026-07-28</span></div>
   <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรชข้อมูล">↻</button>
   <button class="icon-btn" id="btnDark" onclick="toggleDark()" title="Dark mode">🌙</button>
   <button class="icon-btn" onclick="exportExcel()" title="Export Excel">📥</button>
@@ -381,7 +381,7 @@
   </div>
 
   <div style="text-align:center;padding:20px 0;color:var(--muted);font-size:11px">
-    Rattana OM Report v8.61 · 2026-07-28
+    Rattana OM Report v8.62 · 2026-07-28
   </div>
 
 </div><!-- /pane-summary -->
@@ -485,7 +485,7 @@
   </div>
 
   <div style="text-align:center;padding:20px 0;color:var(--muted);font-size:11px">
-    Rattana OM Report v8.61 · 2026-07-28
+    Rattana OM Report v8.62 · 2026-07-28
   </div>
 
 </div><!-- /pane-quarter -->
@@ -588,7 +588,7 @@
   </div>
 
   <div style="text-align:center;padding:20px 0;color:var(--muted);font-size:11px">
-    Rattana OM Report v8.61 · 2026-07-28
+    Rattana OM Report v8.62 · 2026-07-28
   </div>
 
 </div><!-- /pane-latest -->
@@ -767,7 +767,7 @@
   </div>
 
   <div style="text-align:center;padding:20px 0;color:var(--muted);font-size:11px">
-    Rattana OM Report v8.61 · 2026-07-28
+    Rattana OM Report v8.62 · 2026-07-28
   </div>
 
 </div><!-- /pane-sumdata -->
@@ -803,13 +803,17 @@ async function fetchCustMaster() {
     })();
     custMasterMap = {};
     rows.forEach(r => {
-      const sale = normSale(r['เซลล์ผู้ดูแล'] || '');
+      const sale  = normSale(r['เซลล์ผู้ดูแล'] || '');
       const cust  = String(r['ชื่อร้านค้า'] || '').trim();
+      const code  = String(r['รหัส นีพลัส'] || '').trim();
       const route = String(r['ชื่อรูท'] || '').trim();
       if (!sale || !cust) return;
       if (!custMasterMap[sale]) custMasterMap[sale] = new Set();
       custMasterMap[sale].add(cust);
-      if (route) custRouteMap[cust] = route;
+      if (route) {
+        custRouteMap[cust] = route;           // fallback: by name
+        if (code) custRouteMap[code] = route; // primary: by code
+      }
     });
     if (allData && allData.length) renderAll();
   } catch(e) { console.warn('Customer master load failed:', e.message); }
@@ -1531,14 +1535,15 @@ function renderSummaryTab() {
   document.getElementById('cmpPctVal').style.color = isUp ? 'var(--success)' : 'var(--danger)';
 
   // ── Customer table ──
-  // custMap[name] = { bu, latest, prevTot }
+  // custMap[name] = { bu, latest, prevTot, code }
   const custMap = {};
   data.forEach(r => {
     const name = r['Customer_Name'] || r['Customer_Code'] || '(ไม่ระบุ)';
+    const code = String(r['Customer_Code'] || '').trim();
     const bu   = r['Cat_BU'] || '';
     const m    = r['Month_Year'] || '';
     const v    = parseFloat(r['Exvat'] || 0);
-    if (!custMap[name]) custMap[name] = { bu, latest: 0, prevTot: 0 };
+    if (!custMap[name]) custMap[name] = { bu, latest: 0, prevTot: 0, code };
     if (m === latestMonth) custMap[name].latest += v;
     if (prevQMthsInData.includes(m)) custMap[name].prevTot += v;
   });
@@ -1554,7 +1559,7 @@ function renderSummaryTab() {
     .map(([name, s]) => {
       const avg   = prevQMthsInData.length > 0 ? s.prevTot / prevQMthsInData.length : 0;
       const delta = s.latest - avg;
-      return { name, bu: s.bu, latest: s.latest, avg, delta };
+      return { name, code: s.code || '', bu: s.bu, latest: s.latest, avg, delta };
     })
     .sort((a, b) => a.delta - b.delta);
 
@@ -1710,7 +1715,7 @@ function renderSummaryTab() {
     return `<tr>
       <td style="color:var(--muted);font-size:11px">${i+1}</td>
       <td><strong>${escHtml(r.name)}</strong></td>
-      <td style="font-size:12px;color:var(--muted)">${escHtml(custRouteMap[r.name] || '—')}</td>
+      <td style="font-size:12px;color:var(--muted)">${escHtml(custRouteMap[r.code] || custRouteMap[r.name] || '—')}</td>
       <td class="num" style="color:var(--info)">${fmtFull(r.avg)}</td>
       <td class="num">${fmtFull(r.latest)}</td>
       <td class="num">${deltaHtml}</td>
