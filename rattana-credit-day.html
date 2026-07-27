@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Credit Day v2.7</title>
+<title>Rattana Credit Day v2.8</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{--navy:#0d1b3e;--navy-mid:#1a2f5e;--navy-light:#243b73;--gold:#c9a84c;--gold-light:#e8c86a;--success:#2ecc71;--danger:#e74c3c;--warning:#f39c12;--info:#3498db;--bg:#f4f6fb;--text:#0d1b3e;--card-bg:#ffffff;--border:#dde3f0;--muted:#6b7896;--row-alt:#fafbfd;--radius-sm:6px;--radius-md:12px;--radius-lg:16px;--shadow-md:0 2px 8px rgba(0,0,0,.08);--shadow-lg:0 8px 24px rgba(13,27,62,.12);--shadow-gold:0 4px 12px rgba(201,168,76,.35)}
@@ -201,6 +201,26 @@ body.dark .s-value{color:var(--gold)}
     <button class="tab-btn" onclick="switchTab('history')">📂 ข้อมูลทำเครดิต</button>
   </div>
   <div id="flagBanner" style="display:none;background:#e74c3c;color:#fff;padding:12px 16px;font-size:14px;font-weight:600;line-height:1.6"></div>
+
+  <!-- Record Detail Modal -->
+  <div id="recordModal" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.45);align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeRecordModal()">
+    <div style="background:var(--card-bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:20px 20px 32px;box-shadow:0 -8px 32px rgba(0,0,0,.18)">
+      <div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 18px"></div>
+      <div id="modalShopName" style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:4px"></div>
+      <div id="modalDate" style="font-size:12px;color:var(--muted);margin-bottom:18px"></div>
+      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">สถานะเอกสาร</div>
+      <div style="display:flex;gap:10px">
+        <button id="btnCorrect" onclick="setRecordStatus('ถูกต้อง')"
+          style="flex:1;padding:14px;border-radius:12px;border:2px solid #2ecc71;background:#2ecc71;color:#fff;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer">
+          ✓ ถูกต้อง
+        </button>
+        <button id="btnWrong" onclick="setRecordStatus('เอกสารไม่ถูกต้อง')"
+          style="flex:1;padding:14px;border-radius:12px;border:2px solid #e74c3c;background:#e74c3c;color:#fff;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer">
+          ✗ ไม่ถูกต้อง
+        </button>
+      </div>
+    </div>
+  </div>
 
   <div class="content">
 
@@ -995,12 +1015,11 @@ function renderHistory(rows) {
     ].filter(Boolean).join('');
     const status = r['สถานะ']||'';
     const isFlagged = status === 'เอกสารไม่ถูกต้อง';
-    const rowStyle = isFlagged ? 'background:rgba(231,76,60,.08)' : '';
+    const rowStyle = isFlagged ? 'background:rgba(231,76,60,.06);cursor:pointer' : 'cursor:pointer';
     const statusCell = isFlagged
-      ? `<span style="color:#e74c3c;font-weight:700;font-size:12px">⚠️ ไม่ถูกต้อง</span><br>
-         <button onclick="clearFlag(${i})" style="margin-top:4px;font-size:11px;padding:2px 8px;background:var(--success);color:#fff;border-radius:4px;border:none;cursor:pointer">✓ แก้ไขแล้ว</button>`
-      : `<button onclick="setFlag(${i})" style="font-size:11px;padding:3px 8px;background:#e74c3c;color:#fff;border-radius:4px;border:none;cursor:pointer">⚠️ ไม่ถูกต้อง</button>`;
-    return `<tr style="${rowStyle}">
+      ? `<span style="display:inline-block;background:#e74c3c;color:#fff;font-size:11px;font-weight:700;border-radius:20px;padding:3px 10px;white-space:nowrap">✗ ไม่ถูกต้อง</span>`
+      : `<span style="display:inline-block;background:#2ecc71;color:#fff;font-size:11px;font-weight:700;border-radius:20px;padding:3px 10px;white-space:nowrap">✓ ถูกต้อง</span>`;
+    return `<tr style="${rowStyle}" onclick="openRecordModal(${i})">
       <td style="white-space:nowrap">${formatThaiDate(r['วันที่บันทึก'])}</td>
       <td style="font-weight:600;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r['ชื่อร้านค้า']}">${r['ชื่อร้านค้า']||'-'}</td>
       <td style="white-space:nowrap">${formatThaiDate(r['วันที่ขอเครดิต'])}</td>
@@ -1012,29 +1031,40 @@ function renderHistory(rows) {
   }).join('');
 }
 
-async function setFlag(idx) {
+let _modalIdx = -1;
+
+function openRecordModal(idx) {
+  _modalIdx = idx;
   const r = historyData[idx];
-  if (!confirm(`ยืนยันว่าเอกสารของ "${r['ชื่อร้านค้า']}" ไม่ถูกต้อง?`)) return;
-  if (!GAS_URL||GAS_URL==='YOUR_APPS_SCRIPT_URL') { showToast('ยังไม่ได้ตั้งค่า Apps Script URL','error'); return; }
-  showSpinner('กำลังบันทึกสถานะ...');
-  try {
-    await fetch(GAS_URL, { method:'POST', redirect:'follow',
-      body: JSON.stringify({ action:'flagRecord', shopName:r['ชื่อร้านค้า'], recordDate:r['วันที่บันทึก'], status:'เอกสารไม่ถูกต้อง' }) });
-    await loadHistory();
-    showToast('บันทึกสถานะเรียบร้อย','success');
-  } catch { showToast('เกิดข้อผิดพลาด','error'); }
-  hideSpinner();
+  const status = r['สถานะ'] || '';
+  document.getElementById('modalShopName').textContent = r['ชื่อร้านค้า'] || '-';
+  document.getElementById('modalDate').textContent = 'บันทึก: ' + formatThaiDate(r['วันที่บันทึก']);
+  const btnC = document.getElementById('btnCorrect');
+  const btnW = document.getElementById('btnWrong');
+  const isFlagged = status === 'เอกสารไม่ถูกต้อง';
+  btnC.style.opacity = isFlagged ? '.45' : '1';
+  btnC.style.boxShadow = isFlagged ? 'none' : '0 4px 12px rgba(46,204,113,.4)';
+  btnW.style.opacity = isFlagged ? '1' : '.45';
+  btnW.style.boxShadow = isFlagged ? '0 4px 12px rgba(231,76,60,.4)' : 'none';
+  const modal = document.getElementById('recordModal');
+  modal.style.display = 'flex';
 }
 
-async function clearFlag(idx) {
-  const r = historyData[idx];
-  if (!GAS_URL||GAS_URL==='YOUR_APPS_SCRIPT_URL') { showToast('ยังไม่ได้ตั้งค่า Apps Script URL','error'); return; }
+function closeRecordModal() {
+  document.getElementById('recordModal').style.display = 'none';
+  _modalIdx = -1;
+}
+
+async function setRecordStatus(status) {
+  if (_modalIdx < 0) return;
+  const r = historyData[_modalIdx];
+  closeRecordModal();
   showSpinner('กำลังบันทึกสถานะ...');
   try {
     await fetch(GAS_URL, { method:'POST', redirect:'follow',
-      body: JSON.stringify({ action:'flagRecord', shopName:r['ชื่อร้านค้า'], recordDate:r['วันที่บันทึก'], status:'' }) });
+      body: JSON.stringify({ action:'flagRecord', shopName:r['ชื่อร้านค้า'], recordDate:r['วันที่บันทึก'], status }) });
     await loadHistory();
-    showToast('ล้างสถานะเรียบร้อย','success');
+    showToast(status === 'เอกสารไม่ถูกต้อง' ? '⚠️ บันทึก: ไม่ถูกต้อง' : '✓ บันทึก: ถูกต้อง', status === 'เอกสารไม่ถูกต้อง' ? 'error' : 'success');
   } catch { showToast('เกิดข้อผิดพลาด','error'); }
   hideSpinner();
 }
