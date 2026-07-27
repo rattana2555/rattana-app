@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v2.0</title>
+<title>Rattana DS-DC Report v2.1</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -117,7 +117,7 @@ header{background:var(--navy);color:#fff;padding:12px 16px;position:sticky;top:0
   <div class="logo-text">Rattana <span>DS-DC</span> Report</div>
   <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" title="Dark mode">◑</button>
-  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v2.0</span>
+  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v2.1</span>
 </header>
 
 <div class="content">
@@ -401,9 +401,9 @@ async function loadPromotion() {
     if (!name) return;
     const obj = {
       ชื่อโปร:       (r['ชื่อโปร']       || '').trim(),
-      ราคาขายกำหนด: (r['ราคาขายกำหนด'] || '').trim(),
+      ราคาขายกำหนด: (r['ราคาขายกำหนด*'] || r['ราคาขายกำหนด'] || '').trim(),
       จำนวน:        (r['จำนวน']         || '').trim(),
-      รูปแบบขาย:   (r['รูปแบบขาย']    || '').trim().toUpperCase(),
+      รูปแบบขาย:   (r['รูป']           || r['รูปแบบขาย'] || '').trim().toUpperCase(),
       แถมสินค้า:   (r['แถมสินค้า']     || '').trim(),
       จำนวนแถมEA:  (r['จำนวนแถมEA']   || '').trim(),
       warehouses:   (r['Warehouses']    || '').split(',').map(w => w.trim()).filter(Boolean),
@@ -450,19 +450,22 @@ function extractUnit(utqname) {
   return m ? m[1].toUpperCase() : (utqname || '').trim().toUpperCase();
 }
 
+// Strip thousand-separator commas and parse as float
+function parseNum(s) { return parseFloat((s || '').replace(/,/g, '')) || 0; }
+
 // Check if a DS_DC row passes all conditions for a given promo object
 function promoMatches(r, promo) {
   // 1. รูปแบบขาย — unit type must match (empty = any)
   if (promo.รูปแบบขาย) {
     if (extractUnit(r.TRD_UTQNAME) !== promo.รูปแบบขาย) return false;
   }
-  // 2. จำนวน — TRD_QTY >= จำนวน
+  // 2. จำนวน — TRD_QTY >= จำนวน (use parseNum to handle comma-formatted numbers)
   if (promo.จำนวน) {
-    if ((parseFloat(r.TRD_QTY) || 0) < (parseFloat(promo.จำนวน) || 0)) return false;
+    if (parseNum(r.TRD_QTY) < parseNum(promo.จำนวน)) return false;
   }
   // 3. ราคาขายกำหนด — TRD_U_PRC >= ราคาขายกำหนด (empty = any price ok)
   if (promo.ราคาขายกำหนด) {
-    if ((parseFloat(r.TRD_U_PRC) || 0) < (parseFloat(promo.ราคาขายกำหนด) || 0)) return false;
+    if (parseNum(r.TRD_U_PRC) < parseNum(promo.ราคาขายกำหนด)) return false;
   }
   const slmnKey   = (r.SLMN_NAME || '').replace(/^คุณ\s*/u, '').trim().toLowerCase();
   const slmnEntry = slmnWMap[slmnKey] || {};
