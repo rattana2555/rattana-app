@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v1.6</title>
+<title>Rattana DS-DC Report v1.7</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -117,7 +117,7 @@ header{background:var(--navy);color:#fff;padding:12px 16px;position:sticky;top:0
   <div class="logo-text">Rattana <span>DS-DC</span> Report</div>
   <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" title="Dark mode">◑</button>
-  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v1.6</span>
+  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v1.7</span>
 </header>
 
 <div class="content">
@@ -535,9 +535,10 @@ function enrichWithPromo(rows) {
 
 // ── Free-item status check ─────────────────────────────────────
 function enrichWithFreeStatus(rows) {
-  // Build map: DI_REF → [{skuLower, qFree}] for rows with TRD_Q_FREE > 0
   const freeByRef = {};
   rows.forEach(r => {
+    r.FREE_STATUS = '';
+    r.FREE_FROM   = '';
     if ((parseFloat(r.TRD_Q_FREE) || 0) > 0) {
       const key = r.DI_REF || '';
       (freeByRef[key] = freeByRef[key] || []).push({
@@ -546,16 +547,30 @@ function enrichWithFreeStatus(rows) {
       });
     }
   });
+  // parentMap: "DI_REF|skuLower" → Set of parent SKU_NAMEs
+  const parentMap = {};
   rows.forEach(r => {
-    if (!r.FREE_ITEMS || !r.FREE_ITEMS.length) { r.FREE_STATUS = ''; return; }
+    if (!r.FREE_ITEMS || !r.FREE_ITEMS.length) return;
     const freeRows = freeByRef[r.DI_REF || ''] || [];
     let allFound = true;
     for (const fi of r.FREE_ITEMS) {
       const fiKey = (fi.name || '').toLowerCase();
       const match = freeRows.find(fr => fr.skuLower === fiKey);
-      if (!match || match.qFree < (fi.qty || 1)) { allFound = false; break; }
+      if (!match || match.qFree < (fi.qty || 1)) { allFound = false; }
+      if (match) {
+        const mk = (r.DI_REF || '') + '|' + fiKey;
+        if (!parentMap[mk]) parentMap[mk] = new Set();
+        parentMap[mk].add(r.SKU_NAME || '');
+      }
     }
     r.FREE_STATUS = allFound ? 'ครบ' : 'ขาด';
+  });
+  rows.forEach(r => {
+    if ((parseFloat(r.TRD_Q_FREE) || 0) > 0) {
+      const mk = (r.DI_REF || '') + '|' + (r.SKU_NAME || '').toLowerCase();
+      const parents = parentMap[mk];
+      if (parents && parents.size) r.FREE_FROM = [...parents].join(', ');
+    }
   });
 }
 
@@ -670,14 +685,34 @@ function renderTable() {
     return;
   }
 
-  // For large data, limit display to 2000 rows with note
-  const display = filteredData.length > 2000 ? filteredData.slice(0, 2000) : filteredData;
-  const hasMore = filteredData.length > 2000;
+  // Separate main rows and promo free-item rows, then interleave
+  const mainRows = filteredData.filter(r => !r.FREE_FROM);
+  const freeRowMap = {};  // DI_REF|skuLower → row
+  filteredData.filter(r => r.FREE_FROM).forEach(r => {
+    const mk = (r.DI_REF || '') + '|' + (r.SKU_NAME || '').toLowerCase();
+    (freeRowMap[mk] = freeRowMap[mk] || []).push(r);
+  });
+
+  // Build ordered list: each main row followed by its free-item rows
+  const ordered = [];
+  mainRows.forEach(r => {
+    ordered.push({ row: r, isFree: false });
+    if (r.FREE_ITEMS && r.FREE_ITEMS.length) {
+      r.FREE_ITEMS.forEach(fi => {
+        const mk = (r.DI_REF || '') + '|' + (fi.name || '').toLowerCase();
+        (freeRowMap[mk] || []).forEach(fr => ordered.push({ row: fr, isFree: true }));
+      });
+    }
+  });
+
+  const display = ordered.length > 2000 ? ordered.slice(0, 2000) : ordered;
+  const hasMore = ordered.length > 2000;
 
   let html = '';
-  display.forEach(r => {
+  display.forEach(({ row: r, isFree }) => {
     const amt = parseFloat(r.TRD_G_AMT) || 0;
-    html += `<tr>
+    const rowStyle = isFree ? 'background:rgba(230,126,34,.08);border-left:3px solid #e67e22' : '';
+    html += `<tr style="${rowStyle}">
       <td>${fmtDate(r.DI_DATE)}</td>
       <td style="font-family:monospace;font-size:11px">${r.DI_REF || '-'}</td>
       <td style="font-family:monospace;font-size:11px">${r.AR_CODE || '-'}</td>
@@ -685,7 +720,7 @@ function renderTable() {
       <td>${r.SLMN_CODE || '-'}</td>
       <td>${r.SLMN_NAME || '-'}</td>
       <td><span style="background:rgba(201,168,76,.15);padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600">${r.WL_CODE || '-'}</span></td>
-      <td class="wrap">${r.PROMOS && r.PROMOS.length ? '<span style="display:inline-block;margin-right:4px;padding:1px 5px;border-radius:8px;font-size:10px;font-weight:700;background:#e74c3c;color:#fff;vertical-align:middle">P</span>' : ''}${r.SKU_NAME || '-'}${r.CAT_BRAND ? `<br><span style="font-size:10px;color:var(--muted)">${r.CAT_BRAND}${r.CAT_SIZE ? ' · ' + r.CAT_SIZE : ''}</span>` : ''}</td>
+      <td class="wrap">${isFree ? '<span style="font-size:10px;color:#e67e22;font-weight:700;margin-right:4px">🎁</span>' : (r.PROMOS && r.PROMOS.length ? '<span style="display:inline-block;margin-right:4px;padding:1px 5px;border-radius:8px;font-size:10px;font-weight:700;background:#e74c3c;color:#fff;vertical-align:middle">P</span>' : '')}${r.SKU_NAME || '-'}${r.CAT_BRAND ? `<br><span style="font-size:10px;color:var(--muted)">${r.CAT_BRAND}${r.CAT_SIZE ? ' · ' + r.CAT_SIZE : ''}</span>` : ''}</td>
       <td>${r.TRD_UTQNAME || '-'}</td>
       <td class="num">${fmt(r.TRD_QTY)}</td>
       <td class="num">${r.TRD_Q_FREE && parseFloat(r.TRD_Q_FREE) ? fmt(r.TRD_Q_FREE) : '-'}</td>
