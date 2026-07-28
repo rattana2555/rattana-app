@@ -301,49 +301,21 @@
         </div>
       </div>
 
-      <!-- Stat cards -->
-      <div class="stat-grid" id="statGrid">
-        <div class="stat-card">
-          <div class="s-label">🏪 ลูกค้าทั้งหมด</div>
-          <div class="s-value" id="statCusts">—</div>
-          <div class="s-sub">ราย</div>
-        </div>
-        <div class="stat-card c-info">
-          <div class="s-label">📦 สินค้า (SKU)</div>
-          <div class="s-value" id="statSKU">—</div>
-          <div class="s-sub">รายการ</div>
-        </div>
-        <div class="stat-card c-success">
-          <div class="s-label">📋 ยอด CS</div>
-          <div class="s-value" id="statCS">—</div>
-          <div class="s-sub">CS รวม</div>
-        </div>
-        <div class="stat-card c-danger">
-          <div class="s-label">💰 มูลค่า (Exvat)</div>
-          <div class="s-value" id="statExvat">—</div>
-          <div class="s-sub">บาท</div>
-        </div>
-      </div>
-
-      <!-- BU Summary table -->
-      <div class="card" id="buCard">
+      <!-- Customer table -->
+      <div class="card mt-12" style="margin-bottom:12px">
         <div class="card-head">
-          <div class="card-head-title">📊 สรุปตาม <em>Cat BU</em></div>
-          <span id="buCount" class="badge badge-info">0 BU</span>
+          <div class="card-head-title">🏪 รายชื่อร้านค้าในพอร์ต</div>
+          <span id="custCount" class="badge badge-gold">0 ร้าน</span>
         </div>
         <div class="tbl-wrap">
-          <table class="tbl" id="buTbl">
+          <table class="tbl" id="custTbl" style="min-width:300px">
             <thead>
               <tr>
-                <th data-key="Cat_BU" data-type="str">#&nbsp;Cat BU <span class="sort-ind"></span></th>
-                <th data-key="Exvat" data-type="num" style="text-align:right">มูลค่า (บาท) <span class="sort-ind">▼</span></th>
-                <th data-key="Sales_CS" data-type="num" style="text-align:right">CS <span class="sort-ind"></span></th>
-                <th data-key="pct" data-type="num" style="text-align:right">% <span class="sort-ind"></span></th>
-                <th data-key="customers" data-type="num" style="text-align:right">ลูกค้า <span class="sort-ind"></span></th>
+                <th style="width:50px">#</th>
+                <th>ชื่อร้านค้า</th>
               </tr>
             </thead>
-            <tbody id="buTblBody"></tbody>
-            <tfoot><tr id="buTblFoot"></tr></tfoot>
+            <tbody id="custTblBody"></tbody>
           </table>
         </div>
       </div>
@@ -417,7 +389,6 @@ let currentSheet = '';
 let selBU        = '';
 
 const sortStateMain = { key: 'Exvat', dir: 'desc' };
-const sortStateBU   = { key: 'Exvat', dir: 'desc' };
 
 // ── Spinner / Loading ────────────────────────────
 const showSpinner = m => {
@@ -669,26 +640,6 @@ function bindHeaderSort(tableId, sortState, renderFn) {
   });
 }
 
-// ── Aggregate BU ──────────────────────────────────
-function aggByBU(data) {
-  const map = {};
-  data.forEach(r => {
-    const bu = r['Cat_BU'] || '(ไม่ระบุ)';
-    if (!map[bu]) map[bu] = { Cat_BU: bu, Exvat: 0, Sales_CS: 0, custs: new Set() };
-    map[bu].Exvat    += parseFloat(r['Exvat']    || 0);
-    map[bu].Sales_CS += parseFloat(r['Sales_CS'] || 0);
-    map[bu].custs.add(r['Customer_Code'] || r['Customer_Name'] || '');
-  });
-  const total = Object.values(map).reduce((s, v) => s + v.Exvat, 0);
-  return Object.values(map).map(v => ({
-    Cat_BU:    v.Cat_BU,
-    Exvat:     v.Exvat,
-    Sales_CS:  v.Sales_CS,
-    pct:       total > 0 ? (v.Exvat / total * 100) : 0,
-    customers: v.custs.size,
-  }));
-}
-
 // ── KPI Cards ─────────────────────────────────────
 function renderKPICards() {
   if (!filteredData.length) return;
@@ -767,12 +718,28 @@ function renderKPICards() {
   document.getElementById('kpiSKULatestSub').textContent = `SKU เฉลี่ยต่อร้าน (${latestStores.size} ร้าน) · ${latestMonth}`;
 }
 
+// ── Customer Table ────────────────────────────────
+function renderCustomerTable() {
+  const tbody = document.getElementById('custTblBody');
+  if (!custMaster.length) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="2">ไม่พบข้อมูลร้านค้า</td></tr>`;
+    document.getElementById('custCount').textContent = '0 ร้าน';
+    return;
+  }
+  document.getElementById('custCount').textContent = `${custMaster.length} ร้าน`;
+  tbody.innerHTML = custMaster.map((r, i) => `
+    <tr>
+      <td style="color:var(--muted);font-size:11px;text-align:center">${i + 1}</td>
+      <td><strong>${escHtml(String(r['ชื่อร้านค้า'] || '—').trim())}</strong></td>
+    </tr>
+  `).join('');
+}
+
 // ── Render all ────────────────────────────────────
 function renderAll() {
-  renderStats();
   renderInfoBar();
   renderKPICards();
-  renderBUTable();
+  renderCustomerTable();
   renderMainTable();
 }
 
@@ -797,69 +764,15 @@ function resolveShopName(row, lookup) {
   return cn; // fall back to whatever is in the data
 }
 
-// ── Stats ─────────────────────────────────────────
-function renderStats() {
-  // total customers = customer master size (base)
-  const totalCusts = custMaster.length;
-  // customers with at least 1 missout row
-  const custsWithMissout = new Set(filteredData.map(r => String(r['Customer_Name'] || '').trim().toLowerCase())).size;
-  const skus  = new Set(filteredData.map(r => r['Product_Name'] || '')).size;
-  const totCS = filteredData.reduce((s, r) => s + parseFloat(r['Sales_CS'] || 0), 0);
-  const totEx = filteredData.reduce((s, r) => s + parseFloat(r['Exvat'] || 0), 0);
-  document.getElementById('statCusts').textContent = `${custsWithMissout} / ${totalCusts}`;
-  document.getElementById('statSKU').textContent   = skus.toLocaleString('th-TH');
-  document.getElementById('statCS').textContent    = fmtNum(totCS);
-  document.getElementById('statExvat').textContent = fmtNum(totEx);
-  document.querySelector('#statCusts').closest('.stat-card').querySelector('.s-sub').textContent =
-    `ร้านที่มี Missout / ร้านทั้งหมด`;
-}
-
 // ── Info bar ──────────────────────────────────────
 function renderInfoBar() {
-  const months  = [...new Set(filteredData.map(r => r['Month_Year'] || '').filter(Boolean))].sort().join(', ');
-  const buCount = new Set(filteredData.map(r => r['Cat_BU'] || '')).size;
+  const months = [...new Set(filteredData.map(r => r['Month_Year'] || '').filter(Boolean))].sort().join(', ');
   document.getElementById('infoBar').innerHTML =
     `<strong>พนักงาน:</strong> ${currentSheet || '—'} &nbsp;|&nbsp; ` +
     `<strong>ร้านในพอร์ต:</strong> ${custMaster.length} ร้าน &nbsp;|&nbsp; ` +
     `<strong>เดือน:</strong> ${months || '—'} &nbsp;|&nbsp; ` +
-    `<strong>Cat BU:</strong> ${buCount} &nbsp;|&nbsp; ` +
     `<strong>รายการ Missout:</strong> ${filteredData.length.toLocaleString()}` +
     (selBU ? ` &nbsp;<span style="color:var(--gold);font-weight:700">| BU: ${selBU}</span>` : '');
-}
-
-// ── BU Table ──────────────────────────────────────
-function renderBUTable() {
-  const buRows = aggByBU(filteredData);
-  const sorted = sortRows(buRows, sortStateBU.key, sortStateBU.key === 'Cat_BU' ? 'str' : 'num', sortStateBU.dir);
-  document.getElementById('buCount').textContent = `${sorted.length} BU`;
-  const maxEx = Math.max(...sorted.map(r => r.Exvat), 1);
-  const tbody = document.getElementById('buTblBody');
-  if (!sorted.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="5">ไม่พบข้อมูล</td></tr>`;
-    document.getElementById('buTblFoot').innerHTML = '';
-    return;
-  }
-  tbody.innerHTML = sorted.map((r, i) => `
-    <tr>
-      <td>
-        <span style="color:var(--muted);font-size:11px;margin-right:4px">${i+1}</span>
-        <strong>${escHtml(r.Cat_BU)}</strong>
-        <div class="prog-bar"><div class="prog-fill" style="width:${(r.Exvat/maxEx*100).toFixed(1)}%"></div></div>
-      </td>
-      <td class="num">${fmtNum(r.Exvat)}</td>
-      <td class="num">${fmtNum(r.Sales_CS)}</td>
-      <td class="num" style="color:${r.pct>=20?'var(--gold)':r.pct>=10?'var(--info)':'inherit'};font-weight:700">
-        ${r.pct.toFixed(1)}%
-      </td>
-      <td class="num">${r.customers.toLocaleString()}</td>
-    </tr>
-  `).join('');
-  const totEx = sorted.reduce((s, r) => s + r.Exvat, 0);
-  const totCS = sorted.reduce((s, r) => s + r.Sales_CS, 0);
-  const totCu = new Set(filteredData.map(r => r['Customer_Code'] || r['Customer_Name'] || '')).size;
-  document.getElementById('buTblFoot').innerHTML =
-    `<td>รวม ${sorted.length} BU</td><td class="num">${fmtNum(totEx)}</td><td class="num">${fmtNum(totCS)}</td><td class="num">100%</td><td class="num">${totCu.toLocaleString()}</td>`;
-  updateSortIndicators('buTbl', sortStateBU);
 }
 
 // ── Main Detail Table ─────────────────────────────
@@ -902,19 +815,7 @@ function exportExcel() {
   try {
     const wb = XLSX.utils.book_new();
 
-    // Sheet 1: BU Summary
-    const buRows = sortRows(aggByBU(filteredData), 'Exvat', 'num', 'desc');
-    const ws1 = XLSX.utils.json_to_sheet(buRows.map((r, i) => ({
-      '#':           i + 1,
-      'Cat BU':      r.Cat_BU,
-      'Exvat (บาท)': parseFloat(r.Exvat.toFixed(2)),
-      'Sales CS':    parseFloat(r.Sales_CS.toFixed(2)),
-      '% สัดส่วน':   parseFloat(r.pct.toFixed(2)),
-      'จำนวนลูกค้า': r.customers,
-    })));
-    XLSX.utils.book_append_sheet(wb, ws1, 'Cat BU Summary');
-
-    // Sheet 2: Raw Data
+    // Sheet 1: Raw Data
     const ws2 = XLSX.utils.json_to_sheet(filteredData.map(r => ({
       'Month_Year':    r['Month_Year'],
       'Customer_Code': r['Customer_Code'],
@@ -981,7 +882,6 @@ function initApp() {
   if (localStorage.getItem('rattana_om_report_dark') === '1') document.body.classList.add('dark');
   buildSaleDD();
   bindHeaderSort('mainTbl', sortStateMain, renderMainTable);
-  bindHeaderSort('buTbl',   sortStateBU,   renderBUTable);
 }
 
 initApp();
