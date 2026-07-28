@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Credit Day v4.6</title>
+<title>Rattana Credit Day v4.7</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{--navy:#0d1b3e;--navy-mid:#1a2f5e;--navy-light:#243b73;--gold:#c9a84c;--gold-light:#e8c86a;--success:#2ecc71;--danger:#e74c3c;--warning:#f39c12;--info:#3498db;--bg:#f4f6fb;--text:#0d1b3e;--card-bg:#ffffff;--border:#dde3f0;--muted:#6b7896;--row-alt:#fafbfd;--radius-sm:6px;--radius-md:12px;--radius-lg:16px;--shadow-md:0 2px 8px rgba(0,0,0,.08);--shadow-lg:0 8px 24px rgba(13,27,62,.12);--shadow-gold:0 4px 12px rgba(201,168,76,.35)}
@@ -1126,15 +1126,35 @@ async function confirmFlag() {
   const note = document.getElementById('noteModalText').value.trim();
   closeNoteModal();
   await toggleStatus(idx, 'เอกสารไม่ถูกต้อง', note);
+  switchTab('flagged');
 }
 
 function showDocSheet(idx) {
   const r = historyData[idx];
+  const isFlagged = r['สถานะ'] === 'เอกสารไม่ถูกต้อง';
   const d1 = r['เอกสารขอเครดิต']||r['สำเนาหนังสือรับรองบริษัท'];
   const d2 = r['บัตรประชาชน']||r['สำเนาใบจดทะเบียน ภพ.20'];
   const d3 = r['ภพ.20']||r['สำเนาบัตรประชาชน'];
   document.getElementById('docSheetTitle').textContent = r['ชื่อร้านค้า']||'-';
   document.getElementById('docSheetSub').textContent = 'วันที่ขอเครดิต: ' + (formatThaiDate(r['วันที่ขอเครดิต'])||'-') + '  •  ' + (r['จำนวนวันเครดิต']||'-') + ' วัน';
+  // แสดง/ซ่อน ช่องแก้หมายเหตุ
+  let noteArea = document.getElementById('docSheetNoteArea');
+  if (!noteArea) {
+    noteArea = document.createElement('div');
+    noteArea.id = 'docSheetNoteArea';
+    document.getElementById('docSheetLinks').insertAdjacentElement('afterend', noteArea);
+  }
+  if (isFlagged) {
+    noteArea.innerHTML = `<div style="margin-top:16px">
+      <div style="font-size:12px;font-weight:700;color:#e74c3c;margin-bottom:6px">📝 หมายเหตุ (เหตุผลไม่ถูกต้อง)</div>
+      <textarea id="docSheetNoteText" rows="2" placeholder="ระบุเหตุผล..."
+        style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #e74c3c55;border-radius:10px;font-size:13px;font-family:inherit;resize:none;outline:none">${r['หมายเหตุสถานะ']||''}</textarea>
+      <button onclick="saveSheetNote(${idx})"
+        style="margin-top:8px;width:100%;padding:10px;background:#e74c3c;color:#fff;border:none;border-radius:10px;font-size:13px;font-family:inherit;cursor:pointer;font-weight:700">บันทึกหมายเหตุ</button>
+    </div>`;
+  } else {
+    noteArea.innerHTML = '';
+  }
   const docs = [
     { label:'📄 สำเนาหนังสือรับรองบริษัท', url: d1, color:'#1a6fd4' },
     { label:'🪪 สำเนาบัตรประชาชน',          url: d2, color:'#7b34c1' },
@@ -1158,6 +1178,18 @@ function showDocSheet(idx) {
 }
 function closeDocSheet() {
   document.getElementById('docSheet').style.display = 'none';
+}
+async function saveSheetNote(idx) {
+  const note = document.getElementById('docSheetNoteText').value.trim();
+  historyData[idx]['หมายเหตุสถานะ'] = note;
+  renderFlagged(historyData);
+  closeDocSheet();
+  showToast('✓ บันทึกหมายเหตุแล้ว', 'success');
+  const r = historyData[idx];
+  try {
+    await fetch(GAS_URL, { method:'POST', redirect:'follow',
+      body: JSON.stringify({ action:'flagRecord', shopName:r['ชื่อร้านค้า'], recordDate:r['วันที่บันทึก'], status: r['สถานะ'], note }) });
+  } catch { showToast('บันทึกลง Sheets ไม่สำเร็จ','error'); }
 }
 
 async function toggleStatus(idx, newStatus, note='') {
