@@ -773,7 +773,6 @@ function renderAll() {
   renderInfoBar();
   renderKPICards();
   renderBUTable();
-  renderCustTable();
   renderMainTable();
 }
 
@@ -826,70 +825,6 @@ function renderInfoBar() {
     `<strong>Cat BU:</strong> ${buCount} &nbsp;|&nbsp; ` +
     `<strong>รายการ Missout:</strong> ${filteredData.length.toLocaleString()}` +
     (selBU ? ` &nbsp;<span style="color:var(--gold);font-weight:700">| BU: ${selBU}</span>` : '');
-}
-
-// ── Customer Summary Table ────────────────────────
-function renderCustTable() {
-  const tbody = document.getElementById('custTblBody');
-  if (!custMaster.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="6">ไม่พบข้อมูลร้านค้า</td></tr>`;
-    document.getElementById('custCount').textContent = '0 ร้าน';
-    return;
-  }
-
-  // build missout totals per Customer_Name (lowercase key)
-  const omByName = {};
-  filteredData.forEach(r => {
-    const key = String(r['Customer_Name'] || '').trim().toLowerCase();
-    if (!omByName[key]) omByName[key] = { Exvat: 0, Sales_CS: 0, skus: new Set() };
-    omByName[key].Exvat    += parseFloat(r['Exvat']    || 0);
-    omByName[key].Sales_CS += parseFloat(r['Sales_CS'] || 0);
-    omByName[key].skus.add(r['Product_Name'] || '');
-  });
-
-  // build rows: one per customer in master
-  const rows = custMaster.map(r => {
-    const shop = String(r['ชื่อร้านค้า'] || '').trim();
-    const om   = omByName[shop.toLowerCase()] || null;
-    return {
-      shop,
-      route:     String(r['ชื่อรูท'] || '—').trim(),
-      storeType: String(r['ประเภทร้านค้าขอพร'] || '—').trim(),
-      hasMissout: !!om,
-      Exvat:     om ? om.Exvat    : 0,
-      Sales_CS:  om ? om.Sales_CS : 0,
-      skuCount:  om ? om.skus.size : 0,
-    };
-  });
-
-  // sort: missout first (by Exvat desc), then no-missout alphabetically
-  rows.sort((a, b) => {
-    if (a.hasMissout !== b.hasMissout) return b.hasMissout ? 1 : -1;
-    return b.Exvat - a.Exvat;
-  });
-
-  const withMissout = rows.filter(r => r.hasMissout).length;
-  document.getElementById('custCount').textContent =
-    `${withMissout} มี Missout / ${rows.length} ร้านทั้งหมด`;
-
-  tbody.innerHTML = rows.map((r, i) => `
-    <tr style="${!r.hasMissout ? 'opacity:.55' : ''}">
-      <td>
-        <span style="color:var(--muted);font-size:10px;margin-right:4px">${i+1}</span>
-        <strong>${escHtml(r.shop)}</strong>
-        ${r.hasMissout
-          ? `<span class="badge badge-gold" style="margin-left:4px;font-size:10px">Missout</span>`
-          : `<span class="badge" style="background:rgba(0,0,0,.06);color:var(--muted);margin-left:4px;font-size:10px">ไม่มี</span>`}
-      </td>
-      <td style="font-size:12px;color:var(--muted)">${escHtml(r.route)}</td>
-      <td style="font-size:12px">${escHtml(r.storeType)}</td>
-      <td class="num">${r.skuCount > 0 ? r.skuCount : '—'}</td>
-      <td class="num">${r.Sales_CS > 0 ? fmtNum(r.Sales_CS) : '—'}</td>
-      <td class="num" style="color:${r.Exvat > 0 ? 'var(--danger)' : 'var(--muted)'}">
-        ${r.Exvat > 0 ? fmtNum(r.Exvat) : '—'}
-      </td>
-    </tr>
-  `).join('');
 }
 
 // ── BU Table ──────────────────────────────────────
