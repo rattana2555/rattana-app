@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Credit Day v4.1</title>
+<title>Rattana Credit Day v4.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{--navy:#0d1b3e;--navy-mid:#1a2f5e;--navy-light:#243b73;--gold:#c9a84c;--gold-light:#e8c86a;--success:#2ecc71;--danger:#e74c3c;--warning:#f39c12;--info:#3498db;--bg:#f4f6fb;--text:#0d1b3e;--card-bg:#ffffff;--border:#dde3f0;--muted:#6b7896;--row-alt:#fafbfd;--radius-sm:6px;--radius-md:12px;--radius-lg:16px;--shadow-md:0 2px 8px rgba(0,0,0,.08);--shadow-lg:0 8px 24px rgba(13,27,62,.12);--shadow-gold:0 4px 12px rgba(201,168,76,.35)}
@@ -495,6 +495,20 @@ body.dark .s-value{color:var(--gold)}
 
   </div><!-- end .content -->
 </div><!-- end #appScreen -->
+
+<!-- Note Modal (ใส่หมายเหตุก่อนเปลี่ยนเป็นไม่ถูกต้อง) -->
+<div id="noteModal" onclick="if(event.target===this)closeNoteModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:950;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#fff;width:100%;max-width:400px;border-radius:16px;padding:24px 20px;box-shadow:0 8px 32px rgba(13,27,62,.2)">
+    <div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:6px">⚠️ ระบุเหตุผล</div>
+    <div id="noteModalShop" style="font-size:12px;color:var(--muted);margin-bottom:14px"></div>
+    <textarea id="noteModalText" placeholder="ระบุเหตุผลที่เอกสารไม่ถูกต้อง..." rows="3"
+      style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;resize:none;outline:none"></textarea>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button onclick="closeNoteModal()" style="flex:1;padding:11px;background:var(--border);border:none;border-radius:10px;font-size:13px;font-family:inherit;cursor:pointer;font-weight:600">ยกเลิก</button>
+      <button onclick="confirmFlag()" style="flex:2;padding:11px;background:#e74c3c;color:#fff;border:none;border-radius:10px;font-size:13px;font-family:inherit;cursor:pointer;font-weight:700">ยืนยัน — ไม่ถูกต้อง</button>
+    </div>
+  </div>
+</div>
 
 <!-- Doc Detail Sheet -->
 <div id="docSheet" onclick="if(event.target===this)closeDocSheet()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:900;align-items:flex-end;justify-content:center">
@@ -1057,7 +1071,7 @@ function renderHistory(rows) {
            style="display:inline-flex;align-items:center;gap:5px;background:#e74c3c;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;box-shadow:0 2px 6px rgba(231,76,60,.35)">
            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
            เอกสารไม่ถูกต้อง</button>`
-      : `<button onclick="event.stopPropagation();toggleStatus(${i},'เอกสารไม่ถูกต้อง')"
+      : `<button onclick="event.stopPropagation();openNoteModal(${i})"
            style="display:inline-flex;align-items:center;gap:5px;background:linear-gradient(135deg,#27ae60,#2ecc71);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;box-shadow:0 2px 6px rgba(46,204,113,.4)">
            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
            เอกสารถูกต้อง</button>`;
@@ -1071,6 +1085,27 @@ function renderHistory(rows) {
       <td style="white-space:nowrap">${statusCell}</td>
     </tr>`;
   }).join('');
+}
+
+let _noteTargetIdx = null;
+function openNoteModal(idx) {
+  _noteTargetIdx = idx;
+  const r = historyData[idx];
+  document.getElementById('noteModalShop').textContent = r['ชื่อร้านค้า']||'';
+  document.getElementById('noteModalText').value = '';
+  const m = document.getElementById('noteModal');
+  m.style.display = 'flex';
+  setTimeout(() => document.getElementById('noteModalText').focus(), 100);
+}
+function closeNoteModal() {
+  document.getElementById('noteModal').style.display = 'none';
+  _noteTargetIdx = null;
+}
+async function confirmFlag() {
+  if (_noteTargetIdx === null) return;
+  const note = document.getElementById('noteModalText').value.trim();
+  closeNoteModal();
+  await toggleStatus(_noteTargetIdx, 'เอกสารไม่ถูกต้อง', note);
 }
 
 function showDocSheet(idx) {
@@ -1105,20 +1140,21 @@ function closeDocSheet() {
   document.getElementById('docSheet').style.display = 'none';
 }
 
-async function toggleStatus(idx, newStatus) {
+async function toggleStatus(idx, newStatus, note='') {
   const r = historyData[idx];
-  // update local state ทันที ไม่รอ CSV cache
   historyData[idx]['สถานะ'] = newStatus;
+  if (note) historyData[idx]['หมายเหตุสถานะ'] = note;
+  else if (newStatus === 'ถูกต้อง') delete historyData[idx]['หมายเหตุสถานะ'];
   const q = document.getElementById('historySearch').value.toLowerCase();
-  renderHistory(q ? historyData.filter(r=>(r['ชื่อร้านค้า']||'').toLowerCase().includes(q)) : historyData);
+  const ok = historyData.filter(r => r['สถานะ'] !== 'เอกสารไม่ถูกต้อง');
+  renderHistory(q ? ok.filter(r=>(r['ชื่อร้านค้า']||'').toLowerCase().includes(q)) : ok);
   renderFlagged(historyData);
   updateFlagBanner();
   showToast(newStatus === 'เอกสารไม่ถูกต้อง' ? '⚠️ บันทึก: ไม่ถูกต้อง' : '✓ บันทึก: เอกสารถูกต้อง',
             newStatus === 'เอกสารไม่ถูกต้อง' ? 'error' : 'success');
-  // บันทึกลง Sheets ใน background
   try {
     await fetch(GAS_URL, { method:'POST', redirect:'follow',
-      body: JSON.stringify({ action:'flagRecord', shopName:r['ชื่อร้านค้า'], recordDate:r['วันที่บันทึก'], status: newStatus }) });
+      body: JSON.stringify({ action:'flagRecord', shopName:r['ชื่อร้านค้า'], recordDate:r['วันที่บันทึก'], status: newStatus, note }) });
   } catch { showToast('บันทึกลง Sheets ไม่สำเร็จ','error'); }
 }
 
@@ -1156,17 +1192,18 @@ function renderFlagged(rows) {
       d2?`<a href="${d2}" target="_blank" class="link-badge">🪪 บัตร</a>`:'',
       d3?`<a href="${d3}" target="_blank" class="link-badge">📑 ภพ.20</a>`:'',
     ].filter(Boolean).join('');
-    return `<tr style="background:rgba(231,76,60,.06)">
+    const note = r['หมายเหตุสถานะ'] ? `<div style="font-size:10px;color:#e74c3c;margin-top:3px">📝 ${r['หมายเหตุสถานะ']}</div>` : '';
+    return `<tr style="background:rgba(231,76,60,.06);cursor:pointer" onclick="showDocSheet(${i})">
       <td style="white-space:nowrap">${formatThaiDate(r['วันที่บันทึก'])}</td>
       <td style="font-weight:600;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r['ชื่อร้านค้า']}">${r['ชื่อร้านค้า']||'-'}</td>
       <td style="white-space:nowrap">${formatThaiDate(r['วันที่ขอเครดิต'])}</td>
       <td style="text-align:center;font-weight:700">${r['จำนวนวันเครดิต']||'-'}</td>
       <td>${badge}<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:2px">${links}</div></td>
       <td style="font-size:11px;color:var(--muted)">${r['ชื่อผู้บันทึก']||r['ผู้บันทึก']||'-'}</td>
-      <td><button onclick="toggleStatus(${i},'ถูกต้อง')"
+      <td><button onclick="event.stopPropagation();toggleStatus(${i},'ถูกต้อง')"
         style="display:inline-flex;align-items:center;gap:5px;background:#e74c3c;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;box-shadow:0 2px 6px rgba(231,76,60,.35)">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-        เอกสารไม่ถูกต้อง</button></td>
+        เอกสารไม่ถูกต้อง</button>${note}</td>
     </tr>`;
   }).join('');
 }
