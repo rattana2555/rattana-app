@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Credit Day v5.3</title>
+<title>Rattana Credit Day v5.4</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{--navy:#0d1b3e;--navy-mid:#1a2f5e;--navy-light:#243b73;--gold:#c9a84c;--gold-light:#e8c86a;--success:#2ecc71;--danger:#e74c3c;--warning:#f39c12;--info:#3498db;--bg:#f4f6fb;--text:#0d1b3e;--card-bg:#ffffff;--border:#dde3f0;--muted:#6b7896;--row-alt:#fafbfd;--radius-sm:6px;--radius-md:12px;--radius-lg:16px;--shadow-md:0 2px 8px rgba(0,0,0,.08);--shadow-lg:0 8px 24px rgba(13,27,62,.12);--shadow-gold:0 4px 12px rgba(201,168,76,.35)}
@@ -1038,6 +1038,14 @@ function resetForm() {
 // ══════════════════════════════════
 //  HISTORY
 // ══════════════════════════════════
+function flagKey(r) { return (r['ชื่อร้านค้า']||'') + '|' + (r['วันที่บันทึก']||''); }
+function loadLocalFlags() {
+  try { return JSON.parse(localStorage.getItem('rattana_flags') || '{}'); } catch { return {}; }
+}
+function saveLocalFlags(map) {
+  localStorage.setItem('rattana_flags', JSON.stringify(map));
+}
+
 async function loadHistory() {
   try {
     const rows = await fetchSheet(SHEET_ID, REC_SHEET);
@@ -1046,6 +1054,15 @@ async function loadHistory() {
       return d && d.trim() !== '' && d.trim() !== '-' && !isNaN(new Date(d));
     });
     historyData = [...validRows].reverse();
+    // merge local flags (persist across refresh even if Sheets not updated yet)
+    const localFlags = loadLocalFlags();
+    historyData.forEach(r => {
+      const k = flagKey(r);
+      if (localFlags[k]) {
+        r['สถานะ'] = localFlags[k].status;
+        if (localFlags[k].note) r['หมายเหตุสถานะ'] = localFlags[k].note;
+      }
+    });
     const ok = historyData.filter(r => r['สถานะ'] !== 'เอกสารไม่ถูกต้อง');
     renderHistory(ok);
     renderFlagged(historyData);
@@ -1250,6 +1267,12 @@ async function toggleStatus(idx, newStatus, note='') {
   historyData[idx]['สถานะ'] = newStatus;
   if (note) historyData[idx]['หมายเหตุสถานะ'] = note;
   else if (newStatus === 'ถูกต้อง') delete historyData[idx]['หมายเหตุสถานะ'];
+  // save to localStorage so status persists after refresh
+  const localFlags = loadLocalFlags();
+  const k = flagKey(r);
+  if (newStatus === 'ถูกต้อง') delete localFlags[k];
+  else localFlags[k] = { status: newStatus, note: note || '' };
+  saveLocalFlags(localFlags);
   const q = document.getElementById('historySearch').value.toLowerCase();
   const ok = historyData.filter(r => r['สถานะ'] !== 'เอกสารไม่ถูกต้อง');
   renderHistory(q ? ok.filter(r=>(r['ชื่อร้านค้า']||'').toLowerCase().includes(q)) : ok);
