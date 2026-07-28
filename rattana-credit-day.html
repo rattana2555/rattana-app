@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Credit Day v4.7</title>
+<title>Rattana Credit Day v4.8</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{--navy:#0d1b3e;--navy-mid:#1a2f5e;--navy-light:#243b73;--gold:#c9a84c;--gold-light:#e8c86a;--success:#2ecc71;--danger:#e74c3c;--warning:#f39c12;--info:#3498db;--bg:#f4f6fb;--text:#0d1b3e;--card-bg:#ffffff;--border:#dde3f0;--muted:#6b7896;--row-alt:#fafbfd;--radius-sm:6px;--radius-md:12px;--radius-lg:16px;--shadow-md:0 2px 8px rgba(0,0,0,.08);--shadow-lg:0 8px 24px rgba(13,27,62,.12);--shadow-gold:0 4px 12px rgba(201,168,76,.35)}
@@ -1156,29 +1156,84 @@ function showDocSheet(idx) {
     noteArea.innerHTML = '';
   }
   const docs = [
-    { label:'📄 สำเนาหนังสือรับรองบริษัท', url: d1, color:'#1a6fd4' },
-    { label:'🪪 สำเนาบัตรประชาชน',          url: d2, color:'#7b34c1' },
-    { label:'📑 สำเนาใบจดทะเบียน ภพ.20',   url: d3, color:'#c17a34' },
+    { key:'creditDoc', label:'📄 สำเนาหนังสือรับรองบริษัท', url: d1, color:'#1a6fd4' },
+    { key:'idCard',    label:'🪪 สำเนาบัตรประชาชน',          url: d2, color:'#7b34c1' },
+    { key:'vat',       label:'📑 สำเนาใบจดทะเบียน ภพ.20',   url: d3, color:'#c17a34' },
   ];
-  document.getElementById('docSheetLinks').innerHTML = docs.map(doc =>
-    doc.url
-      ? `<a href="${doc.url}" target="_blank" style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:${doc.color}12;border:1.5px solid ${doc.color}40;border-radius:12px;text-decoration:none;color:${doc.color};font-weight:700;font-size:14px;font-family:inherit">
-           <span style="font-size:22px">${doc.label.split(' ')[0]}</span>
+  window._docSheetIdx = idx;
+  window._docSheetNewFiles = {};
+  document.getElementById('docSheetLinks').innerHTML = docs.map(doc => {
+    const viewBtn = doc.url
+      ? `<a href="${doc.url}" target="_blank" style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:${doc.color}12;border:1.5px solid ${doc.color}40;border-radius:10px;text-decoration:none;color:${doc.color};font-weight:700;font-size:13px;font-family:inherit;flex:1">
+           <span style="font-size:18px">${doc.label.split(' ')[0]}</span>
            <span>${doc.label.slice(doc.label.indexOf(' ')+1)}</span>
-           <svg style="margin-left:auto;opacity:.6" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+           <svg style="margin-left:auto;opacity:.6;flex-shrink:0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
          </a>`
-      : `<div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:#f4f6fb;border:1.5px solid #dde3f0;border-radius:12px;color:#aaa;font-size:14px;font-family:inherit">
-           <span style="font-size:22px">${doc.label.split(' ')[0]}</span>
+      : `<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:#f4f6fb;border:1.5px solid #dde3f0;border-radius:10px;color:#aaa;font-size:13px;font-family:inherit;flex:1">
+           <span style="font-size:18px">${doc.label.split(' ')[0]}</span>
            <span>${doc.label.slice(doc.label.indexOf(' ')+1)}</span>
            <span style="margin-left:auto;font-size:11px">ไม่มีไฟล์</span>
-         </div>`
-  ).join('');
+         </div>`;
+    const editBtn = isFlagged
+      ? `<label id="lbl_${doc.key}" style="display:inline-flex;align-items:center;gap:4px;padding:10px 12px;background:#f0f4ff;border:1.5px solid #b0c0e8;border-radius:10px;cursor:pointer;font-size:12px;font-weight:700;color:var(--navy);white-space:nowrap;flex-shrink:0">
+           📷 แก้ไข
+           <input type="file" accept="image/*,application/pdf" style="display:none" onchange="pickDocFile('${doc.key}',this)">
+         </label>`
+      : '';
+    return `<div style="display:flex;gap:8px;align-items:stretch">${viewBtn}${editBtn}</div>`;
+  }).join('');
+  if (isFlagged) {
+    document.getElementById('docSheetLinks').insertAdjacentHTML('beforeend',
+      `<button id="btnSaveDocFiles" onclick="saveDocFiles()" style="display:none;margin-top:4px;width:100%;padding:12px;background:var(--navy);color:#fff;border:none;border-radius:10px;font-size:13px;font-family:inherit;cursor:pointer;font-weight:700">💾 บันทึกเอกสารที่แก้ไข</button>`);
+  }
   const sheet = document.getElementById('docSheet');
   sheet.style.display = 'flex';
 }
 function closeDocSheet() {
   document.getElementById('docSheet').style.display = 'none';
 }
+async function pickDocFile(key, input) {
+  const file = input.files[0];
+  if (!file) return;
+  showSpinner('กำลังประมวลผลไฟล์...');
+  try {
+    let dataUrl, mimeType;
+    if (file.type.startsWith('image/')) {
+      dataUrl = await compressImage(file, 1400, 0.82);
+      mimeType = 'image/jpeg';
+    } else {
+      dataUrl = await readAsDataUrl(file);
+      mimeType = file.type;
+    }
+    window._docSheetNewFiles[key] = { data: dataUrl.split(',')[1], mimeType, name: file.name };
+    const lbl = document.getElementById('lbl_' + key);
+    if (lbl) lbl.style.background = '#d4edda';
+    document.getElementById('btnSaveDocFiles').style.display = '';
+    showToast(`✓ เลือก ${file.name} แล้ว`, 'success');
+  } catch { showToast('เกิดข้อผิดพลาด','error'); }
+  finally { hideSpinner(); input.value = ''; }
+}
+
+async function saveDocFiles() {
+  const idx = window._docSheetIdx;
+  const r   = historyData[idx];
+  if (!Object.keys(window._docSheetNewFiles).length) return;
+  closeDocSheet();
+  showSpinner('กำลังอัพโหลดเอกสารใหม่...');
+  try {
+    const result = await fetch(GAS_URL, { method:'POST', redirect:'follow',
+      body: JSON.stringify({ action:'updateDocFiles', shopName: r['ชื่อร้านค้า'], recordDate: r['วันที่บันทึก'], files: window._docSheetNewFiles }) })
+      .then(res => res.json());
+    if (!result.success) throw new Error(result.error || 'error');
+    if (result.creditDocUrl) historyData[idx]['เอกสารขอเครดิต'] = result.creditDocUrl;
+    if (result.idCardUrl)    historyData[idx]['บัตรประชาชน']     = result.idCardUrl;
+    if (result.vatUrl)       historyData[idx]['ภพ.20']           = result.vatUrl;
+    renderFlagged(historyData);
+    showToast('✓ อัพโหลดเอกสารใหม่สำเร็จ', 'success');
+  } catch(e) { showToast('อัพโหลดไม่สำเร็จ: ' + e.message, 'error'); }
+  finally { hideSpinner(); }
+}
+
 async function saveSheetNote(idx) {
   const note = document.getElementById('docSheetNoteText').value.trim();
   historyData[idx]['หมายเหตุสถานะ'] = note;
