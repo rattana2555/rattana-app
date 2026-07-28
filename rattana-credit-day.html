@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Credit Day v5.0</title>
+<title>Rattana Credit Day v5.1</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{--navy:#0d1b3e;--navy-mid:#1a2f5e;--navy-light:#243b73;--gold:#c9a84c;--gold-light:#e8c86a;--success:#2ecc71;--danger:#e74c3c;--warning:#f39c12;--info:#3498db;--bg:#f4f6fb;--text:#0d1b3e;--card-bg:#ffffff;--border:#dde3f0;--muted:#6b7896;--row-alt:#fafbfd;--radius-sm:6px;--radius-md:12px;--radius-lg:16px;--shadow-md:0 2px 8px rgba(0,0,0,.08);--shadow-lg:0 8px 24px rgba(13,27,62,.12);--shadow-gold:0 4px 12px rgba(201,168,76,.35)}
@@ -496,19 +496,6 @@ body.dark .s-value{color:var(--gold)}
   </div><!-- end .content -->
 </div><!-- end #appScreen -->
 
-<!-- Login Modal -->
-<div id="loginModal" style="display:none;position:fixed;inset:0;background:rgba(13,27,62,.7);z-index:1000;align-items:center;justify-content:center;padding:20px">
-  <div style="background:#fff;width:100%;max-width:360px;border-radius:20px;padding:32px 24px;box-shadow:0 16px 48px rgba(13,27,62,.3);text-align:center">
-    <div style="width:60px;height:60px;background:linear-gradient(135deg,var(--navy),var(--navy-mid));border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;font-size:26px">👤</div>
-    <div style="font-size:18px;font-weight:700;color:var(--navy);margin-bottom:6px">ระบุตัวตน</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:20px">พิมพ์ชื่อของคุณเพื่อใช้งานระบบ</div>
-    <input id="loginNameInput" type="text" placeholder="ชื่อ-นามสกุล หรือชื่อเล่น"
-      style="width:100%;box-sizing:border-box;padding:12px 14px;border:2px solid var(--border);border-radius:12px;font-size:14px;font-family:inherit;outline:none;text-align:center;margin-bottom:16px"
-      onkeydown="if(event.key==='Enter')confirmLogin()">
-    <button onclick="confirmLogin()" style="width:100%;padding:13px;background:linear-gradient(135deg,var(--navy),var(--navy-mid));color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer">เข้าใช้งาน</button>
-  </div>
-</div>
-
 <!-- Note Modal (ใส่หมายเหตุก่อนเปลี่ยนเป็นไม่ถูกต้อง) -->
 <div id="noteModal" onclick="if(event.target===this)closeNoteModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:950;align-items:center;justify-content:center;padding:20px">
   <div style="background:#fff;width:100%;max-width:400px;border-radius:16px;padding:24px 20px;box-shadow:0 8px 32px rgba(13,27,62,.2)">
@@ -712,30 +699,7 @@ function getAvailableShops() {
   return customers.filter(n => !recorded.has(n.trim().toLowerCase()) || selectedShops.includes(n));
 }
 
-function getMyName() {
-  return localStorage.getItem('rattana_username') || '';
-}
-function confirmLogin() {
-  const name = (document.getElementById('loginNameInput').value || '').trim();
-  if (!name) { document.getElementById('loginNameInput').style.borderColor='#e74c3c'; return; }
-  localStorage.setItem('rattana_username', name);
-  document.getElementById('loginModal').style.display = 'none';
-  _loginResolve && _loginResolve(name);
-}
-let _loginResolve = null;
-function requireLogin() {
-  return new Promise(resolve => {
-    const name = localStorage.getItem('rattana_username');
-    if (name) { resolve(name); return; }
-    _loginResolve = resolve;
-    const m = document.getElementById('loginModal');
-    m.style.display = 'flex';
-    setTimeout(() => document.getElementById('loginNameInput').focus(), 100);
-  });
-}
-
 async function startApp() {
-  await requireLogin();
   document.getElementById('fCreditDate').value = todayDMY();
   showSpinner('กำลังโหลดข้อมูล...');
   await Promise.all([loadCustomers(), loadHistory()]).catch(()=>{});
@@ -1181,20 +1145,13 @@ function showDocSheet(idx) {
     document.getElementById('docSheetLinks').insertAdjacentElement('afterend', noteArea);
   }
   if (isFlagged) {
-    const me        = getMyName();
-    const author    = r['หมายเหตุผู้บันทึก'] || '';
-    const canEdit   = !author || author === me;
-    const noteText  = r['หมายเหตุสถานะ'] || '';
+    const noteText = r['หมายเหตุสถานะ'] || '';
     noteArea.innerHTML = `<div style="margin-top:16px;padding:14px;background:#fff5f5;border:1.5px solid #e74c3c44;border-radius:12px">
       <div style="font-size:12px;font-weight:700;color:#e74c3c;margin-bottom:6px">📝 หมายเหตุ</div>
-      ${canEdit
-        ? `<textarea id="docSheetNoteText" rows="2" placeholder="ระบุเหตุผล..."
-             style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #e74c3c55;border-radius:10px;font-size:13px;font-family:inherit;resize:none;outline:none">${noteText}</textarea>
-           <button onclick="saveSheetNote(${idx})"
-             style="margin-top:8px;width:100%;padding:10px;background:#e74c3c;color:#fff;border:none;border-radius:10px;font-size:13px;font-family:inherit;cursor:pointer;font-weight:700">บันทึกหมายเหตุ</button>`
-        : `<div style="font-size:13px;color:#555;padding:8px 0">${noteText||'(ไม่มีหมายเหตุ)'}</div>
-           <div style="font-size:11px;color:#aaa;margin-top:4px">🔒 บันทึกโดย ${author}</div>`
-      }
+      <textarea id="docSheetNoteText" rows="2" placeholder="ระบุเหตุผล..."
+        style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #e74c3c55;border-radius:10px;font-size:13px;font-family:inherit;resize:none;outline:none">${noteText}</textarea>
+      <button onclick="saveSheetNote(${idx})"
+        style="margin-top:8px;width:100%;padding:10px;background:#e74c3c;color:#fff;border:none;border-radius:10px;font-size:13px;font-family:inherit;cursor:pointer;font-weight:700">บันทึกหมายเหตุ</button>
     </div>`;
   } else {
     noteArea.innerHTML = '';
@@ -1279,17 +1236,15 @@ async function saveDocFiles() {
 }
 
 async function saveSheetNote(idx) {
-  const note   = document.getElementById('docSheetNoteText').value.trim();
-  const author = getMyName();
-  historyData[idx]['หมายเหตุสถานะ']    = note;
-  historyData[idx]['หมายเหตุผู้บันทึก'] = author;
+  const note = document.getElementById('docSheetNoteText').value.trim();
+  historyData[idx]['หมายเหตุสถานะ'] = note;
   renderFlagged(historyData);
   closeDocSheet();
   showToast('✓ บันทึกหมายเหตุแล้ว', 'success');
   const r = historyData[idx];
   try {
     await fetch(GAS_URL, { method:'POST', redirect:'follow',
-      body: JSON.stringify({ action:'flagRecord', shopName:r['ชื่อร้านค้า'], recordDate:r['วันที่บันทึก'], status: r['สถานะ'], note, noteAuthor: author }) });
+      body: JSON.stringify({ action:'flagRecord', shopName:r['ชื่อร้านค้า'], recordDate:r['วันที่บันทึก'], status: r['สถานะ'], note }) });
   } catch { showToast('บันทึกลง Sheets ไม่สำเร็จ','error'); }
 }
 
