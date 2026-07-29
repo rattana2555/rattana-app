@@ -310,6 +310,7 @@
       <!-- Tab nav -->
       <div class="tab-nav">
         <button class="tab-btn active" id="tabBtnStore" onclick="switchTab('store')">🏪 รายชื่อร้านค้า</button>
+        <button class="tab-btn" id="tabBtnHist" onclick="switchTab('hist')">📊 ข้อมูลย้อนหลัง 3 เดือน</button>
         <button class="tab-btn" id="tabBtnRaw" onclick="switchTab('raw')">📋 ข้อมูลดิบ</button>
       </div>
 
@@ -379,6 +380,21 @@
       </div>
 
       <!-- Raw data tab -->
+      <div id="tabHist" style="display:none">
+        <div class="card" style="margin-bottom:12px">
+          <div class="card-head">
+            <div class="card-head-title">📊 ข้อมูลย้อนหลัง 3 เดือน — <span id="histSheetName">—</span></div>
+            <span id="histCount" class="badge badge-gold">0 รายการ</span>
+          </div>
+          <div class="tbl-wrap">
+            <table class="tbl" id="histTbl" style="min-width:900px">
+              <thead id="histThead"></thead>
+              <tbody id="histTbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <div id="tabRaw" style="display:none">
         <div class="card" style="margin-bottom:12px">
           <div class="card-head">
@@ -970,12 +986,14 @@ let currentTab = 'store';
 function switchTab(tab) {
   currentTab = tab;
   document.getElementById('tabBtnStore').classList.toggle('active', tab === 'store');
+  document.getElementById('tabBtnHist').classList.toggle('active', tab === 'hist');
   document.getElementById('tabBtnRaw').classList.toggle('active', tab === 'raw');
+  document.getElementById('tabHist').style.display = tab === 'hist' ? 'block' : 'none';
   document.getElementById('tabRaw').style.display = tab === 'raw' ? 'block' : 'none';
-  // store card is the customer table card — toggle visibility
   const storeCard = document.getElementById('custTbl')?.closest('.card');
   if (storeCard) storeCard.style.display = tab === 'store' ? '' : 'none';
   if (tab === 'raw') renderRawData();
+  if (tab === 'hist') renderHistData();
 }
 
 // ── Raw data table ────────────────────────────────
@@ -992,6 +1010,32 @@ function renderRawData() {
   document.getElementById('rawThead').innerHTML =
     `<tr>${cols.map(c => `<th style="white-space:nowrap">${escHtml(c)}</th>`).join('')}</tr>`;
   document.getElementById('rawTbody').innerHTML = data.map(r =>
+    `<tr>${cols.map(c => `<td>${escHtml(String(r[c]??''))}</td>`).join('')}</tr>`
+  ).join('');
+}
+
+// ── 3-Month history table ─────────────────────────
+function renderHistData() {
+  document.getElementById('histSheetName').textContent = currentSheet || '—';
+  if (!filteredData.length) {
+    document.getElementById('histThead').innerHTML = '';
+    document.getElementById('histTbody').innerHTML = `<tr class="empty-row"><td colspan="1">ไม่มีข้อมูล</td></tr>`;
+    document.getElementById('histCount').textContent = '0 รายการ';
+    return;
+  }
+  const allMonths = [...new Set(filteredData.map(r => r['Month_Year']||'').filter(Boolean))].sort();
+  const prev3 = new Set(allMonths.slice(-4, -1));
+  const data = filteredData.filter(r => prev3.has(r['Month_Year']));
+  document.getElementById('histCount').textContent = `${data.length.toLocaleString()} รายการ`;
+  if (!data.length) {
+    document.getElementById('histThead').innerHTML = '';
+    document.getElementById('histTbody').innerHTML = `<tr class="empty-row"><td colspan="1">ไม่มีข้อมูลย้อนหลัง 3 เดือน</td></tr>`;
+    return;
+  }
+  const cols = Object.keys(data[0]);
+  document.getElementById('histThead').innerHTML =
+    `<tr>${cols.map(c => `<th style="white-space:nowrap">${escHtml(c)}</th>`).join('')}</tr>`;
+  document.getElementById('histTbody').innerHTML = data.map(r =>
     `<tr>${cols.map(c => `<td>${escHtml(String(r[c]??''))}</td>`).join('')}</tr>`
   ).join('');
 }
