@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v3.20</title>
+<title>Rattana DS-DC Report v3.21</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -229,7 +229,6 @@ body.dark .tab-btn.active{color:var(--gold)}
               <th>ลูกค้า</th>
               <th>Sales</th>
               <th style="text-align:right">จำนวน (CS)</th>
-              <th style="text-align:right">ของแถม (ขวด)</th>
               <th>โปรที่ได้</th>
             </tr>
           </thead>
@@ -927,18 +926,6 @@ function updateBeerTab() {
     : 'ไม่พบช่วงวันโปร';
   document.getElementById('beerDateRange').textContent = rangeLabel;
 
-  // สร้าง freeMap: AR_CODE → { date → TRD_Q_FREE } สำหรับ SKU เบียร์ช้าง 620 ขวด
-  const FREE_SKU = 'เบียร์ช้างคลาสสิก 620 ml. ขวด';
-  const freeMap = {};
-  monthData.forEach(r => {
-    const qFree = parseFloat(r.TRD_Q_FREE) || 0;
-    if (qFree <= 0) return;
-    if ((r.SKU_NAME || '').trim() !== FREE_SKU) return;
-    const arKey = r.AR_CODE || r.AR_NAME || '?';
-    if (!freeMap[arKey]) freeMap[arKey] = {};
-    freeMap[arKey][r.DI_DATE || ''] = (freeMap[arKey][r.DI_DATE || ''] || 0) + qFree;
-  });
-
   const rowMap = {};
   monthData.forEach(r => {
     if (r.WL_CODE !== 'W4') return;
@@ -950,9 +937,7 @@ function updateBeerTab() {
     if ((pddt.CAT_BRAND || '').trim() !== 'ช้างคลาสสิก') return;
     const key = r.AR_CODE || r.AR_NAME || '?';
     if (!rowMap[key]) {
-      const fd = freeMap[key] || {};
-      const totalFree = Object.values(fd).reduce((s, v) => s + v, 0);
-      rowMap[key] = { name: r.AR_NAME || r.AR_CODE || '?', code: r.AR_CODE || '', sales: r.SLMN_NAME || '', qty: 0, freeQty: totalFree, txns: [], freeByDate: fd };
+      rowMap[key] = { name: r.AR_NAME || r.AR_CODE || '?', code: r.AR_CODE || '', sales: r.SLMN_NAME || '', qty: 0, txns: [] };
     }
     rowMap[key].qty += parseFloat(r.TRD_QTY) || 0;
     rowMap[key].txns.push({ date: r.DI_DATE || '', sku: r.SKU_NAME || '-', qty: parseFloat(r.TRD_QTY) || 0 });
@@ -963,7 +948,7 @@ function updateBeerTab() {
   document.getElementById('beerCount').textContent = rows.length + ' ร้าน';
 
   if (!rows.length) {
-    document.getElementById('beerBody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)">ไม่พบข้อมูล W4 ในช่วงนี้</td></tr>';
+    document.getElementById('beerBody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted)">ไม่พบข้อมูล W4 ในช่วงนี้</td></tr>';
     return;
   }
 
@@ -984,7 +969,6 @@ function updateBeerTab() {
     <td><span style="font-weight:600">${c.name}</span><br><span style="font-size:10px;color:var(--muted);font-family:monospace">${c.code}</span></td>
     <td style="font-size:12px">${c.sales}</td>
     <td style="text-align:right;font-weight:700">${c.qty.toLocaleString()}</td>
-    <td style="text-align:right;font-weight:700;color:${c.freeQty > 0 ? 'var(--success)' : 'var(--muted)'}">${c.freeQty > 0 ? c.freeQty.toLocaleString() : '-'}</td>
     <td>${tierCell}</td>
   </tr>`;
   }).join('');
