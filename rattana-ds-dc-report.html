@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v3.11</title>
+<title>Rattana DS-DC Report v3.12</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -829,13 +829,14 @@ function switchTab(id) {
 
 // ── Beer promotion tiers (FDB ช้างคลาสสิก สะสมต่อร้าน) ────────
 const BEER_TIERS = [
-  { min: 3350, free: 115, label: 'Tier 6 · 3,350 CS' },
-  { min: 2700, free: 85,  label: 'Tier 5 · 2,700 CS' },
-  { min: 1350, free: 40,  label: 'Tier 4 · 1,350 CS' },
-  { min: 675,  free: 18,  label: 'Tier 3 · 675 CS'   },
-  { min: 300,  free: 7,   label: 'Tier 2 · 300 CS'   },
-  { min: 225,  free: 5,   label: 'Tier 1 · 225 CS'   },
+  { min: 3350, free: 115, level: 6 },
+  { min: 2700, free: 85,  level: 5 },
+  { min: 1350, free: 40,  level: 4 },
+  { min: 675,  free: 18,  level: 3 },
+  { min: 300,  free: 7,   level: 2 },
+  { min: 225,  free: 5,   level: 1 },
 ];
+const TIER_COLORS = ['','#27ae60','#2980b9','#8e44ad','#e67e22','#c0392b','#c9a84c'];
 function getBeerTier(qty) {
   const hit = BEER_TIERS.find(t => qty >= t.min);
   const next = hit ? BEER_TIERS[BEER_TIERS.indexOf(hit) - 1] : BEER_TIERS[BEER_TIERS.length - 1];
@@ -878,16 +879,28 @@ function updateBeerTab() {
 
   const html = rows.map((c, i) => {
     const { hit, next } = getBeerTier(c.qty);
-    const tierCell = hit
-      ? `<span class="tier-badge tier-hit">✓ ${hit.label}<br>แถม CC620 ${hit.free} ลัง</span>`
-        + (next ? `<br><span style="font-size:10px;color:var(--muted)">ถัดไป +${(next.min - c.qty).toLocaleString()} CS → ${next.free} ลัง</span>` : '')
-      : `<span style="font-size:11px;color:var(--muted)">ยังไม่ถึง<br>ขาดอีก ${(next.min - c.qty).toLocaleString()} CS</span>`;
+    const color = hit ? TIER_COLORS[hit.level] : '#95a5a6';
+    const tierCell = hit ? `
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="background:${color};color:#fff;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">T${hit.level}</div>
+        <div>
+          <div style="font-size:12px;font-weight:700;color:${color}">แถม CC620 · ${hit.free} ลัง</div>
+          ${next ? `<div style="font-size:10px;color:var(--muted);margin-top:1px">ถัดไป +${(next.min - c.qty).toLocaleString()} CS → T${next.level} (${next.free} ลัง)</div>` : `<div style="font-size:10px;color:var(--gold);margin-top:1px">🏆 สูงสุดแล้ว</div>`}
+        </div>
+      </div>`
+    : `<div style="display:flex;align-items:center;gap:8px">
+        <div style="background:var(--border);color:var(--muted);border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">–</div>
+        <div>
+          <div style="font-size:11px;color:var(--muted)">ยังไม่ถึง Tier 1</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:1px">ขาดอีก ${(next.min - c.qty).toLocaleString()} CS</div>
+        </div>
+      </div>`;
     return `<tr>
     <td style="color:var(--muted);font-size:11px">${i+1}</td>
     <td><span style="font-weight:600">${c.name}</span><br><span style="font-size:10px;color:var(--muted);font-family:monospace">${c.code}</span></td>
     <td style="font-size:12px">${c.sales}</td>
     <td style="text-align:right;font-weight:700">${c.qty.toLocaleString()}</td>
-    <td style="font-size:11px;line-height:1.6">${tierCell}</td>
+    <td>${tierCell}</td>
   </tr>`;
   }).join('');
 
