@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v3.18</title>
+<title>Rattana DS-DC Report v3.19</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -265,9 +265,10 @@ body.dark .tab-btn.active{color:var(--gold)}
         <table class="tbl" id="detailTbl" style="min-width:500px">
           <thead>
             <tr>
-              <th>วันที่</th>
+              <th data-key="DI_DATE" data-type="date">วันที่</th>
               <th>สินค้า</th>
               <th style="text-align:right">จำนวน (CS)</th>
+              <th style="text-align:right">ของแถม (ขวด)</th>
             </tr>
           </thead>
           <tbody id="modalBody"></tbody>
@@ -925,6 +926,18 @@ function updateBeerTab() {
     : 'ไม่พบช่วงวันโปร';
   document.getElementById('beerDateRange').textContent = rangeLabel;
 
+  // สร้าง freeMap: AR_CODE → { date → TRD_Q_FREE } สำหรับ SKU เบียร์ช้าง 620 ขวด
+  const FREE_SKU = 'เบียร์ช้างคลาสสิก 620 ml. ขวด';
+  const freeMap = {};
+  monthData.forEach(r => {
+    const qFree = parseFloat(r.TRD_Q_FREE) || 0;
+    if (qFree <= 0) return;
+    if ((r.SKU_NAME || '').trim() !== FREE_SKU) return;
+    const arKey = r.AR_CODE || r.AR_NAME || '?';
+    if (!freeMap[arKey]) freeMap[arKey] = {};
+    freeMap[arKey][r.DI_DATE || ''] = (freeMap[arKey][r.DI_DATE || ''] || 0) + qFree;
+  });
+
   const rowMap = {};
   monthData.forEach(r => {
     if (r.WL_CODE !== 'W4') return;
@@ -936,7 +949,7 @@ function updateBeerTab() {
     if ((pddt.CAT_BRAND || '').trim() !== 'ช้างคลาสสิก') return;
     const key = r.AR_CODE || r.AR_NAME || '?';
     if (!rowMap[key]) {
-      rowMap[key] = { name: r.AR_NAME || r.AR_CODE || '?', code: r.AR_CODE || '', sales: r.SLMN_NAME || '', qty: 0, txns: [] };
+      rowMap[key] = { name: r.AR_NAME || r.AR_CODE || '?', code: r.AR_CODE || '', sales: r.SLMN_NAME || '', qty: 0, txns: [], freeByDate: freeMap[key] || {} };
     }
     rowMap[key].qty += parseFloat(r.TRD_QTY) || 0;
     rowMap[key].txns.push({ date: r.DI_DATE || '', sku: r.SKU_NAME || '-', qty: parseFloat(r.TRD_QTY) || 0 });
@@ -982,12 +995,16 @@ function openBeerModal(idx) {
   document.getElementById('modalName').textContent = c.name;
   document.getElementById('modalMeta').textContent = c.code + ' · ' + c.sales;
   const txns = [...c.txns].sort((a, b) => a.date.localeCompare(b.date));
-  document.getElementById('modalBody').innerHTML = txns.map(t => `
-    <tr>
+  const freeByDate = c.freeByDate || {};
+  document.getElementById('modalBody').innerHTML = txns.map(t => {
+    const freeQty = freeByDate[t.date] || 0;
+    return `<tr>
       <td>${fmtDate(t.date)}</td>
       <td class="wrap">${t.sku}</td>
       <td class="num">${t.qty.toLocaleString()}</td>
-    </tr>`).join('');
+      <td class="num">${freeQty > 0 ? `<span style="color:var(--success);font-weight:700">${freeQty.toLocaleString()}</span>` : '<span style="color:var(--muted)">-</span>'}</td>
+    </tr>`;
+  }).join('');
   document.getElementById('modalCount').textContent = txns.length + ' รายการ';
   document.getElementById('modalTotal').textContent = 'รวม ' + c.qty.toLocaleString() + ' CS';
   document.querySelector('.content').style.display = 'none';
