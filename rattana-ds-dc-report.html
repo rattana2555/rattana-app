@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v3.9</title>
+<title>Rattana DS-DC Report v3.10</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -136,7 +136,7 @@ body.dark .tab-btn.active{color:var(--gold)}
   <div class="logo-text">Rattana <span>DS-DC</span> Report</div>
   <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" title="Dark mode">◑</button>
-  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.9</span>
+  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.10</span>
 </header>
 
 <div class="content">
@@ -227,12 +227,11 @@ body.dark .tab-btn.active{color:var(--gold)}
               <th>#</th>
               <th>ลูกค้า</th>
               <th>Sales</th>
-              <th>สินค้า</th>
-              <th style="text-align:right">จำนวน</th>
+              <th style="text-align:right">จำนวน (CS)</th>
             </tr>
           </thead>
           <tbody id="beerBody">
-            <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">กำลังโหลด...</td></tr>
+            <tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted)">กำลังโหลด...</td></tr>
           </tbody>
         </table>
       </div>
@@ -844,26 +843,20 @@ function updateBeerTab() {
     const slmnKey = (r.SLMN_NAME || '').replace(/^คุณ\s*/u, '').trim().toLowerCase();
     const slmnRole = parseInt((slmnWMap[slmnKey] || {}).role || '0');
     if (slmnRole < 4) return;
-    const key = (r.AR_CODE || r.AR_NAME || '?') + '|' + (r.SKU_NAME || '');
+    const pddt = pddtMap[(r.SKU_NAME || '').trim().toLowerCase()] || {};
+    if ((pddt.CAT_BRAND || '').trim() !== 'ช้างคลาสสิก') return;
+    const key = r.AR_CODE || r.AR_NAME || '?';
     if (!rowMap[key]) {
-      const pddt = pddtMap[(r.SKU_NAME || '').trim().toLowerCase()] || {};
-      if ((pddt.CAT_BRAND || '').trim() !== 'ช้างคลาสสิก') return;
-      rowMap[key] = { name: r.AR_NAME || r.AR_CODE || '?', code: r.AR_CODE || '', sales: r.SLMN_NAME || '', sku: r.SKU_NAME || '-', brand: pddt.CAT_BRAND || '-', size: pddt.CAT_SIZE || '-', qty: 0, amt: 0 };
+      rowMap[key] = { name: r.AR_NAME || r.AR_CODE || '?', code: r.AR_CODE || '', sales: r.SLMN_NAME || '', qty: 0 };
     }
-    rowMap[key].qty += parseFloat(r.TRD_QTY)   || 0;
-    rowMap[key].amt += parseFloat(r.TRD_G_AMT) || 0;
+    rowMap[key].qty += parseFloat(r.TRD_QTY) || 0;
   });
 
-  const rows = Object.values(rowMap).sort((a, b) => {
-    const nameSort = a.name.localeCompare(b.name, 'th');
-    if (nameSort !== 0) return nameSort;
-    return b.qty - a.qty;
-  });
-  const uniqueAR = new Set(Object.values(rowMap).map(r => r.code)).size;
-  document.getElementById('beerCount').textContent = uniqueAR + ' ร้าน / ' + rows.length + ' รายการ';
+  const rows = Object.values(rowMap).sort((a, b) => b.qty - a.qty);
+  document.getElementById('beerCount').textContent = rows.length + ' ร้าน';
 
   if (!rows.length) {
-    document.getElementById('beerBody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted)">ไม่พบข้อมูล W4 ในช่วงนี้</td></tr>';
+    document.getElementById('beerBody').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted)">ไม่พบข้อมูล W4 ในช่วงนี้</td></tr>';
     return;
   }
 
@@ -871,7 +864,6 @@ function updateBeerTab() {
     <td style="color:var(--muted);font-size:11px">${i+1}</td>
     <td><span style="font-weight:600">${c.name}</span><br><span style="font-size:10px;color:var(--muted);font-family:monospace">${c.code}</span></td>
     <td style="font-size:12px">${c.sales}</td>
-    <td class="wrap">${c.sku}<br><span style="font-size:10px;color:var(--muted)">${c.brand}${c.size && c.size !== '-' ? ' · ' + c.size : ''}</span></td>
     <td style="text-align:right;font-weight:700">${c.qty.toLocaleString()}</td>
   </tr>`).join('');
 
