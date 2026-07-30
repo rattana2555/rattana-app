@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v3.14</title>
+<title>Rattana DS-DC Report v3.15</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -837,7 +837,12 @@ function buildBeerTiers() {
   const seen = new Set();
   beerTiers = promos
     .filter(p => p.รูปแบบขาย === 'CS' && parseNum(p.จำนวน) > 0 && parseNum(p.จำนวนแถมEA) > 0)
-    .map(p => ({ min: parseNum(p.จำนวน), free: parseNum(p.จำนวนแถมEA) }))
+    .map(p => {
+      // รายละเอียดโปร ระบุจำนวนลังชัดเจน เช่น "แถม เบียร์ช้าง620ml. 115ลัง"
+      const m = (p.รายละเอียดโปร || '').match(/แถม[^0-9]*(\d+)\s*ลัง/);
+      const freeCS = m ? parseInt(m[1]) : Math.round(parseNum(p.จำนวนแถมEA) / 12);
+      return { min: parseNum(p.จำนวน), free: freeCS };
+    })
     .filter(t => { if (seen.has(t.min)) return false; seen.add(t.min); return true; })
     .sort((a, b) => b.min - a.min)
     .map((t, i) => ({ ...t, level: 0, color: TIER_COLORS[i % TIER_COLORS.length] }));
