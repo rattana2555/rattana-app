@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v3.16</title>
+<title>Rattana DS-DC Report v3.17</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -243,6 +243,35 @@ body.dark .tab-btn.active{color:var(--gold)}
 </div>
 
 
+<!-- Beer detail modal -->
+<div id="beerModal" style="display:none;position:fixed;inset:0;background:rgba(13,27,62,.55);z-index:9000;align-items:center;justify-content:center;backdrop-filter:blur(3px)" onclick="if(event.target===this)closeBeerModal()">
+  <div style="background:var(--card-bg);border-radius:var(--radius-lg);width:min(680px,95vw);max-height:80vh;display:flex;flex-direction:column;border-top:4px solid var(--gold);box-shadow:var(--shadow-lg)">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <div>
+        <div style="font-weight:700;font-size:15px" id="modalName"></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px" id="modalMeta"></div>
+      </div>
+      <button onclick="closeBeerModal()" style="background:transparent;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1;padding:4px 8px">×</button>
+    </div>
+    <div style="overflow:auto;flex:1">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead style="position:sticky;top:0">
+          <tr style="background:var(--navy);color:#fff">
+            <th style="padding:8px 12px;text-align:left;font-size:11px;border-bottom:2px solid var(--gold)">วันที่</th>
+            <th style="padding:8px 12px;text-align:left;font-size:11px;border-bottom:2px solid var(--gold)">สินค้า</th>
+            <th style="padding:8px 12px;text-align:right;font-size:11px;border-bottom:2px solid var(--gold)">จำนวน (CS)</th>
+          </tr>
+        </thead>
+        <tbody id="modalBody"></tbody>
+      </table>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;background:var(--row-alt);border-radius:0 0 var(--radius-lg) var(--radius-lg)">
+      <span style="font-size:12px;color:var(--muted)" id="modalCount"></span>
+      <span style="font-size:14px;font-weight:700;color:var(--success)" id="modalTotal"></span>
+    </div>
+  </div>
+</div>
+
 <button id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
 
 <script>
@@ -269,6 +298,7 @@ let promoBySize    = {}; // CAT_SIZE (lower)  → [promo obj]
 let slmnWMap = {};       // ชื่อ-สกุล (lower, no คุณ) → คลัง e.g. "W4"
 let beerTiers = [];      // built from Promotion sheet after load
 let beerPromoRange = null; // { from: Date, to: Date } effective date range
+let beerRows = [];       // last rendered rows for modal lookup
 const sortState = { key: 'DI_DATE', dir: 'desc' };
 let activeQuickFilter = 'today';
 
@@ -901,12 +931,14 @@ function updateBeerTab() {
     if ((pddt.CAT_BRAND || '').trim() !== 'ช้างคลาสสิก') return;
     const key = r.AR_CODE || r.AR_NAME || '?';
     if (!rowMap[key]) {
-      rowMap[key] = { name: r.AR_NAME || r.AR_CODE || '?', code: r.AR_CODE || '', sales: r.SLMN_NAME || '', qty: 0 };
+      rowMap[key] = { name: r.AR_NAME || r.AR_CODE || '?', code: r.AR_CODE || '', sales: r.SLMN_NAME || '', qty: 0, txns: [] };
     }
     rowMap[key].qty += parseFloat(r.TRD_QTY) || 0;
+    rowMap[key].txns.push({ date: r.DI_DATE || '', sku: r.SKU_NAME || '-', qty: parseFloat(r.TRD_QTY) || 0 });
   });
 
   const rows = Object.values(rowMap).sort((a, b) => b.qty - a.qty);
+  beerRows = rows;
   document.getElementById('beerCount').textContent = rows.length + ' ร้าน';
 
   if (!rows.length) {
@@ -926,7 +958,7 @@ function updateBeerTab() {
         <div style="font-size:11px;color:var(--muted)">ยังไม่ถึง Tier 1</div>
         <div style="font-size:10px;color:var(--muted);margin-top:2px">ขาดอีก ${(next.min - c.qty).toLocaleString()} CS</div>
       </div>`;
-    return `<tr>
+    return `<tr style="cursor:pointer" onclick="openBeerModal(${i})">
     <td style="color:var(--muted);font-size:11px">${i+1}</td>
     <td><span style="font-weight:600">${c.name}</span><br><span style="font-size:10px;color:var(--muted);font-family:monospace">${c.code}</span></td>
     <td style="font-size:12px">${c.sales}</td>
@@ -937,6 +969,29 @@ function updateBeerTab() {
 
   document.getElementById('beerBody').innerHTML = html;
 }
+
+// ── Beer detail modal ──────────────────────────────────────────
+function openBeerModal(idx) {
+  const c = beerRows[idx];
+  if (!c) return;
+  document.getElementById('modalName').textContent = c.name;
+  document.getElementById('modalMeta').textContent = c.code + ' · ' + c.sales;
+  const txns = [...c.txns].sort((a, b) => a.date.localeCompare(b.date));
+  document.getElementById('modalBody').innerHTML = txns.map((t, i) => `
+    <tr style="border-bottom:1px solid var(--border);${i%2===1?'background:var(--row-alt)':''}">
+      <td style="padding:8px 12px;color:var(--muted);font-size:11px;white-space:nowrap">${fmtDate(t.date)}</td>
+      <td style="padding:8px 12px;font-size:12px">${t.sku}</td>
+      <td style="padding:8px 12px;text-align:right;font-weight:600">${t.qty.toLocaleString()}</td>
+    </tr>`).join('');
+  document.getElementById('modalCount').textContent = txns.length + ' รายการ';
+  document.getElementById('modalTotal').textContent = 'รวม ' + c.qty.toLocaleString() + ' CS';
+  const m = document.getElementById('beerModal');
+  m.style.display = 'flex';
+}
+function closeBeerModal() {
+  document.getElementById('beerModal').style.display = 'none';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeBeerModal(); });
 
 // ── Dark mode ──────────────────────────────────────────────────
 function toggleDark() {
