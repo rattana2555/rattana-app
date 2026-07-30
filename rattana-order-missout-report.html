@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Rattana Order Missout Report v4.3</title>
+  <title>Rattana Order Missout Report v4.4</title>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
   <style>
@@ -228,7 +228,7 @@
   <img class="logo-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln92zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJticczw5h5np+n7M7mFBwPDda7jznOdhOWemZ+bt6reqq6qrCfwNDkIIwzCEEEoppfQGJzCsk5OTzMnJ0cGBZVkAEATBxtksZovJZEIq/PIShmEYhkFESiki/vXv+BfeW8TiOnAdZU7h4eEJ8XFJCXEJcbFRkZHBwUE+3t7u7u6OMhlIWCBSAACgwHM2i8VgNKpU6vaO9vqGxoqqmvKKysrKqoaGBrPZdOsb/e8DTQhhWbb3a3t6eQ8ckD529KjRI4enpfZ39fITv9cANCm5xg5lc5eqXalBikarTWu2AqJUsHh7+7FAfVykwT4e4YE+UYE+gc4S8ULOZCgqLj575sLpjIxLuZcUCvnNbv2/CbTID4LQPdKjoqOnTp5858wZo0ePlDq7A0CtAc4VVeaUVBdXVDY0NOhUKt5idiCCs5RxkbIMQ9xcXRmWBUDBZjNarIIg6C1WvclmtvEARObuERYU2D8lcUifuLHpyQMTIgAAkL+Ymb1rz56DBw9VVVWKt7bzz/8a0CzLinQJAL5+/rNn3f7wA/ePHDseADoFOHix/OjZnNzCy5rOVjfgIwM8+kcH94+PTo6NiAwN9vP1dnRzA4kMgLnRA3NgMSlVmobWzrKquoKy6vzK+or6JrnKIPPw7BcXOX3C6LunjE6MDAWAwoL8des37tq1s62tza4b/hy4yZ8AsV0dDRw0+InHFs67/x5HF48OEjYe06KCRQ8/cOocQg83QLs3LPTsZ/aN3bIe6ibFBHk2yj0s3RL8bnNMNO2aBZNWqWKJfwkHuguHuqwAYCAb3TWlF5Xyg3HMNS0aPnEuvUzYAAQjb+MADKAAAAAElFTkSuQmCC" alt="Rattana" onerror="this.style.display='none'">
   <div class="header-title">
     <h1>Rattana Order Missout Report</h1>
-    <div class="ver">v4.3 · 2026-07-30</div>
+    <div class="ver">v4.4 · 2026-07-30</div>
   </div>
   <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรชข้อมูล">↻</button>
   <button class="icon-btn" onclick="toggleDark()" title="Dark Mode">🌙</button>
@@ -1441,16 +1441,24 @@ function renderSumData() {
     diff:   r.latest - (r.prev3sum / 3)
   }));
 
-  // sort: most negative diff first
-  rows.sort((a, b) => a.diff - b.diff);
+  // group by customer → total diff → sort customers most negative first
+  const custMap = {};
+  rows.forEach(r => {
+    if (!custMap[r.cust]) custMap[r.cust] = { total: 0, brands: [] };
+    custMap[r.cust].total += r.diff;
+    custMap[r.cust].brands.push(r);
+  });
+  const custList = Object.entries(custMap).sort((a, b) => a[1].total - b[1].total);
+  custList.forEach(([, v]) => v.brands.sort((a, b) => a.diff - b.diff));
+  const sorted = custList.flatMap(([, v]) => v.brands);
 
   const ps = parseInt(document.getElementById('sumPageSize')?.value || 50);
-  const totalPages = Math.ceil(rows.length / ps);
+  const totalPages = Math.ceil(sorted.length / ps);
   sumPage = Math.min(Math.max(1, sumPage), totalPages || 1);
-  document.getElementById('sumCount').textContent = `${rows.length.toLocaleString()} รายการ`;
+  document.getElementById('sumCount').textContent = `${sorted.length.toLocaleString()} รายการ`;
   document.getElementById('sumPageInfo').textContent = `หน้า ${sumPage}/${totalPages || 1}`;
 
-  const slice = rows.slice((sumPage-1)*ps, sumPage*ps);
+  const slice = sorted.slice((sumPage-1)*ps, sumPage*ps);
   const startNum = (sumPage-1)*ps;
 
   document.getElementById('sumTbody').innerHTML = slice.map((r, i) => {
