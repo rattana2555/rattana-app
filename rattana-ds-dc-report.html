@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v3.15</title>
+<title>Rattana DS-DC Report v3.16</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -218,6 +218,7 @@ body.dark .tab-btn.active{color:var(--gold)}
     <div class="card">
       <div class="card-head">
         <h3>🍺 ยอดสะสม W4</h3>
+        <span style="font-size:11px;color:var(--muted)" id="beerDateRange"></span>
         <span class="row-count" id="beerCount">0 ร้าน</span>
       </div>
       <div class="tbl-wrap">
@@ -267,6 +268,7 @@ let promoByBrand   = {}; // CAT_BRAND (lower) → [promo obj]
 let promoBySize    = {}; // CAT_SIZE (lower)  → [promo obj]
 let slmnWMap = {};       // ชื่อ-สกุล (lower, no คุณ) → คลัง e.g. "W4"
 let beerTiers = [];      // built from Promotion sheet after load
+let beerPromoRange = null; // { from: Date, to: Date } effective date range
 const sortState = { key: 'DI_DATE', dir: 'desc' };
 let activeQuickFilter = 'today';
 
@@ -849,6 +851,20 @@ function buildBeerTiers() {
   // กำหนด level จากน้อยไปมาก (tier 1 = min น้อยสุด)
   const total = beerTiers.length;
   beerTiers.forEach((t, i) => t.level = total - i);
+
+  // คำนวณช่วงวันโปร (ใช้ promo ตัวแรกที่มีวันกำหนด)
+  beerPromoRange = null;
+  const ref = promos.find(p => p.เริ่มโปร || p.จบโปร);
+  if (ref) {
+    const from = ref.เริ่มโปร ? new Date(ref.เริ่มโปร.replace(/\//g, '-')) : null;
+    let to = ref.จบโปร ? new Date(ref.จบโปร.replace(/\//g, '-')) : null;
+    if (to && !isNaN(to)) {
+      const lastDay = new Date(to.getFullYear(), to.getMonth() + 1, 0);
+      to.setDate(to.getDate() + 2);
+      if (to > lastDay) to = lastDay;
+    }
+    if (from && !isNaN(from)) beerPromoRange = { from, to };
+  }
 }
 function getBeerTier(qty) {
   const hit = beerTiers.find(t => qty >= t.min);
@@ -858,13 +874,21 @@ function getBeerTier(qty) {
 
 // ── Beer accumulation tab ──────────────────────────────────────
 function updateBeerTab() {
-  // ใช้ข้อมูลทั้งเดือนปัจจุบันเสมอ (ไม่ขึ้นกับ quick filter)
-  const now = new Date();
-  const curY = now.getFullYear(), curM = now.getMonth();
+  // กรองตามช่วงวันโปร (เริ่มโปร ถึง จบโปร+2วัน ไม่เกินสิ้นเดือน)
   const monthData = allData.filter(r => {
     const d = new Date((r.DI_DATE || '').replace(/\//g, '-'));
-    return !isNaN(d) && d.getFullYear() === curY && d.getMonth() === curM;
+    if (isNaN(d)) return false;
+    if (!beerPromoRange) return false;
+    if (d < beerPromoRange.from) return false;
+    if (beerPromoRange.to && d > beerPromoRange.to) return false;
+    return true;
   });
+
+  // แสดงช่วงวันโปรที่ใช้กรอง
+  const rangeLabel = beerPromoRange
+    ? `${beerPromoRange.from.toLocaleDateString('th-TH',{day:'numeric',month:'short'})} – ${beerPromoRange.to ? beerPromoRange.to.toLocaleDateString('th-TH',{day:'numeric',month:'short'}) : '...'}`
+    : 'ไม่พบช่วงวันโปร';
+  document.getElementById('beerDateRange').textContent = rangeLabel;
 
   const rowMap = {};
   monthData.forEach(r => {
