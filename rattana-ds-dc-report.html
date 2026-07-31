@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v3.39</title>
+<title>Rattana DS-DC Report v3.40</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -136,7 +136,7 @@ body.dark .tab-btn.active{color:var(--gold)}
   <div class="logo-text">Rattana <span>DS-DC</span> Report</div>
   <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" title="Dark mode">◑</button>
-  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.39</span>
+  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.40</span>
 </header>
 
 <div class="content">
@@ -781,40 +781,50 @@ function buildPromoVerifyMap() {
 
   Object.values(byRef).forEach(({ buys, frees }) => {
     if (!frees.length) return;
+
+    const matchingBuysForPromo = (pr, promo) => {
+      const sk = (pr.SKU_NAME  || '').toLowerCase();
+      const br = (pr.CAT_BRAND || '').toLowerCase();
+      const sz = (pr.CAT_SIZE  || '').toLowerCase();
+      const inScope = (promo.วิธีวัด === 'PRODUCT NAME' && (promoByProduct[sk] || []).includes(promo))
+                   || (promo.วิธีวัด === 'CAT BRAND'    && (promoByBrand  [br] || []).includes(promo))
+                   || (promo.วิธีวัด === 'CAT SIZE'     && (promoBySize   [sz] || []).includes(promo));
+      return inScope && promoMatches(pr, promo);
+    };
+
+    // Group free rows by SKU (same item may appear in multiple rows when triggered by different purchases)
+    const freeBySku = new Map();
     frees.forEach(fr => {
-      const frSku = (fr.SKU_NAME || '').trim();
-      const frQty = parseFloat(fr.TRD_Q_FREE) || 0;
+      const key = (fr.SKU_NAME || '').trim().toLowerCase();
+      if (!freeBySku.has(key)) freeBySku.set(key, []);
+      freeBySku.get(key).push(fr);
+    });
+
+    freeBySku.forEach(frRows => {
+      const sampleSku = (frRows[0].SKU_NAME || '').trim();
+      const totalActual = frRows.reduce((s, r) => s + (parseFloat(r.TRD_Q_FREE) || 0), 0);
+
       let bestPromo = null;
-
-      const matchingBuys = pr => {
-        const sk = (pr.SKU_NAME  || '').toLowerCase();
-        const br = (pr.CAT_BRAND || '').toLowerCase();
-        const sz = (pr.CAT_SIZE  || '').toLowerCase();
-        return promo => {
-          const inScope = (promo.วิธีวัด === 'PRODUCT NAME' && (promoByProduct[sk] || []).includes(promo))
-                       || (promo.วิธีวัด === 'CAT BRAND'    && (promoByBrand  [br] || []).includes(promo))
-                       || (promo.วิธีวัด === 'CAT SIZE'     && (promoBySize   [sz] || []).includes(promo));
-          return inScope && promoMatches(pr, promo);
-        };
-      };
-
       for (const promo of allPromos) {
-        if (!skuSim(frSku, promo.แถมสินค้า)) continue;
-        if (buys.some(pr => matchingBuys(pr)(promo))) { bestPromo = promo; break; }
+        if (!skuSim(sampleSku, promo.แถมสินค้า)) continue;
+        if (buys.some(pr => matchingBuysForPromo(pr, promo))) { bestPromo = promo; break; }
       }
 
       if (!bestPromo) {
-        promoVerifyMap.set(fr, { status: 'no_promo' });
+        frRows.forEach(fr => promoVerifyMap.set(fr, { status: 'no_promo' }));
       } else {
         const lotSize    = parseNum(bestPromo.จำนวน) || 1;
         const freePerLot = parseNum(bestPromo.จำนวนแถมEA) || 0;
-        // Sum expected across ALL qualifying purchase rows (same DI_REF may have multiple products in same promo)
-        const exp = freePerLot === 0 ? 0 : buys
-          .filter(pr => matchingBuys(pr)(bestPromo))
+        const triggerBuys = buys.filter(pr => matchingBuysForPromo(pr, bestPromo));
+        // Compare total actual across all same-SKU free rows vs total expected from all trigger purchases
+        const totalExp = freePerLot === 0 ? 0 : triggerBuys
           .reduce((sum, pr) => sum + Math.floor((parseFloat(pr.TRD_QTY) || 0) / lotSize) * freePerLot, 0);
-        const ok  = exp === 0 || Math.abs(frQty - exp) < 0.01;
-        const triggerBuys = buys.filter(pr => matchingBuys(pr)(bestPromo));
-        promoVerifyMap.set(fr, { status: ok ? 'ok' : 'qty_mismatch', expected: exp, actual: frQty, promoName: bestPromo.ชื่อโปร, triggerBuys });
+        const ok = totalExp === 0 || Math.abs(totalActual - totalExp) < 0.01;
+        frRows.forEach(fr => promoVerifyMap.set(fr, {
+          status: ok ? 'ok' : 'qty_mismatch',
+          expected: totalExp, actual: totalActual,
+          promoName: bestPromo.ชื่อโปร, triggerBuys
+        }));
       }
     });
   });
