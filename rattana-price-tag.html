@@ -2816,30 +2816,30 @@ function initApp() {
   // v6.14: Flash Sale Canva-style editing — drag any element to move, drag its corner handle to resize.
   restoreFlashLayout();
   initFlashBgSwatches();   // v6.19 — populate the weekly background colour picker
-  // v6.30: โปรแถมประจำเดือน — restore pairs, populate month picker, wire the builder
-  restorePromoPairs();
+  // v6.32: โปรแถมประจำเดือน — restore auto-loaded promos, populate month picker, wire the list
+  restorePromoItems();
   initPromoBgSwatches();
   (function initPromoBuilder(){
     const panel = $('#promoBuilderPanel'); if (!panel) return;
+    const markEdited = (it, f, val) => { it[f] = val; it[f === 'buyText' ? '_buyEdited' : '_freeEdited'] = true; };
     panel.addEventListener('input', (e) => {
-      const s = e.target.closest('.promo-search'); if (s) { promoShowMatches(s); return; }
       const t = e.target.closest('.promo-text');
-      if (t) { const i = +t.dataset.i, f = t.dataset.field; if (promoPairs[i]) { promoPairs[i][f] = t.value; savePromoPairs(); } }
+      if (t) { const i = +t.dataset.i; if (promoItems[i]) { markEdited(promoItems[i], t.dataset.field, t.value); savePromoItems(); } }
+    });
+    panel.addEventListener('change', (e) => {
+      const c = e.target.closest('.promo-inc');
+      if (c) { const i = +c.dataset.i; if (promoItems[i]) { promoItems[i].include = c.checked; savePromoItems(); const row = c.closest('.promo-row'); if (row) row.classList.toggle('off', !c.checked); const b = $('#promoBuilderBar'); if (b && typeof renderPromoBuilder === 'function') renderPromoBuilder(); buildPromoPreview(); } }
     });
     panel.addEventListener('click', (e) => {
-      const opt = e.target.closest('.promo-opt[data-sku]');
-      if (opt) { promoPickProduct(+opt.dataset.i, opt.dataset.role, opt.dataset.sku); return; }
       const del = e.target.closest('.promo-del');
-      if (del) { promoPairs.splice(+del.dataset.i, 1); if (!promoPairs.length) promoPairs.push({ buySku:'', buyText:'', freeSku:'', freeText:'' }); savePromoPairs(); renderPromoBuilder(); return; }
-      if (e.target.closest('#promoAddRow')) { promoPairs.push({ buySku:'', buyText:'', freeSku:'', freeText:'' }); savePromoPairs(); renderPromoBuilder(); }
+      if (del) { const i = +del.dataset.i; promoItems.splice(i, 1); savePromoItems(); renderPromoBuilder(); buildPromoPreview(); }
     });
-    document.addEventListener('click', (e) => { if (!e.target.closest('.promo-search-wrap')) document.querySelectorAll('.promo-dropdown').forEach(d => d.innerHTML = ''); });
     // edit the "ซื้อ.../แถมฟรี..." lines directly on the poster preview
     const stage = $('#pdfStage');
     if (stage) stage.addEventListener('input', (e) => {
       const el = e.target.closest('[data-promoi]'); if (!el) return;
       const i = +el.dataset.promoi, f = el.dataset.promof;
-      if (promoPairs[i]) { promoPairs[i][f] = el.textContent.replace(/\s*\n\s*/g,' ').trim(); savePromoPairs(); }
+      if (promoItems[i]) { markEdited(promoItems[i], f, el.textContent.replace(/\s*\n\s*/g,' ').trim()); savePromoItems(); }
       if (f && $('#promoBuilderRows')) { const inp = $(`#promoBuilderRows .promo-text[data-i="${i}"][data-field="${f}"]`); if (inp) inp.value = el.textContent.trim(); }
     });
   })();
