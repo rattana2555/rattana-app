@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v3.44</title>
+<title>Rattana DS-DC Report v3.45</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -136,7 +136,7 @@ body.dark .tab-btn.active{color:var(--gold)}
   <div class="logo-text">Rattana <span>DS-DC</span> Report</div>
   <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" title="Dark mode">◑</button>
-  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.44</span>
+  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.45</span>
 </header>
 
 <div class="content">
@@ -800,29 +800,36 @@ function buildPromoVerifyMap() {
       const sampleSku = (frRows[0].SKU_NAME || '').trim();
       const totalActual = frRows.reduce((s, r) => s + (parseFloat(r.TRD_Q_FREE) || 0), 0);
 
-      // Each buy row independently finds which promo it triggers for this free SKU.
-      // This handles the case where different purchases trigger different promos giving the same free item.
       let totalExp = 0;
       const triggerBuys = [];
       const promoNames = new Set();
       let anyPromoFound = false;
+      const seenPromos = new Set();
 
-      buys.forEach(buyRow => {
-        for (const promo of allPromos) {
-          if (!skuSim(sampleSku, promo.แถมสินค้า)) continue;
-          if (!matchingBuysForPromo(buyRow, promo)) continue;
-          anyPromoFound = true;
-          const lotSize    = parseNum(promo.จำนวน) || 1;
-          const freePerLot = parseNum(promo.จำนวนแถมEA) || 0;
-          const exp = Math.floor((parseFloat(buyRow.TRD_QTY) || 0) / lotSize) * freePerLot;
-          if (exp > 0) {
-            totalExp += exp;
-            triggerBuys.push(buyRow);
-            promoNames.add(promo.ชื่อโปร);
-          }
-          // no break — allow one buy row to contribute to multiple promos giving the same free SKU
+      for (const promo of allPromos) {
+        if (!skuSim(sampleSku, promo.แถมสินค้า)) continue;
+        if (seenPromos.has(promo.ชื่อโปร)) continue;
+        const matchedBuys = buys.filter(pr => matchingBuysForPromo(pr, promo));
+        if (!matchedBuys.length) continue;
+        seenPromos.add(promo.ชื่อโปร);
+        anyPromoFound = true;
+
+        const lotSize    = parseNum(promo.จำนวน) || 1;
+        const freePerLot = parseNum(promo.จำนวนแถมEA) || 0;
+        let exp;
+        if (promo.วิธีวัด === 'PRODUCT NAME') {
+          // คิดแยกทีละแถว — สินค้าแต่ละรายการนับอิสระ
+          exp = matchedBuys.reduce((sum, pr) =>
+            sum + Math.floor((parseFloat(pr.TRD_QTY) || 0) / lotSize) * freePerLot, 0);
+        } else {
+          // CAT BRAND / CAT SIZE — รวม qty ทั้งหมดก่อนหาร lot (คละรสได้)
+          const totalQty = matchedBuys.reduce((sum, pr) => sum + (parseFloat(pr.TRD_QTY) || 0), 0);
+          exp = Math.floor(totalQty / lotSize) * freePerLot;
         }
-      });
+        totalExp += exp;
+        matchedBuys.forEach(r => { if (!triggerBuys.includes(r)) triggerBuys.push(r); });
+        promoNames.add(promo.ชื่อโปร);
+      }
 
       if (!anyPromoFound) {
         frRows.forEach(fr => promoVerifyMap.set(fr, { status: 'no_promo' }));
