@@ -4621,7 +4621,7 @@ function flashCard(p) {
     <div class="flash-name" data-fs-sku="${sk}" data-fs-role="name">${nameCellHtml(p, true)}</div>
     ${box(leftU,'left')}${box(rightU,'right')}`;
 }
-/* ══════ v6.30 — โปรแถมประจำเดือน (buy-get-free) ══════ */
+/* ══════ v6.32 — โปรแถมประจำเดือน: ดึงจากชีท Promotion อัตโนมัติ (ซื้อ → แถม) ══════ */
 const PROMO_BG_PRESETS = [   // monthly backgrounds (manual list — add new months here)
   { id:'1IiK9YhXodG4FT5xMBetMIC0Bt83gv4pU', name:'สิงหาคม',   color:'#1f8ff0' },
   { id:'1DwmFGr79riIlVTaHXOOYqmWpSSHfbuFa', name:'กันยายน',   color:'#26a69a' },
@@ -4630,12 +4630,103 @@ const PROMO_BG_PRESETS = [   // monthly backgrounds (manual list — add new mon
 ];
 function promoBgUrl(id){ return `https://lh3.googleusercontent.com/d/${id}=w1600`; }
 function isPromoMode(){ return SHEET_CONFIG.perPage === 'promo'; }
-let promoPairs = [];   // [{ buySku, buyText, freeSku, freeText }]
-function restorePromoPairs(){ try { promoPairs = JSON.parse(localStorage.getItem('rattanaPriceTag_promoPairs') || '[]'); } catch { promoPairs = []; } if (!Array.isArray(promoPairs)) promoPairs = []; }
-function savePromoPairs(){ safeSetItem('rattanaPriceTag_promoPairs', JSON.stringify(promoPairs)); }
-function promoProduct(sku){ return sku ? products.find(p => p.sku === sku) : null; }
 
-// ── Pair builder UI ──
+// v6.32 — โปรแถมดึงจากชีท Promotion แล้วสร้างข้อความ + จับหน่วยของแถมจาก PDDT
+const PROMO_SHEET = { id: '1CqHARklgveAeJ6rTkNeyUSku__puTiNE7-c6ebn93W8', name: 'Promotion' };
+const PROMO_UNIT_TH = { CS:'ลัง', PA:'แพ็ค', BP:'แพ็คใหญ่', EA:'ชิ้น' };
+let promoItems = [];        // [{buyName,buyQty,buyUnit,freeName,freeBc,freePieces,whs,buySku,freeSku,buyText,freeText,include}]
+let promoLoaded = false;
+let promoWhFilter = '';     // '' = ทุกสาขา
+function promoProduct(sku){ return sku ? products.find(p => p.sku === sku) : null; }
+function savePromoItems(){ safeSetItem('rattanaPriceTag_promoItems', JSON.stringify(promoItems)); }
+function restorePromoItems(){ try { promoItems = JSON.parse(localStorage.getItem('rattanaPriceTag_promoItems') || '[]'); } catch { promoItems = []; } if (!Array.isArray(promoItems)) promoItems = []; promoLoaded = promoItems.length > 0; }
+
+// ── unit-multiplier + product-matching helpers ──
+function promoUnitMult(s){ const m = String(s||'').match(/x\s*([\d,]+)/i); return m ? parseInt(m[1].replace(/,/g,'')) : 0; }   // "ลังx144(CS)" → 144
+function promoNorm(s){ return String(s||'').toLowerCase().replace(/[.,()\-]/g,'').replace(/\s+/g,''); }
+function promoTokens(s){ return String(s||'').trim().split(/\s+/).map(promoNorm).filter(Boolean); }
+function promoCol(r, name){ if (r[name] != null && r[name] !== '') return r[name]; const k = Object.keys(r).find(k => k.trim() === name.trim()); return k ? r[k] : ''; }
+function promoFindByBarcode(bc){ bc = String(bc||'').trim(); if (!bc) return null; return products.find(p => p.sku === bc || p.barcode === bc || (Array.isArray(p.allCodes) && p.allCodes.includes(bc))) || null; }
+function promoFindByName(name){
+  const q = promoNorm(name); if (!q) return null;
+  let hit = products.find(p => promoNorm(p.name) === q); if (hit) return hit;                       // 1) ชื่อตรงเป๊ะ
+  const subs = products.filter(p => { const n = promoNorm(p.name); return n && (n.includes(q) || q.includes(n)); });
+  if (subs.length) { subs.sort((a,b) => Math.abs(promoNorm(a.name).length - q.length) - Math.abs(promoNorm(b.name).length - q.length)); return subs[0]; }   // 2) ชื่อเป็น substring
+  const tk = promoTokens(name); if (!tk.length) return null;                                        // 3) จับจากคำ (ชื่อย่อ เช่น "กาโตะ 250")
+  let best = null, bs = 0;
+  for (const p of products) { const n = promoNorm(p.name); if (!n) continue; const s = tk.reduce((a,t) => a + (n.includes(t) ? 1 : 0), 0); if (s > bs || (s === bs && best && n.length < promoNorm(best.name).length)) { bs = s; best = p; } }
+  if (best && ((bs >= 2 && bs >= tk.length - 1) || bs === tk.length)) return best;
+  return null;
+}
+// จำนวนแถม (มาเป็นชิ้น) → หน่วยไทย โดยเทียบตัวคูณ UNIT PA/CS ของสินค้าใน PDDT
+function promoFreeQtyText(fp, pieces){
+  pieces = parseInt(String(pieces).replace(/,/g,'')) || 0;
+  if (fp && fp.units) {
+    const cs = promoUnitMult(fp.units.CS), pa = promoUnitMult(fp.units.PA), bp = promoUnitMult(fp.units.BP);
+    if (cs > 1 && pieces === cs) return '1 ลัง';      // ตรงกับ ลังxNN → 1 ลัง
+    if (pa > 1 && pieces === pa) return '1 แพ็ค';     // ตรงกับ แพ็คxNN → 1 แพ็ค
+    if (bp > 1 && pieces === bp) return '1 แพ็คใหญ่';
+  }
+  return pieces > 0 ? pieces + ' ชิ้น' : '';           // ไม่ตรง → ตามชีทเป็นชิ้น
+}
+// สร้างรายการโปรจากแถวชีท Promotion (คงข้อความที่ผู้ใช้แก้เองไว้เมื่อรีเฟรช)
+function buildPromoItemsFromRows(rows){
+  const prevByKey = {};
+  promoItems.forEach(it => { prevByKey[[it.buyName, it.freeBc, it.freePieces].join('|')] = it; });
+  const out = [];
+  rows.forEach(r => {
+    const buyName  = String(promoCol(r,'ชื่อ')||'').trim();
+    const freeName = String(promoCol(r,'แถมสินค้า')||'').trim();
+    if (!buyName || !freeName) return;                               // ต้องมีทั้งฝั่งซื้อและฝั่งแถม
+    const buyQty     = String(promoCol(r,'จำนวน')||'').trim();
+    const buyUnit    = String(promoCol(r,'รูปแบบขาย')||'').trim().toUpperCase();
+    const freeBc     = String(promoCol(r,'Barcode สินค้าแถมEA')||'').trim();
+    const freePieces = String(promoCol(r,'จำนวนแถมEA')||'').trim();
+    const whs        = String(promoCol(r,'Warehouses')||'').trim();
+    const buyProduct  = promoFindByName(buyName);                    // รูปฝั่งซื้อ (จับจากชื่อ)
+    const freeProduct = promoFindByBarcode(freeBc) || promoFindByName(freeName);   // รูป + ตัวคูณหน่วยฝั่งแถม
+    const buyUnitTh = PROMO_UNIT_TH[buyUnit] || buyUnit || '';
+    const buyText  = ('ซื้อ ' + buyName + (buyQty ? ' ' + buyQty + ' ' + buyUnitTh : '')).replace(/\s+/g,' ').trim();
+    const fq = promoFreeQtyText(freeProduct, freePieces);
+    const freeText = (freeName + (fq ? ' ' + fq : '')).replace(/\s+/g,' ').trim();
+    const prev = prevByKey[[buyName, freeBc, freePieces].join('|')];
+    out.push({
+      buyName, buyQty, buyUnit, freeName, freeBc, freePieces, whs,
+      buySku: buyProduct ? buyProduct.sku : '', freeSku: freeProduct ? freeProduct.sku : '',
+      buyText:  prev && prev._buyEdited  ? prev.buyText  : buyText,
+      freeText: prev && prev._freeEdited ? prev.freeText : freeText,
+      _buyEdited:  prev ? !!prev._buyEdited  : false,
+      _freeEdited: prev ? !!prev._freeEdited : false,
+      include: prev ? prev.include !== false : true,
+    });
+  });
+  return out;
+}
+async function loadPromoSheet(force){
+  if (!force && promoLoaded && promoItems.length) return promoItems;
+  if (!products.length) { showToast('⚠️ โหลดสินค้าก่อน (แท็บ ⚙️ ตั้งค่า)', 'warning'); return promoItems; }
+  try {
+    showToast('⏳ กำลังดึงโปรจากชีท Promotion...', 'info');
+    const rows = await loadFromSheets(PROMO_SHEET.id, PROMO_SHEET.name);
+    promoItems = buildPromoItemsFromRows(rows);
+    promoLoaded = true;
+    savePromoItems();
+    showToast('🎁 โหลดโปรแถม ' + promoItems.length + ' รายการ', 'success');
+  } catch (e) { console.error(e); showToast('❌ โหลดโปรไม่สำเร็จ: ' + (e.message||''), 'error'); }
+  return promoItems;
+}
+async function refreshPromoSheet(){ await loadPromoSheet(true); renderPromoBuilder(); buildPromoPreview(); }
+function promoWhOptions(){
+  const set = new Set();
+  promoItems.forEach(it => String(it.whs||'').split(/[,\s]+/).forEach(w => { const t = w.trim().toUpperCase(); if (t) set.add(t); }));
+  return Array.from(set).sort();
+}
+function promoWhMatch(it){ if (!promoWhFilter) return true; return String(it.whs||'').toUpperCase().split(/[,\s]+/).map(s => s.trim()).includes(promoWhFilter.toUpperCase()); }
+function promoShownItems(){ return promoItems.map((it, idx) => ({ it, idx })).filter(x => x.it.include !== false && promoWhMatch(x.it)); }
+function setPromoWh(v){ promoWhFilter = v || ''; renderPromoBuilder(); buildPromoPreview(); }
+function promoSetAll(on){ promoItems.forEach(it => { if (promoWhMatch(it)) it.include = !!on; }); savePromoItems(); renderPromoBuilder(); buildPromoPreview(); }
+
+// ── background month picker (unchanged) ──
 function applyPromoMonth(id){   // v6.31 — renamed to avoid clash with the promo-header applyPromoBg
   SHEET_CONFIG.promoTemplate = promoBgUrl(id);
   const cfg = JSON.parse(localStorage.getItem(STORAGE.config) || '{}');
@@ -4651,48 +4742,46 @@ function initPromoBgSwatches(){
     `<button type="button" class="fxw-swatch${cur.includes(b.id) ? ' active' : ''}" data-id="${b.id}" style="background:${b.color}" title="${escapeAttr(b.name)}" onclick="applyPromoMonth('${b.id}')"></button><small style="font-size:10px;color:var(--muted);margin:0 4px 0 -2px">${escapeHtml(b.name)}</small>`
   ).join('');
 }
+// ── promo list (auto-loaded, editable, filterable by warehouse) ──
 function renderPromoBuilder(){
+  const bar = $('#promoBuilderBar');
+  if (bar) {
+    const whs = promoWhOptions();
+    bar.innerHTML =
+      `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" type="button" onclick="refreshPromoSheet()">🔄 โหลด/รีเฟรชจากชีท</button>
+        <label style="font-size:13px;color:var(--muted)">สาขา:</label>
+        <select class="input input-sm" style="width:auto;min-width:110px" onchange="setPromoWh(this.value)">
+          <option value="">ทุกสาขา</option>
+          ${whs.map(w => `<option value="${escapeAttr(w)}"${promoWhFilter===w?' selected':''}>${escapeHtml(w)}</option>`).join('')}
+        </select>
+        <span style="font-size:13px;color:var(--muted)">โชว์ <b>${promoShownItems().length}</b> / ${promoItems.length} โปร</span>
+        <button class="btn btn-outline btn-sm" type="button" onclick="promoSetAll(true)">☑ เลือกทั้งหมด</button>
+        <button class="btn btn-outline btn-sm" type="button" onclick="promoSetAll(false)">☐ ไม่เลือก</button>
+      </div>`;
+  }
   const box = $('#promoBuilderRows'); if (!box) return;
-  if (!promoPairs.length) promoPairs.push({ buySku:'', buyText:'', freeSku:'', freeText:'' });
-  box.innerHTML = promoPairs.map((pr, i) => {
-    const bp = promoProduct(pr.buySku), fp = promoProduct(pr.freeSku);
-    return `<div class="promo-row" data-i="${i}">
+  if (!promoItems.length) { box.innerHTML = `<div class="help-block">ยังไม่มีข้อมูลโปร — กด <b>"🔄 โหลด/รีเฟรชจากชีท"</b> ด้านบนเพื่อดึงโปรจากชีท Promotion</div>`; return; }
+  const thumb = p => p && p.image ? `<img src="${escapeAttr(imgAtWidth(p.image,80))}" onerror="this.style.visibility='hidden'" crossorigin="anonymous">` : `<span class="promo-nothumb">🚫</span>`;
+  box.innerHTML = promoItems.map((it, i) => {
+    const bp = promoProduct(it.buySku), fp = promoProduct(it.freeSku);
+    const hide = !promoWhMatch(it);
+    return `<div class="promo-row${it.include===false?' off':''}" data-i="${i}"${hide?' style="display:none"':''}>
+      <input type="checkbox" class="promo-inc" data-i="${i}" ${it.include!==false?'checked':''} title="โชว์โปรนี้ในโปสเตอร์">
       <div class="promo-half">
         <span class="promo-badge buy">ซื้อ</span>
-        <div class="promo-search-wrap">
-          <input class="input input-sm promo-search" data-i="${i}" data-role="buy" placeholder="🔍 ค้นหาสินค้าที่ต้องซื้อ" value="${bp ? escapeAttr(bp.name) : ''}">
-          <div class="promo-dropdown" data-i="${i}" data-role="buy"></div>
-        </div>
-        <input class="input input-sm promo-text" data-i="${i}" data-field="buyText" placeholder="ข้อความ เช่น ซื้อ...ขนาด...1 แพ็ค" value="${escapeAttr(pr.buyText || '')}">
+        <div class="promo-editline"><span class="promo-thumb">${thumb(bp)}</span>
+          <input class="input input-sm promo-text" data-i="${i}" data-field="buyText" value="${escapeAttr(it.buyText||'')}"></div>
       </div>
       <span class="promo-arrow">➜</span>
       <div class="promo-half">
         <span class="promo-badge free">แถมฟรี</span>
-        <div class="promo-search-wrap">
-          <input class="input input-sm promo-search" data-i="${i}" data-role="free" placeholder="🔍 ค้นหาของแถม" value="${fp ? escapeAttr(fp.name) : ''}">
-          <div class="promo-dropdown" data-i="${i}" data-role="free"></div>
-        </div>
-        <input class="input input-sm promo-text" data-i="${i}" data-field="freeText" placeholder="ข้อความของแถม เช่น ...100ก. 1 ชิ้น" value="${escapeAttr(pr.freeText || '')}">
+        <div class="promo-editline"><span class="promo-thumb">${thumb(fp)}</span>
+          <input class="input input-sm promo-text" data-i="${i}" data-field="freeText" value="${escapeAttr(it.freeText||'')}"></div>
       </div>
       <button class="btn btn-sm btn-outline promo-del" data-i="${i}" title="ลบโปรนี้">🗑</button>
     </div>`;
   }).join('');
-}
-function promoShowMatches(input){
-  const dd = input.parentElement.querySelector('.promo-dropdown');
-  const q = input.value.trim().toLowerCase();
-  if (q.length < 2) { dd.innerHTML = ''; return; }
-  const i = input.dataset.i, role = input.dataset.role;
-  const matches = products.filter(p => p.image && ((p.name || '').toLowerCase().includes(q) || (p.sku || '').includes(q))).slice(0, 8);
-  dd.innerHTML = matches.length
-    ? matches.map(p => `<div class="promo-opt" data-i="${i}" data-role="${role}" data-sku="${escapeAttr(p.sku)}"><img src="${escapeAttr(imgAtWidth(p.image,80))}" onerror="this.style.visibility='hidden'" crossorigin="anonymous"><span>${escapeHtml((p.name || '').slice(0,44))}</span></div>`).join('')
-    : '<div class="promo-opt" style="color:#999;cursor:default">— ไม่พบสินค้า —</div>';
-}
-function promoPickProduct(i, role, sku){
-  const p = promoProduct(sku); if (!p) return;
-  if (role === 'buy') { promoPairs[i].buySku = sku; if (!promoPairs[i].buyText) promoPairs[i].buyText = 'ซื้อ' + (p.name || '') + ' '; }
-  else { promoPairs[i].freeSku = sku; if (!promoPairs[i].freeText) promoPairs[i].freeText = (p.name || '') + ' '; }
-  savePromoPairs(); renderPromoBuilder();
 }
 
 // ── Render the promo poster ──
