@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v3.45</title>
+<title>Rattana DS-DC Report v3.46</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -136,7 +136,7 @@ body.dark .tab-btn.active{color:var(--gold)}
   <div class="logo-text">Rattana <span>DS-DC</span> Report</div>
   <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" title="Dark mode">◑</button>
-  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.45</span>
+  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.46</span>
 </header>
 
 <div class="content">
@@ -176,13 +176,17 @@ body.dark .tab-btn.active{color:var(--gold)}
     <button class="btn btn-gold btn-sm" onclick="exportExcel()">📥 Export Excel</button>
   </div>
 
-  <!-- Promo status filter -->
-  <div class="qfilter-bar">
+  <!-- Promo status filter + Search -->
+  <div class="qfilter-bar" style="flex-wrap:wrap;gap:8px">
     <span class="qfilter-label">🔍 สถานะโปร:</span>
     <button class="qbtn active" id="pAll"      onclick="setPromoFilter('')">ทั้งหมด</button>
     <button class="qbtn"        id="pAbnormal" onclick="setPromoFilter('no_promo')">🚨 ผิดปกติ</button>
     <button class="qbtn"        id="pMismatch" onclick="setPromoFilter('qty_mismatch')">⚠️ จำนวนไม่ตรง</button>
     <button class="qbtn"        id="pOk"       onclick="setPromoFilter('ok')">✅ ถูกต้อง</button>
+    <div style="flex:1"></div>
+    <input id="searchBox" type="text" placeholder="ค้นหา ชื่อลูกค้า / เลขที่เอกสาร / สินค้า…"
+      oninput="searchQuery=this.value.trim();applyFilters()"
+      style="padding:5px 12px;border:1px solid var(--border);border-radius:20px;font-size:13px;width:280px;background:var(--bg);color:var(--text);outline:none">
   </div>
 
   <!-- Tabs -->
@@ -311,6 +315,7 @@ let filteredData = [];
 const PAGE_SIZE = 500;
 let currentPage = 0;
 let activePromoFilter = '';
+let searchQuery = '';
 let pddtMap = {};        // PRODUCT NAME (lower) → { CAT_BRAND, CAT_SIZE }
 let promoByProduct = {}; // SKU_NAME (lower) → [promo obj]
 let promoByBrand   = {}; // CAT_BRAND (lower) → [promo obj]
@@ -863,6 +868,17 @@ function applyFilters() {
 
   const type = document.querySelector(`#mainTbl th[data-key="${sortState.key}"]`)?.dataset.type || 'str';
   filteredData = sortRows(filteredData, sortState.key, type, sortState.dir);
+
+  // ค้นหา
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    filteredData = filteredData.filter(r =>
+      (r.AR_NAME   || '').toLowerCase().includes(q) ||
+      (r.DI_REF    || '').toLowerCase().includes(q) ||
+      (r.SKU_NAME  || '').toLowerCase().includes(q) ||
+      (r.AR_ID     || '').toLowerCase().includes(q)
+    );
+  }
 
   // กรองตามสถานะโปร — แสดงเฉพาะแถวของแถมที่ตรงเงื่อนไข
   if (activePromoFilter) {
