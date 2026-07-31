@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v3.36</title>
+<title>Rattana DS-DC Report v3.37</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -136,7 +136,7 @@ body.dark .tab-btn.active{color:var(--gold)}
   <div class="logo-text">Rattana <span>DS-DC</span> Report</div>
   <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" title="Dark mode">◑</button>
-  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.36</span>
+  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.37</span>
 </header>
 
 <div class="content">
@@ -174,6 +174,15 @@ body.dark .tab-btn.active{color:var(--gold)}
     <button class="qbtn" id="qLastMonth" onclick="setQuickFilter('lastmonth')">📋 เดือนที่แล้ว</button>
     <div style="flex:1"></div>
     <button class="btn btn-gold btn-sm" onclick="exportExcel()">📥 Export Excel</button>
+  </div>
+
+  <!-- Promo status filter -->
+  <div class="qfilter-bar">
+    <span class="qfilter-label">🔍 สถานะโปร:</span>
+    <button class="qbtn active" id="pAll"      onclick="setPromoFilter('')">ทั้งหมด</button>
+    <button class="qbtn"        id="pAbnormal" onclick="setPromoFilter('no_promo')">🚨 ผิดปกติ</button>
+    <button class="qbtn"        id="pMismatch" onclick="setPromoFilter('qty_mismatch')">⚠️ จำนวนไม่ตรง</button>
+    <button class="qbtn"        id="pOk"       onclick="setPromoFilter('ok')">✅ ถูกต้อง</button>
   </div>
 
   <!-- Tabs -->
@@ -301,6 +310,7 @@ let allData = [];
 let filteredData = [];
 const PAGE_SIZE = 500;
 let currentPage = 0;
+let activePromoFilter = '';
 let pddtMap = {};        // PRODUCT NAME (lower) → { CAT_BRAND, CAT_SIZE }
 let promoByProduct = {}; // SKU_NAME (lower) → [promo obj]
 let promoByBrand   = {}; // CAT_BRAND (lower) → [promo obj]
@@ -689,9 +699,17 @@ function updateStats() {
 // ── Quick filter ───────────────────────────────────────────────
 function setQuickFilter(period) {
   activeQuickFilter = period;
-  document.querySelectorAll('.qbtn').forEach(b => b.classList.remove('active'));
+  ['qToday','qWeek','qMonth','qLastMonth'].forEach(id => document.getElementById(id)?.classList.remove('active'));
   const map = { today:'qToday', week:'qWeek', month:'qMonth', lastmonth:'qLastMonth' };
   document.getElementById(map[period])?.classList.add('active');
+  applyFilters();
+}
+
+function setPromoFilter(status) {
+  activePromoFilter = status;
+  ['pAll','pAbnormal','pMismatch','pOk'].forEach(id => document.getElementById(id)?.classList.remove('active'));
+  const map = { '':'pAll', 'no_promo':'pAbnormal', 'qty_mismatch':'pMismatch', 'ok':'pOk' };
+  document.getElementById(map[status])?.classList.add('active');
   applyFilters();
 }
 
@@ -823,6 +841,20 @@ function applyFilters() {
 
   const type = document.querySelector(`#mainTbl th[data-key="${sortState.key}"]`)?.dataset.type || 'str';
   filteredData = sortRows(filteredData, sortState.key, type, sortState.dir);
+
+  // กรองตามสถานะโปร — แสดงทุกแถวของ DI_REF ที่มีแถวตรงเงื่อนไข
+  if (activePromoFilter) {
+    const matchRefs = new Set(
+      filteredData
+        .filter(r => {
+          const v = promoVerifyMap.get(r);
+          if (!v && (parseFloat(r.TRD_Q_FREE) || 0) > 0) return activePromoFilter === 'no_promo';
+          return v && v.status === activePromoFilter;
+        })
+        .map(r => r.DI_REF)
+    );
+    filteredData = filteredData.filter(r => matchRefs.has(r.DI_REF));
+  }
 
   renderTable();
   if (activeTab === 'beer') updateBeerTab();
