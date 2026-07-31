@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v3.28</title>
+<title>Rattana DS-DC Report v3.29</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -136,7 +136,7 @@ body.dark .tab-btn.active{color:var(--gold)}
   <div class="logo-text">Rattana <span>DS-DC</span> Report</div>
   <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" title="Dark mode">◑</button>
-  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.28</span>
+  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.29</span>
 </header>
 
 <div class="content">
@@ -210,6 +210,7 @@ body.dark .tab-btn.active{color:var(--gold)}
           </tbody>
         </table>
       </div>
+      <div id="tblPagination"></div>
     </div>
   </div>
 
@@ -297,6 +298,8 @@ const TTL = 5 * 60 * 1000;
 
 let allData = [];
 let filteredData = [];
+const PAGE_SIZE = 500;
+let currentPage = 0;
 let pddtMap = {};        // PRODUCT NAME (lower) → { CAT_BRAND, CAT_SIZE }
 let promoByProduct = {}; // SKU_NAME (lower) → [promo obj]
 let promoByBrand   = {}; // CAT_BRAND (lower) → [promo obj]
@@ -709,6 +712,7 @@ function getShipDateRange(period) {
 
 // ── Filters ────────────────────────────────────────────────────
 function applyFilters() {
+  currentPage = 0;
   const range = getShipDateRange(activeQuickFilter);
 
   filteredData = allData.filter(r => {
@@ -775,11 +779,16 @@ function renderTable() {
   const tbody = document.getElementById('tblBody');
   if (!filteredData.length) {
     tbody.innerHTML = '<tr class="empty-row"><td colspan="13">ไม่พบข้อมูลตามเงื่อนไขที่กรอง</td></tr>';
+    renderPagination();
     return;
   }
 
+  const totalPages = Math.ceil(filteredData.length / PAGE_SIZE);
+  if (currentPage >= totalPages) currentPage = totalPages - 1;
+  const pageData = filteredData.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+
   let html = '';
-  filteredData.forEach(r => {
+  pageData.forEach(r => {
     const amt = parseFloat(r.TRD_G_AMT) || 0;
     html += `<tr>
       <td>${fmtDate(r.DI_DATE)}</td>
@@ -795,10 +804,33 @@ function renderTable() {
     </tr>`;
   });
 
-
-
   tbody.innerHTML = html;
   updateSortIndicators();
+  renderPagination();
+}
+
+function renderPagination() {
+  const el = document.getElementById('tblPagination');
+  if (!el) return;
+  const total = filteredData.length;
+  if (total <= PAGE_SIZE) { el.innerHTML = ''; return; }
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const from = currentPage * PAGE_SIZE + 1;
+  const to = Math.min((currentPage + 1) * PAGE_SIZE, total);
+  el.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;justify-content:center;flex-wrap:wrap">
+    <button onclick="gotoPage(0)" ${currentPage===0?'disabled':''} style="padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card-bg);color:var(--text);font-size:13px">«</button>
+    <button onclick="gotoPage(${currentPage-1})" ${currentPage===0?'disabled':''} style="padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card-bg);color:var(--text);font-size:13px">‹</button>
+    <span style="font-size:13px;color:var(--muted)">แสดง ${from.toLocaleString()}–${to.toLocaleString()} จาก ${total.toLocaleString()} รายการ (หน้า ${currentPage+1}/${totalPages})</span>
+    <button onclick="gotoPage(${currentPage+1})" ${currentPage>=totalPages-1?'disabled':''} style="padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card-bg);color:var(--text);font-size:13px">›</button>
+    <button onclick="gotoPage(${totalPages-1})" ${currentPage>=totalPages-1?'disabled':''} style="padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card-bg);color:var(--text);font-size:13px">»</button>
+  </div>`;
+}
+
+function gotoPage(p) {
+  const totalPages = Math.ceil(filteredData.length / PAGE_SIZE);
+  currentPage = Math.max(0, Math.min(p, totalPages - 1));
+  renderTable();
+  document.getElementById('mainTbl')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ── Export Excel ───────────────────────────────────────────────
