@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v3.31</title>
+<title>Rattana DS-DC Report v3.32</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -136,7 +136,7 @@ body.dark .tab-btn.active{color:var(--gold)}
   <div class="logo-text">Rattana <span>DS-DC</span> Report</div>
   <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" title="Dark mode">◑</button>
-  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.31</span>
+  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.32</span>
 </header>
 
 <div class="content">
@@ -864,37 +864,60 @@ function bindHeaderSort() {
 }
 
 // ── Render ─────────────────────────────────────────────────────
+function groupByRef(data) {
+  // Group rows by DI_REF (order of first occurrence), purchases before free rows within each group
+  const map = new Map();
+  const order = [];
+  data.forEach(r => {
+    const ref = r.DI_REF || '__';
+    if (!map.has(ref)) { map.set(ref, []); order.push(ref); }
+    map.get(ref).push(r);
+  });
+  order.forEach(ref => {
+    map.get(ref).sort((a, b) => {
+      const af = (parseFloat(a.TRD_QTY) || 0) === 0 && (parseFloat(a.TRD_Q_FREE) || 0) > 0;
+      const bf = (parseFloat(b.TRD_QTY) || 0) === 0 && (parseFloat(b.TRD_Q_FREE) || 0) > 0;
+      return af - bf;
+    });
+  });
+  return order.flatMap(ref => map.get(ref).map((r, i) => ({ r, first: i === 0 })));
+}
+
+function renderRow(r, first) {
+  const amt = parseFloat(r.TRD_G_AMT) || 0;
+  const isFree = (parseFloat(r.TRD_QTY) || 0) === 0 && (parseFloat(r.TRD_Q_FREE) || 0) > 0;
+  const topBorder = first ? 'border-top:2px solid var(--border)' : '';
+  const rowBg = isFree ? 'background:rgba(39,174,96,.05)' : '';
+  const freeIndicator = isFree ? '<span style="display:inline-block;width:3px;height:14px;background:#27ae60;border-radius:2px;margin-right:5px;vertical-align:middle"></span>' : '';
+  return `<tr style="${topBorder};${rowBg}">
+    <td>${fmtDate(r.DI_DATE)}</td>
+    <td class="wrap"><span style="font-family:monospace;font-size:11px">${r.DI_REF || '-'}</span><br><span style="font-family:monospace;font-size:11px;color:var(--muted)">${r.AR_CODE || ''}</span>${r.AR_NAME ? ` <span style="font-weight:600">${r.AR_NAME}</span>` : ''}</td>
+    <td>${r.SLMN_NAME || '-'}</td>
+    <td><span style="background:rgba(201,168,76,.15);padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600">${r.WL_CODE || '-'}</span></td>
+    <td class="wrap">${freeIndicator}${r.SKU_NAME || '-'}${r.CAT_BRAND ? `<br><span style="font-size:10px;color:var(--muted)">${r.CAT_BRAND}${r.CAT_SIZE ? ' · ' + r.CAT_SIZE : ''}</span>` : ''}${r.FREE_ITEMS && r.FREE_ITEMS.length ? '<br>' + r.FREE_ITEMS.map(f => `<span style="font-size:11px;color:#27ae60;font-weight:600">🎁 แถม: ${f.name}${f.qty ? ' ' + f.qty + ' EA' : ''}</span>`).join('<br>') : ''}</td>
+    <td>${r.TRD_UTQNAME ? (extractUnit(r.TRD_UTQNAME) || r.TRD_UTQNAME) : '-'}</td>
+    <td class="num">${fmt(r.TRD_QTY)}</td>
+    <td class="num">${r.TRD_Q_FREE && parseFloat(r.TRD_Q_FREE) ? fmt(r.TRD_Q_FREE) : '-'}</td>
+    <td class="num">${fmt(r.TRD_U_PRC)}</td>
+    <td class="num" style="color:${amt > 0 ? 'var(--success)' : 'var(--text)'};font-weight:700">${fmt(r.TRD_G_AMT)}</td>
+    <td>${renderPromoStatus(r)}</td>
+  </tr>`;
+}
+
 function renderTable() {
   const tbody = document.getElementById('tblBody');
   if (!filteredData.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="13">ไม่พบข้อมูลตามเงื่อนไขที่กรอง</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="11">ไม่พบข้อมูลตามเงื่อนไขที่กรอง</td></tr>';
     renderPagination();
     return;
   }
 
-  const totalPages = Math.ceil(filteredData.length / PAGE_SIZE);
-  if (currentPage >= totalPages) currentPage = totalPages - 1;
-  const pageData = filteredData.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+  const grouped = groupByRef(filteredData);
+  const totalPages = Math.ceil(grouped.length / PAGE_SIZE);
+  if (currentPage >= totalPages) currentPage = Math.max(0, totalPages - 1);
+  const page = grouped.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
-  let html = '';
-  pageData.forEach(r => {
-    const amt = parseFloat(r.TRD_G_AMT) || 0;
-    html += `<tr>
-      <td>${fmtDate(r.DI_DATE)}</td>
-      <td class="wrap"><span style="font-family:monospace;font-size:11px">${r.DI_REF || '-'}</span><br><span style="font-family:monospace;font-size:11px;color:var(--muted)">${r.AR_CODE || ''}</span>${r.AR_NAME ? ` <span style="font-weight:600">${r.AR_NAME}</span>` : ''}</td>
-      <td>${r.SLMN_NAME || '-'}</td>
-      <td><span style="background:rgba(201,168,76,.15);padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600">${r.WL_CODE || '-'}</span></td>
-      <td class="wrap">${r.SKU_NAME || '-'}${r.CAT_BRAND ? `<br><span style="font-size:10px;color:var(--muted)">${r.CAT_BRAND}${r.CAT_SIZE ? ' · ' + r.CAT_SIZE : ''}</span>` : ''}${r.FREE_ITEMS && r.FREE_ITEMS.length ? '<br>' + r.FREE_ITEMS.map(f => `<span style="font-size:11px;color:#27ae60;font-weight:600">🎁 แถม: ${f.name}${f.qty ? ' ' + f.qty + ' EA' : ''}</span>`).join('<br>') : ''}</td>
-      <td>${r.TRD_UTQNAME ? (extractUnit(r.TRD_UTQNAME) || r.TRD_UTQNAME) : '-'}</td>
-      <td class="num">${fmt(r.TRD_QTY)}</td>
-      <td class="num">${r.TRD_Q_FREE && parseFloat(r.TRD_Q_FREE) ? fmt(r.TRD_Q_FREE) : '-'}</td>
-      <td class="num">${fmt(r.TRD_U_PRC)}</td>
-      <td class="num" style="color:${amt > 0 ? 'var(--success)' : 'var(--text)'};font-weight:700">${fmt(r.TRD_G_AMT)}</td>
-      <td>${renderPromoStatus(r)}</td>
-    </tr>`;
-  });
-
-  tbody.innerHTML = html;
+  tbody.innerHTML = page.map(({ r, first }) => renderRow(r, first)).join('');
   updateSortIndicators();
   renderPagination();
 }
