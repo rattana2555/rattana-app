@@ -4720,15 +4720,54 @@ function buildPromoItemsFromRows(rows){
     const prev = prevByKey[[buyName, freeBc, freePieces].join('|')];
     out.push({
       buyName, buyQty, buyUnit, buyMeasure, freeName, freeBc, freePieces, whs,
+      buyCatSize: buyProduct ? (buyProduct.size||'') : '',        // v6.35 — for merging same-size rows
+      buyCategory: buyProduct ? (buyProduct.category||'') : '',    // v6.35 — for sorting by หมวดหมู่
       buySku: buyProduct ? buyProduct.sku : '', buySkus, freeSku: freeProduct ? freeProduct.sku : '',
       buyText:  prev && prev._buyEdited  ? prev.buyText  : buyText,
       freeText: prev && prev._freeEdited ? prev.freeText : freeText,
       _buyEdited:  prev ? !!prev._buyEdited  : false,
       _freeEdited: prev ? !!prev._freeEdited : false,
+      _buyNames: [buyName],
       include: prev ? prev.include !== false : true,
     });
   });
-  return out;
+  // v6.35 — รวมโปรที่เป็น "โปรเดียวกันแต่คนละแบบ": CAT SIZE + จำนวน + หน่วย + ของแถม + จำนวนแถม ตรงกัน → การ์ดเดียว โชว์รูปซื้อทุกแบบ
+  const byMerge = {}; const merged = [];
+  out.forEach(it => {
+    const mk = it.buyCatSize
+      ? ['cs', it.buyCatSize, it.buyQty, it.buyUnit, it.freeBc, it.freePieces].join('¦')
+      : ['nm', it.buyName, it.freeBc, it.freePieces].join('¦');
+    const m = byMerge[mk];
+    if (m) {
+      const set = new Set(m.buySkus && m.buySkus.length ? m.buySkus : (m.buySku ? [m.buySku] : []));
+      (it.buySkus && it.buySkus.length ? it.buySkus : (it.buySku ? [it.buySku] : [])).forEach(s => set.add(s));
+      m.buySkus = [...set].filter(Boolean);
+      m.whs = [...new Set((m.whs + ',' + it.whs).split(/[,\s]+/).filter(Boolean))].join(',');
+      m._buyNames.push(it.buyName);
+      if (it.include !== false) m.include = true;
+    } else { byMerge[mk] = it; merged.push(it); }
+  });
+  // ข้อความฝั่งซื้อของการ์ดที่รวมแล้ว → ใช้ชื่อร่วม (ตัดคำที่ต่างกันออก เช่น หุ้ม/ไม่หุ้ม) เว้นแต่ผู้ใช้แก้เอง
+  merged.forEach(m => {
+    if (m._buyNames.length > 1 && !m._buyEdited) {
+      const common = promoCommonPrefix(m._buyNames) || m.buyName;
+      m.buyText = ('ซื้อ ' + common + (m.buyQty ? ' ' + m.buyQty + ' ' + (PROMO_UNIT_TH[m.buyUnit]||m.buyUnit||'') : '')).replace(/\s+/g,' ').trim();
+    }
+    if (m.buySkus && m.buySkus.length > 1) m.buySkus = promoSortSkusByName(m.buySkus);
+    delete m._buyNames;
+  });
+  // v6.35 — เรียงการ์ดตามหมวดหมู่ (CAT GROUP) แล้วตามชื่อ
+  merged.sort((a,b) => (a.buyCategory||'zzz').localeCompare(b.buyCategory||'zzz','th') || (a.buyName||'').localeCompare(b.buyName||'','th'));
+  return merged;
+}
+function promoCommonPrefix(names){   // คำนำหน้าที่เหมือนกันทุกชื่อ (แยกเป็นคำ)
+  const wl = names.map(n => String(n||'').trim().split(/\s+/));
+  const first = wl[0] || []; const out = [];
+  for (let i = 0; i < first.length; i++) { const w = first[i]; if (wl.every(a => a[i] === w)) out.push(w); else break; }
+  return out.join(' ');
+}
+function promoSortSkusByName(skus){
+  return skus.slice().sort((a,b) => (promoProduct(a)?.name||'').localeCompare(promoProduct(b)?.name||'','th'));
 }
 async function loadPromoSheet(force){
   if (!force && promoLoaded && promoItems.length) return promoItems;
