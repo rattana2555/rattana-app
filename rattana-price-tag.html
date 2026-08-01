@@ -4654,8 +4654,16 @@ let promoItems = [];        // [{buyName,buyQty,buyUnit,freeName,freeBc,freePiec
 let promoLoaded = false;
 let promoWhFilter = '';     // '' = ทุกสาขา
 function promoProduct(sku){ return sku ? products.find(p => p.sku === sku) : null; }
-function savePromoItems(){ safeSetItem('rattanaPriceTag_promoItems', JSON.stringify(promoItems)); }
-function restorePromoItems(){ try { promoItems = JSON.parse(localStorage.getItem('rattanaPriceTag_promoItems') || '[]'); } catch { promoItems = []; } if (!Array.isArray(promoItems)) promoItems = []; promoLoaded = promoItems.length > 0; }
+const PROMO_ITEMS_VER = 'v6.36-collage';   // v6.36 — bump when the promo-item schema/logic changes → old cache auto-refetches
+function savePromoItems(){ safeSetItem('rattanaPriceTag_promoItems', JSON.stringify({ v: PROMO_ITEMS_VER, items: promoItems })); }
+function restorePromoItems(){
+  try {
+    const raw = JSON.parse(localStorage.getItem('rattanaPriceTag_promoItems') || 'null');
+    promoItems = (raw && raw.v === PROMO_ITEMS_VER && Array.isArray(raw.items)) ? raw.items : [];   // old/absent schema → discard → auto-refetch fresh
+  } catch { promoItems = []; }
+  if (!Array.isArray(promoItems)) promoItems = [];
+  promoLoaded = promoItems.length > 0;
+}
 
 // ── unit-multiplier + product-matching helpers ──
 function promoUnitMult(s){ const m = String(s||'').match(/x\s*([\d,]+)/i); return m ? parseInt(m[1].replace(/,/g,'')) : 0; }   // "ลังx144(CS)" → 144
