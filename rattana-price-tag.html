@@ -4821,14 +4821,20 @@ function promoSlots(n){
 }
 function promoSlotKey(pr){ return 'p:' + [pr.buyName||'', pr.freeBc||'', pr.freePieces||''].join('|'); }   // v6.33 — stable per-slot id for canvas edit
 function promoItemHtml(pr, c, gi){
-  const bp = promoProduct(pr.buySku), fp = promoProduct(pr.freeSku);
+  const fp = promoProduct(pr.freeSku);
   const img = p => p && p.image ? `<img src="${escapeAttr(imgAtWidth(p.image,300))}" onerror="this.style.display='none'" crossorigin="anonymous">` : '';
+  // v6.34 — ฝั่งซื้อ: ถ้าเป็นกลุ่ม CAT SIZE เดียวกัน โชว์หลายรูปแบบแคตตาล็อก, ไม่งั้นรูปเดียว
+  const buyList = ((pr.buySkus && pr.buySkus.length ? pr.buySkus : (pr.buySku ? [pr.buySku] : [])).map(promoProduct).filter(p => p && p.image));
+  const cols = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(buyList.length))));
+  const buyInner = buyList.length > 1
+    ? `<div class="promo-collage" style="grid-template-columns:repeat(${cols},1fr)">${buyList.map(img).join('')}</div>`
+    : (buyList.length === 1 ? img(buyList[0]) : '');
   const k = escapeAttr(promoSlotKey(pr));   // v6.33 — each element movable + resizable (Canva-style, like Flash Sale)
   return `<div class="promo-slot" style="left:${c.x}%;top:${c.y}%;width:${c.w}%;height:${c.h}%">
     <div class="promo-imgs">
-      <div class="promo-cell" data-fs-sku="${k}" data-fs-role="pbuy"><span class="pbadge buy">BUY</span>${img(bp)}</div>
+      <div class="promo-cell" data-fs-sku="${k}" data-fs-role="pbuy">${buyInner}</div>
       <span class="promo-plus">+</span>
-      <div class="promo-cell" data-fs-sku="${k}" data-fs-role="pfree"><span class="pbadge free">FREE</span>${img(fp)}</div>
+      <div class="promo-cell" data-fs-sku="${k}" data-fs-role="pfree">${img(fp)}</div>
     </div>
     <div class="promo-txt">
       <div class="promo-line1 editable-txt" data-fs-sku="${k}" data-fs-role="pl1" data-promoi="${gi}" data-promof="buyText" contenteditable="true" spellcheck="false">${escapeHtml(pr.buyText || '')}</div>
