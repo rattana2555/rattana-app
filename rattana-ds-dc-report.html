@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v3.60</title>
+<title>Rattana DS-DC Report v3.61</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -136,7 +136,7 @@ body.dark .tab-btn.active{color:var(--gold)}
   <div class="logo-text">Rattana <span>DS-DC</span> Report</div>
   <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" title="Dark mode">◑</button>
-  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.60</span>
+  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.61</span>
 </header>
 
 <div class="content">
@@ -577,6 +577,7 @@ async function loadPromotion() {
       รูปแบบขาย:   (r['รูปแบบขาย']    || '').trim().toUpperCase(),
       แถมสินค้า:   (r['แถมสินค้า']     || '').trim(),
       จำนวนแถมEA:  (r['จำนวนแถมEA']   || '').trim(),
+      การเคลม:     (r['การเคลม']       || '').trim(),
       warehouses:   (r['Warehouses']    || '').split(',').map(w => w.trim()).filter(Boolean),
       role:         (r['Role']          || '').trim(),
       เริ่มโปร:    (r['เริ่มโปร']      || '').trim(),
@@ -1150,10 +1151,21 @@ function switchTab(id) {
 let claimDetailMap = new Map(); // sku → [row, ...]
 
 function updateClaimTab() {
+  // สร้าง set ของชื่อโปรที่ การเคลม = ซัพพลายเออร์ชดเชยคืน
+  const claimablePromoNames = new Set(
+    [...Object.values(promoByProduct), ...Object.values(promoByBrand), ...Object.values(promoBySize)]
+      .flat()
+      .filter(p => p.การเคลม === 'ซัพพลายเออร์ชดเชยคืน' && p.แถมสินค้า)
+      .map(p => p.ชื่อโปร)
+  );
+
   const okRows = allData.filter(r => {
     if ((parseFloat(r.TRD_Q_FREE) || 0) <= 0) return false;
     const v = promoVerifyMap.get(r);
-    return v && v.status === 'ok';
+    if (!v || v.status !== 'ok') return false;
+    // ตรวจว่า promoName ของแถวนี้มีอย่างน้อยหนึ่งโปรที่เคลมได้
+    const names = (v.promoName || '').split(',').map(n => n.trim());
+    return names.some(n => claimablePromoNames.has(n));
   });
 
   claimDetailMap = new Map();
