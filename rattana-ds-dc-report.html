@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v3.61</title>
+<title>Rattana DS-DC Report v3.62</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -136,7 +136,7 @@ body.dark .tab-btn.active{color:var(--gold)}
   <div class="logo-text">Rattana <span>DS-DC</span> Report</div>
   <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" title="Dark mode">◑</button>
-  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.61</span>
+  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.62</span>
 </header>
 
 <div class="content">
@@ -355,8 +355,11 @@ const SHEET_ID   = '1NO8sHyDxwHTRqgcLFCxq_g_Rr09lfe4gt_odwkIgiB0';
 const SHEET_NAME  = 'DS_DC';
 const PDDT_ID     = '16mYDqAqqJma-_0vCIAajy6bcjdOZ7F6VagxkdkqAB2I';
 const PDDT_NAME   = 'PDDT';
-const PROMO_ID    = '1CqHARklgveAeJ6rTkNeyUSku__puTiNE7-c6ebn93W8';
-const PROMO_SHEET = 'Promotion';
+const PROMO_ID        = '1CqHARklgveAeJ6rTkNeyUSku__puTiNE7-c6ebn93W8';
+const PROMO_SHEET     = 'Promotion';
+const PROMO_LAST_ID   = '1TX-hg6gsdwNHKLgL6GVw7YO8wWhzRLVlVkgb6a_ITpo';
+const PROMO_LAST_SHEET= 'เก็บ promotion';
+const CACHE_PROMO_LAST= 'rattana_promo_last';
 const CACHE_KEY   = 'rattana_dsdc_data';
 const CACHE_PDDT  = 'rattana_pddt_map_v2';
 const CACHE_PROMO = 'rattana_promo_map';
@@ -375,6 +378,9 @@ let pddtMap = {};        // PRODUCT NAME (lower) → { CAT_BRAND, CAT_SIZE }
 let promoByProduct = {}; // SKU_NAME (lower) → [promo obj]
 let promoByBrand   = {}; // CAT_BRAND (lower) → [promo obj]
 let promoBySize    = {}; // CAT_SIZE (lower)  → [promo obj]
+let promoByProductLast = {};
+let promoByBrandLast   = {};
+let promosBySizeLast   = {};
 let promoVerifyMap = new Map(); // row object → { status, expected, actual, promoName }
 let slmnWMap = {};       // ชื่อ-สกุล (lower, no คุณ) → คลัง e.g. "W4"
 let beerTiers = [];      // built from Promotion sheet after load
@@ -445,6 +451,29 @@ function parseCsv(text) {
   );
 }
 
+// returns raw 2D array (no header mapping)
+function parseCsvRaw(text) {
+  if (!text) return [];
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const rows = []; let row = [], cell = '', inQuote = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuote) {
+      if (ch === '"') { if (text[i+1]==='"'){cell+='"';i++;}else inQuote=false; }
+      else cell += ch;
+    } else {
+      if (ch==='"') inQuote=true;
+      else if (ch===',') { row.push(cell); cell=''; }
+      else if (ch==='\r') { /* skip */ }
+      else if (ch==='\n') { row.push(cell); rows.push(row); row=[]; cell=''; }
+      else cell += ch;
+    }
+  }
+  if (cell.length || row.length) { row.push(cell); rows.push(row); }
+  const clean = s => String(s||'').replace(/[​‌‍﻿]/g,'').replace(/ /g,' ').trim();
+  return rows.map(r => r.map(clean));
+}
+
 // ── Cache ──────────────────────────────────────────────────────
 function getCached() {
   try {
@@ -471,7 +500,7 @@ async function loadData(showLoading = true) {
   try {
     const cached = getCached();
     if (cached) {
-      await Promise.all([loadPddt(), loadPromotion(), loadOrder()]);
+      await Promise.all([loadPddt(), loadPromotion(), loadPromotionLastMonth(), loadOrder()]);
       allData = cached;
       enrichWithPddt(allData);
       enrichWithPromo(allData);
@@ -498,7 +527,7 @@ async function loadData(showLoading = true) {
       return;
     }
     // Fresh load — fetch all in parallel
-    const [data] = await Promise.all([fetchSheetData(), loadPddt(), loadPromotion(), loadOrder()]);
+    const [data] = await Promise.all([fetchSheetData(), loadPddt(), loadPromotion(), loadPromotionLastMonth(), loadOrder()]);
     enrichWithPddt(data);
     enrichWithPromo(data);
     enrichWithFreeStatus(data);
@@ -550,22 +579,8 @@ function enrichWithPddt(rows) {
 }
 
 // ── Load Promotion sheet ───────────────────────────────────────
-async function loadPromotion() {
-  try {
-    const c = JSON.parse(localStorage.getItem(CACHE_PROMO));
-    if (c && Date.now() - c.ts < TTL) {
-      promoByProduct = c.data.product;
-      promoByBrand   = c.data.brand;
-      promoBySize    = c.data.size;
-      buildBeerTiers();
-      return;
-    }
-  } catch {}
-  const url = `https://docs.google.com/spreadsheets/d/${PROMO_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(PROMO_SHEET)}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('Promo fetch failed');
-  const rows = parseCsv(await res.text());
-  promoByProduct = {}; promoByBrand = {}; promoBySize = {};
+function parsePromoRows(rows, maps) {
+  const { product, brand, size } = maps;
   rows.forEach(r => {
     const method = (r['วิธีวัด'] || '').trim();
     const name   = (r['ชื่อ']    || '').trim().toLowerCase();
@@ -582,21 +597,64 @@ async function loadPromotion() {
       role:         (r['Role']          || '').trim(),
       เริ่มโปร:    (r['เริ่มโปร']      || '').trim(),
       จบโปร:       (r['จบโปร']         || '').trim(),
+      รายละเอียดโปร: (r['รายละเอียดโปร'] || '').trim(),
       วิธีวัด:     method,
       ชื่อ:         name,
     };
     if (method === 'PRODUCT NAME') {
-      (promoByProduct[name] = promoByProduct[name] || []).push(obj);
+      (product[name] = product[name] || []).push(obj);
     } else if (method === 'CAT BRAND') {
-      (promoByBrand[name] = promoByBrand[name] || []).push(obj);
+      (brand[name] = brand[name] || []).push(obj);
     } else if (method === 'CAT SIZE') {
-      (promoBySize[name] = promoBySize[name] || []).push(obj);
+      (size[name] = size[name] || []).push(obj);
     }
   });
+}
+
+async function loadPromotion() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE_PROMO));
+    if (c && Date.now() - c.ts < TTL) {
+      promoByProduct = c.data.product;
+      promoByBrand   = c.data.brand;
+      promoBySize    = c.data.size;
+      buildBeerTiers();
+      return;
+    }
+  } catch {}
+  const url = `https://docs.google.com/spreadsheets/d/${PROMO_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(PROMO_SHEET)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Promo fetch failed');
+  promoByProduct = {}; promoByBrand = {}; promoBySize = {};
+  parsePromoRows(parseCsv(await res.text()), { product: promoByProduct, brand: promoByBrand, size: promoBySize });
   try {
     localStorage.setItem(CACHE_PROMO, JSON.stringify({ ts: Date.now(), data: { product: promoByProduct, brand: promoByBrand, size: promoBySize } }));
   } catch {}
   buildBeerTiers();
+}
+
+async function loadPromotionLastMonth() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE_PROMO_LAST));
+    if (c && Date.now() - c.ts < TTL) {
+      promoByProductLast = c.data.product;
+      promoByBrandLast   = c.data.brand;
+      promosBySizeLast   = c.data.size;
+      return;
+    }
+  } catch {}
+  const url = `https://docs.google.com/spreadsheets/d/${PROMO_LAST_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(PROMO_LAST_SHEET)}`;
+  const res = await fetch(url);
+  if (!res.ok) { console.warn('Last-month promo fetch failed'); return; }
+  // หัวคอลัมน์อยู่แถวที่ 2 — ข้ามแถวแรก
+  const allRows = parseCsvRaw(await res.text());
+  const headers = allRows[1] || [];
+  const dataRows = allRows.slice(2).map(r => Object.fromEntries(headers.map((k, i) => [k, (r[i] || '').trim()])));
+  promoByProductLast = {}; promoByBrandLast = {}; promosBySizeLast = {};
+  parsePromoRows(dataRows, { product: promoByProductLast, brand: promoByBrandLast, size: promosBySizeLast });
+  try {
+    localStorage.setItem(CACHE_PROMO_LAST, JSON.stringify({ ts: Date.now(), data: { product: promoByProductLast, brand: promoByBrandLast, size: promosBySizeLast } }));
+  } catch {}
 }
 
 // ── Load Staff sheet → slmnWMap (ชื่อ - สกุล → W) ────────────
@@ -771,6 +829,7 @@ function setPromoFilter(status) {
   ['pAll','pAbnormal','pMismatch','pOk'].forEach(id => document.getElementById(id)?.classList.remove('active'));
   const map = { '':'pAll', 'no_promo':'pAbnormal', 'qty_mismatch':'pMismatch', 'ok':'pOk' };
   document.getElementById(map[status])?.classList.add('active');
+  buildPromoVerifyMap();
   applyFilters();
   if (activeTab === 'beer') updateBeerTab();
 }
@@ -822,10 +881,14 @@ function skuSim(a, b) {
 
 function buildPromoVerifyMap() {
   promoVerifyMap = new Map();
+  const isLast = activeQuickFilter === 'lastmonth';
+  const _product = isLast ? promoByProductLast : promoByProduct;
+  const _brand   = isLast ? promoByBrandLast   : promoByBrand;
+  const _size    = isLast ? promosBySizeLast    : promoBySize;
   const allPromos = [
-    ...Object.values(promoByProduct).flat(),
-    ...Object.values(promoByBrand).flat(),
-    ...Object.values(promoBySize).flat(),
+    ...Object.values(_product).flat(),
+    ...Object.values(_brand).flat(),
+    ...Object.values(_size).flat(),
   ].filter(p => p.แถมสินค้า);
 
   // Group allData by DI_REF
@@ -844,9 +907,9 @@ function buildPromoVerifyMap() {
       const sk = (pr.SKU_NAME  || '').toLowerCase();
       const br = (pr.CAT_BRAND || '').toLowerCase();
       const sz = (pr.CAT_SIZE  || '').toLowerCase();
-      const inScope = (promo.วิธีวัด === 'PRODUCT NAME' && (promoByProduct[sk] || []).includes(promo))
-                   || (promo.วิธีวัด === 'CAT BRAND'    && (promoByBrand  [br] || []).includes(promo))
-                   || (promo.วิธีวัด === 'CAT SIZE'     && (promoBySize   [sz] || []).includes(promo));
+      const inScope = (promo.วิธีวัด === 'PRODUCT NAME' && (_product[sk] || []).includes(promo))
+                   || (promo.วิธีวัด === 'CAT BRAND'    && (_brand  [br] || []).includes(promo))
+                   || (promo.วิธีวัด === 'CAT SIZE'     && (_size   [sz] || []).includes(promo));
       return inScope && promoMatches(pr, promo);
     };
 
