@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v3.56</title>
+<title>Rattana DS-DC Report v3.57</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -136,7 +136,7 @@ body.dark .tab-btn.active{color:var(--gold)}
   <div class="logo-text">Rattana <span>DS-DC</span> Report</div>
   <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" title="Dark mode">◑</button>
-  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.56</span>
+  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.57</span>
 </header>
 
 <div class="content">
@@ -259,25 +259,51 @@ body.dark .tab-btn.active{color:var(--gold)}
 
   <!-- Tab: Vendor Claim -->
   <div class="tab-pane" id="tab-claim">
-    <div class="card">
-      <div class="card-head">
-        <h3>🧾 เคลม Vendor</h3>
-        <span style="font-size:11px;color:var(--muted)">เฉพาะรายการที่สถานะ ✅ ถูกต้อง</span>
-        <span class="row-count" id="claimCount">0 รายการ</span>
+    <!-- Summary view -->
+    <div id="claimSummaryView">
+      <div class="card">
+        <div class="card-head">
+          <h3>🧾 เคลม Vendor</h3>
+          <span style="font-size:11px;color:var(--muted)">เฉพาะรายการที่สถานะ ✅ ถูกต้อง</span>
+          <span class="row-count" id="claimCount">0 รายการ</span>
+        </div>
+        <div class="tbl-wrap">
+          <table class="acc-tbl" id="claimTbl">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>ชื่อสินค้าที่แถม</th>
+                <th style="text-align:right">จำนวนแถมรวม (EA)</th>
+              </tr>
+            </thead>
+            <tbody id="claimBody">
+              <tr><td colspan="3" style="text-align:center;padding:32px;color:var(--muted)">กำลังโหลด...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-      <div class="tbl-wrap">
-        <table class="acc-tbl" id="claimTbl">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>ชื่อสินค้าที่แถม</th>
-              <th style="text-align:right">จำนวนแถมรวม (EA)</th>
-            </tr>
-          </thead>
-          <tbody id="claimBody">
-            <tr><td colspan="3" style="text-align:center;padding:32px;color:var(--muted)">กำลังโหลด...</td></tr>
-          </tbody>
-        </table>
+    </div>
+    <!-- Detail view -->
+    <div id="claimDetailView" style="display:none">
+      <div class="card">
+        <div class="card-head" style="gap:10px">
+          <button onclick="closeClaimDetail()" style="border:none;background:var(--hover);border-radius:8px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text);font-weight:600">← กลับ</button>
+          <h3 id="claimDetailTitle" style="flex:1;margin:0"></h3>
+          <span class="row-count" id="claimDetailCount"></span>
+        </div>
+        <div class="tbl-wrap">
+          <table class="acc-tbl">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>ร้านค้า</th>
+                <th>เลขที่เอกสาร</th>
+                <th style="text-align:right">EA</th>
+              </tr>
+            </thead>
+            <tbody id="claimDetailBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -1161,7 +1187,7 @@ function showClaimDetail(idx) {
   const [sku] = (window._claimSorted || [])[idx] || [];
   if (!sku) return;
   const rows = claimDetailMap.get(sku) || [];
-  // Group by AR_NAME (customer), sum TRD_Q_FREE, collect DI_REFs
+
   const custMap = new Map();
   rows.forEach(r => {
     const name = (r.AR_NAME || r.AR_ID || '').trim();
@@ -1173,49 +1199,23 @@ function showClaimDetail(idx) {
   const custSorted = [...custMap.entries()].sort((a, b) => b[1].qty - a[1].qty);
   const totalQty = custSorted.reduce((s, [, c]) => s + c.qty, 0);
 
-  const html = `
-    <div id="claimModal" onclick="if(event.target===this)closeClaimModal()"
-      style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px">
-      <div style="background:#fff;border-radius:12px;width:100%;max-width:640px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.35);color:#1a1a2e">
-        <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:12px">
-          <div style="flex:1">
-            <div style="font-weight:700;font-size:15px;color:#1a1a2e">${sku}</div>
-            <div style="font-size:12px;color:#6b7280;margin-top:2px">แถมรวม ${totalQty.toLocaleString()} EA · ${custSorted.length} ร้าน</div>
-          </div>
-          <button onclick="closeClaimModal()" style="border:none;background:#f3f4f6;border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:16px;color:#374151;display:flex;align-items:center;justify-content:center;line-height:1">✕</button>
-        </div>
-        <div style="overflow-y:auto;flex:1">
-          <table style="width:100%;border-collapse:collapse;font-size:13px;color:#1a1a2e">
-            <thead style="position:sticky;top:0;background:#f9fafb">
-              <tr style="border-bottom:2px solid #e5e7eb">
-                <th style="padding:10px 16px;text-align:left;font-weight:600;color:#374151">#</th>
-                <th style="padding:10px 16px;text-align:left;font-weight:600;color:#374151">ร้านค้า</th>
-                <th style="padding:10px 16px;text-align:left;font-weight:600;color:#6b7280">เลขที่เอกสาร</th>
-                <th style="padding:10px 16px;text-align:right;font-weight:600;color:#374151">EA</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${custSorted.map(([name, c], i) => `
-                <tr style="border-bottom:1px solid #f3f4f6;${i%2===0?'background:#fff':'background:#f9fafb'}">
-                  <td style="padding:9px 16px;color:#9ca3af">${i + 1}</td>
-                  <td style="padding:9px 16px;font-weight:500;color:#1a1a2e">${name}</td>
-                  <td style="padding:9px 16px;font-size:11px;color:#6b7280">${[...c.refs].filter(Boolean).join(', ')}</td>
-                  <td style="padding:9px 16px;text-align:right;font-weight:700;color:#1e40af">${c.qty.toLocaleString()}</td>
-                </tr>`).join('')}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>`;
-  const el = document.createElement('div');
-  el.id = 'claimModalWrap';
-  el.innerHTML = html;
-  document.body.appendChild(el);
+  document.getElementById('claimDetailTitle').textContent = '🧾 ' + sku;
+  document.getElementById('claimDetailCount').textContent = `รวม ${totalQty.toLocaleString()} EA · ${custSorted.length} ร้าน`;
+  document.getElementById('claimDetailBody').innerHTML = custSorted.map(([name, c], i) => `
+    <tr>
+      <td style="text-align:center;color:var(--muted)">${i + 1}</td>
+      <td>${name}</td>
+      <td style="font-size:11px;color:var(--muted)">${[...c.refs].filter(Boolean).join(', ')}</td>
+      <td style="text-align:right;font-weight:700">${c.qty.toLocaleString()}</td>
+    </tr>`).join('');
+
+  document.getElementById('claimSummaryView').style.display = 'none';
+  document.getElementById('claimDetailView').style.display = '';
 }
 
-function closeClaimModal() {
-  const el = document.getElementById('claimModalWrap');
-  if (el) el.remove();
+function closeClaimDetail() {
+  document.getElementById('claimDetailView').style.display = 'none';
+  document.getElementById('claimSummaryView').style.display = '';
 }
 
 // ── Beer promotion tiers (FDB ช้างคลาสสิก สะสมต่อร้าน) ────────
