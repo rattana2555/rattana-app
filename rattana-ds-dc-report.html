@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v3.58</title>
+<title>Rattana DS-DC Report v3.59</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -136,7 +136,7 @@ body.dark .tab-btn.active{color:var(--gold)}
   <div class="logo-text">Rattana <span>DS-DC</span> Report</div>
   <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" title="Dark mode">◑</button>
-  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.58</span>
+  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.59</span>
 </header>
 
 <div class="content">
@@ -771,6 +771,7 @@ function setPromoFilter(status) {
   const map = { '':'pAll', 'no_promo':'pAbnormal', 'qty_mismatch':'pMismatch', 'ok':'pOk' };
   document.getElementById(map[status])?.classList.add('active');
   applyFilters();
+  if (activeTab === 'beer') updateBeerTab();
 }
 
 function getShipDateRange(period) {
@@ -1261,20 +1262,23 @@ function getBeerTier(qty) {
 
 // ── Beer accumulation tab ──────────────────────────────────────
 function updateBeerTab() {
-  // กรองตามช่วงวันโปร (เริ่มโปร ถึง จบโปร+2วัน ไม่เกินสิ้นเดือน)
+  // ใช้ช่วงวันจาก quick filter ก่อน ถ้าไม่มี fallback ไป beerPromoRange
+  const qRange = getShipDateRange(activeQuickFilter);
+  const dateRange = qRange || beerPromoRange;
+
   const monthData = allData.filter(r => {
     const d = new Date((r.DI_DATE || '').replace(/\//g, '-'));
     if (isNaN(d)) return false;
-    if (!beerPromoRange) return false;
-    if (d < beerPromoRange.from) return false;
-    if (beerPromoRange.to && d > beerPromoRange.to) return false;
+    if (!dateRange) return false;
+    if (d < dateRange.from) return false;
+    if (dateRange.to && d > dateRange.to) return false;
     return true;
   });
 
-  // แสดงช่วงวันโปรที่ใช้กรอง
-  const rangeLabel = beerPromoRange
-    ? `${beerPromoRange.from.toLocaleDateString('th-TH',{day:'numeric',month:'short'})} – ${beerPromoRange.to ? beerPromoRange.to.toLocaleDateString('th-TH',{day:'numeric',month:'short'}) : '...'}`
-    : 'ไม่พบช่วงวันโปร';
+  // แสดงช่วงวันที่ใช้กรอง
+  const rangeLabel = dateRange
+    ? `${dateRange.from.toLocaleDateString('th-TH',{day:'numeric',month:'short'})} – ${dateRange.to ? dateRange.to.toLocaleDateString('th-TH',{day:'numeric',month:'short'}) : '...'}`
+    : 'ไม่พบช่วงวัน';
   document.getElementById('beerDateRange').textContent = rangeLabel;
 
   // สร้าง freeMap: AR_CODE → ยอด TRD_Q_FREE ของ SKU "เบียร์ช้างคลาสสิก 620 ml. ขวด"
