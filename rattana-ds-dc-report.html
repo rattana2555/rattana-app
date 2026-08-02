@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Rattana DS-DC Report v3.74</title>
+<title>Rattana DS-DC Report v3.75</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -95,7 +95,7 @@ header{background:var(--navy);color:#fff;padding:12px 16px;position:sticky;top:0
   <div class="logo-text">Rattana <span>DS-DC</span> Report</div>
   <button class="icon-btn" onclick="refreshData()" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" title="Dark mode">◑</button>
-  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.74</span>
+  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.75</span>
 </header>
 
 <div class="content">
@@ -134,7 +134,14 @@ header{background:var(--navy);color:#fff;padding:12px 16px;position:sticky;top:0
   <div class="card">
     <div class="card-head">
       <h3>📋 รายการ DS-DC</h3>
-      <span class="row-count" id="rowCount">0 รายการ</span>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="row-count" id="rowCount">0 รายการ</span>
+        <div id="pagination" style="display:none;align-items:center;gap:6px">
+          <button onclick="goPage(-1)" id="btnPrev" style="padding:4px 12px;border-radius:6px;border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-family:inherit;font-size:13px;cursor:pointer">◀</button>
+          <span id="pageInfo" style="font-size:13px;font-weight:600;color:var(--muted)"></span>
+          <button onclick="goPage(1)"  id="btnNext" style="padding:4px 12px;border-radius:6px;border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-family:inherit;font-size:13px;cursor:pointer">▶</button>
+        </div>
+      </div>
     </div>
     <div class="tbl-wrap">
       <table class="tbl" id="mainTbl">
@@ -173,6 +180,8 @@ const TTL        = 5 * 60 * 1000;
 
 let allData = [], filteredData = [];
 let activeQuickFilter = 'today';
+let currentPage = 0;
+const PAGE_SIZE = 2000;
 const sortState = { key: 'DI_DATE', dir: 'desc' };
 
 // ── UI ─────────────────────────────────────────────────────────
@@ -267,6 +276,7 @@ function setQuickFilter(period) {
 
 // ── Filter & Sort ──────────────────────────────────────────────
 function applyFilters() {
+  currentPage = 0;
   const range = getShipDateRange(activeQuickFilter);
   filteredData = allData.filter(r => {
     if (!range) return true;
@@ -284,8 +294,27 @@ function applyFilters() {
     return va.localeCompare(vb, 'th') * m;
   });
   renderTable();
+  updatePagination();
   document.getElementById('statFiltered').textContent = filteredData.length.toLocaleString();
   document.getElementById('rowCount').textContent = `${filteredData.length.toLocaleString()} รายการ`;
+}
+
+function goPage(dir) {
+  const totalPages = Math.ceil(filteredData.length / PAGE_SIZE);
+  currentPage = Math.max(0, Math.min(currentPage + dir, totalPages - 1));
+  renderTable();
+  updatePagination();
+  document.querySelector('.tbl-wrap').scrollTop = 0;
+}
+
+function updatePagination() {
+  const totalPages = Math.ceil(filteredData.length / PAGE_SIZE);
+  const pg = document.getElementById('pagination');
+  if (totalPages <= 1) { pg.style.display = 'none'; return; }
+  pg.style.display = 'flex';
+  document.getElementById('pageInfo').textContent = `หน้า ${currentPage+1} / ${totalPages}`;
+  document.getElementById('btnPrev').disabled = currentPage === 0;
+  document.getElementById('btnNext').disabled = currentPage >= totalPages - 1;
 }
 
 // ── Render ─────────────────────────────────────────────────────
@@ -295,9 +324,9 @@ function renderTable() {
     tbody.innerHTML = '<tr class="empty-row"><td colspan="14">ไม่พบข้อมูลตามเงื่อนไขที่กรอง</td></tr>';
     return;
   }
-  // Group by DI_REF for border separation
+  const pageData = filteredData.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
   const seen = new Set();
-  tbody.innerHTML = filteredData.map(r => {
+  tbody.innerHTML = pageData.map(r => {
     const isFirst = !seen.has(r.DI_REF); seen.add(r.DI_REF);
     const amt  = parseFloat(r.TRD_G_AMT) || 0;
     const top  = isFirst ? 'border-top:2px solid var(--border)' : '';
@@ -333,29 +362,6 @@ function updateSortIndicators() {
   });
 }
 
-// ── Fetch chunks of 2000 rows ──────────────────────────────────
-const CHUNK = 2000;
-
-async function fetchChunk(offset) {
-  const tq = encodeURIComponent(`select * limit ${CHUNK} offset ${offset}`);
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}&tq=${tq}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  return parseCsv(await res.text());
-}
-
-async function fetchAllChunks(onChunk) {
-  let offset = 0, all = [];
-  while (true) {
-    const chunk = await fetchChunk(offset);
-    all = all.concat(chunk);
-    if (onChunk) onChunk(all.length);
-    if (chunk.length < CHUNK) break;
-    offset += CHUNK;
-  }
-  return all;
-}
-
 // ── Load ───────────────────────────────────────────────────────
 async function loadData(showLoading = true) {
   if (showLoading) showSpinner('กำลังโหลด DS-DC...');
@@ -368,34 +374,20 @@ async function loadData(showLoading = true) {
       updateStats();
       if (showLoading) hideSpinner();
       setLoadingBar(false);
-      // Background refresh แบบ chunk
-      fetchAllChunks().then(fresh => {
-        if (fresh.length) { allData = fresh; setCache(fresh); applyFilters(); updateStats(); showToast('อัพเดทข้อมูลล่าสุดแล้ว ✓','info'); }
-      }).catch(() => {});
+      fetch(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`)
+        .then(r => r.text()).then(text => {
+          const fresh = parseCsv(text);
+          if (fresh.length) { allData = fresh; setCache(fresh); applyFilters(); updateStats(); showToast('อัพเดทข้อมูลล่าสุดแล้ว ✓','info'); }
+        }).catch(() => {});
       return;
     }
-    // Fresh load — แสดง chunk แรกก่อน แล้วโหลดต่อ background
-    const first = await fetchChunk(0);
-    allData = first;
+    const res = await fetch(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    allData = parseCsv(await res.text());
+    setCache(allData);
     applyFilters();
     updateStats();
-    if (showLoading) hideSpinner();
-    setLoadingBar(false);
-    if (first.length === CHUNK) {
-      // ยังมีข้อมูลเพิ่ม — โหลดต่อ
-      let offset = CHUNK;
-      while (true) {
-        const chunk = await fetchChunk(offset);
-        allData = allData.concat(chunk);
-        applyFilters();
-        updateStats();
-        showToast(`โหลดแล้ว ${allData.length.toLocaleString()} รายการ...`, 'info');
-        if (chunk.length < CHUNK) break;
-        offset += CHUNK;
-      }
-    }
-    setCache(allData);
-    showToast(`โหลดครบ ${allData.length.toLocaleString()} รายการ ✓`, 'success');
+    showToast(`โหลด ${allData.length.toLocaleString()} รายการ ✓`, 'success');
   } catch (e) {
     showToast('โหลดข้อมูลไม่สำเร็จ: ' + e.message, 'error');
     document.getElementById('tblBody').innerHTML = `<tr class="empty-row"><td colspan="14">❌ ${e.message}</td></tr>`;
