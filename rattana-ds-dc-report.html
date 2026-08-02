@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Rattana DS-DC Report v3.73</title>
+<title>Rattana DS-DC Report v3.74</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -95,7 +95,7 @@ header{background:var(--navy);color:#fff;padding:12px 16px;position:sticky;top:0
   <div class="logo-text">Rattana <span>DS-DC</span> Report</div>
   <button class="icon-btn" onclick="refreshData()" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" title="Dark mode">◑</button>
-  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.73</span>
+  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.74</span>
 </header>
 
 <div class="content">
@@ -333,6 +333,29 @@ function updateSortIndicators() {
   });
 }
 
+// ── Fetch chunks of 2000 rows ──────────────────────────────────
+const CHUNK = 2000;
+
+async function fetchChunk(offset) {
+  const tq = encodeURIComponent(`select * limit ${CHUNK} offset ${offset}`);
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}&tq=${tq}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return parseCsv(await res.text());
+}
+
+async function fetchAllChunks(onChunk) {
+  let offset = 0, all = [];
+  while (true) {
+    const chunk = await fetchChunk(offset);
+    all = all.concat(chunk);
+    if (onChunk) onChunk(all.length);
+    if (chunk.length < CHUNK) break;
+    offset += CHUNK;
+  }
+  return all;
+}
+
 // ── Load ───────────────────────────────────────────────────────
 async function loadData(showLoading = true) {
   if (showLoading) showSpinner('กำลังโหลด DS-DC...');
@@ -345,26 +368,39 @@ async function loadData(showLoading = true) {
       updateStats();
       if (showLoading) hideSpinner();
       setLoadingBar(false);
-      // Background refresh
-      fetch(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`)
-        .then(r => r.text()).then(text => {
-          const fresh = parseCsv(text);
-          if (fresh.length) { allData = fresh; setCache(fresh); applyFilters(); updateStats(); showToast('อัพเดทข้อมูลล่าสุดแล้ว ✓','info'); }
-        }).catch(() => {});
+      // Background refresh แบบ chunk
+      fetchAllChunks().then(fresh => {
+        if (fresh.length) { allData = fresh; setCache(fresh); applyFilters(); updateStats(); showToast('อัพเดทข้อมูลล่าสุดแล้ว ✓','info'); }
+      }).catch(() => {});
       return;
     }
-    const res = await fetch(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`);
-    if (!res.ok) throw new Error('โหลดชีตไม่สำเร็จ ' + res.status);
-    allData = parseCsv(await res.text());
-    setCache(allData);
+    // Fresh load — แสดง chunk แรกก่อน แล้วโหลดต่อ background
+    const first = await fetchChunk(0);
+    allData = first;
     applyFilters();
     updateStats();
-    showToast(`โหลด ${allData.length.toLocaleString()} รายการ ✓`, 'success');
+    if (showLoading) hideSpinner();
+    setLoadingBar(false);
+    if (first.length === CHUNK) {
+      // ยังมีข้อมูลเพิ่ม — โหลดต่อ
+      let offset = CHUNK;
+      while (true) {
+        const chunk = await fetchChunk(offset);
+        allData = allData.concat(chunk);
+        applyFilters();
+        updateStats();
+        showToast(`โหลดแล้ว ${allData.length.toLocaleString()} รายการ...`, 'info');
+        if (chunk.length < CHUNK) break;
+        offset += CHUNK;
+      }
+    }
+    setCache(allData);
+    showToast(`โหลดครบ ${allData.length.toLocaleString()} รายการ ✓`, 'success');
   } catch (e) {
     showToast('โหลดข้อมูลไม่สำเร็จ: ' + e.message, 'error');
     document.getElementById('tblBody').innerHTML = `<tr class="empty-row"><td colspan="14">❌ ${e.message}</td></tr>`;
   } finally {
-    if (showLoading) hideSpinner();
+    hideSpinner();
     setLoadingBar(false);
   }
 }
