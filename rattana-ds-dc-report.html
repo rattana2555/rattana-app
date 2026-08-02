@@ -33,7 +33,7 @@ header{background:var(--navy);color:#fff;padding:12px 16px;position:sticky;top:0
 @media(min-width:640px){.content{padding:16px}}
 
 .stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
-@media(min-width:640px){.stat-grid{grid-template-columns:repeat(4,1fr)}}
+@media(min-width:640px){.stat-grid{grid-template-columns:repeat(5,1fr)}}
 .stat-card{background:var(--card-bg);border-radius:var(--radius-md);padding:14px 16px;border:1px solid var(--border);border-top:3px solid var(--gold)}
 .stat-card.danger{border-top-color:var(--danger)} .stat-card.success{border-top-color:var(--success)} .stat-card.info{border-top-color:var(--info)}
 .s-label{font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin-bottom:4px}
@@ -120,6 +120,11 @@ header{background:var(--navy);color:#fff;padding:12px 16px;position:sticky;top:0
       <div class="s-label">แสดงผล (กรอง)</div>
       <div class="s-value" id="statFiltered">0</div>
       <div class="s-sub">รายการ</div>
+    </div>
+    <div class="stat-card" style="border-top-color:#9b59b6">
+      <div class="s-label">🎁 โปรโมชั่น</div>
+      <div class="s-value" id="statPromo">-</div>
+      <div class="s-sub" id="statPromoMatch">rules / แถวที่ตรง</div>
     </div>
   </div>
 
@@ -316,8 +321,10 @@ async function loadPromo() {
       Object.fromEntries(headers.map((k, i) => [k, clean(r[i] || '')]))
     ).filter(p => p['ชื่อ'] && p['วิธีวัด']);
     try { localStorage.setItem(CACHE_PROMO, JSON.stringify({ ts: Date.now(), data: promoRules })); } catch {}
-    console.log('[PROMO] loaded', promoRules.length, 'rules', promoRules.slice(0,5));
-    showToast(`โหลดโปร ${promoRules.length} รายการ`, 'info');
+    console.log('[PROMO] loaded', promoRules.length, 'rules');
+    console.log('[PROMO] first 3 rules:', JSON.stringify(promoRules.slice(0,3), null, 2));
+    document.getElementById('statPromo').textContent = promoRules.length;
+    showToast(`โหลดโปร ${promoRules.length} rules`, 'info');
   } catch (e) { console.error('[PROMO] error', e); }
 }
 
@@ -333,6 +340,7 @@ function parsePromoDate(s) {
 }
 
 function enrichWithPromo(rows) {
+  let matchCount = 0;
   rows.forEach(r => {
     r._gifts = [];
     const shipDate = r.SHIP_DATE ? (() => {
@@ -360,14 +368,32 @@ function enrichWithPromo(rows) {
       // Match type
       const mType = (p['วิธีวัด'] || '').trim().toUpperCase();
       const mVal  = (p['ชื่อ']    || '').trim().toLowerCase();
+      if (!mVal) return;
       let matched = false;
-      if (mType === 'PRODUCT NAME' && mVal && (r.SKU_NAME || '').toLowerCase() === mVal) matched = true;
-      if (mType === 'CAT SIZE'     && mVal && (r._size    || '').toLowerCase() === mVal) matched = true;
-      if (mType === 'CAT BRAND'    && mVal && (r._brand   || '').toLowerCase() === mVal) matched = true;
+      if (mType === 'PRODUCT NAME') {
+        const skuL = (r.SKU_NAME || '').trim().toLowerCase();
+        matched = skuL === mVal || skuL.includes(mVal) || mVal.includes(skuL);
+      } else if (mType === 'CAT SIZE') {
+        const szL = (r._size || '').trim().toLowerCase();
+        matched = szL === mVal || szL.includes(mVal) || mVal.includes(szL);
+      } else if (mType === 'CAT BRAND') {
+        const brL = (r._brand || '').trim().toLowerCase();
+        matched = brL === mVal || brL.includes(mVal) || mVal.includes(brL);
+      }
 
       if (matched && !r._gifts.includes(p['แถมสินค้า'])) r._gifts.push(p['แถมสินค้า']);
     });
+    if (r._gifts.length) matchCount++;
   });
+  console.log('[PROMO] enriched — matched rows:', matchCount, '/', rows.length);
+  if (rows.length > 0) {
+    const sample = rows.find(r => !r._gifts.length);
+    if (sample) console.log('[PROMO] sample unmatched row SKU_NAME:', sample.SKU_NAME, '| _brand:', sample._brand, '| _size:', sample._size, '| SHIP_DATE:', sample.SHIP_DATE);
+  }
+  const el = document.getElementById('statPromoMatch');
+  if (el) el.textContent = `${promoRules.length} rules · ${matchCount} แถวตรง`;
+  const sv = document.getElementById('statPromo');
+  if (sv) sv.textContent = promoRules.length || '-';
 }
 
 function enrichWithPddt(rows) {
