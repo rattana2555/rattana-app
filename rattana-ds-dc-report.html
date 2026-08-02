@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v3.61</title>
+<title>Rattana DS-DC Report v3.62</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -136,7 +136,7 @@ body.dark .tab-btn.active{color:var(--gold)}
   <div class="logo-text">Rattana <span>DS-DC</span> Report</div>
   <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" title="Dark mode">◑</button>
-  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.61</span>
+  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.62</span>
 </header>
 
 <div class="content">
@@ -363,6 +363,9 @@ const CACHE_PROMO = 'rattana_promo_map';
 const CACHE_ORDER = 'rattana_order_map';
 const STAFF_ID    = '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ';
 const STAFF_SHEET = 'Sheet1';
+const PROMO_LM_ID    = '1TX-hg6gsdwNHKLgL6GVw7YO8wWhzRLVlVkgb6a_ITpo';
+const PROMO_LM_SHEET = 'เก็บ promotion  app';
+const CACHE_PROMO_LM = 'rattana_promo_lm_v362';
 const TTL = 5 * 60 * 1000;
 
 let allData = [];
@@ -375,6 +378,8 @@ let pddtMap = {};        // PRODUCT NAME (lower) → { CAT_BRAND, CAT_SIZE }
 let promoByProduct = {}; // SKU_NAME (lower) → [promo obj]
 let promoByBrand   = {}; // CAT_BRAND (lower) → [promo obj]
 let promoBySize    = {}; // CAT_SIZE (lower)  → [promo obj]
+let savedPromoByProduct = {}, savedPromoByBrand = {}, savedPromoBySize = {};
+let lmPromoByProduct = {}, lmPromoByBrand = {}, lmPromoBySize = {};
 let promoVerifyMap = new Map(); // row object → { status, expected, actual, promoName }
 let slmnWMap = {};       // ชื่อ-สกุล (lower, no คุณ) → คลัง e.g. "W4"
 let beerTiers = [];      // built from Promotion sheet after load
@@ -445,6 +450,86 @@ function parseCsv(text) {
   );
 }
 
+// ── CSV raw rows (for sheets with header not on row 1) ─────────
+function parseCsvRows(text) {
+  if (!text) return [];
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const rows = []; let row = [], cell = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQ) {
+      if (ch === '"') { if (text[i+1]==='"'){cell+='"';i++;}else inQ=false; }
+      else cell += ch;
+    } else {
+      if (ch==='"') inQ=true;
+      else if (ch===',') { row.push(cell); cell=''; }
+      else if (ch==='\r') {}
+      else if (ch==='\n') { row.push(cell); rows.push(row); row=[]; cell=''; }
+      else cell += ch;
+    }
+  }
+  if (cell.length || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+
+// ── Load Last-Month Promo (เก็บ promotion app, header=row2) ───
+async function loadLastMonthPromo() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE_PROMO_LM));
+    if (c && Date.now() - c.ts < TTL) {
+      lmPromoByProduct = c.data.product;
+      lmPromoByBrand   = c.data.brand;
+      lmPromoBySize    = c.data.size;
+      return;
+    }
+  } catch {}
+  const url = `https://docs.google.com/spreadsheets/d/${PROMO_LM_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(PROMO_LM_SHEET)}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const raw = parseCsvRows(await res.text());
+    if (raw.length < 3) return;
+    const clean = s => String(s||'').replace(/[​‌‍﻿]/g,'').replace(/ /g,' ').trim();
+    const headers = raw[1].map(clean); // row 2 = index 1
+    const rows = raw.slice(2).filter(r => r.some(c => clean(c))).map(r =>
+      Object.fromEntries(headers.map((k, i) => [k, clean(r[i] || '')]))
+    );
+    lmPromoByProduct = {}; lmPromoByBrand = {}; lmPromoBySize = {};
+    rows.forEach(r => {
+      const method = (r['วิธีวัด'] || '').trim();
+      const name   = (r['ชื่อ']    || '').trim().toLowerCase();
+      if (!name || !method) return;
+      const obj = {
+        ชื่อโปร:       (r['ชื่อโปร']       || name).trim(),
+        ราคาขายกำหนด: (r['ราคาขายกำหนด'] || '').trim(),
+        จำนวน:        (r['จำนวน']         || '').trim(),
+        รูปแบบขาย:   (r['รูปแบบขาย']    || '').trim().toUpperCase(),
+        แถมสินค้า:   (r['แถมสินค้า']     || '').trim(),
+        จำนวนแถมEA:  (r['จำนวนแถมEA']   || '').trim(),
+        การเคลม:     (r['การเคลม']       || '').trim(),
+        warehouses:   (r['Warehouses'] || '').split(',').map(w => w.trim()).filter(Boolean),
+        role:         (r['Role']          || '').trim(),
+        เริ่มโปร:    (r['เริ่มโปร']      || '').trim(),
+        จบโปร:       (r['จบโปร']         || '').trim(),
+        วิธีวัด:     method,
+        ชื่อ:         name,
+      };
+      if (method === 'PRODUCT NAME') {
+        (lmPromoByProduct[name] = lmPromoByProduct[name] || []).push(obj);
+      } else if (method === 'CAT BRAND') {
+        (lmPromoByBrand[name] = lmPromoByBrand[name] || []).push(obj);
+      } else if (method === 'CAT SIZE') {
+        (lmPromoBySize[name] = lmPromoBySize[name] || []).push(obj);
+      }
+    });
+    try {
+      localStorage.setItem(CACHE_PROMO_LM, JSON.stringify({ ts: Date.now(), data: { product: lmPromoByProduct, brand: lmPromoByBrand, size: lmPromoBySize } }));
+    } catch {}
+    const total = Object.values(lmPromoByProduct).flat().length + Object.values(lmPromoByBrand).flat().length + Object.values(lmPromoBySize).flat().length;
+    console.log('[LM PROMO] loaded', total, 'rules');
+  } catch (e) { console.error('[LM PROMO] error', e); }
+}
+
 // ── Cache ──────────────────────────────────────────────────────
 function getCached() {
   try {
@@ -471,7 +556,7 @@ async function loadData(showLoading = true) {
   try {
     const cached = getCached();
     if (cached) {
-      await Promise.all([loadPddt(), loadPromotion(), loadOrder()]);
+      await Promise.all([loadPddt(), loadPromotion(), loadOrder(), loadLastMonthPromo()]);
       allData = cached;
       enrichWithPddt(allData);
       enrichWithPromo(allData);
@@ -498,7 +583,7 @@ async function loadData(showLoading = true) {
       return;
     }
     // Fresh load — fetch all in parallel
-    const [data] = await Promise.all([fetchSheetData(), loadPddt(), loadPromotion(), loadOrder()]);
+    const [data] = await Promise.all([fetchSheetData(), loadPddt(), loadPromotion(), loadOrder(), loadLastMonthPromo()]);
     enrichWithPddt(data);
     enrichWithPromo(data);
     enrichWithFreeStatus(data);
@@ -557,6 +642,9 @@ async function loadPromotion() {
       promoByProduct = c.data.product;
       promoByBrand   = c.data.brand;
       promoBySize    = c.data.size;
+      savedPromoByProduct = promoByProduct;
+      savedPromoByBrand   = promoByBrand;
+      savedPromoBySize    = promoBySize;
       buildBeerTiers();
       return;
     }
@@ -596,6 +684,9 @@ async function loadPromotion() {
   try {
     localStorage.setItem(CACHE_PROMO, JSON.stringify({ ts: Date.now(), data: { product: promoByProduct, brand: promoByBrand, size: promoBySize } }));
   } catch {}
+  savedPromoByProduct = promoByProduct;
+  savedPromoByBrand   = promoByBrand;
+  savedPromoBySize    = promoBySize;
   buildBeerTiers();
 }
 
@@ -763,6 +854,21 @@ function setQuickFilter(period) {
   ['qToday','qWeek','qMonth','qLastMonth'].forEach(id => document.getElementById(id)?.classList.remove('active'));
   const map = { today:'qToday', week:'qWeek', month:'qMonth', lastmonth:'qLastMonth' };
   document.getElementById(map[period])?.classList.add('active');
+
+  // สลับ promo maps ตาม filter
+  if (period === 'lastmonth') {
+    promoByProduct = lmPromoByProduct;
+    promoByBrand   = lmPromoByBrand;
+    promoBySize    = lmPromoBySize;
+  } else {
+    promoByProduct = savedPromoByProduct;
+    promoByBrand   = savedPromoByBrand;
+    promoBySize    = savedPromoBySize;
+  }
+  enrichWithPromo(allData);
+  enrichWithFreeStatus(allData);
+  buildPromoVerifyMap();
+
   applyFilters();
 }
 
@@ -1129,7 +1235,8 @@ async function refreshData() {
   btn.disabled = true;
   btn.style.transform = 'rotate(360deg)';
   btn.style.transition = 'transform .6s';
-  localStorage.removeItem(CACHE_KEY);
+  [CACHE_KEY, CACHE_PROMO_LM].forEach(k => localStorage.removeItem(k));
+  lmPromoByProduct = {}; lmPromoByBrand = {}; lmPromoBySize = {};
   await loadData(true);
   btn.disabled = false;
   setTimeout(() => { btn.style.transform = ''; btn.style.transition = ''; }, 700);
