@@ -4810,9 +4810,29 @@ function buildPromoItemsFromRows(rows){
     if (m.buySkus && m.buySkus.length > 1) m.buySkus = promoSortSkusByName(m.buySkus);
     delete m._buyNames;
   });
-  // v6.35 — เรียงการ์ดตามหมวดหมู่ (CAT GROUP) แล้วตามชื่อ
-  merged.sort((a,b) => (a.buyCategory||'zzz').localeCompare(b.buyCategory||'zzz','th') || (a.buyName||'').localeCompare(b.buyName||'','th'));
+  // v6.47 — เรียงการ์ดตามแบรนด์ โดยแบรนด์ที่ขายดี (RANK ดีสุด) ขึ้นก่อน แล้วชื่อแบรนด์/ชื่อสินค้า
+  const brandScore = promoBrandScoreMap();
+  merged.sort((a,b) => {
+    const ba = a.buyBrand||'', bb = b.buyBrand||'';
+    const sa = ba ? (brandScore[ba] ?? 90) : 100, sb = bb ? (brandScore[bb] ?? 90) : 100;   // ไม่มีแบรนด์ = ท้ายสุด
+    return sa - sb || ba.localeCompare(bb,'th') || (a.buyName||'').localeCompare(b.buyName||'','th');
+  });
   return merged;
+}
+// v6.47 — RANK → คะแนน (A=1 ดีสุด … F=6 · New=15 · ไม่มี=99); คะแนนแบรนด์ = คะแนนดีสุดของสินค้าในแบรนด์
+const WHS_RANK = ['W1','W2','W3','W4','C4'];
+function promoProdRankScore(p){
+  if (!p || !p.rank) return 99;
+  let best = 99;
+  WHS_RANK.forEach(w => { const l = String(p.rank[w]||'').trim(); let sc = 99;
+    if (/^[A-Za-z]$/.test(l)) sc = l.toUpperCase().charCodeAt(0) - 64; else if (/new/i.test(l)) sc = 15;
+    if (sc < best) best = sc; });
+  return best;
+}
+function promoBrandScoreMap(){
+  const m = {};
+  products.forEach(p => { const b = (p.brand||'').trim(); if (!b) return; const sc = promoProdRankScore(p); if (m[b] == null || sc < m[b]) m[b] = sc; });
+  return m;
 }
 function promoSortSkusByName(skus){
   return skus.slice().sort((a,b) => (promoProduct(a)?.name||'').localeCompare(promoProduct(b)?.name||'','th'));
