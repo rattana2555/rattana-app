@@ -4902,6 +4902,14 @@ function promoSlots(n){
   return out;
 }
 function promoSlotKey(pr){ return 'p:' + [pr.buyName||'', pr.freeBc||'', pr.freePieces||''].join('|'); }   // v6.33 — stable per-slot id for canvas edit
+// v6.42 — รูปจาก Drive บางทีโหลดไม่ทัน/โดน rate-limit → ลองใหม่ 2 ครั้ง (ครั้งท้ายตัด crossorigin) ก่อนซ่อน
+function promoImgRetry(el){
+  const n = (parseInt(el.dataset.err||'0') || 0) + 1; el.dataset.err = String(n);
+  if (n > 2) { el.style.display = 'none'; return; }
+  if (n === 2) el.removeAttribute('crossorigin');   // ครั้งที่ 2 ตัด CORS ออก (อย่างน้อยให้รูปขึ้น แม้ bake ไม่ได้)
+  const src = el.src; el.removeAttribute('src');
+  setTimeout(() => { el.src = src; }, 300 * n);
+}
 function promoItemHtml(pr, c, gi){
   const fp = promoProduct(pr.freeSku);
   const img = p => p && p.image ? `<img src="${escapeAttr(imgAtWidth(p.image,300))}" onerror="promoImgRetry(this)" crossorigin="anonymous">` : '';
