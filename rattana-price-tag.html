@@ -2844,8 +2844,16 @@ function initApp() {
     });
     panel.addEventListener('click', (e) => {
       const del = e.target.closest('.promo-del');
-      if (del) { const i = +del.dataset.i; promoItems.splice(i, 1); savePromoItems(); renderPromoBuilder(); buildPromoPreview(); }
+      if (del) { const i = +del.dataset.i; promoItems.splice(i, 1); savePromoItems(); renderPromoBuilder(); buildPromoPreview(); return; }
+      // v6.49 — คลิกรูป → เปิดช่องค้นหาเลือกรูปเอง
+      const thumb = e.target.closest('.promo-thumb-clk');
+      if (thumb) { const pick = thumb.closest('.promo-half').querySelector(`.promo-imgpick[data-side="${thumb.dataset.side}"]`); if (pick) { const open = pick.style.display !== 'none'; pick.style.display = open ? 'none' : ''; if (!open) { const inp = pick.querySelector('.promo-imgsearch'); if (inp) { inp.focus(); promoImgMatches(inp); } } } return; }
+      // v6.49 — เลือกสินค้าจาก dropdown → ตั้งรูปเอง (data-sku="" = ล้าง กลับไปอัตโนมัติ)
+      const opt = e.target.closest('.promo-imgopt');
+      if (opt) { const i = +opt.dataset.i, side = opt.dataset.side, sku = opt.dataset.sku || ''; const it = promoItems[i];
+        if (it) { it[side === 'buy' ? 'buyImgSku' : 'freeImgSku'] = sku; savePromoItems(); renderPromoBuilder(); buildPromoPreview(); } return; }
     });
+    document.addEventListener('click', (e) => { if (!e.target.closest('.promo-imgpick') && !e.target.closest('.promo-thumb-clk')) document.querySelectorAll('#promoBuilderPanel .promo-imgpick').forEach(p => p.style.display = 'none'); });
     // edit the "ซื้อ.../แถมฟรี..." lines directly on the poster preview
     const stage = $('#pdfStage');
     if (stage) stage.addEventListener('input', (e) => {
