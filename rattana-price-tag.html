@@ -4812,12 +4812,13 @@ function promoWhOptions(){
   return Array.from(set).sort();
 }
 function promoWhMatch(it){ if (!promoWhFilter) return true; return String(it.whs||'').toUpperCase().split(/[,\s]+/).map(s => s.trim()).includes(promoWhFilter.toUpperCase()); }
-// v6.39 — filter by จบโปร month; null = ตามพื้นหลังที่เลือก, 0 = ทุกเดือน
+// v6.42 — filter by "โปรยังจัดอยู่ในเดือนนั้น" (ช่วง เริ่ม..จบ ครอบเดือนที่เลือก) ไม่ใช่แค่เดือนที่จบ
+function promoItemMonths(it){ return (it.spanMonths && it.spanMonths.length) ? it.spanMonths : (it.endMonth ? [it.endMonth] : []); }
 function promoSelectedMonth(){ const cur = SHEET_CONFIG.promoTemplate || ''; const p = PROMO_BG_PRESETS.find(b => cur.includes(b.id)); return p ? p.month : 0; }
 function promoEffMonth(){ return promoMonthFilter == null ? promoSelectedMonth() : promoMonthFilter; }
-function promoMonthMatch(it){ const m = promoEffMonth(); return !m || (it.endMonth||0) === m; }
-function promoMonthOptions(){   // distinct จบโปร months present in the data
-  const set = new Set(); promoItems.forEach(it => { if (it.endMonth) set.add(it.endMonth); });
+function promoMonthMatch(it){ const m = promoEffMonth(); return !m || promoItemMonths(it).includes(m); }
+function promoMonthOptions(){   // distinct months where any promo is active (เริ่ม..จบ)
+  const set = new Set(); promoItems.forEach(it => promoItemMonths(it).forEach(mm => set.add(mm)));
   return Array.from(set).sort((a,b) => a-b);
 }
 function setPromoMonth(v){ promoMonthFilter = (v === 'auto') ? null : parseInt(v); renderPromoBuilder(); buildPromoPreview(); }
