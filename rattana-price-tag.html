@@ -4794,9 +4794,18 @@ function promoWhOptions(){
   return Array.from(set).sort();
 }
 function promoWhMatch(it){ if (!promoWhFilter) return true; return String(it.whs||'').toUpperCase().split(/[,\s]+/).map(s => s.trim()).includes(promoWhFilter.toUpperCase()); }
-function promoShownItems(){ return promoItems.map((it, idx) => ({ it, idx })).filter(x => x.it.include !== false && promoWhMatch(x.it)); }
+// v6.39 — filter by จบโปร month; null = ตามพื้นหลังที่เลือก, 0 = ทุกเดือน
+function promoSelectedMonth(){ const cur = SHEET_CONFIG.promoTemplate || ''; const p = PROMO_BG_PRESETS.find(b => cur.includes(b.id)); return p ? p.month : 0; }
+function promoEffMonth(){ return promoMonthFilter == null ? promoSelectedMonth() : promoMonthFilter; }
+function promoMonthMatch(it){ const m = promoEffMonth(); return !m || (it.endMonth||0) === m; }
+function promoMonthOptions(){   // distinct จบโปร months present in the data
+  const set = new Set(); promoItems.forEach(it => { if (it.endMonth) set.add(it.endMonth); });
+  return Array.from(set).sort((a,b) => a-b);
+}
+function setPromoMonth(v){ promoMonthFilter = (v === 'auto') ? null : parseInt(v); renderPromoBuilder(); buildPromoPreview(); }
+function promoShownItems(){ return promoItems.map((it, idx) => ({ it, idx })).filter(x => x.it.include !== false && promoWhMatch(x.it) && promoMonthMatch(x.it)); }
 function setPromoWh(v){ promoWhFilter = v || ''; renderPromoBuilder(); buildPromoPreview(); }
-function promoSetAll(on){ promoItems.forEach(it => { if (promoWhMatch(it)) it.include = !!on; }); savePromoItems(); renderPromoBuilder(); buildPromoPreview(); }
+function promoSetAll(on){ promoItems.forEach(it => { if (promoWhMatch(it) && promoMonthMatch(it)) it.include = !!on; }); savePromoItems(); renderPromoBuilder(); buildPromoPreview(); }
 
 // ── background month picker (unchanged) ──
 function applyPromoMonth(id){   // v6.31 — renamed to avoid clash with the promo-header applyPromoBg
