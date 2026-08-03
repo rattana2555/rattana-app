@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v3.67</title>
+<title>Rattana DS-DC Report v3.68</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -136,7 +136,7 @@ body.dark .tab-btn.active{color:var(--gold)}
   <div class="logo-text">Rattana <span>DS-DC</span> Report</div>
   <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" title="Dark mode">◑</button>
-  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.67</span>
+  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.68</span>
 </header>
 
 <div class="content">
@@ -362,7 +362,7 @@ const LM_PROMO_SHEET = 'เก็บ promotion app';
 const CACHE_KEY   = 'rattana_dsdc_data';
 const CACHE_PDDT  = 'rattana_pddt_map_v2';
 const CACHE_PROMO = 'rattana_promo_map';
-const CACHE_LM_PROMO = 'rattana_lm_promo_map';
+const CACHE_LM_PROMO = 'rattana_lm_promo_map_v2';
 const CACHE_ORDER = 'rattana_order_map';
 const STAFF_ID    = '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ';
 const STAFF_SHEET = 'Sheet1';
@@ -639,15 +639,18 @@ async function loadPromotionLastMonth() {
       lmPromoByProduct = c.data.product;
       lmPromoByBrand   = c.data.brand;
       lmPromoBySize    = c.data.size;
+      const n = Object.values(lmPromoByProduct).flat().length + Object.values(lmPromoByBrand).flat().length + Object.values(lmPromoBySize).flat().length;
+      showToast(`โปรเดือนที่แล้ว (cache): ${n} rules`, n > 0 ? 'info' : 'error');
       return;
     }
   } catch {}
   const url = `https://docs.google.com/spreadsheets/d/${LM_PROMO_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(LM_PROMO_SHEET)}`;
   let res;
   try { res = await fetch(url); } catch (e) { showToast('โหลดโปรเดือนที่แล้วไม่สำเร็จ (network)', 'error'); return; }
-  if (!res.ok) { showToast(`โหลดโปรเดือนที่แล้วไม่สำเร็จ (${res.status}) — ตรวจสอบสิทธิ์ชีต`, 'error'); return; }
+  if (!res.ok) { showToast(`โหลดโปรเดือนที่แล้วไม่สำเร็จ (${res.status})`, 'error'); return; }
   const text = await res.text();
   const dataRows = parseCsv(text);
+  console.log('[LM Promo] raw rows:', dataRows.length, 'headers:', dataRows[0] ? Object.keys(dataRows[0]).slice(0,6) : []);
   lmPromoByProduct = {}; lmPromoByBrand = {}; lmPromoBySize = {};
   dataRows.forEach(r => {
     const method = (r['วิธีวัด'] || '').trim();
@@ -677,11 +680,10 @@ async function loadPromotionLastMonth() {
     }
   });
   const totalRules = Object.values(lmPromoByProduct).flat().length + Object.values(lmPromoByBrand).flat().length + Object.values(lmPromoBySize).flat().length;
-  console.log('[LM Promo] loaded rows:', dataRows.length, 'rules:', totalRules, 'sample headers:', dataRows[0] ? Object.keys(dataRows[0]).slice(0,5) : []);
-  try {
-    localStorage.setItem(CACHE_LM_PROMO, JSON.stringify({ ts: Date.now(), data: { product: lmPromoByProduct, brand: lmPromoByBrand, size: lmPromoBySize } }));
-  } catch {}
-  showToast(`โปรเดือนที่แล้ว: โหลด ${totalRules} rules ✓`, totalRules > 0 ? 'success' : 'error');
+  if (totalRules > 0) {
+    try { localStorage.setItem(CACHE_LM_PROMO, JSON.stringify({ ts: Date.now(), data: { product: lmPromoByProduct, brand: lmPromoByBrand, size: lmPromoBySize } })); } catch {}
+  }
+  showToast(`โปรเดือนที่แล้ว: โหลด ${dataRows.length} แถว / ${totalRules} rules`, totalRules > 0 ? 'success' : 'error');
 }
 
 // ── Load Staff sheet → slmnWMap (ชื่อ - สกุล → W) ────────────
