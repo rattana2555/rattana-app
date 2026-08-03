@@ -4950,24 +4950,42 @@ function renderPromoBuilder(){
   if (!promoItems.length) { box.innerHTML = `<div class="help-block">ยังไม่มีข้อมูลโปร — กด <b>"🔄 โหลด/รีเฟรชจากชีท"</b> ด้านบนเพื่อดึงโปรจากชีท Promotion</div>`; return; }
   const thumb = p => p && p.image ? `<img src="${escapeAttr(imgAtWidth(p.image,80))}" onerror="this.style.visibility='hidden'" crossorigin="anonymous">` : `<span class="promo-nothumb">🚫</span>`;
   box.innerHTML = promoItems.map((it, i) => {
-    const bp = promoProduct(it.buySku), fp = promoProduct(it.freeSku);
+    const bp = promoProduct(it.buyImgSku || it.buySku), fp = promoProduct(it.freeImgSku || it.freeSku);   // v6.49 — reflect manual override
     const hide = !promoWhMatch(it) || !promoMonthMatch(it) || !promoStoreMatch(it);
+    const pickBox = side => `<div class="promo-imgpick" data-side="${side}" data-i="${i}" style="display:none">
+        <input class="input input-sm promo-imgsearch" data-side="${side}" data-i="${i}" placeholder="🔍 ค้นหาสินค้าเพื่อใช้รูป (พิมพ์ชื่อ)">
+        <div class="promo-dropdown"></div>
+      </div>`;
     return `<div class="promo-row${it.include===false?' off':''}" data-i="${i}"${hide?' style="display:none"':''}>
       <input type="checkbox" class="promo-inc" data-i="${i}" ${it.include!==false?'checked':''} title="โชว์โปรนี้ในโปสเตอร์">
       <div class="promo-half">
         <span class="promo-badge buy">ซื้อ</span>
-        <div class="promo-editline"><span class="promo-thumb">${thumb(bp)}</span>
+        <div class="promo-editline"><span class="promo-thumb promo-thumb-clk${it.buyImgSku?' over':''}" data-side="buy" data-i="${i}" title="คลิกเพื่อเลือก/เปลี่ยนรูปเอง">${thumb(bp)}</span>
           <input class="input input-sm promo-text" data-i="${i}" data-field="buyText" value="${escapeAttr(it.buyText||'')}"></div>
+        ${pickBox('buy')}
       </div>
       <span class="promo-arrow">➜</span>
       <div class="promo-half">
         <span class="promo-badge free">แถมฟรี</span>
-        <div class="promo-editline"><span class="promo-thumb">${thumb(fp)}</span>
+        <div class="promo-editline"><span class="promo-thumb promo-thumb-clk${it.freeImgSku?' over':''}" data-side="free" data-i="${i}" title="คลิกเพื่อเลือก/เปลี่ยนรูปเอง">${thumb(fp)}</span>
           <input class="input input-sm promo-text" data-i="${i}" data-field="freeText" value="${escapeAttr(it.freeText||'')}"></div>
+        ${pickBox('free')}
       </div>
       <button class="btn btn-sm btn-outline promo-del" data-i="${i}" title="ลบโปรนี้">🗑</button>
     </div>`;
   }).join('');
+}
+// v6.49 — dropdown ค้นหาสินค้าเพื่อตั้งรูปเอง (แก้เคสที่ชื่อในชีทต่างจาก Stocksync จนจับรูปไม่เจอ/ผิด)
+function promoImgMatches(input){
+  const dd = input.parentElement.querySelector('.promo-dropdown'); if (!dd) return;
+  const q = input.value.trim().toLowerCase();
+  const side = input.dataset.side, i = input.dataset.i;
+  const head = `<div class="promo-opt promo-imgopt" data-side="${side}" data-i="${i}" data-sku=""><span style="color:#1f8ff0">🔄 ใช้รูปอัตโนมัติ (ล้างที่เลือกเอง)</span></div>`;
+  if (q.length < 2) { dd.innerHTML = head; return; }
+  const matches = products.filter(p => p.image && ((p.name||'').toLowerCase().includes(q) || (p.sku||'').includes(q))).slice(0, 8);
+  dd.innerHTML = head + (matches.length
+    ? matches.map(p => `<div class="promo-opt promo-imgopt" data-side="${side}" data-i="${i}" data-sku="${escapeAttr(p.sku)}"><img src="${escapeAttr(imgAtWidth(p.image,60))}" onerror="this.style.visibility='hidden'" crossorigin="anonymous"><span>${escapeHtml((p.name||'').slice(0,46))}</span></div>`).join('')
+    : '<div class="promo-opt" style="color:#999;cursor:default">— ไม่พบสินค้า —</div>');
 }
 
 // ── Render the promo poster ──
