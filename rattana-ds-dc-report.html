@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v3.68</title>
+<title>Rattana DS-DC Report v3.69</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -136,7 +136,7 @@ body.dark .tab-btn.active{color:var(--gold)}
   <div class="logo-text">Rattana <span>DS-DC</span> Report</div>
   <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" title="Dark mode">◑</button>
-  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.68</span>
+  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.69</span>
 </header>
 
 <div class="content">
@@ -171,7 +171,6 @@ body.dark .tab-btn.active{color:var(--gold)}
     <button class="qbtn" id="qToday"    onclick="setQuickFilter('today')">📅 วันนี้</button>
     <button class="qbtn" id="qWeek"     onclick="setQuickFilter('week')">📆 สัปดาห์นี้</button>
     <button class="qbtn" id="qMonth"    onclick="setQuickFilter('month')">🗓️ เดือนนี้</button>
-    <button class="qbtn" id="qLastMonth" onclick="setQuickFilter('lastmonth')">📋 เดือนที่แล้ว</button>
     <div style="flex:1"></div>
     <button class="btn btn-gold btn-sm" onclick="exportExcel()">📥 Export Excel</button>
   </div>
@@ -357,12 +356,9 @@ const PDDT_ID     = '16mYDqAqqJma-_0vCIAajy6bcjdOZ7F6VagxkdkqAB2I';
 const PDDT_NAME   = 'PDDT';
 const PROMO_ID    = '1CqHARklgveAeJ6rTkNeyUSku__puTiNE7-c6ebn93W8';
 const PROMO_SHEET = 'Promotion';
-const LM_PROMO_ID    = '1TX-hg6gsdwNHKLgL6GVw7YO8wWhzRLVlVkgb6a_ITpo';
-const LM_PROMO_SHEET = 'เก็บ promotion app';
 const CACHE_KEY   = 'rattana_dsdc_data';
 const CACHE_PDDT  = 'rattana_pddt_map_v2';
 const CACHE_PROMO = 'rattana_promo_map';
-const CACHE_LM_PROMO = 'rattana_lm_promo_map_v2';
 const CACHE_ORDER = 'rattana_order_map';
 const STAFF_ID    = '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ';
 const STAFF_SHEET = 'Sheet1';
@@ -378,8 +374,6 @@ let pddtMap = {};        // PRODUCT NAME (lower) → { CAT_BRAND, CAT_SIZE }
 let promoByProduct = {}; // SKU_NAME (lower) → [promo obj]
 let promoByBrand   = {}; // CAT_BRAND (lower) → [promo obj]
 let promoBySize    = {}; // CAT_SIZE (lower)  → [promo obj]
-let lmPromoByProduct = {}, lmPromoByBrand = {}, lmPromoBySize = {};
-let _regularPromoByProduct = {}, _regularPromoByBrand = {}, _regularPromoBySize = {};
 let promoVerifyMap = new Map(); // row object → { status, expected, actual, promoName }
 let slmnWMap = {};       // ชื่อ-สกุล (lower, no คุณ) → คลัง e.g. "W4"
 let beerTiers = [];      // built from Promotion sheet after load
@@ -424,27 +418,6 @@ function fmtDate(s) {
 }
 
 // ── CSV Parser ─────────────────────────────────────────────────
-function parseCsvRaw(text) {
-  if (!text) return [];
-  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
-  const rows = []; let row = [], cell = '', inQuote = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (inQuote) {
-      if (ch === '"') { if (text[i+1]==='"'){cell+='"';i++;}else inQuote=false; }
-      else cell += ch;
-    } else {
-      if (ch==='"') inQuote=true;
-      else if (ch===',') { row.push(cell); cell=''; }
-      else if (ch==='\r') { /* skip */ }
-      else if (ch==='\n') { row.push(cell); rows.push(row); row=[]; cell=''; }
-      else cell += ch;
-    }
-  }
-  if (cell.length || row.length) { row.push(cell); rows.push(row); }
-  return rows;
-}
-
 function parseCsv(text) {
   if (!text) return [];
   if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
@@ -497,7 +470,7 @@ async function loadData(showLoading = true) {
   try {
     const cached = getCached();
     if (cached) {
-      await Promise.all([loadPddt(), loadPromotion(), loadPromotionLastMonth(), loadOrder()]);
+      await Promise.all([loadPddt(), loadPromotion(), loadOrder()]);
       allData = cached;
       enrichWithPddt(allData);
       enrichWithPromo(allData);
@@ -524,7 +497,7 @@ async function loadData(showLoading = true) {
       return;
     }
     // Fresh load — fetch all in parallel
-    const [data] = await Promise.all([fetchSheetData(), loadPddt(), loadPromotion(), loadPromotionLastMonth(), loadOrder()]);
+    const [data] = await Promise.all([fetchSheetData(), loadPddt(), loadPromotion(), loadOrder()]);
     enrichWithPddt(data);
     enrichWithPromo(data);
     enrichWithFreeStatus(data);
@@ -583,9 +556,6 @@ async function loadPromotion() {
       promoByProduct = c.data.product;
       promoByBrand   = c.data.brand;
       promoBySize    = c.data.size;
-      _regularPromoByProduct = promoByProduct;
-      _regularPromoByBrand   = promoByBrand;
-      _regularPromoBySize    = promoBySize;
       buildBeerTiers();
       return;
     }
@@ -622,69 +592,12 @@ async function loadPromotion() {
       (promoBySize[name] = promoBySize[name] || []).push(obj);
     }
   });
-  _regularPromoByProduct = promoByProduct;
-  _regularPromoByBrand   = promoByBrand;
-  _regularPromoBySize    = promoBySize;
   try {
     localStorage.setItem(CACHE_PROMO, JSON.stringify({ ts: Date.now(), data: { product: promoByProduct, brand: promoByBrand, size: promoBySize } }));
   } catch {}
   buildBeerTiers();
 }
 
-// ── Load LM Promo sheet (หัวคอลัมน์แถว 2) ────────────────────
-async function loadPromotionLastMonth() {
-  try {
-    const c = JSON.parse(localStorage.getItem(CACHE_LM_PROMO));
-    if (c && Date.now() - c.ts < TTL) {
-      lmPromoByProduct = c.data.product;
-      lmPromoByBrand   = c.data.brand;
-      lmPromoBySize    = c.data.size;
-      const n = Object.values(lmPromoByProduct).flat().length + Object.values(lmPromoByBrand).flat().length + Object.values(lmPromoBySize).flat().length;
-      showToast(`โปรเดือนที่แล้ว (cache): ${n} rules`, n > 0 ? 'info' : 'error');
-      return;
-    }
-  } catch {}
-  const url = `https://docs.google.com/spreadsheets/d/${LM_PROMO_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(LM_PROMO_SHEET)}`;
-  let res;
-  try { res = await fetch(url); } catch (e) { showToast('โหลดโปรเดือนที่แล้วไม่สำเร็จ (network)', 'error'); return; }
-  if (!res.ok) { showToast(`โหลดโปรเดือนที่แล้วไม่สำเร็จ (${res.status})`, 'error'); return; }
-  const text = await res.text();
-  const dataRows = parseCsv(text);
-  console.log('[LM Promo] raw rows:', dataRows.length, 'headers:', dataRows[0] ? Object.keys(dataRows[0]).slice(0,6) : []);
-  lmPromoByProduct = {}; lmPromoByBrand = {}; lmPromoBySize = {};
-  dataRows.forEach(r => {
-    const method = (r['วิธีวัด'] || '').trim();
-    const name   = (r['ชื่อ']    || '').trim().toLowerCase();
-    if (!name) return;
-    const obj = {
-      ชื่อโปร:       (r['ชื่อโปร']       || '').trim(),
-      ราคาขายกำหนด: (r['ราคาขายกำหนด'] || '').trim(),
-      จำนวน:        (r['จำนวน']         || '').trim(),
-      รูปแบบขาย:   (r['รูปแบบขาย']    || '').trim().toUpperCase(),
-      แถมสินค้า:   (r['แถมสินค้า']     || '').trim(),
-      จำนวนแถมEA:  (r['จำนวนแถมEA']   || '').trim(),
-      การเคลม:     (r['การเคลม']       || '').trim(),
-      warehouses:   (r['Warehouses']    || '').split(',').map(w => w.trim()).filter(Boolean),
-      role:         (r['Role']          || '').trim(),
-      เริ่มโปร:    (r['เริ่มโปร']      || '').trim(),
-      จบโปร:       (r['จบโปร']         || '').trim(),
-      วิธีวัด:     method,
-      ชื่อ:         name,
-    };
-    if (method === 'PRODUCT NAME') {
-      (lmPromoByProduct[name] = lmPromoByProduct[name] || []).push(obj);
-    } else if (method === 'CAT BRAND') {
-      (lmPromoByBrand[name] = lmPromoByBrand[name] || []).push(obj);
-    } else if (method === 'CAT SIZE') {
-      (lmPromoBySize[name] = lmPromoBySize[name] || []).push(obj);
-    }
-  });
-  const totalRules = Object.values(lmPromoByProduct).flat().length + Object.values(lmPromoByBrand).flat().length + Object.values(lmPromoBySize).flat().length;
-  if (totalRules > 0) {
-    try { localStorage.setItem(CACHE_LM_PROMO, JSON.stringify({ ts: Date.now(), data: { product: lmPromoByProduct, brand: lmPromoByBrand, size: lmPromoBySize } })); } catch {}
-  }
-  showToast(`โปรเดือนที่แล้ว: โหลด ${dataRows.length} แถว / ${totalRules} rules`, totalRules > 0 ? 'success' : 'error');
-}
 
 // ── Load Staff sheet → slmnWMap (ชื่อ - สกุล → W) ────────────
 async function loadOrder() {
@@ -847,22 +760,9 @@ function updateStats() {
 // ── Quick filter ───────────────────────────────────────────────
 function setQuickFilter(period) {
   activeQuickFilter = period;
-  ['qToday','qWeek','qMonth','qLastMonth'].forEach(id => document.getElementById(id)?.classList.remove('active'));
-  const map = { today:'qToday', week:'qWeek', month:'qMonth', lastmonth:'qLastMonth' };
+  ['qToday','qWeek','qMonth'].forEach(id => document.getElementById(id)?.classList.remove('active'));
+  const map = { today:'qToday', week:'qWeek', month:'qMonth' };
   document.getElementById(map[period])?.classList.add('active');
-
-  if (period === 'lastmonth') {
-    promoByProduct = lmPromoByProduct;
-    promoByBrand   = lmPromoByBrand;
-    promoBySize    = lmPromoBySize;
-  } else {
-    promoByProduct = _regularPromoByProduct;
-    promoByBrand   = _regularPromoByBrand;
-    promoBySize    = _regularPromoBySize;
-  }
-  enrichWithPromo(allData);
-  enrichWithFreeStatus(allData);
-  buildPromoVerifyMap();
 
   applyFilters();
 }
@@ -889,9 +789,6 @@ function getShipDateRange(period) {
   }
   if (period === 'month') {
     return { from: new Date(y, m, 1), to: new Date(y, m + 1, 0) };
-  }
-  if (period === 'lastmonth') {
-    return { from: new Date(y, m - 1, 1), to: new Date(y, m, 0) };
   }
   return null; // 'all'
 }
