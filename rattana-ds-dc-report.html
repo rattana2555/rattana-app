@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana DS-DC Report v3.63</title>
+<title>Rattana DS-DC Report v3.64</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -136,7 +136,7 @@ body.dark .tab-btn.active{color:var(--gold)}
   <div class="logo-text">Rattana <span>DS-DC</span> Report</div>
   <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรช">↻</button>
   <button class="icon-btn" onclick="toggleDark()" title="Dark mode">◑</button>
-  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.63</span>
+  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:4px">v3.64</span>
 </header>
 
 <div class="content">
@@ -375,6 +375,7 @@ let pddtMap = {};        // PRODUCT NAME (lower) → { CAT_BRAND, CAT_SIZE }
 let promoByProduct = {}; // SKU_NAME (lower) → [promo obj]
 let promoByBrand   = {}; // CAT_BRAND (lower) → [promo obj]
 let promoBySize    = {}; // CAT_SIZE (lower)  → [promo obj]
+let _savedPromoMaps = null; // สำรอง maps ก่อน clear เพื่อ filter อื่น
 let promoVerifyMap = new Map(); // row object → { status, expected, actual, promoName }
 let slmnWMap = {};       // ชื่อ-สกุล (lower, no คุณ) → คลัง e.g. "W4"
 let beerTiers = [];      // built from Promotion sheet after load
@@ -557,6 +558,7 @@ async function loadPromotion() {
       promoByProduct = c.data.product;
       promoByBrand   = c.data.brand;
       promoBySize    = c.data.size;
+      _savedPromoMaps = { product: promoByProduct, brand: promoByBrand, size: promoBySize };
       buildBeerTiers();
       return;
     }
@@ -596,6 +598,7 @@ async function loadPromotion() {
   try {
     localStorage.setItem(CACHE_PROMO, JSON.stringify({ ts: Date.now(), data: { product: promoByProduct, brand: promoByBrand, size: promoBySize } }));
   } catch {}
+  _savedPromoMaps = { product: promoByProduct, brand: promoByBrand, size: promoBySize };
   buildBeerTiers();
 }
 
@@ -763,6 +766,22 @@ function setQuickFilter(period) {
   ['qToday','qWeek','qMonth','qLastMonth'].forEach(id => document.getElementById(id)?.classList.remove('active'));
   const map = { today:'qToday', week:'qWeek', month:'qMonth', lastmonth:'qLastMonth' };
   document.getElementById(map[period])?.classList.add('active');
+
+  if (period === 'lastmonth') {
+    // เดือนที่แล้ว — ล้าง promo ออก ไม่แสดงสถานะโปร
+    promoByProduct = {}; promoByBrand = {}; promoBySize = {};
+    enrichWithPromo(allData);
+    enrichWithFreeStatus(allData);
+    buildPromoVerifyMap();
+  } else if (_savedPromoMaps) {
+    // กลับมา filter อื่น — คืน promo maps เดิม
+    promoByProduct = _savedPromoMaps.product;
+    promoByBrand   = _savedPromoMaps.brand;
+    promoBySize    = _savedPromoMaps.size;
+    enrichWithPromo(allData);
+    enrichWithFreeStatus(allData);
+    buildPromoVerifyMap();
+  }
 
   applyFilters();
 }
