@@ -4762,8 +4762,13 @@ function buildPromoItemsFromRows(rows){
     const spanMonths = promoActiveMonths(promoStart, promoEnd);      // v6.42 — ทุกเดือนที่โปรยังจัดอยู่ (เริ่ม..จบ)
     const endMonth   = spanMonths.length ? spanMonths[spanMonths.length - 1] : 0;
     const buyMeasure = String(promoCol(r,'วิธีวัด')||'').trim();      // PRODUCT NAME / CAT SIZE / CAT BRAND
-    const buyProduct  = promoFindByName(buyName);                    // รูปฝั่งซื้อ (จับจากชื่อ)
+    let buyProduct    = promoFindByName(buyName);                    // รูปฝั่งซื้อ (จับจากชื่อ)
     const freeProduct = promoFindByBarcode(freeBc) || promoFindByName(freeName);   // รูป + ตัวคูณหน่วยฝั่งแถม
+    // v6.46 — โปร "ซื้อ X แถม X" (สินค้าเดียวกัน): ฝั่งซื้อไม่มีบาร์โค้ด จับชื่อได้ตัวไม่มีรูป แต่ฝั่งแถมจับจากบาร์โค้ดเจอตัวมีรูป → ใช้รูปเดียวกัน
+    if ((!buyProduct || !buyProduct.image) && freeProduct && freeProduct.image) {
+      const bn = promoNorm(buyName), fn = promoNorm(freeName);
+      if (bn && fn && (bn === fn || bn.includes(fn) || fn.includes(bn))) buyProduct = freeProduct;
+    }
     const buySkus = promoBuyGroupSkus(buyProduct, buyMeasure);       // v6.34 — คละรสขนาดเดียวกัน → หลายรูป
     const buyUnitTh = PROMO_UNIT_TH[buyUnit] || buyUnit || '';
     const buyText  = ('ซื้อ ' + buyName + (buyQty ? ' ' + buyQty + ' ' + buyUnitTh : '')).replace(/\s+/g,' ').trim();
