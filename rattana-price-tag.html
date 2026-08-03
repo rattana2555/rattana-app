@@ -4688,6 +4688,18 @@ function promoFindByName(name){
   let best = null, bs = 0;
   for (const p of products) { const n = promoNorm(p.name); if (!n) continue; const s = tk.reduce((a,t) => a + (n.includes(t) ? 1 : 0), 0); if (s > bs || (s === bs && best && n.length < promoNorm(best.name).length)) { bs = s; best = p; } }
   if (best && ((bs >= 2 && bs >= tk.length - 1) || bs === tk.length)) return best;
+  // 4) v6.41 — จับจาก CAT SIZE + CAT BRAND ด้วย (ชื่อในชีทมักตรงกับ CAT SIZE เช่น "ช้างโคลด์บรูว์ 490" ที่ PRODUCT NAME เป็นภาษาอังกฤษ) + ตัดวรรณยุกต์
+  const ltk = tk.map(promoLoose).filter(Boolean);
+  if (ltk.length) {
+    let lb = null, lbs = 0;
+    for (const p of products) {
+      const h = promoLoose((p.name||'') + ' ' + (p.size||'') + ' ' + (p.brand||''));
+      if (!h) continue;
+      const s = ltk.reduce((a,t) => a + (h.includes(t) ? 1 : 0), 0);
+      if (s > lbs) { lbs = s; lb = p; }
+    }
+    if (lb && lbs >= 2) return lb;
+  }
   return null;
 }
 // จำนวนแถม (มาเป็นชิ้น) → หน่วยไทย โดยเทียบตัวคูณ UNIT PA/CS ของสินค้าใน PDDT
