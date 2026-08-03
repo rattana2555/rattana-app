@@ -4810,16 +4810,17 @@ function buildPromoItemsFromRows(rows){
     if (m.buySkus && m.buySkus.length > 1) m.buySkus = promoSortSkusByName(m.buySkus);
     delete m._buyNames;
   });
-  // v6.47 — เรียงการ์ดตามแบรนด์ โดยแบรนด์ที่ขายดี (RANK ดีสุด) ขึ้นก่อน แล้วชื่อแบรนด์/ชื่อสินค้า
-  const brandScore = promoBrandScoreMap();
+  // v6.48 — เรียงตามแบรนด์ (จับจาก "คำแรกของชื่อสินค้า" — นิ่งกว่า CAT BRAND ที่บางทีเพี้ยน เช่น คาร์เนชั่นถูกใส่ "โกโก้ดัทช์") · แบรนด์ขายดีขึ้นก่อน
+  const dict = promoBrandDict();
+  merged.forEach(it => { it.groupBrand = promoGroupBrand(it.buyName, dict, it.buyBrand); });
   merged.sort((a,b) => {
-    const ba = a.buyBrand||'', bb = b.buyBrand||'';
-    const sa = ba ? (brandScore[ba] ?? 90) : 100, sb = bb ? (brandScore[bb] ?? 90) : 100;   // ไม่มีแบรนด์ = ท้ายสุด
-    return sa - sb || ba.localeCompare(bb,'th') || (a.buyName||'').localeCompare(b.buyName||'','th');
+    const ga = a.groupBrand||'', gb = b.groupBrand||'';
+    const sa = ga ? (dict.score[ga] ?? 90) : 100, sb = gb ? (dict.score[gb] ?? 90) : 100;   // ไม่มีแบรนด์ = ท้ายสุด
+    return sa - sb || ga.localeCompare(gb,'th') || (a.buyName||'').localeCompare(b.buyName||'','th');
   });
   return merged;
 }
-// v6.47 — RANK → คะแนน (A=1 ดีสุด … F=6 · New=15 · ไม่มี=99); คะแนนแบรนด์ = คะแนนดีสุดของสินค้าในแบรนด์
+// v6.47 — RANK → คะแนน (A=1 ดีสุด … F=6 · New=15 · ไม่มี=99)
 const WHS_RANK = ['W1','W2','W3','W4','C4'];
 function promoProdRankScore(p){
   if (!p || !p.rank) return 99;
@@ -4829,10 +4830,23 @@ function promoProdRankScore(p){
     if (sc < best) best = sc; });
   return best;
 }
-function promoBrandScoreMap(){
-  const m = {};
-  products.forEach(p => { const b = (p.brand||'').trim(); if (!b) return; const sc = promoProdRankScore(p); if (m[b] == null || sc < m[b]) m[b] = sc; });
-  return m;
+// v6.48 — พจนานุกรมแบรนด์ = คำแรกของชื่อสินค้า (ยาว≥4) + คะแนน RANK ดีสุดของแบรนด์นั้น
+function promoBrandDict(){
+  const score = {}, seen = new Set(), toks = [];
+  products.forEach(p => {
+    const parts = String(p.name||'').trim().split(/\s+/); if (parts.length < 2) return;
+    const t = promoNorm(parts[0]); if (t.length < 4) return;
+    const sc = promoProdRankScore(p);
+    if (score[t] == null || sc < score[t]) score[t] = sc;
+    if (!seen.has(t)) { seen.add(t); toks.push(t); }
+  });
+  return { score, byLen: toks.slice().sort((a,b) => a.length - b.length), byLenDesc: toks.slice().sort((a,b) => b.length - a.length) };
+}
+function promoGroupBrand(buyName, dict, fallback){
+  const q = promoNorm(buyName);
+  for (const t of dict.byLen) if (q.startsWith(t)) return t;                             // 1) ขึ้นต้นด้วยแบรนด์ (สั้นสุด = แบรนด์หลัก เช่น "คาร์เนชั่น")
+  for (const t of dict.byLenDesc) if (t.length >= 5 && q.includes(t)) return t;          // 2) มีชื่อแบรนด์อยู่กลางชื่อ (ยาวสุด)
+  return promoNorm(fallback||'') || '';                                                  // 3) fallback = CAT BRAND
 }
 function promoSortSkusByName(skus){
   return skus.slice().sort((a,b) => (promoProduct(a)?.name||'').localeCompare(promoProduct(b)?.name||'','th'));
