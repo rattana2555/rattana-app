@@ -4759,10 +4759,41 @@ function promoBuyGroupSkus(bp, measure){
   }
   return bp.image ? [bp.sku] : [];
 }
+// v6.50 — จับรูปฝั่งซื้อแบบยืดหยุ่น: แบรนด์(กลุ่ม) + ขนาด(ตัวเลข+หน่วย) + มีรูป แล้วเลือกตัวที่คำตรงกับชื่อในชีทมากสุด
+function promoSizeSig(s){
+  s = String(s||'').toLowerCase(); const out = [];
+  const re = /(\d+(?:\.\d+)?)\s*(ลิตร|ล\.|มล\.|มล|กก\.|กก|กิโล|กรัม|ก\.|ก|cc|ml|l)?/g; let m;
+  while ((m = re.exec(s))) { const n = m[1], u = (m[2]||''); let uc = '';
+    if (/มล|ml|cc/.test(u)) uc = 'ML'; else if (u==='ลิตร'||u==='ล'||u==='ล.'||u==='l') uc = 'L';
+    else if (/กก|กิโล|kg/.test(u)) uc = 'KG'; else if (u==='กรัม'||u==='ก'||u==='ก.') uc = 'G';
+    if (n) out.push(n + uc);
+  }
+  return out;
+}
+function promoWords(s){ return String(s||'').toLowerCase().replace(/[.,()]/g,' ').split(/\s+/).map(promoNorm).filter(w => w.length >= 2); }
+function promoFindByBrandSize(buyName, dict){
+  const brand = promoGroupBrand(buyName, dict, ''); if (!brand) return null;
+  const bsz = promoSizeSig(buyName).filter(x => x.length > 1); if (!bsz.length) return null;   // ต้องมีขนาดที่มีหน่วยชัด
+  const bw = promoWords(buyName);
+  const cands = [];
+  for (const p of products) {
+    if (!p.image) continue;
+    const pn = promoNorm(p.name); if (!pn.includes(brand)) continue;
+    if (!bsz.some(x => promoSizeSig(p.name).includes(x))) continue;
+    const pw = promoWords(p.name);
+    cands.push({ p, ov: bw.filter(w => pw.includes(w)).length });
+  }
+  if (!cands.length) return null;
+  cands.sort((a,b) => b.ov - a.ov);
+  if (cands.length === 1) return cands[0].p;                          // แบรนด์+ขนาด ตรงตัวเดียว
+  if (cands[0].ov >= 1 && cands[0].ov > cands[1].ov) return cands[0].p;   // มีตัวชนะชัดด้วยคำที่ตรง
+  return null;                                                        // ก้ำกึ่ง → ปล่อยให้เลือกรูปเอง
+}
 // สร้างรายการโปรจากแถวชีท Promotion (คงข้อความที่ผู้ใช้แก้เองไว้เมื่อรีเฟรช)
 function buildPromoItemsFromRows(rows){
   const prevByKey = {};
   promoItems.forEach(it => { prevByKey[[it.buyName, it.freeBc, it.freePieces].join('|')] = it; });
+  const dict = promoBrandDict();   // v6.50 — ใช้ทั้งจับแบรนด์+ขนาด และเรียงตามแบรนด์
   const out = [];
   rows.forEach(r => {
     const buyName  = String(promoCol(r,'ชื่อ')||'').trim().replace(/^\d+@\s*/, '').trim();   // v6.41 — ตัดรหัสภายใน "12345@" ออกจากชื่อที่โชว์
