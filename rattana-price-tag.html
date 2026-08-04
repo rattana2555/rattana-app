@@ -4911,18 +4911,26 @@ function promoGroupBrand(buyName, dict, fallback){
 function promoSortSkusByName(skus){
   return skus.slice().sort((a,b) => (promoProduct(a)?.name||'').localeCompare(promoProduct(b)?.name||'','th'));
 }
-async function loadPromoSheet(force){
+let promoLastFetch = 0;   // v6.52 — เวลาที่ดึงจากชีทล่าสุด (กันดึงถี่เกิน)
+async function loadPromoSheet(force, silent){
   if (!force && promoLoaded && promoItems.length) return promoItems;
-  if (!products.length) { showToast('⚠️ โหลดสินค้าก่อน (แท็บ ⚙️ ตั้งค่า)', 'warning'); return promoItems; }
+  if (!products.length) { if (!silent) showToast('⚠️ โหลดสินค้าก่อน (แท็บ ⚙️ ตั้งค่า)', 'warning'); return promoItems; }
   try {
-    showToast('⏳ กำลังดึงโปรจากชีท Promotion...', 'info');
+    if (!silent) showToast('⏳ กำลังดึงโปรจากชีท Promotion...', 'info');
     const rows = await loadFromSheets(PROMO_SHEET.id, PROMO_SHEET.name);
     promoItems = buildPromoItemsFromRows(rows);
-    promoLoaded = true;
+    promoLoaded = true; promoLastFetch = nowMs();
     savePromoItems();
-    showToast('🎁 โหลดโปรแถม ' + promoItems.length + ' รายการ', 'success');
-  } catch (e) { console.error(e); showToast('❌ โหลดโปรไม่สำเร็จ: ' + (e.message||''), 'error'); }
+    showToast((silent ? '🔄 อัพเดทโปรจากชีทแล้ว ' : '🎁 โหลดโปรแถม ') + promoItems.length + ' รายการ', 'success');
+  } catch (e) { console.error(e); if (!silent) showToast('❌ โหลดโปรไม่สำเร็จ: ' + (e.message||''), 'error'); }
   return promoItems;
+}
+function nowMs(){ try { return Date.now(); } catch { return 0; } }
+// v6.52 — ดึงสดจากชีทอัตโนมัติเมื่อเข้าโหมดโปรแถม (แสดง cache ทันที แล้วอัพเดตเมื่อได้ข้อมูลใหม่) — เก็บที่แก้เอง/สลับลำดับไว้
+function promoAutoRefresh(){
+  if (!products.length) return;
+  if (nowMs() - promoLastFetch < 4000) return;   // เพิ่งดึงไป → ข้าม (กันดึงซ้ำตอนกดหลายปุ่มติดกัน)
+  loadPromoSheet(true, true).then(() => { if (isPromoMode() && $('#tab-print')?.classList.contains('active')) { renderPromoBuilder(); buildPromoPreview(); } });
 }
 async function refreshPromoSheet(){ await loadPromoSheet(true); renderPromoBuilder(); buildPromoPreview(); }
 function promoWhOptions(){
