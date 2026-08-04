@@ -49,8 +49,18 @@ returns void language sql security definer as $$
 $$;
 
 -- ── REALTIME ───────────────────────────────────────────────
-alter publication supabase_realtime add table public.conversations;
-alter publication supabase_realtime add table public.messages;
+-- เพิ่มเฉพาะถ้ายังไม่มี — รันซ้ำได้ไม่ error
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables
+    where pubname='supabase_realtime' and schemaname='public' and tablename='conversations') then
+    alter publication supabase_realtime add table public.conversations;
+  end if;
+  if not exists (select 1 from pg_publication_tables
+    where pubname='supabase_realtime' and schemaname='public' and tablename='messages') then
+    alter publication supabase_realtime add table public.messages;
+  end if;
+end $$;
 
 -- ── ROW LEVEL SECURITY ─────────────────────────────────────
 alter table public.conversations enable row level security;
