@@ -739,50 +739,76 @@ function closeChat(){
 // ─────────────────────────────────────────────────────────
 //  SEND MESSAGE
 // ─────────────────────────────────────────────────────────
+// บันทึกลง DB ก่อนเสมอ แล้วค่อยยิงเข้าแพลตฟอร์ม
+// ถ้าสลับลำดับ ข้อความจะหายเมื่อส่งเข้าแพลตฟอร์มไม่สำเร็จ
 async function sendMsg(){
   const inp = document.getElementById('replyInp');
   const text = inp.value.trim();
   if(!text||activeId===null) return;
-  const c = convs.find(x=>x.id===activeId);
+  const convId = activeId;
+  const c = convs.find(x=>x.id===convId);
   if(!c) return;
 
   inp.value='';
   grow(inp);
   syncSend();
 
-  // Optimistic UI — add outbound bubble immediately
-  const now2 = new Date().toISOString();
-  if(!msgCache[activeId]) msgCache[activeId]=[];
-  msgCache[activeId].push({direction:'out',content:text,sent_at:now2});
-  renderMsgs(msgCache[activeId]);
-  scrollBottom();
+  const nowISO = new Date().toISOString();
 
-  // Update conv preview locally
+  // 1) แสดงบนจอทันที (สถานะ "กำลังส่ง")
+  if(!msgCache[convId]) msgCache[convId]=[];
+  const local = { direction:'out', content:text, sent_at:nowISO, status:'sending' };
+  msgCache[convId].push(local);
+  if(activeId===convId){ renderMsgs(msgCache[convId]); scrollBottom(); }
+
   c.lastMsg = text;
-  c.lastTime = new Date(now2);
+  c.lastTime = new Date(nowISO);
   renderList();
 
-  // Call Edge Function → delivers to platform + saves outbound to DB
+  // 2) บันทึกลงฐานข้อมูล — ทำก่อน ไม่ว่าแพลตฟอร์มจะรับหรือไม่
+  const { data: saved, error: saveErr } = await sb.from('messages').insert({
+    conversation_id: convId,
+    direction: 'out',
+    content: text,
+    sent_at: nowISO,
+    status: 'sending',
+  }).select('id').single();
+
+  if(saveErr){
+    local.status = 'failed';
+    if(activeId===convId) renderMsgs(msgCache[convId]);
+    showToast('บันทึกข้อความไม่ได้: '+saveErr.message,'error');
+    return;
+  }
+  local.id = saved.id;
+
+  await sb.from('conversations')
+    .update({ last_message:text, last_message_at:nowISO })
+    .eq('id', convId);
+
+  // 3) ยิงเข้าแพลตฟอร์มจริง แล้วอัพเดตสถานะตามผล
+  let ok = false, why = '';
   try {
-    const { data: { session } } = await sb.auth.getSession();
+    const { data:{ session } } = await sb.auth.getSession();
     const res = await fetch(`${SUPABASE_URL}/functions/v1/${FN_SEND}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
         'apikey': SUPABASE_ANON,
         'Authorization': `Bearer ${session?.access_token ?? SUPABASE_ANON}`,
       },
-      body: JSON.stringify({ conversationId: activeId, content: text }),
+      body: JSON.stringify({ conversationId: convId, content: text, messageId: saved.id }),
     });
-    const json = await res.json();
-    if(json.sent){
-      showToast('ส่งแล้ว ✓','success');
-    } else {
-      showToast('ส่งไปยังแพลตฟอร์มไม่ได้: '+(json.error||'unknown'),'warning');
-    }
-  } catch(e){
-    showToast('ส่งข้อความไม่ได้: '+e.message,'error');
-  }
+    const json = await res.json().catch(()=>({}));
+    ok = !!json.sent; why = json.error || ('HTTP '+res.status);
+  } catch(e){ why = e.message; }
+
+  local.status = ok ? 'sent' : 'failed';
+  if(activeId===convId) renderMsgs(msgCache[convId]);
+  await sb.from('messages').update({ status: local.status }).eq('id', saved.id);
+
+  if(ok) showToast('ส่งแล้ว ✓','success');
+  else   showToast('บันทึกแล้ว แต่ยังไม่ถึงลูกค้า: '+why,'warning');
 }
 
 function onKey(e){ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendMsg(); } }
