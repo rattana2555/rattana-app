@@ -5353,10 +5353,23 @@ function bakeWhiteTransparent(url) {
         c.width = im.naturalWidth; c.height = im.naturalHeight;
         const ctx = c.getContext('2d');
         ctx.drawImage(im, 0, 0);
-        const data = ctx.getImageData(0, 0, c.width, c.height);
+        // v6.54 — ลบเฉพาะ "พื้นขาวรอบสินค้า" (flood-fill จากขอบรูป) ไม่แตะขาวที่อยู่กลางตัวสินค้า เช่น พื้น/ตัวอักษรบนซอง
+        const w = c.width, h = c.height;
+        const data = ctx.getImageData(0, 0, w, h);
         const a = data.data;
-        for (let i = 0; i < a.length; i += 4) {
-          if (a[i] > 240 && a[i+1] > 240 && a[i+2] > 240) a[i+3] = 0;   // near-white → transparent
+        const N = w * h;
+        const isWhite = idx => { const i = idx * 4; return a[i] > 238 && a[i+1] > 238 && a[i+2] > 238; };
+        const seen = new Uint8Array(N);
+        const stack = [];
+        const seed = idx => { if (idx >= 0 && idx < N && !seen[idx] && isWhite(idx)) { seen[idx] = 1; stack.push(idx); } };
+        for (let x = 0; x < w; x++) { seed(x); seed((h - 1) * w + x); }          // ขอบบน/ล่าง
+        for (let y = 0; y < h; y++) { seed(y * w); seed(y * w + (w - 1)); }        // ขอบซ้าย/ขวา
+        while (stack.length) {
+          const idx = stack.pop();
+          a[idx * 4 + 3] = 0;   // โปร่งใส
+          const x = idx % w, y = (idx - x) / w;
+          if (x > 0) seed(idx - 1); if (x < w - 1) seed(idx + 1);
+          if (y > 0) seed(idx - w); if (y < h - 1) seed(idx + w);
         }
         ctx.putImageData(data, 0, 0);
         resolve(c.toDataURL('image/png'));
