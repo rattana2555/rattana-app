@@ -110,19 +110,9 @@ serve(async (req: Request) => {
     console.error("send-message error:", errMsg);
   }
 
-  // บันทึก outbound message ลง DB
-  if (sent) {
-    await db.from("messages").insert({
-      conversation_id: conversationId,
-      direction: "out",
-      content,
-      sent_at: new Date().toISOString(),
-    });
-    await db.from("conversations").update({
-      last_message: content,
-      last_message_at: new Date().toISOString(),
-    }).eq("id", conversationId);
-  }
+  // ไม่บันทึกข้อความที่นี่ — ฝั่งแอพบันทึกลง DB ไปแล้วก่อนเรียกฟังก์ชันนี้
+  // (ถ้าบันทึกซ้ำตรงนี้จะได้ข้อความซ้ำ 2 อัน เมื่อส่งเข้าแพลตฟอร์มสำเร็จ)
+  // หน้าที่ของฟังก์ชันนี้คือ "ส่งเข้าแพลตฟอร์ม" อย่างเดียว แล้วรายงานผลกลับ
 
   return new Response(JSON.stringify({ sent, error: errMsg || null }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
