@@ -882,37 +882,116 @@ function setupRealtime(){
 }
 
 // ─────────────────────────────────────────────────────────
-//  AUTH — ต้องล็อกอินก่อนถึงเห็นข้อมูล
-//  RLS ฝั่ง Supabase เป็นด่านจริง (policy = to authenticated)
-//  หน้า login นี้เป็นแค่ UX — ถึงข้ามได้ก็ query ไม่ผ่าน
+//  ทะเบียนพนักงาน — Google Sheet "นำเข้า-ข้อมูลพนักงาน"
+//  F = ชื่อเล่น   K = ออกจากงาน   O = E-mail
+// ─────────────────────────────────────────────────────────
+const STAFF_SHEET = 'https://docs.google.com/spreadsheets/d/1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ/export?format=csv&gid=1364907058';
+const COL_NICK = 5;   // F  ชื่อเล่น
+const COL_NAME = 4;   // E  ชื่อ - สกุล
+const COL_QUIT = 10;  // K  ออกจากงาน
+const COL_MAIL = 14;  // O  E-mail
+
+// CSV parser รองรับ field ที่มี comma / newline / เครื่องหมายคำพูดซ้อน
+function parseCSV(text){
+  const rows=[]; let row=[], cell='', q=false;
+  text = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(q){
+      if(c==='"'){ if(text[i+1]==='"'){ cell+='"'; i++; } else q=false; }
+      else cell+=c;
+    } else if(c==='"'){ q=true; }
+    else if(c===','){ row.push(cell); cell=''; }
+    else if(c==='\n'){ row.push(cell); rows.push(row); row=[]; cell=''; }
+    else cell+=c;
+  }
+  if(cell!==''||row.length){ row.push(cell); rows.push(row); }
+  return rows;
+}
+
+// ดึงทะเบียนพนักงาน → Map(email → {nick,name})  เฉพาะคนที่ยังไม่ออกจากงาน
+async function loadStaff(){
+  const res = await fetch(STAFF_SHEET, { cache:'no-store' });
+  if(!res.ok) throw new Error('โหลดทะเบียนพนักงานไม่ได้ (HTTP '+res.status+')');
+  const rows = parseCSV(await res.text());
+  const map = new Map();
+  rows.slice(1).forEach(r=>{
+    const mail = (r[COL_MAIL]||'').trim().toLowerCase();
+    if(!mail.includes('@')) return;
+    if((r[COL_QUIT]||'').trim()) return;          // ออกจากงานแล้ว → ไม่ให้เข้า
+    if(map.has(mail)) return;                      // อีเมลซ้ำ → ใช้แถวแรก
+    map.set(mail, {
+      nick: (r[COL_NICK]||'').trim(),
+      name: (r[COL_NAME]||'').trim(),
+    });
+  });
+  return map;
+}
+
+// ─────────────────────────────────────────────────────────
+//  AUTH — Google login + ตรวจสิทธิ์จากทะเบียนพนักงาน
+//  ด่านจริงคือ RLS ฝั่ง Supabase (policy = to authenticated)
+//  ส่วนการเช็คชีทเป็นชั้นเสริม: กันคนนอกทะเบียน/คนที่ลาออกแล้ว
 // ─────────────────────────────────────────────────────────
 let started = false;
+let me = null;   // {nick,name,email}
 
-async function doLogin(e){
-  e.preventDefault();
+async function doLogin(){
   const btn = document.getElementById('lgBtn');
   const err = document.getElementById('lgErr');
   err.textContent = '';
-  btn.disabled = true; btn.textContent = 'กำลังเข้าสู่ระบบ…';
+  btn.disabled = true;
+  btn.querySelector('span').textContent = 'กำลังเปิด Google…';
 
-  const { error } = await sb.auth.signInWithPassword({
-    email: document.getElementById('lgEmail').value.trim(),
-    password: document.getElementById('lgPass').value,
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: location.origin + location.pathname,
+      queryParams: { prompt: 'select_account' },
+    },
   });
 
-  btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ';
   if(error){
-    err.textContent = error.message==='Invalid login credentials'
-      ? 'อีเมลหรือรหัสผ่านไม่ถูกต้อง'
-      : error.message;
-    return;
+    btn.disabled = false;
+    btn.querySelector('span').textContent = 'เข้าสู่ระบบด้วย Google';
+    err.textContent = 'เข้าสู่ระบบไม่สำเร็จ: ' + error.message;
   }
-  document.getElementById('lgPass').value = '';
 }
 
 async function doLogout(){
   await sb.auth.signOut();
-  location.reload();
+  location.replace(location.origin + location.pathname);
+}
+
+// ตรวจว่าอีเมลที่ล็อกอินอยู่ในทะเบียนพนักงานไหม
+async function gateSession(session){
+  const email = (session.user.email||'').toLowerCase();
+  try{
+    const staff = await loadStaff();
+    const rec = staff.get(email);
+    if(!rec){
+      await sb.auth.signOut();
+      showLogin();
+      document.getElementById('lgErr').innerHTML =
+        `อีเมล <b>${esc(email)}</b> ไม่อยู่ในทะเบียนพนักงาน<br>หรือถูกบันทึกว่าออกจากงานแล้ว<br>ติดต่อฝ่ายบุคคลเพื่อเพิ่มอีเมลในระบบ`;
+      return;
+    }
+    me = { ...rec, email };
+    greet();
+    showApp();
+  }catch(e){
+    // โหลดชีทไม่ได้ (เน็ตล่ม / ชีทถูกปิด) — ไม่ปล่อยเข้าไว้ก่อน
+    await sb.auth.signOut();
+    showLogin();
+    document.getElementById('lgErr').textContent = e.message + ' — กรุณาลองใหม่';
+  }
+}
+
+function greet(){
+  if(!me) return;
+  const label = me.nick || me.name || me.email;
+  document.getElementById('hdrGreet').textContent = `สวัสดี ${label} 👋`;
+  showToast(`สวัสดี ${label} 👋`, 'success');
 }
 
 function showApp(){
@@ -924,19 +1003,26 @@ function showApp(){
 }
 
 function showLogin(){
+  const btn = document.getElementById('lgBtn');
+  btn.disabled = false;
+  btn.querySelector('span').textContent = 'เข้าสู่ระบบด้วย Google';
   document.getElementById('loginGate').classList.remove('hide');
 }
 
 // ─────────────────────────────────────────────────────────
 //  INIT
 // ─────────────────────────────────────────────────────────
-sb.auth.onAuthStateChange((_evt, session)=>{
-  if(session) showApp(); else showLogin();
-});
+let gating = false;
+async function route(session){
+  if(!session){ me=null; showLogin(); return; }
+  if(gating || started) return;
+  gating = true;
+  await gateSession(session);
+  gating = false;
+}
 
-sb.auth.getSession().then(({ data })=>{
-  if(data.session) showApp(); else showLogin();
-});
+sb.auth.onAuthStateChange((_evt, session)=>{ route(session); });
+sb.auth.getSession().then(({ data })=> route(data.session));
 </script>
 </body>
 </html>
