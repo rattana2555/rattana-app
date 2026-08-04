@@ -34,6 +34,10 @@ create table if not exists public.messages (
 );
 
 -- ── INDEXES ────────────────────────────────────────────────
+-- สถานะการส่งของข้อความขาออก: sending → sent | failed
+-- ข้อความถูกบันทึกก่อนเสมอ สถานะค่อยอัพเดตตามผลการส่งเข้าแพลตฟอร์ม
+alter table public.messages add column if not exists status text default 'sent';
+
 create index if not exists idx_msgs_conv    on public.messages      (conversation_id, sent_at);
 create index if not exists idx_convs_plat   on public.conversations  (platform, last_message_at desc);
 
