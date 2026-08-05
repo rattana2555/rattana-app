@@ -971,12 +971,12 @@ async function doLogout(){
 }
 
 // ตรวจว่าอีเมลที่ล็อกอินอยู่ในทะเบียนพนักงานไหม
+// หมายเหตุ: นี่คือชั้น UX เท่านั้น — ต่อให้ข้ามด่านนี้ไปได้ RLS ก็ไม่ปล่อยข้อมูลอยู่ดี
 async function gateSession(session){
   const email = (session.user.email||'').toLowerCase();
   try{
-    const staff = await loadStaff();
-    const rec = staff.get(email);
-    if(!rec){
+    const rec = await loadMyStaffRecord(email);
+    if(!rec || rec.active === false){
       await sb.auth.signOut();
       showLogin();
       document.getElementById('lgErr').innerHTML =
@@ -987,7 +987,7 @@ async function gateSession(session){
     greet();
     showApp();
   }catch(e){
-    // โหลดชีทไม่ได้ (เน็ตล่ม / ชีทถูกปิด) — ไม่ปล่อยเข้าไว้ก่อน
+    // ตรวจสอบไม่ได้ (เน็ตล่ม / DB ล่ม) — ไม่ปล่อยเข้าไว้ก่อน
     await sb.auth.signOut();
     showLogin();
     document.getElementById('lgErr').textContent = e.message + ' — กรุณาลองใหม่';
@@ -996,9 +996,8 @@ async function gateSession(session){
 
 function greet(){
   if(!me) return;
-  // บัญชีที่ใช้ร่วมกันหลายคนจะแสดงชื่อเล่นทุกคน เช่น "ตี้ / ไอซ์ / ยัน"
-  const label = (me.nicks && me.nicks.length) ? me.nicks.join(' / ')
-              : (me.name || me.email);
+  // บัญชีที่ใช้ร่วมกันหลายคนจะเก็บชื่อเล่นรวมกันไว้ เช่น "ตี้ / ไอซ์ / ยัน"
+  const label = me.nick || me.name || me.email;
   document.getElementById('hdrGreet').textContent = `สวัสดี ${label} 👋`;
   showToast(`สวัสดี ${label} 👋`, 'success');
 }
