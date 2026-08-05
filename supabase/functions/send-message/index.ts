@@ -77,9 +77,9 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
-  const { conversationId, content } = await req.json();
-  if (!conversationId || !content) {
-    return new Response(JSON.stringify({ error: "missing fields" }), { status: 400, headers: corsHeaders });
+  const { conversationId, content, action } = await req.json();
+  if (!conversationId) {
+    return new Response(JSON.stringify({ error: "missing conversationId" }), { status: 400, headers: corsHeaders });
   }
 
   const db = createClient(SUPABASE_URL, SERVICE_KEY);
@@ -87,11 +87,31 @@ serve(async (req: Request) => {
   // ดึงข้อมูล conversation
   const { data: conv } = await db
     .from("conversations")
-    .select("platform, platform_conv_id")
+    .select("platform, platform_conv_id, mark_read_token")
     .eq("id", conversationId)
     .single();
 
   if (!conv) return new Response(JSON.stringify({ error: "not found" }), { status: 404, headers: corsHeaders });
+
+  // ── บอก LINE ว่าทีมงานอ่านข้อความแล้ว (ลูกค้าจะเห็น "อ่านแล้ว") ──
+  // ต้องเปิด "แชท" ใน LINE OA Manager ถึงจะใช้ได้
+  if (action === "markRead") {
+    if (conv.platform !== "line" || !conv.mark_read_token) {
+      return new Response(JSON.stringify({ ok: false, error: "no token" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const r = await fetch("https://api.line.me/v2/bot/chat/markAsRead", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${LINE_TOKEN}` },
+      body: JSON.stringify({ markAsReadToken: conv.mark_read_token }),
+    });
+    const ok = r.ok;
+    if (!ok) console.error("markAsRead:", r.status, await r.text());
+    return new Response(JSON.stringify({ ok }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+
+  if (!content) {
+    return new Response(JSON.stringify({ error: "missing content" }), { status: 400, headers: corsHeaders });
+  }
 
   let sent = false;
   let errMsg = "";
