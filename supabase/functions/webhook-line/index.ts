@@ -98,7 +98,9 @@ serve(async (req: Request) => {
         customer_id: event.source.userId,
         last_message: preview,
         last_message_at: ts,
-        mark_read_token: event.markAsReadToken ?? null,
+        // token อยู่ใน message ไม่ใช่ระดับ event — และ "ไม่ได้มาทุกครั้ง" ตามเอกสาร
+        // จึงต้องคง token เดิมไว้ถ้ารอบนี้ไม่มีมา (อย่าเขียนทับด้วย null)
+        ...(m.markAsReadToken ? { mark_read_token: m.markAsReadToken } : {}),
       }, { onConflict: "platform,platform_conv_id" })
       .select("id, customer_name, avatar_url")
       .single();
