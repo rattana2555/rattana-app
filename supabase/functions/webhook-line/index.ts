@@ -12,7 +12,12 @@ const SERVICE_KEY    = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 // ── ตรวจสอบ HMAC-SHA256 signature ──────────────────────────
 async function verifySignature(body: string, sig: string): Promise<boolean> {
-  if (!CHANNEL_SECRET) return true; // skip in dev
+  // fail closed — ถ้าไม่มี secret ต้องปฏิเสธ ไม่ใช่ปล่อยผ่าน
+  // (Verify JWT ปิดอยู่ ลายเซ็นนี้จึงเป็นด่านเดียวที่กันคนยิงข้อความปลอม)
+  if (!CHANNEL_SECRET) {
+    console.error("LINE_CHANNEL_SECRET ยังไม่ได้ตั้ง — ปฏิเสธ request ทั้งหมด");
+    return false;
+  }
   const key = await crypto.subtle.importKey(
     "raw", new TextEncoder().encode(CHANNEL_SECRET),
     { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
