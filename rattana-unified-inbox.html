@@ -916,53 +916,23 @@ function setupRealtime(){
 }
 
 // ─────────────────────────────────────────────────────────
-//  ทะเบียนพนักงาน — Google Sheet "นำเข้า-ข้อมูลพนักงาน"
-//  F = ชื่อเล่น   K = ออกจากงาน   O = E-mail
+//  ทะเบียนพนักงาน — อ่านจากตาราง staff ใน Supabase
+//  (ซิงก์มาจากชีท "นำเข้า-ข้อมูลพนักงาน" ด้วย Edge Function ฝั่งเซิร์ฟเวอร์)
+//
+//  ⚠️ เดิมแอพดึง CSV จากชีทตรงๆ ตรงนี้ ซึ่งผิด 2 ข้อ:
+//    1. บังคับให้ชีทต้องเปิดสาธารณะ = ข้อมูลพนักงาน 261 คนหลุดให้ใครก็โหลดได้
+//    2. เช็คในเบราว์เซอร์กันอะไรไม่ได้ เพราะ JWT ออกให้ไปก่อนแล้ว
+//  ตอนนี้ RLS ฝั่งฐานข้อมูลเป็นคนตรวจ (is_staff()) แถวนี้เหลือไว้แค่เอาชื่อเล่นมาทัก
 // ─────────────────────────────────────────────────────────
-const STAFF_SHEET = 'https://docs.google.com/spreadsheets/d/1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ/export?format=csv&gid=1364907058';
-const COL_NICK = 5;   // F  ชื่อเล่น
-const COL_NAME = 4;   // E  ชื่อ - สกุล
-const COL_QUIT = 10;  // K  ออกจากงาน
-const COL_MAIL = 14;  // O  E-mail
-
-// CSV parser รองรับ field ที่มี comma / newline / เครื่องหมายคำพูดซ้อน
-function parseCSV(text){
-  const rows=[]; let row=[], cell='', q=false;
-  text = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
-  for(let i=0;i<text.length;i++){
-    const c=text[i];
-    if(q){
-      if(c==='"'){ if(text[i+1]==='"'){ cell+='"'; i++; } else q=false; }
-      else cell+=c;
-    } else if(c==='"'){ q=true; }
-    else if(c===','){ row.push(cell); cell=''; }
-    else if(c==='\n'){ row.push(cell); rows.push(row); row=[]; cell=''; }
-    else cell+=c;
-  }
-  if(cell!==''||row.length){ row.push(cell); rows.push(row); }
-  return rows;
-}
-
-// ดึงทะเบียนพนักงาน → Map(email → {nick,name})  เฉพาะคนที่ยังไม่ออกจากงาน
-async function loadStaff(){
-  const res = await fetch(STAFF_SHEET, { cache:'no-store' });
-  if(!res.ok) throw new Error('โหลดทะเบียนพนักงานไม่ได้ (HTTP '+res.status+')');
-  const rows = parseCSV(await res.text());
-  const map = new Map();
-  rows.slice(1).forEach(r=>{
-    const mail = (r[COL_MAIL]||'').trim().toLowerCase();
-    if(!mail.includes('@')) return;
-    if((r[COL_QUIT]||'').trim()) return;          // ออกจากงานแล้ว → ไม่ให้เข้า
-    const nick = (r[COL_NICK]||'').trim();
-    const name = (r[COL_NAME]||'').trim();
-    const rec = map.get(mail);
-    if(rec){                                       // อีเมลใช้ร่วมกันหลายคน (บัญชีกลางสาขา)
-      if(nick && !rec.nicks.includes(nick)) rec.nicks.push(nick);
-    } else {
-      map.set(mail, { nicks: nick?[nick]:[], name });
-    }
-  });
-  return map;
+async function loadMyStaffRecord(email){
+  // RLS policy "self_read" ยอมให้เห็นเฉพาะแถวของตัวเอง — ดึงรายชื่อคนอื่นไม่ได้
+  const { data, error } = await sb
+    .from('staff')
+    .select('nick,name,active')
+    .eq('email', email)
+    .maybeSingle();
+  if(error) throw new Error('ตรวจสอบสิทธิ์ไม่ได้: '+error.message);
+  return data;
 }
 
 // ─────────────────────────────────────────────────────────
