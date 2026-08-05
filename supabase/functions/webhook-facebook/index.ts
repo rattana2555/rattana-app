@@ -7,8 +7,31 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const VERIFY_TOKEN = Deno.env.get("FACEBOOK_VERIFY_TOKEN") ?? "rattana_verify_2025";
+const APP_SECRET   = Deno.env.get("FACEBOOK_APP_SECRET") ?? "";
 const SUPABASE_URL  = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+// ตรวจลายเซ็น X-Hub-Signature-256 ที่ Facebook แนบมากับทุก POST
+// fail closed — ไม่มี secret = ปฏิเสธ (Verify JWT ปิดอยู่ ลายเซ็นนี้คือด่านเดียว)
+async function verifySignature(body: string, header: string): Promise<boolean> {
+  if (!APP_SECRET) {
+    console.error("FACEBOOK_APP_SECRET ยังไม่ได้ตั้ง — ปฏิเสธ request ทั้งหมด");
+    return false;
+  }
+  if (!header.startsWith("sha256=")) return false;
+  const key = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(APP_SECRET),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+  );
+  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body));
+  const expected = [...new Uint8Array(mac)].map(b => b.toString(16).padStart(2, "0")).join("");
+  const given = header.slice(7);
+  // เทียบแบบเวลาคงที่ กัน timing attack
+  if (given.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= given.charCodeAt(i) ^ expected.charCodeAt(i);
+  return diff === 0;
+}
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: { "Access-Control-Allow-Origin": "*" } });
