@@ -89,6 +89,7 @@ serve(async (req: Request) => {
     const ts   = new Date(event.timestamp).toISOString();
 
     // upsert conversation
+    // mark_read_token: เก็บไว้ให้แอพเรียก markAsRead ตอนพนักงานเปิดอ่าน
     const { data: conv, error: convErr } = await db
       .from("conversations")
       .upsert({
@@ -97,11 +98,23 @@ serve(async (req: Request) => {
         customer_id: event.source.userId,
         last_message: preview,
         last_message_at: ts,
+        mark_read_token: event.markAsReadToken ?? null,
       }, { onConflict: "platform,platform_conv_id" })
-      .select("id")
+      .select("id, customer_name, avatar_url")
       .single();
 
     if (convErr || !conv) { console.error("conv upsert:", convErr); continue; }
+
+    // ดึงโปรไฟล์ครั้งเดียวตอนยังไม่มีชื่อ (แชทกลุ่มไม่มี userId ก็ข้ามไป)
+    if ((!conv.customer_name || conv.customer_name === "ลูกค้า" || !conv.avatar_url) && event.source.userId) {
+      const prof = await fetchProfile(event.source.userId);
+      if (prof) {
+        await db.from("conversations").update({
+          customer_name: prof.name ?? conv.customer_name,
+          avatar_url:    prof.avatar ?? conv.avatar_url,
+        }).eq("id", conv.id);
+      }
+    }
 
     // insert message
     await db.from("messages").insert({
