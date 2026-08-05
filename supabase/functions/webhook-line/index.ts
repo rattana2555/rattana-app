@@ -44,11 +44,30 @@ serve(async (req: Request) => {
   const { events = [] } = JSON.parse(body);
 
   for (const event of events) {
-    // รับแค่ text message ก่อน (เพิ่ม image/sticker ทีหลังได้)
-    if (event.type !== "message" || event.message.type !== "text") continue;
+    if (event.type !== "message") continue;
+
+    const m = event.message;
+    // แปลงข้อความแต่ละชนิดเป็น content ที่เก็บได้
+    //  - text    : เก็บข้อความตรงๆ
+    //  - sticker : เก็บ "URL รูปสติกเกอร์" ไว้ใน content (ฝั่งแอพเช็ค message_type แล้วเอาไป <img>)
+    //  - อื่นๆ    : เก็บข้อความอธิบายไว้ก่อน (ไฟล์จริงต้องดึงผ่าน API ด้วย token — ทำทีหลังได้)
+    let text: string;
+    let preview: string;
+    switch (m.type) {
+      case "text":
+        text = m.text; preview = m.text; break;
+      case "sticker":
+        text = `https://stickershop.line-scdn.net/stickershop/v1/sticker/${m.stickerId}/android/sticker.png`;
+        preview = "[สติกเกอร์]"; break;
+      case "image":    text = "[รูปภาพ]";       preview = text; break;
+      case "video":    text = "[วิดีโอ]";        preview = text; break;
+      case "audio":    text = "[ข้อความเสียง]";  preview = text; break;
+      case "file":     text = `[ไฟล์] ${m.fileName ?? ""}`.trim(); preview = text; break;
+      case "location": text = `[ตำแหน่ง] ${m.address ?? m.title ?? ""}`.trim(); preview = text; break;
+      default:         text = `[${m.type}]`;    preview = text; break;
+    }
 
     const platformConvId = event.source.groupId ?? event.source.roomId ?? event.source.userId;
-    const text = event.message.text as string;
     const ts   = new Date(event.timestamp).toISOString();
 
     // upsert conversation
