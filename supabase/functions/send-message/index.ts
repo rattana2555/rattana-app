@@ -27,13 +27,19 @@ async function sendLine(to: string, text: string) {
 }
 
 // ── ส่ง Facebook ─────────────────────────────────────────────
+// messaging_type: RESPONSE = ตอบกลับข้อความลูกค้าภายใน 24 ชม. (ไม่ต้องขอสิทธิ์เพิ่ม)
+// recipientId คือ PSID จาก sender.id ของ webhook — ใช้ได้เฉพาะกับเพจนี้เท่านั้น
 async function sendFacebook(recipientId: string, text: string) {
   const res = await fetch(
-    `https://graph.facebook.com/v19.0/me/messages?access_token=${FB_TOKEN}`,
+    `https://graph.facebook.com/v25.0/me/messages?access_token=${encodeURIComponent(FB_TOKEN)}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ recipient: { id: recipientId }, message: { text } }),
+      body: JSON.stringify({
+        recipient: { id: recipientId },
+        messaging_type: "RESPONSE",
+        message: { text },
+      }),
     }
   );
   if (!res.ok) throw new Error(`Facebook error: ${await res.text()}`);
