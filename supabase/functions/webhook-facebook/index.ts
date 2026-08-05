@@ -50,7 +50,14 @@ serve(async (req: Request) => {
 
   if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
-  const body = await req.json();
+  const raw = await req.text();
+  const sig = req.headers.get("x-hub-signature-256") ?? "";
+  if (!(await verifySignature(raw, sig))) {
+    console.error("Facebook signature mismatch");
+    return new Response("Unauthorized", { status: 401 });
+  }
+
+  const body = JSON.parse(raw);
   if (body.object !== "page") return new Response("Not a page event", { status: 200 });
 
   const db = createClient(SUPABASE_URL, SERVICE_KEY);
