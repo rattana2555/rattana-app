@@ -77,7 +77,7 @@ serve(async (req: Request) => {
         platform: "line",
         platform_conv_id: platformConvId,
         customer_id: event.source.userId,
-        last_message: text,
+        last_message: preview,
         last_message_at: ts,
       }, { onConflict: "platform,platform_conv_id" })
       .select("id")
@@ -90,7 +90,8 @@ serve(async (req: Request) => {
       conversation_id: conv.id,
       direction: "in",
       content: text,
-      platform_msg_id: event.message.id,
+      message_type: m.type,
+      platform_msg_id: m.id,
       sent_at: ts,
     });
 
