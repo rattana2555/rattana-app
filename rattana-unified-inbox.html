@@ -957,6 +957,16 @@ function setupRealtime(){
         renderMsgs(msgCache[activeId]);
         scrollBottom();
       }
+      // ข้อความเข้ามาขณะเปิดแชทค้างไว้ = ทีมงานเห็นแล้ว
+      // ต้องล้างเลขใน DB ด้วย ไม่งั้น webhook บวกสะสมไว้ แล้วเลขจะโผล่กลับมาตอนรีเฟรช
+      if(m.direction === 'in'){
+        const c = convs.find(x=>x.id===activeId);
+        if(c) c.unread = 0;
+        updateBadges();
+        sb.from('conversations').update({ unread_count: 0 }).eq('id', activeId)
+          .then(({error})=>{ if(error) console.error('reset unread (live):', error); });
+        markReadOnPlatform(activeId);
+      }
     })
     .subscribe();
 }
