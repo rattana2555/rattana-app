@@ -66,22 +66,55 @@ begin
   end if;
 end $$;
 
+-- ── ทะเบียนพนักงานฝั่งเซิร์ฟเวอร์ ──────────────────────────
+-- ⚠️ บทเรียนสำคัญ: "authenticated" ≠ "พนักงาน"
+-- Supabase เปิดให้สมัครได้ ใครมีบัญชี Google ก็เป็น authenticated ได้ทันที
+-- การเช็ครายชื่อในเบราว์เซอร์กันไม่ได้ เพราะ JWT ถูกออกให้ไปแล้วก่อนเช็ค
+-- คนที่ได้ JWT มาสามารถ curl ตรงเข้า PostgREST ข้ามหน้าเว็บไปเลย
+-- ดังนั้นรายชื่อพนักงานต้องอยู่ในฐานข้อมูล และ RLS ต้องเป็นคนตรวจ
+create table if not exists public.staff (
+  email      text primary key,
+  nick       text,
+  name       text,
+  active     boolean default true,
+  updated_at timestamptz default now()
+);
+
+alter table public.staff enable row level security;
+drop policy if exists "self_read" on public.staff;
+-- พนักงานอ่านได้เฉพาะแถวของตัวเอง (ไว้ดึงชื่อเล่นมาทักทาย) — ไม่เห็นรายชื่อคนอื่น
+create policy "self_read" on public.staff
+  for select to authenticated
+  using (lower(email) = lower(auth.jwt() ->> 'email'));
+
+create or replace function public.is_staff()
+returns boolean language sql stable security definer
+set search_path = public as $$
+  select exists (
+    select 1 from public.staff
+    where lower(email) = lower(auth.jwt() ->> 'email') and active
+  );
+$$;
+revoke execute on function public.is_staff() from public, anon;
+grant  execute on function public.is_staff() to authenticated;
+
 -- ── ROW LEVEL SECURITY ─────────────────────────────────────
 -- แอพ deploy อยู่บน URL สาธารณะ (GitHub Pages) พร้อม anon key ฝังในไฟล์
--- ดังนั้น RLS คือด่านกันจริง — ต้องเป็น "to authenticated" เท่านั้น
--- ห้ามใช้ using(true) แบบไม่ระบุ role เด็ดขาด (= เปิดให้คนทั้งอินเทอร์เน็ต)
+-- RLS คือด่านกันจริงด่านเดียว — ต้องตรวจถึงระดับ "เป็นพนักงานที่ยังทำงานอยู่"
 alter table public.conversations enable row level security;
 alter table public.messages       enable row level security;
 
-drop policy if exists "open_access" on public.conversations;
-drop policy if exists "open_access" on public.messages;
-drop policy if exists "team_access" on public.conversations;
-drop policy if exists "team_access" on public.messages;
+drop policy if exists "open_access"  on public.conversations;
+drop policy if exists "open_access"  on public.messages;
+drop policy if exists "team_access"  on public.conversations;
+drop policy if exists "team_access"  on public.messages;
+drop policy if exists "staff_access" on public.conversations;
+drop policy if exists "staff_access" on public.messages;
 
-create policy "team_access" on public.conversations
-  for all to authenticated using (true) with check (true);
-create policy "team_access" on public.messages
-  for all to authenticated using (true) with check (true);
+create policy "staff_access" on public.conversations
+  for all to authenticated using (public.is_staff()) with check (public.is_staff());
+create policy "staff_access" on public.messages
+  for all to authenticated using (public.is_staff()) with check (public.is_staff());
 
 -- Edge Functions (webhook) ใช้ service_role → bypass RLS ได้อยู่แล้ว ไม่ต้องมี policy
 
