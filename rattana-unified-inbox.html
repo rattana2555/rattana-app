@@ -675,12 +675,20 @@ async function openConv(id){
   const c = convs.find(x=>x.id===id);
   if(!c) return;
 
-  // Reset unread in DB and locally
+  // ล้างเลขยังไม่อ่าน
+  // ใช้ UPDATE ตรงๆ ผ่าน RLS แทน rpc('reset_unread')
+  // เพราะ rpc ต้องพึ่งสิทธิ์ execute แยกอีกชั้น ซึ่งเงียบเมื่อล้มเหลว หาสาเหตุยาก
   if(c.unread>0){
     c.unread = 0;
-    sb.rpc('reset_unread', { conv_id: id });
     updateBadges();
+    renderList();
     markReadOnPlatform(id);   // ให้ลูกค้าเห็นว่า "อ่านแล้ว" ในแอพ LINE
+    const { error } = await sb.from('conversations')
+      .update({ unread_count: 0 }).eq('id', id);
+    if(error){
+      console.error('reset unread failed:', error);
+      showToast('ล้างเลขยังไม่อ่านไม่สำเร็จ: '+error.message,'warning');
+    }
   }
 
   const p = P[c.platform]||{name:c.platform,color:'#888',short:'?'};
