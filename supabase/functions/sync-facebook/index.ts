@@ -25,6 +25,29 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization,content-type",
 };
 
+// แปลงข้อความหนึ่งอันเป็น {content, message_type}
+// รูป/สติกเกอร์ Facebook ส่งมาโดย message = "" แล้วเก็บไฟล์ไว้ใน attachments
+// ถ้ากรองด้วย m.message เฉยๆ รูปจะหายหมด
+function shape(m: any): { content: string; message_type: string } | null {
+  const text = (m.message ?? "").trim();
+  const at   = m.attachments?.data?.[0];
+
+  if (at) {
+    const url  = at.image_data?.url ?? at.file_url ?? "";
+    const mime = at.mime_type ?? "";
+    const name = at.name ?? "";
+    if (url && mime.startsWith("image/")) {
+      // ชื่อไฟล์ของสติกเกอร์ขึ้นต้นด้วย sticker- เสมอ
+      return { content: url, message_type: name.startsWith("sticker-") ? "sticker" : "image" };
+    }
+    if (url && mime.startsWith("video/")) return { content: url, message_type: "video" };
+    if (url) return { content: url, message_type: "file" };
+    if (!text) return { content: `[${mime || "ไฟล์แนบ"}]`, message_type: "text" };
+  }
+
+  return text ? { content: text, message_type: "text" } : null;
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
