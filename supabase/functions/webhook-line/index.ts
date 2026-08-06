@@ -95,23 +95,44 @@ serve(async (req: Request) => {
 
     const m = event.message;
     // แปลงข้อความแต่ละชนิดเป็น content ที่เก็บได้
-    //  - text    : เก็บข้อความตรงๆ
-    //  - sticker : เก็บ "URL รูปสติกเกอร์" ไว้ใน content (ฝั่งแอพเช็ค message_type แล้วเอาไป <img>)
-    //  - อื่นๆ    : เก็บข้อความอธิบายไว้ก่อน (ไฟล์จริงต้องดึงผ่าน API ด้วย token — ทำทีหลังได้)
+    //  - text            : เก็บข้อความตรงๆ
+    //  - sticker         : URL สติกเกอร์เป็นลิงก์สาธารณะอยู่แล้ว เก็บ URL ได้เลย
+    //  - image/video/audio/file : LINE ไม่ให้ URL ต้องโหลดไฟล์มาเก็บใน Storage ก่อน
+    const db = createClient(SUPABASE_URL, SERVICE_KEY);
+
     let text: string;
     let preview: string;
+    let mtype = m.type as string;
+
     switch (m.type) {
       case "text":
         text = m.text; preview = m.text; break;
+
       case "sticker":
         text = `https://stickershop.line-scdn.net/stickershop/v1/sticker/${m.stickerId}/android/sticker.png`;
         preview = "[สติกเกอร์]"; break;
-      case "image":    text = "[รูปภาพ]";       preview = text; break;
-      case "video":    text = "[วิดีโอ]";        preview = text; break;
-      case "audio":    text = "[ข้อความเสียง]";  preview = text; break;
-      case "file":     text = `[ไฟล์] ${m.fileName ?? ""}`.trim(); preview = text; break;
-      case "location": text = `[ตำแหน่ง] ${m.address ?? m.title ?? ""}`.trim(); preview = text; break;
-      default:         text = `[${m.type}]`;    preview = text; break;
+
+      case "image":
+      case "video":
+      case "audio":
+      case "file": {
+        const label = m.type === "image" ? "[รูปภาพ]"
+                    : m.type === "video" ? "[วิดีโอ]"
+                    : m.type === "audio" ? "[ข้อความเสียง]"
+                    : `[ไฟล์] ${m.fileName ?? ""}`.trim();
+        const url = await saveLineMedia(db, m.id, m.type);
+        // โหลดไม่สำเร็จก็ยังบันทึกข้อความอธิบายไว้ ดีกว่าปล่อยข้อความหาย
+        text    = url ?? label;
+        mtype   = url ? m.type : "text";
+        preview = label;
+        break;
+      }
+
+      case "location":
+        text = `[ตำแหน่ง] ${m.address ?? m.title ?? ""}`.trim(); preview = text; mtype = "text"; break;
+
+      default:
+        text = `[${m.type}]`; preview = text; mtype = "text"; break;
     }
 
     const platformConvId = event.source.groupId ?? event.source.roomId ?? event.source.userId;
