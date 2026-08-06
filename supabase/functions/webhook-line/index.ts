@@ -98,8 +98,6 @@ serve(async (req: Request) => {
     //  - text            : เก็บข้อความตรงๆ
     //  - sticker         : URL สติกเกอร์เป็นลิงก์สาธารณะอยู่แล้ว เก็บ URL ได้เลย
     //  - image/video/audio/file : LINE ไม่ให้ URL ต้องโหลดไฟล์มาเก็บใน Storage ก่อน
-    const db = createClient(SUPABASE_URL, SERVICE_KEY);
-
     let text: string;
     let preview: string;
     let mtype = m.type as string;
