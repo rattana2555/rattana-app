@@ -73,6 +73,27 @@ serve(async (req: Request) => {
 
     const last = msgs[msgs.length - 1];
 
+    // รูปโปรไฟล์: participants ของ Conversations API ไม่มีรูปให้
+    // ต้องถาม User Profile API แยก — ใช้ได้ต่อเมื่อ PSID ผูกกับแอพเราแล้ว
+    // (เกิดขึ้นเมื่อเปิด "เข้าถึงช่องสำรอง" ใน Conversation Routing)
+    // ดึงเฉพาะรายที่ยังไม่มีรูป เพื่อไม่ให้ยิง API ซ้ำทุกรอบ
+    const { data: prev } = await db
+      .from("conversations")
+      .select("avatar_url")
+      .eq("platform", "facebook")
+      .eq("platform_conv_id", customer.id)
+      .maybeSingle();
+
+    let avatar = prev?.avatar_url ?? null;
+    if (!avatar) {
+      try {
+        const pr = await fetch(
+          `${GRAPH}/${customer.id}?fields=profile_pic&access_token=${encodeURIComponent(PAGE_TOKEN)}`,
+        );
+        if (pr.ok) avatar = (await pr.json()).profile_pic ?? null;
+      } catch (_) { /* ไม่มีรูปก็ไม่เป็นไร ใช้ตัวอักษรแทน */ }
+    }
+
     const { data: conv, error: convErr } = await db
       .from("conversations")
       .upsert({
@@ -80,6 +101,7 @@ serve(async (req: Request) => {
         platform_conv_id: customer.id,      // PSID — ใช้ส่งข้อความกลับได้
         customer_id: customer.id,
         customer_name: customer.name ?? "ลูกค้า",
+        avatar_url: avatar,
         last_message: last.message ?? "",
         last_message_at: new Date(last.created_time).toISOString(),
       }, { onConflict: "platform,platform_conv_id" })
