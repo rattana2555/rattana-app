@@ -45,6 +45,35 @@ async function verifySignature(body: string, sig: string): Promise<boolean> {
   return sig === expected;
 }
 
+// ── ดาวน์โหลดไฟล์จาก LINE มาเก็บใน Supabase Storage ────────
+// LINE ไม่ให้ URL รูปมาตรงๆ เหมือน Facebook — ต้องเอา token ไปโหลดเอง
+// แล้วอัพขึ้น bucket สาธารณะ เพื่อให้แอพเอาไปแสดงได้
+const BUCKET = "chat-media";
+
+async function saveLineMedia(db: any, messageId: string, kind: string): Promise<string | null> {
+  if (!ACCESS_TOKEN) return null;
+  try {
+    const res = await fetch(`https://api-data.line.me/v2/bot/message/${messageId}/content`, {
+      headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
+    });
+    if (!res.ok) { console.error("line content:", res.status, await res.text()); return null; }
+
+    const mime = res.headers.get("content-type") ?? "application/octet-stream";
+    const ext  = mime.split("/")[1]?.split(";")[0] ?? "bin";
+    const path = `line/${kind}/${messageId}.${ext}`;
+    const bytes = new Uint8Array(await res.arrayBuffer());
+
+    const { error } = await db.storage.from(BUCKET)
+      .upload(path, bytes, { contentType: mime, upsert: true });
+    if (error) { console.error("storage upload:", error.message); return null; }
+
+    return db.storage.from(BUCKET).getPublicUrl(path).data.publicUrl as string;
+  } catch (e) {
+    console.error("saveLineMedia:", String(e));
+    return null;
+  }
+}
+
 serve(async (req: Request) => {
   // CORS preflight
   if (req.method === "OPTIONS") return new Response("ok", { headers: { "Access-Control-Allow-Origin": "*" } });
