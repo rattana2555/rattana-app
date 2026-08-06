@@ -114,22 +114,32 @@ serve(async (req: Request) => {
     // ข้อความที่มีอยู่แล้ว — กันบันทึกซ้ำโดยเทียบ platform_msg_id
     const { data: existing } = await db
       .from("messages")
-      .select("platform_msg_id")
+      .select("id,platform_msg_id,message_type")
       .eq("conversation_id", conv.id)
       .not("platform_msg_id", "is", null);
-    const seen = new Set((existing ?? []).map((m: any) => m.platform_msg_id));
+    const seen = new Map((existing ?? []).map((m: any) => [m.platform_msg_id, m]));
 
-    const rows = msgs
-      .filter((m: any) => m.message && !seen.has(m.id))
-      .map((m: any) => ({
+    const rows = [];
+    for (const m of msgs) {
+      const shaped = shape(m);
+      if (!shaped) continue;                    // ไม่มีทั้งข้อความและไฟล์แนบ → ข้าม
+      const old = seen.get(m.id);
+      if (old) {
+        // ลิงก์รูปของ Facebook เป็นแบบมีวันหมดอายุ — sync ทุกรอบให้ลิงก์ใหม่เสมอ
+        if (shaped.message_type !== "text") {
+          await db.from("messages").update({ content: shaped.content }).eq("id", old.id);
+        }
+        continue;
+      }
+      rows.push({
         conversation_id: conv.id,
         direction: m.from?.id === PAGE_ID ? "out" : "in",
-        content: m.message,
-        message_type: "text",
         platform_msg_id: m.id,
         status: "sent",
         sent_at: new Date(m.created_time).toISOString(),
-      }));
+        ...shaped,
+      });
+    }
 
     if (rows.length) {
       const { error: insErr } = await db.from("messages").insert(rows);
