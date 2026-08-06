@@ -63,7 +63,15 @@ serve(async (req: Request) => {
   const db = createClient(SUPABASE_URL, SERVICE_KEY);
 
   for (const entry of body.entry ?? []) {
-    for (const msg of entry.messaging ?? []) {
+    // messaging = แอพเราเป็นเจ้าของบทสนทนา
+    // standby   = แอพอื่นเป็นเจ้าของ (เช่น AI ของเพจ) — Meta ส่งมาให้ดูอย่างเดียว
+    // ถ้ารับแค่ messaging จะไม่เห็นข้อความเลยเมื่อมี AI ครองบทสนทนาอยู่
+    const events = [
+      ...(entry.messaging ?? []),
+      ...(entry.standby   ?? []),
+    ];
+
+    for (const msg of events) {
       if (!msg.message?.text) continue; // skip echo, read receipt, etc.
       if (msg.message.is_echo) continue; // skip our own outbound echo
 
