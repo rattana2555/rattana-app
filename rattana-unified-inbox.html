@@ -1117,7 +1117,30 @@ function showApp(){
   if(started) return;
   started = true;
   setupRealtime();
-  loadConvs().then(()=>syncFacebook());   // ดึง Facebook ตอนเปิดแอพ 1 ครั้ง
+  loadConvs().then(()=>syncFacebook());
+  startAutoRefresh();
+}
+
+// ดึงข้อมูลใหม่อัตโนมัติทุก 45 วินาที
+// จำเป็นเพราะ Facebook ไม่ส่ง webhook มาหาเรา (AI ครองบทสนทนา) ต้องไปดึงเอง
+// และเป็นตาข่ายรองรับกรณี realtime ของ LINE หลุดการเชื่อมต่อด้วย
+const REFRESH_MS = 45000;
+let refreshTimer = null;
+
+function startAutoRefresh(){
+  if(refreshTimer) return;
+  refreshTimer = setInterval(async ()=>{
+    if(document.hidden) return;          // ไม่ดึงตอนสลับแท็บไปทำอย่างอื่น
+    if(syncing) return;
+    await syncFacebook({ quiet:true });
+    await loadConvs();
+    if(activeId) renderMsgs(await loadMsgs(activeId));
+  }, REFRESH_MS);
+
+  // กลับมาที่แท็บเมื่อไหร่ ดึงทันทีไม่ต้องรอครบรอบ
+  document.addEventListener('visibilitychange', ()=>{
+    if(!document.hidden && started && !syncing) syncFacebook({ quiet:true }).then(loadConvs);
+  });
 }
 
 function showLogin(){
