@@ -44,7 +44,7 @@ serve(async (req: Request) => {
 
   const fields =
     `id,updated_time,participants,messages.limit(${msgLimit})` +
-    `{id,created_time,from,message}`;
+    `{id,created_time,from,message,attachments{mime_type,name,file_url,image_data}}`;
 
   const res = await fetch(
     `${GRAPH}/${PAGE_ID}/conversations?platform=messenger` +
