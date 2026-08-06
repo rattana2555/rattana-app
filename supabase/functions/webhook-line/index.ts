@@ -171,7 +171,7 @@ serve(async (req: Request) => {
       conversation_id: conv.id,
       direction: "in",
       content: text,
-      message_type: m.type,
+      message_type: mtype,   // ถ้าโหลดไฟล์ไม่สำเร็จจะกลายเป็น text ที่มีคำอธิบายแทน
       platform_msg_id: m.id,
       sent_at: ts,
     });
