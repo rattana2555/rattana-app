@@ -125,7 +125,16 @@ serve(async (req: Request) => {
         customer_id: customer.id,
         customer_name: customer.name ?? "ลูกค้า",
         avatar_url: avatar,
-        last_message: last.message ?? "",
+        // ตัวอย่างข้อความในรายการแชท — รูปต้องไม่แสดงเป็น URL ยาวๆ
+        last_message: (() => {
+          const s = shape(last);
+          if (!s) return "";
+          if (s.message_type === "image")   return "[รูปภาพ]";
+          if (s.message_type === "sticker") return "[สติกเกอร์]";
+          if (s.message_type === "video")   return "[วิดีโอ]";
+          if (s.message_type === "file")    return "[ไฟล์]";
+          return s.content;
+        })(),
         last_message_at: new Date(last.created_time).toISOString(),
       }, { onConflict: "platform,platform_conv_id" })
       .select("id")
