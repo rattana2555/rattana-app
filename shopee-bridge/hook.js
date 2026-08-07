@@ -5,53 +5,68 @@
 //  ไม่ได้ยิง API เพิ่ม ไม่ได้ล็อกอินแทน ไม่ได้แก้ไขอะไรบนหน้าเว็บ
 //  = ข้อมูลชุดเดียวกับที่พนักงานเห็นบนจอ แค่ส่งต่อไปเก็บที่ Chat Hub
 //
-//  ส่งต่อให้ bridge.js ผ่าน window.postMessage เพราะคนละ world คุยกันตรงๆ ไม่ได้
+//  ดัก 3 ทาง: fetch / XMLHttpRequest / WebSocket
+//  (แชทส่วนใหญ่ส่งข้อความผ่าน WebSocket ไม่ใช่ HTTP)
 // ============================================================
 (() => {
   const TAG = "[RCH]";
 
-  // เอาเฉพาะ URL ที่น่าจะเกี่ยวกับแชท เพื่อไม่ให้ดักข้อมูลอื่นโดยไม่จำเป็น
-  const LOOKS_LIKE_CHAT = /(chat|conversation|message|webchat|im\/)/i;
+  // เอาเฉพาะ API แชทของ Seller Centre — ตัด dem.shopee.com ซึ่งเป็นแค่ตัวเก็บสถิติ
+  const WANTED = /seller\.shopee\.[a-z.]+\/webchat\/api\//i;
+  const NOISE  = /dem\.shopee\.com|web-performance|web-custom-event/i;
 
-  function report(url, method, body) {
+  function report(url, kind, body) {
+    if (!body) return;
+    if (NOISE.test(url)) return;
     try {
-      window.postMessage({ __rch: true, url, method, body }, "*");
-    } catch (_) { /* payload ใหญ่เกินหรือ clone ไม่ได้ ก็ข้าม */ }
+      window.postMessage({ __rch: true, url, kind, body: String(body).slice(0, 200000) }, "*");
+    } catch (_) {}
   }
 
-  // ── ดัก fetch ──────────────────────────────────────────────
+  // ── fetch ─────────────────────────────────────────────────
   const origFetch = window.fetch;
   window.fetch = async function (...args) {
     const res = await origFetch.apply(this, args);
     try {
       const url = typeof args[0] === "string" ? args[0] : args[0]?.url ?? "";
-      if (LOOKS_LIKE_CHAT.test(url)) {
-        res.clone().text().then((t) => report(url, "fetch", t)).catch(() => {});
-      }
+      if (WANTED.test(url)) res.clone().text().then((t) => report(url, "fetch", t)).catch(() => {});
     } catch (_) {}
     return res;
   };
 
-  // ── ดัก XMLHttpRequest ────────────────────────────────────
+  // ── XMLHttpRequest ───────────────────────────────────────
   const origOpen = XMLHttpRequest.prototype.open;
   const origSend = XMLHttpRequest.prototype.send;
 
   XMLHttpRequest.prototype.open = function (method, url, ...rest) {
     this.__rchUrl = url;
-    this.__rchMethod = method;
     return origOpen.call(this, method, url, ...rest);
   };
 
   XMLHttpRequest.prototype.send = function (...args) {
     this.addEventListener("load", () => {
       try {
-        if (LOOKS_LIKE_CHAT.test(this.__rchUrl || "")) {
-          report(this.__rchUrl, this.__rchMethod || "xhr", this.responseText);
-        }
+        if (WANTED.test(this.__rchUrl || "")) report(this.__rchUrl, "xhr", this.responseText);
       } catch (_) {}
     });
     return origSend.apply(this, args);
   };
 
-  console.log(TAG, "hook พร้อมแล้ว — เปิดหน้าแชทใน Seller Center ได้เลย");
+  // ── WebSocket ────────────────────────────────────────────
+  // แชทมักส่งข้อความใหม่มาทางนี้แบบเรียลไทม์ ไม่ผ่าน HTTP
+  const OrigWS = window.WebSocket;
+  function PatchedWS(url, protocols) {
+    const ws = protocols === undefined ? new OrigWS(url) : new OrigWS(url, protocols);
+    ws.addEventListener("message", (ev) => {
+      try {
+        if (typeof ev.data === "string") report(String(url), "ws", ev.data);
+      } catch (_) {}
+    });
+    return ws;
+  }
+  PatchedWS.prototype = OrigWS.prototype;
+  ["CONNECTING", "OPEN", "CLOSING", "CLOSED"].forEach((k, i) => { PatchedWS[k] = i; });
+  window.WebSocket = PatchedWS;
+
+  console.log(TAG, "hook v2 พร้อม — ดัก fetch / xhr / websocket แล้ว");
 })();
