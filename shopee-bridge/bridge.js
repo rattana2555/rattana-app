@@ -114,8 +114,11 @@ function parseMessages(url, arr) {
 
   if (!messages.length) return null;
 
+  // กันพลาด: ถ้าชื่อที่ได้ดันเป็นชื่อร้านเอง อย่าใช้
+  if (customerName && isShopUser(customerName)) customerName = "";
+
   const meta = convMeta.get(convId) ?? {};
-  if (customerName && !meta.name) { meta.name = customerName; convMeta.set(convId, meta); }
+  if (customerName) { meta.name = customerName; convMeta.set(convId, meta); }
 
   return {
     convId,
@@ -123,6 +126,49 @@ function parseMessages(url, arr) {
     avatar: "",
     messages,
   };
+}
+
+// ── รายการแชท (ไม่ต้องคลิกเปิด) ───────────────────────────
+// หน้าเว็บโหลดรายการนี้เองเป็นระยะ ทำให้รู้ว่ามีใครทักมาใหม่
+// โดยไม่ต้องรอพนักงานคลิกเปิดทีละอัน
+// เก็บได้แค่ "ข้อความล่าสุด" 1 บรรทัด — เนื้อหาเต็มมาตอนเปิดแชท
+function parseConvList(arr) {
+  if (!Array.isArray(arr)) return [];
+  const out = [];
+
+  for (const c of arr) {
+    if (!c || typeof c !== "object") continue;
+    const convId = c.conversation_id ?? c.conversationId ?? c.id;
+    if (!convId) continue;
+
+    const name = [c.to_name, c.to_user_name, c.username, c.nickname]
+      .find((n) => n && !isShopUser(n));
+    const preview = c.latest_message_content?.text
+                 ?? c.last_message_content?.text
+                 ?? (typeof c.latest_message_content === "string" ? c.latest_message_content : "")
+                 ?? "";
+    const ts = c.last_message_timestamp ?? c.latest_message_time ?? c.update_time ?? c.mtime;
+    const msgId = c.latest_message_id ?? c.last_message_id;
+
+    if (!preview || !msgId) continue;   // ไม่มีข้อความล่าสุดก็ข้าม
+
+    const meta = convMeta.get(String(convId)) ?? {};
+    if (name) { meta.name = String(name); convMeta.set(String(convId), meta); }
+
+    out.push({
+      convId: String(convId),
+      name: meta.name || "ลูกค้า Shopee",
+      avatar: c.to_avatar || c.avatar || "",
+      messages: [{
+        id: String(msgId),
+        from: isShopUser(c.latest_message_sender_name ?? "") ? "seller" : "buyer",
+        text: String(preview),
+        imageUrl: "",
+        sentAt: pickTime({ created_timestamp: ts }),
+      }],
+    });
+  }
+  return out;
 }
 
 // ── ส่งขึ้น Chat Hub (รวบยอด ไม่ยิงถี่) ────────────────────
