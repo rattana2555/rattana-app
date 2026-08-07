@@ -594,7 +594,84 @@ async function loadConvs(){
     lastTime: new Date(r.last_message_at),
     unread: r.unread_count||0,
   }));
+  detectNewMessages(before);   // เทียบกับของเดิม เพื่อรู้ว่ามีอะไรใหม่เข้ามา
   renderList();
+}
+
+// ─────────────────────────────────────────────────────────
+//  แจ้งเตือนเมื่อมีข้อความใหม่
+//  ใช้ได้กับทุกแพลตฟอร์ม เพราะเทียบจากตาราง conversations
+//  (LINE เข้าทาง realtime · Facebook/Shopee เข้าทางการดึงข้อมูล)
+// ─────────────────────────────────────────────────────────
+let notifyOn = localStorage.getItem('notifyOff') !== '1';
+
+function snapshotConvs(){
+  const m = new Map();
+  convs.forEach(c=>m.set(c.id, { t:+c.lastTime, u:c.unread }));
+  return m;
+}
+
+function detectNewMessages(before){
+  if(!before || !before.size) return;      // โหลดครั้งแรก ไม่ต้องเตือน
+  const fresh = convs.filter(c=>{
+    const old = before.get(c.id);
+    if(!old) return c.unread > 0;          // แชทใหม่ที่ยังไม่อ่าน
+    return +c.lastTime > old.t && c.unread > 0;
+  });
+  if(!fresh.length) return;
+
+  updateTitleBadge();
+  if(!notifyOn) return;
+  beep();
+  fresh.slice(0,3).forEach(c=>{
+    const p = P[c.platform];
+    popNotification(`${c.name} · ${p ? p.name : c.platform}`, c.lastMsg);
+  });
+}
+
+function updateTitleBadge(){
+  const total = convs.reduce((s,c)=>s+c.unread,0);
+  document.title = (total>0 ? `(${total}) ` : '') + 'Rattana Chat Hub v2.8';
+}
+
+// เสียงเตือนสั้นๆ สร้างเอง ไม่ต้องโหลดไฟล์เสียง
+function beep(){
+  try{
+    const ac = new (window.AudioContext||window.webkitAudioContext)();
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.connect(g); g.connect(ac.destination);
+    o.type = 'sine'; o.frequency.value = 880;
+    g.gain.setValueAtTime(0.0001, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.12, ac.currentTime + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + 0.35);
+    o.start(); o.stop(ac.currentTime + 0.36);
+    setTimeout(()=>ac.close(), 600);
+  }catch(_){ /* บางเบราว์เซอร์ห้ามเล่นเสียงก่อนผู้ใช้คลิก */ }
+}
+
+function popNotification(title, body){
+  if(!('Notification' in window) || Notification.permission !== 'granted') return;
+  try{
+    const n = new Notification(title, { body: String(body||'').slice(0,120), tag: title, icon: LOGO_ICON });
+    n.onclick = ()=>{ window.focus(); n.close(); };
+    setTimeout(()=>n.close(), 8000);
+  }catch(_){}
+}
+
+async function askNotifyPermission(){
+  if(!('Notification' in window)) return;
+  if(Notification.permission === 'default'){
+    try{ await Notification.requestPermission(); }catch(_){}
+  }
+}
+
+function toggleNotify(){
+  notifyOn = !notifyOn;
+  localStorage.setItem('notifyOff', notifyOn ? '0' : '1');
+  const b = document.getElementById('bellBtn');
+  if(b){ b.textContent = notifyOn ? '🔔' : '🔕'; b.title = notifyOn ? 'ปิดเสียงแจ้งเตือน' : 'เปิดเสียงแจ้งเตือน'; }
+  showToast(notifyOn ? 'เปิดแจ้งเตือนแล้ว 🔔' : 'ปิดแจ้งเตือนแล้ว 🔕', 'info');
+  if(notifyOn){ askNotifyPermission(); beep(); }
 }
 
 // ─────────────────────────────────────────────────────────
