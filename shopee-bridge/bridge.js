@@ -144,14 +144,6 @@ window.addEventListener("message", (ev) => {
   const d = ev.data;
   if (!d || d.__rch !== true || !cfg.enabled) return;
 
-  // จำ user id ของร้านไว้ ใช้แยกว่าข้อความไหนเราส่ง ข้อความไหนลูกค้าส่ง
-  const um = String(d.url).match(RE_USER);
-  if (um && !sellerUserId) {
-    sellerUserId = um[1];
-    chrome.storage.local.set({ sellerUserId });
-    console.log(TAG, "รู้แล้วว่า user id ของร้านคือ", sellerUserId);
-  }
-
   let parsed;
   try { parsed = JSON.parse(d.body); } catch { return; }
 
