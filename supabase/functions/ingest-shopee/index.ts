@@ -1,0 +1,129 @@
+// ============================================================
+//  Rattana Chat Hub — Ingest Shopee (รับแชทจากส่วนขยายเบราว์เซอร์)
+//  Deploy: Supabase Dashboard > Edge Functions > New Function
+//  Name: ingest-shopee
+//
+//  ทำไมต้องมีตัวนี้:
+//  Shopee ไม่เปิด API แชทให้ร้านทั่วไป (ต้องเป็น Mall/Managed Seller)
+//  จึงใช้ส่วนขยาย Chrome อ่านจากหน้า Seller Center ที่พนักงานเปิดอยู่แล้วส่งมาที่นี่
+//  ตัวนี้ทำหน้าที่รับ → ตรวจรหัสลับ → บันทึกลงตารางเดียวกับ LINE/Facebook
+//
+//  ⚠️ ตั้งใจให้ "อ่านอย่างเดียว" — การตอบลูกค้ายังทำใน Shopee ตามปกติ
+// ============================================================
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const INGEST_SECRET = Deno.env.get("SHOPEE_INGEST_SECRET") ?? "";
+const SUPABASE_URL  = Deno.env.get("SUPABASE_URL") ?? "";
+const SERVICE_KEY   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "content-type,x-ingest-secret",
+  "Access-Control-Allow-Methods": "POST,OPTIONS",
+};
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+
+type InMsg = {
+  id: string;            // รหัสข้อความจาก Shopee (กันบันทึกซ้ำ)
+  from: "buyer" | "seller";
+  text?: string;
+  imageUrl?: string;
+  sentAt: string | number;  // ISO string หรือ epoch
+};
+
+type InConv = {
+  convId: string;        // รหัสบทสนทนาจาก Shopee
+  name?: string;
+  avatar?: string;
+  messages: InMsg[];
+};
+
+serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST")    return json({ error: "Method Not Allowed" }, 405);
+
+  // fail closed — ไม่ตั้ง secret = ไม่รับอะไรเลย
+  if (!INGEST_SECRET) {
+    console.error("SHOPEE_INGEST_SECRET ยังไม่ได้ตั้ง — ปฏิเสธทั้งหมด");
+    return json({ error: "not configured" }, 503);
+  }
+  if (req.headers.get("x-ingest-secret") !== INGEST_SECRET) {
+    return json({ error: "unauthorized" }, 401);
+  }
+
+  let payload: { conversations?: InConv[] };
+  try { payload = await req.json(); }
+  catch { return json({ error: "invalid json" }, 400); }
+
+  const convs = payload.conversations ?? [];
+  if (!Array.isArray(convs) || !convs.length) return json({ ok: true, conversations: 0, newMessages: 0 });
+
+  const db = createClient(SUPABASE_URL, SERVICE_KEY);
+  let convCount = 0, msgCount = 0;
+
+  for (const c of convs.slice(0, 100)) {
+    if (!c?.convId || !Array.isArray(c.messages) || !c.messages.length) continue;
+
+    const norm = c.messages
+      .filter((m) => m && m.id && (m.text || m.imageUrl))
+      .map((m) => ({
+        id: String(m.id),
+        direction: m.from === "seller" ? "out" : "in",
+        content: m.imageUrl ? String(m.imageUrl) : String(m.text ?? ""),
+        message_type: m.imageUrl ? "image" : "text",
+        sent_at: new Date(typeof m.sentAt === "number" ? m.sentAt : Date.parse(m.sentAt)).toISOString(),
+      }))
+      .sort((a, b) => a.sent_at.localeCompare(b.sent_at));
+
+    if (!norm.length) continue;
+    const last = norm[norm.length - 1];
+
+    const { data: conv, error: convErr } = await db
+      .from("conversations")
+      .upsert({
+        platform: "shopee",
+        platform_conv_id: String(c.convId),
+        customer_name: c.name || "ลูกค้า Shopee",
+        avatar_url: c.avatar || null,
+        last_message: last.message_type === "image" ? "[รูปภาพ]" : last.content,
+        last_message_at: last.sent_at,
+      }, { onConflict: "platform,platform_conv_id" })
+      .select("id")
+      .single();
+
+    if (convErr || !conv) { console.error("conv upsert:", convErr); continue; }
+    convCount++;
+
+    const { data: existing } = await db
+      .from("messages")
+      .select("platform_msg_id")
+      .eq("conversation_id", conv.id)
+      .not("platform_msg_id", "is", null);
+    const seen = new Set((existing ?? []).map((m: any) => m.platform_msg_id));
+
+    const rows = norm
+      .filter((m) => !seen.has(m.id))
+      .map((m) => ({
+        conversation_id: conv.id,
+        direction: m.direction,
+        content: m.content,
+        message_type: m.message_type,
+        platform_msg_id: m.id,
+        status: "sent",
+        sent_at: m.sent_at,
+      }));
+
+    if (rows.length) {
+      const { error: insErr } = await db.from("messages").insert(rows);
+      if (insErr) console.error("msg insert:", insErr);
+      else msgCount += rows.length;
+    }
+  }
+
+  return json({ ok: true, conversations: convCount, newMessages: msgCount });
+});
