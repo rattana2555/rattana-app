@@ -15,15 +15,13 @@
 const ENDPOINT = "https://tsudgtzcskoopbymklfg.supabase.co/functions/v1/ingest-shopee";
 const TAG = "[RCH]";
 
-let cfg = { secret: "", discovery: true, enabled: true };
-let sellerUserId = null;                    // เดาจาก URL ที่หน้าเว็บเรียก
+let cfg = { secret: "", discovery: true, enabled: true, shopUser: "" };
 const convMeta = new Map();                 // convId → {name}
 
-chrome.storage.local.get(["secret", "discovery", "enabled", "sellerUserId"], (v) => {
+chrome.storage.local.get(["secret", "discovery", "enabled", "shopUser"], (v) => {
   cfg = { ...cfg, ...v };
-  if (v.sellerUserId) sellerUserId = String(v.sellerUserId);
   console.log(TAG, "โหมด:", cfg.discovery ? "สำรวจ (ยังไม่ส่ง)" : "ส่งจริง",
-              "| เปิดใช้งาน:", cfg.enabled, "| ร้าน:", sellerUserId ?? "ยังไม่รู้");
+              "| เปิดใช้งาน:", cfg.enabled, "| ชื่อร้าน:", cfg.shopUser || "⚠️ ยังไม่ได้ตั้ง");
 });
 chrome.storage.onChanged.addListener((ch) => {
   for (const k in ch) cfg[k] = ch[k].newValue;
