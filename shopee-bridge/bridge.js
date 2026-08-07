@@ -86,13 +86,12 @@ function parseMessages(url, arr) {
   for (const m of arr) {
     if (!m || !m.id) continue;
 
-    const fromId = String(m.from_id ?? "");
-    const isSeller = sellerUserId ? fromId === sellerUserId
-                                  : !!(m.from_shop_id && m.from_shop_id !== 0 && m.type !== "notification");
+    const isSeller = isShopUser(m.from_user_name);
 
-    // ชื่อลูกค้า = ฝั่งที่ไม่ใช่ร้าน
+    // ชื่อลูกค้า = ฝั่งที่ไม่ใช่ร้าน (เช็คทั้งสองฝั่ง เผื่อบางข้อความมีแค่ฝั่งเดียว)
     if (!customerName) {
-      customerName = isSeller ? (m.to_user_name ?? "") : (m.from_user_name ?? "");
+      const cand = isSeller ? m.to_user_name : m.from_user_name;
+      if (cand && !isShopUser(cand)) customerName = String(cand);
     }
 
     const { text, imageUrl } = pickContent(m);
