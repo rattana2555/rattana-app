@@ -212,9 +212,24 @@ window.addEventListener("message", (ev) => {
     return;
   }
 
-  const conv = parseMessages(String(d.url), parsed);
-  if (!conv) return;
+  const url = String(d.url);
+  let batch = [];
 
-  queue.push(conv);
+  if (RE_MESSAGES.test(url)) {
+    const conv = parseMessages(url, parsed);
+    if (conv) batch = [conv];
+  } else if (/\/conversations(\?|$)/.test(url.split("#")[0])) {
+    // รายการแชท — หน้าเว็บโหลดเองเป็นระยะ
+    const list = Array.isArray(parsed) ? parsed : (parsed.data ?? parsed.conversations ?? parsed.list);
+    batch = parseConvList(list);
+    if (!batch.length && list) {
+      console.log(TAG, "รายการแชท: ยังแปลงไม่ได้ ส่งตัวอย่างนี้ให้ผู้พัฒนาดู →");
+      console.log(JSON.stringify(list).slice(0, 1500));
+    }
+  }
+
+  if (!batch.length) return;
+
+  queue.push(...batch);
   if (!timer) timer = setTimeout(flush, 3000);
 });
