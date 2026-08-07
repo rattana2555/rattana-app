@@ -93,8 +93,11 @@ window.addEventListener("message", (ev) => {
 
   if (cfg.discovery) {
     // โหมดสำรวจ: พิมพ์ให้ดูอย่างเดียว ไม่ส่งไปไหน
-    console.log(TAG, "พบข้อมูล:", d.url);
-    console.log(JSON.stringify(parsed).slice(0, 3000));
+    // แยก path ออกมาให้อ่านง่าย จะได้รู้ว่า endpoint ไหนคือรายการแชท/ข้อความ
+    let path = d.url;
+    try { path = new URL(d.url, location.origin).pathname; } catch (_) {}
+    console.log(`${TAG} [${d.kind}] ${path}`);
+    console.log(JSON.stringify(parsed).slice(0, 4000));
     return;
   }
 
