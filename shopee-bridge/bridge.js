@@ -155,6 +155,11 @@ window.addEventListener("message", (ev) => {
     return;
   }
 
+  if (!cfg.shopUser) {
+    console.warn(TAG, "ยังไม่ได้ตั้ง 'ชื่อร้าน' ในหน้าตั้งค่า — แยกไม่ออกว่าใครส่ง จึงยังไม่ส่งข้อมูล");
+    return;
+  }
+
   const conv = parseMessages(String(d.url), parsed);
   if (!conv) return;
 
