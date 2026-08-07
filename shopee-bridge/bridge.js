@@ -32,11 +32,17 @@ const RE_MESSAGES = /\/conversations\/(\d+)\/messages/;
 
 // ข้อความจากร้านจะมี from_user_name เป็นชื่อร้าน
 // พนักงานแต่ละคนใช้รูปแบบ "ชื่อร้าน:ชื่อพนักงาน" เช่น rattana_2555:main
+//
+// เทียบแบบผ่อนปรน: ตัด _ - . และช่องว่างออก แล้วเทียบตัวพิมพ์เล็ก
+// เพราะคนกรอกมักพิมพ์ "rattana 2555" บ้าง "Rattana_2555" บ้าง
+const norm = (s) => String(s || "").toLowerCase().replace(/[\s._-]/g, "");
+
 function isShopUser(name) {
-  const shop = (cfg.shopUser || "").trim().toLowerCase();
-  const n = String(name || "").trim().toLowerCase();
-  if (!shop || !n) return false;
-  return n === shop || n.startsWith(shop + ":");
+  const shop = norm(cfg.shopUser);
+  const raw  = String(name || "").trim();
+  if (!shop || !raw) return false;
+  const base = norm(raw.split(":")[0]);   // ตัดส่วน :ชื่อพนักงาน ออกก่อน
+  return base === shop;
 }
 
 function pickTime(m) {
