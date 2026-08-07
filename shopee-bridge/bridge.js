@@ -29,7 +29,15 @@ chrome.storage.onChanged.addListener((ch) => {
 
 // ── ตัวช่วย ───────────────────────────────────────────────
 const RE_MESSAGES = /\/conversations\/(\d+)\/messages/;
-const RE_USER     = /\/mini\/users\/(\d+)\//;
+
+// ข้อความจากร้านจะมี from_user_name เป็นชื่อร้าน
+// พนักงานแต่ละคนใช้รูปแบบ "ชื่อร้าน:ชื่อพนักงาน" เช่น rattana_2555:main
+function isShopUser(name) {
+  const shop = (cfg.shopUser || "").trim().toLowerCase();
+  const n = String(name || "").trim().toLowerCase();
+  if (!shop || !n) return false;
+  return n === shop || n.startsWith(shop + ":");
+}
 
 function pickTime(m) {
   const v = m.created_timestamp ?? m.create_time ?? m.ctime ?? m.timestamp ?? m.created_at;
