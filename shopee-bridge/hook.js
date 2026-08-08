@@ -11,9 +11,12 @@
 (() => {
   const TAG = "[RCH]";
 
-  // เอาเฉพาะ API แชทของ Seller Centre — ตัด dem.shopee.com ซึ่งเป็นแค่ตัวเก็บสถิติ
-  const WANTED = /seller\.shopee\.[a-z.]+\/webchat\/api\//i;
-  const NOISE  = /dem\.shopee\.com|web-performance|web-custom-event/i;
+  // เอาเฉพาะ API แชทที่เกี่ยวข้อง — ตัดพวก analytics ทิ้ง
+  const WANTED = new RegExp([
+    "seller\\.shopee\\.[a-z.]+/webchat/api/",   // Shopee Seller Centre
+    "(manager|chat)\\.line\\.biz/.*(chat|message|room|conversation)", // LINE OA Manager
+  ].join("|"), "i");
+  const NOISE  = /dem\.shopee\.com|web-performance|web-custom-event|\/log|analytics|tracking|beacon/i;
 
   function report(url, kind, body) {
     if (!body) return;
