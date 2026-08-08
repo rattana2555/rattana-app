@@ -2655,6 +2655,29 @@ function showToast(msg, type='info') {
   document.body.appendChild(t);
   setTimeout(()=>t.remove(), 3500);
 }
+// v6.56 — PWA install (ติดตั้งเป็นแอปลงเครื่อง Windows/มือถือ)
+let _deferredInstall = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault(); _deferredInstall = e;
+  const b = document.getElementById('btnInstallApp'); if (b) b.style.display = '';
+});
+window.addEventListener('appinstalled', () => {
+  _deferredInstall = null;
+  const b = document.getElementById('btnInstallApp'); if (b) b.style.display = 'none';
+  showToast('✅ ติดตั้งแอปแล้ว — เปิดจากไอคอนบนหน้าจอได้เลย', 'success');
+});
+async function installApp(){
+  const standalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+  if (standalone) { showToast('✅ กำลังใช้งานแบบแอปอยู่แล้ว', 'info'); return; }
+  if (!_deferredInstall) {   // ไม่มีปุ่มติดตั้งอัตโนมัติ (บางเบราว์เซอร์) → บอกวิธีติดตั้งเอง
+    showToast('ℹ️ กดเมนู ⋮ ของ Chrome/Edge → "ติดตั้งแอป / Install app"', 'info');
+    return;
+  }
+  _deferredInstall.prompt();
+  try { await _deferredInstall.userChoice; } catch {}
+  _deferredInstall = null;
+  const b = document.getElementById('btnInstallApp'); if (b) b.style.display = 'none';
+}
 const normalizeEmail = s => String(s||'').replace(/[​‌‍﻿]/g,'').replace(/\s+/g,'').toLowerCase();
 const fmtThaiBaht = n => {
   const v = Number(n);
