@@ -44,8 +44,8 @@ type InConv = {
 };
 
 // รับได้ทั้ง shopee และ line (ส่วนขยายอ่านจากหน้าเว็บที่พนักงานเปิดอยู่)
-// line ใช้ prefix แยก เพื่อไม่ให้ชนกับบทสนทนาที่ webhook สร้างไว้
-const ALLOWED = new Set(["shopee", "line-oa"]);
+// กรณี line: ถ้า convId ตรงกับ userId ที่ webhook เคยสร้างไว้ จะรวมเป็นบทสนทนาเดียวกันเอง
+const ALLOWED = new Set(["shopee", "line"]);
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
