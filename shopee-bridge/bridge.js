@@ -221,8 +221,11 @@ window.addEventListener("message", (ev) => {
   if (/line\.biz/i.test(location.hostname)) {
     let path = url;
     try { path = new URL(url, location.origin).pathname; } catch (_) {}
-    console.log(`${TAG} [LINE ${d.kind}] ${path}`);
-    console.log(JSON.stringify(parsed).slice(0, 3000));
+    const txt = JSON.stringify(parsed);
+    // เอาเฉพาะที่หน้าตาเหมือนข้อมูลแชทจริงๆ ไม่งั้นจะรกจนหาไม่เจอ
+    if (!/message|chat|talk|text|content|sender|user/i.test(txt)) return;
+    console.log(`${TAG} [LINE ${d.kind}] ${path}  (${txt.length} ตัวอักษร)`);
+    console.log(txt.slice(0, 2500));
     return;
   }
 
