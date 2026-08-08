@@ -215,6 +215,16 @@ window.addEventListener("message", (ev) => {
   const url = String(d.url);
   let batch = [];
 
+  // ── LINE OA Manager ──────────────────────────────────────
+  // ยังไม่รู้โครงสร้างจริง → พิมพ์ตัวอย่างให้ดูก่อน แล้วค่อยเขียนตัวแปลง
+  if (/line\.biz/i.test(location.hostname)) {
+    let path = url;
+    try { path = new URL(url, location.origin).pathname; } catch (_) {}
+    console.log(`${TAG} [LINE ${d.kind}] ${path}`);
+    console.log(JSON.stringify(parsed).slice(0, 3000));
+    return;
+  }
+
   if (RE_MESSAGES.test(url)) {
     const conv = parseMessages(url, parsed);
     if (conv) batch = [conv];
