@@ -73,5 +73,6 @@
   ["CONNECTING", "OPEN", "CLOSING", "CLOSED"].forEach((k, i) => { PatchedWS[k] = i; });
   window.WebSocket = PatchedWS;
 
-  console.log(TAG, "hook v2 พร้อม — ดัก fetch / xhr / websocket แล้ว");
+  console.log(TAG, "hook v3 พร้อม —", location.hostname,
+              window.top === window ? "(หน้าหลัก)" : "(เฟรมซ้อน)");
 })();
