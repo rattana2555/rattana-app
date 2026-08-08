@@ -95,7 +95,7 @@ serve(async (req: Request) => {
       .upsert({
         platform,
         platform_conv_id: String(c.convId),
-        customer_name: c.name || "ลูกค้า Shopee",
+        customer_name: c.name || "ลูกค้า",
         avatar_url: c.avatar || null,
         last_message: last.message_type === "image" ? "[รูปภาพ]" : last.content,
         last_message_at: last.sent_at,
