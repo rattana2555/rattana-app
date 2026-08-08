@@ -4538,7 +4538,8 @@ function fsDeselect(){
   fsSelectedEl = null;
 }
 function fsSelect(el){
-  if (fsSelectedEl === el) return;
+  fsGroupClear();   // v6.58 — a single selection replaces any marquee group
+  if (fsSelectedEl === el) { updateFlashSizeUI(); return; }
   fsDeselect();
   fsSelectedEl = el;
   el.classList.add('fs-sel');
@@ -4547,6 +4548,49 @@ function fsSelect(el){
   h.setAttribute('contenteditable', 'false');
   el.appendChild(h);
   updateFlashSizeUI();   // v6.24 — the slider now follows the selected element
+}
+/* ===== v6.58 — marquee group select + group resize/move (promo canvas) ===== */
+function fsGroupClear(){
+  if (fsSelectedEls.length) fsSelectedEls.forEach(el => el.classList.remove('fs-sel'));
+  fsSelectedEls = [];
+  document.querySelectorAll('#pdfStage .fs-group-box, #pdfStage .fs-marquee').forEach(n => n.remove());
+}
+function fsGroupSelect(els){
+  fsDeselect();          // drop any single selection
+  fsGroupClear();
+  fsSelectedEls = els.slice();
+  fsSelectedEls.forEach(el => el.classList.add('fs-sel'));
+  fsGroupBox();
+  updateFlashSizeUI();
+}
+// Draw/reposition the dashed group box + its corner handle over the union of the selected elements.
+function fsGroupBox(){
+  document.querySelectorAll('#pdfStage .fs-group-box').forEach(n => n.remove());
+  if (fsSelectedEls.length < 2) return;
+  const page = fsSelectedEls[0].closest('.promo-page, .flash-page');
+  if (!page) return;
+  const scale = flashPreviewScale || 1;
+  const pr = page.getBoundingClientRect();
+  let minL = Infinity, minT = Infinity, maxR = -Infinity, maxB = -Infinity;
+  fsSelectedEls.forEach(el => {
+    const r = el.getBoundingClientRect();
+    if (r.left < minL) minL = r.left; if (r.top < minT) minT = r.top;
+    if (r.right > maxR) maxR = r.right; if (r.bottom > maxB) maxB = r.bottom;
+  });
+  if (!Number.isFinite(minL)) return;
+  const pad = 4;   // page-local px of breathing room around the union
+  const box = document.createElement('div');
+  box.className = 'fs-group-box';
+  box.setAttribute('contenteditable', 'false');
+  box.style.left   = ((minL - pr.left) / scale - pad).toFixed(1) + 'px';
+  box.style.top    = ((minT - pr.top)  / scale - pad).toFixed(1) + 'px';
+  box.style.width  = ((maxR - minL) / scale + pad * 2).toFixed(1) + 'px';
+  box.style.height = ((maxB - minT) / scale + pad * 2).toFixed(1) + 'px';
+  const h = document.createElement('div');
+  h.className = 'fs-group-handle';
+  h.setAttribute('contenteditable', 'false');
+  box.appendChild(h);
+  page.appendChild(box);
 }
 function resetFlashLayout(){
   // v6.33 — reset only the current mode's layout keys (promo keys are prefixed "p:")
