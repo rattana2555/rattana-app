@@ -90,16 +90,29 @@ serve(async (req: Request) => {
     if (!norm.length) continue;
     const last = norm[norm.length - 1];
 
+    // อย่าเขียนทับชื่อ/รูปที่ webhook เคยเก็บไว้ถูกต้องแล้ว (กรณี LINE)
+    // ส่วนขยายอ่านได้แค่ชื่อที่แสดงบนหน้าจอ ซึ่งบางทีสู้ของ webhook ไม่ได้
+    const { data: prev } = await db
+      .from("conversations")
+      .select("customer_name, avatar_url")
+      .eq("platform", platform)
+      .eq("platform_conv_id", String(c.convId))
+      .maybeSingle();
+
+    const row: Record<string, unknown> = {
+      platform,
+      platform_conv_id: String(c.convId),
+      last_message: last.message_type === "image" ? "[รูปภาพ]" : last.content,
+      last_message_at: last.sent_at,
+    };
+    const hasName = prev?.customer_name && prev.customer_name !== "ลูกค้า";
+    if (c.name && !hasName) row.customer_name = c.name;
+    else if (!prev)         row.customer_name = c.name || "ลูกค้า";
+    if (c.avatar && !prev?.avatar_url) row.avatar_url = c.avatar;
+
     const { data: conv, error: convErr } = await db
       .from("conversations")
-      .upsert({
-        platform,
-        platform_conv_id: String(c.convId),
-        customer_name: c.name || "ลูกค้า",
-        avatar_url: c.avatar || null,
-        last_message: last.message_type === "image" ? "[รูปภาพ]" : last.content,
-        last_message_at: last.sent_at,
-      }, { onConflict: "platform,platform_conv_id" })
+      .upsert(row, { onConflict: "platform,platform_conv_id" })
       .select("id")
       .single();
 
