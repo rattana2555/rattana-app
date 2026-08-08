@@ -11,12 +11,14 @@
 (() => {
   const TAG = "[RCH]";
 
-  // เอาเฉพาะ API แชทที่เกี่ยวข้อง — ตัดพวก analytics ทิ้ง
-  const WANTED = new RegExp([
-    "seller\\.shopee\\.[a-z.]+/webchat/api/",   // Shopee Seller Centre
-    "(manager|chat)\\.line\\.biz/.*(chat|message|room|conversation)", // LINE OA Manager
-  ].join("|"), "i");
-  const NOISE  = /dem\.shopee\.com|web-performance|web-custom-event|\/log|analytics|tracking|beacon/i;
+  // Shopee: รู้ endpoint แน่นอนแล้ว จับเฉพาะที่ต้องการ
+  // LINE  : ยังไม่รู้โครงสร้าง จับกว้างไว้ก่อนเพื่อสำรวจ แล้วค่อยแคบลงทีหลัง
+  const IS_LINE = /\.line\.biz$/i.test(location.hostname);
+  const WANTED  = IS_LINE
+    ? /\.line\.biz\//i
+    : /seller\.shopee\.[a-z.]+\/webchat\/api\//i;
+
+  const NOISE = /dem\.shopee\.com|web-performance|web-custom-event|analytics|tracking|beacon|\.(js|css|png|jpg|jpeg|gif|svg|woff2?|ico|map)(\?|$)/i;
 
   function report(url, kind, body) {
     if (!body) return;
