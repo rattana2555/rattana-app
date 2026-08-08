@@ -181,10 +181,11 @@ function flush() {
   if (!cfg.secret) { console.warn(TAG, "ยังไม่ได้ใส่รหัสลับ — ข้ามการส่ง"); queue = []; return; }
   const batch = queue; queue = [];
 
+  const platform = /line\.biz/i.test(location.hostname) ? "line" : "shopee";
   fetch(ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-ingest-secret": cfg.secret },
-    body: JSON.stringify({ conversations: batch }),
+    body: JSON.stringify({ platform, conversations: batch }),
   })
     .then((r) => r.json())
     .then((j) => console.log(TAG, "ส่งแล้ว:", j))
