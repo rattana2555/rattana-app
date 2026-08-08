@@ -37,11 +37,15 @@ type InMsg = {
 };
 
 type InConv = {
-  convId: string;        // รหัสบทสนทนาจาก Shopee
+  convId: string;        // รหัสบทสนทนาจากแพลตฟอร์ม
   name?: string;
   avatar?: string;
   messages: InMsg[];
 };
+
+// รับได้ทั้ง shopee และ line (ส่วนขยายอ่านจากหน้าเว็บที่พนักงานเปิดอยู่)
+// line ใช้ prefix แยก เพื่อไม่ให้ชนกับบทสนทนาที่ webhook สร้างไว้
+const ALLOWED = new Set(["shopee", "line-oa"]);
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
