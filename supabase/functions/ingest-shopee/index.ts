@@ -93,7 +93,7 @@ serve(async (req: Request) => {
     const { data: conv, error: convErr } = await db
       .from("conversations")
       .upsert({
-        platform: "shopee",
+        platform,
         platform_conv_id: String(c.convId),
         customer_name: c.name || "ลูกค้า Shopee",
         avatar_url: c.avatar || null,
