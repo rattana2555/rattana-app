@@ -3939,12 +3939,28 @@ function updateStats() {
 /* ============== PRODUCT GRID ============== */
 /* v6.8 — "catalog-like" modes (grouped cards): แค็ตตาล็อก (cat12) + สินค้าใหม่ (newsku) */
 function isCatalogMode() { return SHEET_CONFIG.perPage === 'cat12' || SHEET_CONFIG.perPage === 'newsku'; }
-const NEWSKU_DAYS = 14;
+// v6.55 — สินค้าใหม่: ช่วงเวลานับย้อนหลัง ตั้งค่าได้จากหน้าตั้งค่า · แหล่งข้อมูลเดียว (กันข้อความ dropdown/label ไม่ตรงกัน)
+const NEWSKU_OPTIONS = [
+  { d:7, label:'1 สัปดาห์' }, { d:14, label:'2 สัปดาห์' }, { d:21, label:'3 สัปดาห์' },
+  { d:28, label:'4 สัปดาห์' }, { d:30, label:'1 เดือน' }, { d:60, label:'2 เดือน' }, { d:90, label:'3 เดือน' },
+];
+function newSkuDays(){ const d = parseInt(SHEET_CONFIG.newSkuDays, 10); return (Number.isFinite(d) && d > 0 && d <= 3650) ? d : 14; }   // กันค่าเพี้ยน: NaN/0/ติดลบ/มากเกิน → 14
+function newSkuLabel(){ const d = newSkuDays(); const o = NEWSKU_OPTIONS.find(x => x.d === d); return o ? o.label : (d + ' วัน'); }
+function initNewSkuOptions(){ const s = $('#cfgNewSkuDays'); if (s && !s.options.length) s.innerHTML = NEWSKU_OPTIONS.map(o => `<option value="${o.d}">${escapeHtml(o.label)} (${o.d} วัน)</option>`).join(''); }
+function updateNewSkuLabel(){ const el = $('#newSkuDrawerHint'); if (el) el.textContent = 'เข้าใหม่ใน ' + newSkuLabel() + 'ล่าสุด (FIRST STOCK DATE)'; }
+function setNewSkuDays(v){
+  const d = parseInt(v, 10); SHEET_CONFIG.newSkuDays = (Number.isFinite(d) && d > 0 && d <= 3650) ? d : 14;
+  const cfg = JSON.parse(localStorage.getItem(STORAGE.config) || '{}'); cfg.newSkuDays = SHEET_CONFIG.newSkuDays; safeSetItem(STORAGE.config, JSON.stringify(cfg));   // เขียนก่อน render กัน error ทำให้ไม่บันทึก
+  updateNewSkuLabel();
+  renderProducts();   // กรองกริดสินค้าใหม่ตามช่วงใหม่ (ไม่ยุ่งกับ selectedSkus เดิม)
+  if ($('#tab-print')?.classList.contains('active')) buildPdfPreview();
+  showToast('🆕 สินค้าใหม่: นับย้อนหลัง ' + newSkuLabel(), 'success');
+}
 function catalogEligible(p) {
   const wh = SHEET_CONFIG.warehouse || 'W1';
   if (SHEET_CONFIG.perPage === 'newsku') {
-    // v6.10 — เข้าใหม่ ≤14 วัน และ มีสต๊อกในคลังที่เลือก
-    return p.firstStock && p.firstStock >= (Date.now() - NEWSKU_DAYS*24*60*60*1000) && !!(p.stk && p.stk[wh]);
+    // v6.55 — เข้าใหม่ภายในช่วงที่ตั้งค่า (newSkuDays) และ มีสต๊อกในคลังที่เลือก
+    return p.firstStock && p.firstStock >= (Date.now() - newSkuDays()*24*60*60*1000) && !!(p.stk && p.stk[wh]);
   }
   return (p.stk && p.stk[wh]) || (p.sold && p.sold[wh]);   // cat12: มีสต๊อก หรือ มียอดขาย ในคลังที่เลือก
 }
