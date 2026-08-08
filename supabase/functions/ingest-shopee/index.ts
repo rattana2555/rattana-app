@@ -60,9 +60,12 @@ serve(async (req: Request) => {
     return json({ error: "unauthorized" }, 401);
   }
 
-  let payload: { conversations?: InConv[] };
+  let payload: { conversations?: InConv[]; platform?: string };
   try { payload = await req.json(); }
   catch { return json({ error: "invalid json" }, 400); }
+
+  const platform = String(payload.platform ?? "shopee");
+  if (!ALLOWED.has(platform)) return json({ error: "unknown platform" }, 400);
 
   const convs = payload.conversations ?? [];
   if (!Array.isArray(convs) || !convs.length) return json({ ok: true, conversations: 0, newMessages: 0 });
