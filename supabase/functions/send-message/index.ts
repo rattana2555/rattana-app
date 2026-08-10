@@ -90,7 +90,7 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
-  const { conversationId, content, action } = await req.json();
+  const { conversationId, content, action, messageId } = await req.json();
   if (!conversationId) {
     return new Response(JSON.stringify({ error: "missing conversationId" }), { status: 400, headers: corsHeaders });
   }
