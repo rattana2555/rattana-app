@@ -50,7 +50,7 @@ async function sendFacebook(recipientId: string, text: string): Promise<string |
     }
   );
   const body = await res.text();
-  if (!res.ok) throw new Error(`Facebook error: ${body}`);
+  if (!res.ok) throw new Error(`Facebook ${res.status}: ${body}`);
   try { return JSON.parse(body)?.message_id ?? null; } catch { return null; }
 }
 
