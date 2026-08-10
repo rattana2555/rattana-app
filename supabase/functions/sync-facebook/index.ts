@@ -143,13 +143,23 @@ serve(async (req: Request) => {
     if (convErr || !conv) { console.error("conv upsert:", convErr); continue; }
     convCount++;
 
-    // ข้อความที่มีอยู่แล้ว — กันบันทึกซ้ำโดยเทียบ platform_msg_id
+    // ข้อความที่มีอยู่แล้ว — กันบันทึกซ้ำ 2 ชั้น
+    //   seen    = เทียบด้วย platform_msg_id (ข้อความที่เคย sync มาแล้ว)
+    //   orphans = แถวที่ยังไม่มี platform_msg_id = ข้อความที่ตอบจาก Chat Hub
+    //             รอบถัดไป Facebook จะส่งข้อความเดียวกันนี้กลับมาพร้อม id จริง
+    //             ถ้าไม่จับคู่ให้ จะได้ข้อความเบิ้ล 2 อัน
     const { data: existing } = await db
       .from("messages")
-      .select("id,platform_msg_id,message_type")
+      .select("id,platform_msg_id,message_type,direction,content,sent_at")
       .eq("conversation_id", conv.id)
-      .not("platform_msg_id", "is", null);
-    const seen = new Map((existing ?? []).map((m: any) => [m.platform_msg_id, m]));
+      .order("sent_at", { ascending: false })
+      .limit(300);
+
+    const seen = new Map(
+      (existing ?? []).filter((m: any) => m.platform_msg_id).map((m: any) => [m.platform_msg_id, m]),
+    );
+    const orphans = (existing ?? []).filter((m: any) => !m.platform_msg_id);
+    const NEAR = 10 * 60 * 1000;
 
     const rows = [];
     for (const m of msgs) {
@@ -163,12 +173,32 @@ serve(async (req: Request) => {
         }
         continue;
       }
+
+      const direction = m.from?.id === PAGE_ID ? "out" : "in";
+      const sentAt = new Date(m.created_time).toISOString();
+
+      // ตรงกับข้อความที่ตอบจาก Chat Hub → เติม id ให้แถวเดิม ไม่สร้างใหม่
+      const t = Date.parse(sentAt);
+      const k = orphans.findIndex((o: any) =>
+        o.direction === direction &&
+        o.content === shaped.content &&
+        Math.abs(Date.parse(o.sent_at) - t) < NEAR);
+
+      if (k >= 0) {
+        const twin = orphans.splice(k, 1)[0];
+        await db.from("messages")
+          .update({ platform_msg_id: m.id, status: "sent" })
+          .eq("id", twin.id);
+        seen.set(m.id, twin);
+        continue;
+      }
+
       rows.push({
         conversation_id: conv.id,
-        direction: m.from?.id === PAGE_ID ? "out" : "in",
+        direction,
         platform_msg_id: m.id,
         status: "sent",
-        sent_at: new Date(m.created_time).toISOString(),
+        sent_at: sentAt,
         ...shaped,
       });
     }
