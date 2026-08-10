@@ -20,13 +20,19 @@
 
   const NOISE = /dem\.shopee\.com|web-performance|web-custom-event|analytics|tracking|beacon|\.(js|css|png|jpg|jpeg|gif|svg|woff2?|ico|map)(\?|$)/i;
 
+  let captured = 0;
   function report(url, kind, body) {
     if (!body) return;
     if (NOISE.test(url)) return;
+    captured++;
+    if (IS_LINE && captured <= 3) console.log(TAG, "hook จับได้:", kind, String(url).slice(0, 90));
     try {
       window.postMessage({ __rch: true, url, kind, body: String(body).slice(0, 200000) }, "*");
     } catch (_) {}
   }
+
+  // บอกทุก 10 วินาทีว่าจับได้กี่รายการ — ใช้ดูว่า hook ทำงานหรือเปล่า
+  if (IS_LINE) setInterval(() => console.log(TAG, "จับได้สะสม", captured, "รายการ"), 10000);
 
   // ── fetch ─────────────────────────────────────────────────
   const origFetch = window.fetch;
