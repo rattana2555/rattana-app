@@ -112,23 +112,35 @@ serve(async (req: Request) => {
     }
 
     const row: Record<string, unknown> = {
-      platform,
-      platform_conv_id: String(c.convId),
       last_message: last.message_type === "image" ? "[รูปภาพ]" : last.content,
       last_message_at: last.sent_at,
     };
     const hasName = prev?.customer_name && prev.customer_name !== "ลูกค้า";
     if (c.name && !hasName) row.customer_name = c.name;
-    else if (!prev)         row.customer_name = c.name || "ลูกค้า";
     if (c.avatar && !prev?.avatar_url) row.avatar_url = c.avatar;
 
-    const { data: conv, error: convErr } = await db
-      .from("conversations")
-      .upsert(row, { onConflict: "platform,platform_conv_id" })
-      .select("id")
-      .single();
+    let conv: { id: string } | null = null;
 
-    if (convErr || !conv) { console.error("conv upsert:", convErr); continue; }
+    if (prev) {
+      // มีอยู่แล้ว — อัพเดตแถวเดิม ห้ามสร้างใหม่ ไม่งั้นจะได้แชทซ้ำ
+      // (อย่าแตะ platform_conv_id เพราะ webhook ยังใช้ค่าเดิมส่งข้อมูลเข้ามา)
+      const { error } = await db.from("conversations").update(row).eq("id", prev.id);
+      if (error) { console.error("conv update:", error); continue; }
+      conv = { id: prev.id };
+    } else {
+      const { data, error } = await db
+        .from("conversations")
+        .insert({
+          ...row,
+          platform,
+          platform_conv_id: String(c.convId),
+          customer_name: c.name || "ลูกค้า",
+        })
+        .select("id")
+        .single();
+      if (error || !data) { console.error("conv insert:", error); continue; }
+      conv = data;
+    }
     convCount++;
 
     const { data: existing } = await db
