@@ -128,11 +128,12 @@ serve(async (req: Request) => {
 
   let sent = false;
   let errMsg = "";
+  let platformMsgId: string | null = null;
 
   try {
     switch (conv.platform) {
-      case "line":        await sendLine(conv.platform_conv_id, content);        sent = true; break;
-      case "facebook":    await sendFacebook(conv.platform_conv_id, content);    sent = true; break;
+      case "line":        platformMsgId = await sendLine(conv.platform_conv_id, content);     sent = true; break;
+      case "facebook":    platformMsgId = await sendFacebook(conv.platform_conv_id, content); sent = true; break;
       case "tiktok":      await sendTikTok(conv.platform_conv_id, content);      sent = true; break;
       case "shopee":      await sendShopee(conv.platform_conv_id, content);      sent = true; break;
       case "tiktokshop":  await sendTikTokShop(conv.platform_conv_id, content);  sent = true; break;
@@ -143,11 +144,18 @@ serve(async (req: Request) => {
     console.error("send-message error:", errMsg);
   }
 
-  // ไม่บันทึกข้อความที่นี่ — ฝั่งแอพบันทึกลง DB ไปแล้วก่อนเรียกฟังก์ชันนี้
-  // (ถ้าบันทึกซ้ำตรงนี้จะได้ข้อความซ้ำ 2 อัน เมื่อส่งเข้าแพลตฟอร์มสำเร็จ)
-  // หน้าที่ของฟังก์ชันนี้คือ "ส่งเข้าแพลตฟอร์ม" อย่างเดียว แล้วรายงานผลกลับ
+  // ไม่บันทึกข้อความใหม่ที่นี่ — ฝั่งแอพบันทึกลง DB ไปแล้วก่อนเรียกฟังก์ชันนี้
+  // แต่ "ต้อง" เขียนรหัสข้อความของแพลตฟอร์มกลับเข้าแถวเดิม
+  // ไม่งั้นเมื่อ bridge/sync ดึงข้อความเดียวกันกลับมา จะมองว่าเป็นข้อความใหม่ → เบิ้ล
+  if (sent && messageId && platformMsgId) {
+    const { error } = await db
+      .from("messages")
+      .update({ platform_msg_id: platformMsgId, status: "sent" })
+      .eq("id", messageId);
+    if (error) console.error("stamp platform_msg_id:", error);
+  }
 
-  return new Response(JSON.stringify({ sent, error: errMsg || null }), {
+  return new Response(JSON.stringify({ sent, platformMsgId, error: errMsg || null }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 });
