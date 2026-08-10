@@ -202,19 +202,30 @@ window.addEventListener("message", (ev) => {
   const d = ev.data;
   if (!d || d.__rch !== true || !cfg.enabled) return;
 
-  // LINE: แสดงเฉพาะ endpoint ที่เกี่ยวกับแชทจริงๆ จะได้ไม่ต้องไล่หาใน Console
+  // LINE: เก็บตัวอย่าง 2 ชุด — "รายการแชท" กับ "ข้อความในแชท"
+  // เก็บอันที่ใหญ่ที่สุดของแต่ละชุด เพราะอันเล็กมักเป็น endpoint ประกอบที่ไม่มีข้อมูล
   if (/line\.biz/i.test(location.hostname)) {
     const path = url0(d.url);
-    const isChat = /\/chats?(\/|\?|$)|\/messages?(\/|\?|$)/i.test(path);
-    if (isChat && rawSeen < RAW_LIMIT) {
-      rawSeen++;
-      const body = String(d.body || "");
-      console.log(`%c${TAG} ★ เจอแชท [${rawSeen}] ${path} — ${body.length} ตัวอักษร`,
+    const body = String(d.body || "");
+    if (body.length < 200) return;                       // เล็กเกินไป ไม่ใช่ข้อมูลแชท
+
+    // /bots/{id}/chats?...        → รายการแชท
+    // /bots/{id}/chats/{id}/...   → ข้อความในแชทนั้น
+    const isList = /\/chats\/?(\?|$)/i.test(path);
+    const isMsgs = /\/chats\/[^/]+\/(messages|events)/i.test(path)
+                || (/\/chats\/[^/]+\//i.test(path) && /"(text|contentType|createdTime|messages)"/i.test(body));
+    if (!isList && !isMsgs) return;
+
+    const slot = isList ? "sampleChatList" : "sampleChatMsgs";
+    chrome.storage.local.get([slot], (v) => {
+      const cur = v[slot];
+      if (cur && cur.body && cur.body.length >= body.length) return;   // มีอันใหญ่กว่าแล้ว
+      const rec = { path, body: body.slice(0, 6000), size: body.length };
+      chrome.storage.local.set({ [slot]: rec });
+      console.log(`%c${TAG} ★ เก็บตัวอย่าง ${isList ? "รายการแชท" : "ข้อความ"} — ${body.length} ตัวอักษร`,
                   "background:#c9a84c;color:#0d1b3e;font-weight:bold;padding:2px 6px");
-      console.log(body.slice(0, 2000));
-      // เก็บไว้ใน storage ด้วย เผื่อ Console เลื่อนหาย — ดูได้จากหน้าตั้งค่า
-      try { chrome.storage.local.set({ lastChatSample: { path, body: body.slice(0, 4000) } }); } catch (_) {}
-    }
+      console.log(path);
+    });
     return;
   }
 
