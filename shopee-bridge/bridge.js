@@ -202,17 +202,20 @@ window.addEventListener("message", (ev) => {
   const d = ev.data;
   if (!d || d.__rch !== true || !cfg.enabled) return;
 
-  // LINE: ยังไม่รู้รูปแบบข้อมูล → ดูของดิบก่อน แม้จะแปลง JSON ไม่ได้
+  // LINE: แสดงเฉพาะ endpoint ที่เกี่ยวกับแชทจริงๆ จะได้ไม่ต้องไล่หาใน Console
   if (/line\.biz/i.test(location.hostname)) {
-    if (rawSeen < RAW_LIMIT) {
+    const path = url0(d.url);
+    const isChat = /\/chats?(\/|\?|$)|\/messages?(\/|\?|$)/i.test(path);
+    if (isChat && rawSeen < RAW_LIMIT) {
       rawSeen++;
-      let path = url0(d.url);
       const body = String(d.body || "");
-      let kind = "อื่นๆ";
-      try { JSON.parse(body); kind = "JSON"; } catch (_) {}
-      console.log(`${TAG} [ดิบ ${rawSeen}/${RAW_LIMIT}] ${d.kind} ${path} — ${kind} ${body.length} ตัวอักษร`);
-      console.log(body.slice(0, 1200));
+      console.log(`%c${TAG} ★ เจอแชท [${rawSeen}] ${path} — ${body.length} ตัวอักษร`,
+                  "background:#c9a84c;color:#0d1b3e;font-weight:bold;padding:2px 6px");
+      console.log(body.slice(0, 2000));
+      // เก็บไว้ใน storage ด้วย เผื่อ Console เลื่อนหาย — ดูได้จากหน้าตั้งค่า
+      try { chrome.storage.local.set({ lastChatSample: { path, body: body.slice(0, 4000) } }); } catch (_) {}
     }
+    return;
   }
 
   let parsed;
