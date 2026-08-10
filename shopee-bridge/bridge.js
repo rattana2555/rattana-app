@@ -171,6 +171,83 @@ function parseConvList(arr) {
   return out;
 }
 
+// ── LINE OA Manager ───────────────────────────────────────
+// โครงสร้างจริง (สำรวจแล้ว 2026-08-08):
+//   GET /api/v2/bots/{botId}/chats                     → รายการแชท (latestEvent อันเดียวต่อแชท)
+//   GET /api/v3/bots/{botId}/chats/{chatId}/messages   → ข้อความทั้งหมดในแชทนั้น
+//
+// ทิศทาง: type "messageSent" = ร้านส่ง · "message" = ลูกค้าส่ง
+//         (ยืนยันซ้ำด้วย source.userId ที่จะเท่ากับ botId เมื่อร้านเป็นคนส่ง)
+// chatId = userId ของลูกค้า → ตรงกับที่ webhook เก็บไว้ จึงรวมเป็นบทสนทนาเดียวกันเอง
+const RE_LINE_BOT  = /\/bots\/([^/]+)\//i;
+const RE_LINE_MSGS = /\/bots\/[^/]+\/chats\/([^/?]+)\/messages/i;
+const RE_LINE_LIST = /\/bots\/[^/]+\/chats\/?(\?|$)/i;
+
+function lineMsg(ev, botId) {
+  const m = ev && ev.message;
+  if (!m || !m.id) return null;
+  const fromShop = ev.type === "messageSent" || ev.source?.userId === botId;
+
+  let text = "", imageUrl = "";
+  switch (m.type) {
+    case "text":    text = m.text || ""; break;
+    case "sticker":
+      imageUrl = `https://stickershop.line-scdn.net/stickershop/v1/sticker/${m.stickerId}/android/sticker.png`;
+      break;
+    case "image":   text = "[รูปภาพ]";      break;   // ไฟล์จริงดึงผ่านหน้าเว็บไม่ได้
+    case "video":   text = "[วิดีโอ]";       break;
+    case "audio":   text = "[ข้อความเสียง]"; break;
+    case "file":    text = `[ไฟล์] ${m.fileName ?? ""}`.trim(); break;
+    case "location":text = `[ตำแหน่ง] ${m.address ?? ""}`.trim(); break;
+    default:        text = m.text || `[${m.type || "ข้อความ"}]`;
+  }
+  if (!text && !imageUrl) return null;
+
+  return {
+    id: String(m.id),
+    from: fromShop ? "seller" : "buyer",
+    text, imageUrl,
+    sentAt: Number(ev.timestamp) || Date.now(),
+  };
+}
+
+function parseLine(url, data) {
+  const bot = url.match(RE_LINE_BOT);
+  if (!bot || !data) return [];
+  const botId = bot[1];
+  const list = Array.isArray(data.list) ? data.list : null;
+  if (!list || !list.length) return [];
+
+  // ── ข้อความในแชทเดียว ──
+  const mm = url.match(RE_LINE_MSGS);
+  if (mm) {
+    const chatId = mm[1];
+    const messages = list.map((ev) => lineMsg(ev, botId)).filter(Boolean);
+    if (!messages.length) return [];
+    const meta = convMeta.get(chatId) ?? {};
+    return [{ convId: chatId, name: meta.name || "", avatar: meta.avatar || "", messages }];
+  }
+
+  // ── รายการแชท (ได้ข้อความล่าสุดของแต่ละแชท โดยไม่ต้องคลิกเปิด) ──
+  if (RE_LINE_LIST.test(url)) {
+    const out = [];
+    for (const c of list) {
+      if (!c || !c.chatId) continue;
+      const msg = lineMsg(c.latestEvent, botId);
+      if (!msg) continue;
+
+      const name   = c.profile?.name || "";
+      const avatar = c.profile?.iconHash ? `https://profile.line-scdn.net/${c.profile.iconHash}` : "";
+      if (name) convMeta.set(c.chatId, { name, avatar });
+
+      out.push({ convId: c.chatId, name, avatar, messages: [msg] });
+    }
+    return out;
+  }
+
+  return [];
+}
+
 // ── ส่งขึ้น Chat Hub (รวบยอด ไม่ยิงถี่) ────────────────────
 let queue = [];
 let timer = null;
