@@ -368,6 +368,18 @@ window.addEventListener("message", (ev) => {
 
   // ── LINE OA Manager ──────────────────────────────────────
   if (/line\.biz/i.test(location.hostname)) {
+    // คำขาออก = ทีมงานเพิ่งกดส่งข้อความ
+    if (d.req === true) {
+      const s = parseLineSend(String(d.url), d.body);
+      if (s) {
+        console.log(`%c${TAG} LINE → ทีมงานตอบ: ${s.messages[0].text.slice(0, 40)}`,
+                    "background:#c9a84c;color:#0d1b3e;font-weight:bold;padding:2px 6px");
+        queue.push(s);
+        if (!timer) timer = setTimeout(flush, 3000);
+      }
+      return;
+    }
+
     let lineData;
     try { lineData = JSON.parse(d.body); } catch { return; }   // ไม่ใช่ JSON ก็ข้าม
 
