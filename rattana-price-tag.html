@@ -5611,10 +5611,14 @@ async function bakeImages(sel) {
 // v5.8 — bake BOTH catalog cards and tag images (tags sit on a dark card → white box must go)
 async function bakeCatalogImages() { return bakeImages('#pdfStage .cat-img img, #pdfStage .t-img img'); }
 
+// v6.60 — export guard must be MODE-AWARE: promo posters come from promoItems (promoShownItems), NOT selectedSkus,
+// so getSortedSelection() is empty in promo mode and used to wrongly block PDF/PNG/JPEG. Check the right source per mode.
+function hasExportContent(){ return isPromoMode() ? promoShownItems().length > 0 : getSortedSelection().length > 0; }
+function exportEmptyMsg(){ return isPromoMode() ? 'ยังไม่มีโปรที่จะบันทึก — กด “โหลด/รีเฟรชจากชีท” หรือติ๊กเลือกโปรก่อน' : 'ยังไม่ได้เลือกสินค้า'; }
+function exportCount(){ return isPromoMode() ? promoShownItems().length : getSortedSelection().length; }
 async function exportImage(format) {
   format = (format === 'jpeg' ? 'jpeg' : 'png');
-  const sel = getSortedSelection();
-  if (!sel.length) { showToast('ยังไม่ได้เลือกสินค้า', 'warning'); return; }
+  if (!hasExportContent()) { showToast(exportEmptyMsg(), 'warning'); return; }
 
   showSpinner(`กำลังสร้าง ${format.toUpperCase()}...`);
   buildPdfPreview();
