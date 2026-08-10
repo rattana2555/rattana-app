@@ -996,9 +996,12 @@ async function sendMsg(){
       body: JSON.stringify({ conversationId: convId, content: text, messageId: saved.id }),
     });
     const json = await res.json().catch(()=>({}));
-    ok = !!json.sent; why = json.error || ('HTTP '+res.status);
+    ok = !!json.sent;
+    // Edge Function ส่งเหตุผลมาในรูป "Error: <ข้อความ>" — ตัดคำนำหน้าทิ้งให้อ่านง่าย
+    why = String(json.error || ('HTTP '+res.status)).replace(/^Error:\s*/,'');
   } catch(e){ why = e.message; }
 
+  if(!ok) sendErr[saved.id] = why;
   local.status = ok ? 'sent' : 'failed';
   if(activeId===convId) renderMsgs(msgCache[convId]);
   await sb.from('messages').update({ status: local.status }).eq('id', saved.id);
