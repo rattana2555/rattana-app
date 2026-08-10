@@ -131,7 +131,7 @@ serve(async (req: Request) => {
   // ดึงข้อมูล conversation
   const { data: conv } = await db
     .from("conversations")
-    .select("platform, platform_conv_id, mark_read_token")
+    .select("platform, platform_conv_id, mark_read_token, customer_id")
     .eq("id", conversationId)
     .single();
 
