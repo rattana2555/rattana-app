@@ -136,32 +136,71 @@ serve(async (req: Request) => {
     const platformConvId = event.source.groupId ?? event.source.roomId ?? event.source.userId;
     const ts   = new Date(event.timestamp).toISOString();
 
-    // upsert conversation
-    // mark_read_token: เก็บไว้ให้แอพเรียก markAsRead ตอนพนักงานเปิดอ่าน
-    const { data: conv, error: convErr } = await db
-      .from("conversations")
-      .upsert({
-        platform: "line",
-        platform_conv_id: platformConvId,
-        customer_id: event.source.userId,
-        last_message: preview,
-        last_message_at: ts,
-        // token อยู่ใน message ไม่ใช่ระดับ event — และ "ไม่ได้มาทุกครั้ง" ตามเอกสาร
-        // จึงต้องคง token เดิมไว้ถ้ารอบนี้ไม่มีมา (อย่าเขียนทับด้วย null)
-        ...(m.markAsReadToken ? { mark_read_token: m.markAsReadToken } : {}),
-      }, { onConflict: "platform,platform_conv_id" })
-      .select("id, customer_name, avatar_url")
-      .single();
+    // ── หาบทสนทนา ─────────────────────────────────────────
+    let conv: { id: string; customer_name?: string; avatar_url?: string } | null = null;
 
-    if (convErr || !conv) { console.error("conv upsert:", convErr); continue; }
+    {
+      const { data } = await db.from("conversations")
+        .select("id, customer_name, avatar_url")
+        .eq("platform", "line").eq("platform_conv_id", platformConvId).maybeSingle();
+      if (data) conv = data;
+    }
+
+    // ยังไม่เคยเจอรหัสนี้ — แต่ส่วนขยายอาจเคยสร้างแชทของคนคนนี้ไว้แล้วจาก OA Manager
+    // แชทพวกนั้นใช้รหัสคนละชุดกับ Messaging API จึง "ตอบจาก Chat Hub ไม่ได้"
+    // จังหวะที่ลูกค้าทักเข้ามานี่แหละคือโอกาสเดียวที่จะได้รหัสจริง
+    // → ย้ายรหัสไปใส่แถวเดิม แทนการสร้างแถวใหม่ (ไม่งั้นได้แชทซ้ำคนละ 2 อัน)
+    let prof: { name?: string; avatar?: string } | null = null;
+    if (!conv && event.source.userId) {
+      prof = await fetchProfile(event.source.userId);
+      if (prof?.name) {
+        const { data } = await db.from("conversations")
+          .select("id, customer_name, avatar_url")
+          .eq("platform", "line").eq("customer_name", prof.name)
+          .is("customer_id", null).limit(1).maybeSingle();
+        if (data) {
+          await db.from("conversations").update({
+            platform_conv_id: platformConvId,
+            customer_id: event.source.userId,
+          }).eq("id", data.id);
+          console.log("รวมแชทจาก OA Manager เข้ากับรหัสจริงแล้ว:", prof.name);
+          conv = data;
+        }
+      }
+    }
+
+    if (!conv) {
+      const { data, error } = await db.from("conversations")
+        .upsert({
+          platform: "line",
+          platform_conv_id: platformConvId,
+          customer_id: event.source.userId,
+          customer_name: prof?.name ?? "ลูกค้า",
+          avatar_url: prof?.avatar ?? null,
+        }, { onConflict: "platform,platform_conv_id" })
+        .select("id, customer_name, avatar_url")
+        .single();
+      if (error || !data) { console.error("conv insert:", error); continue; }
+      conv = data;
+    }
+
+    // mark_read_token: เก็บไว้ให้แอพเรียก markAsRead ตอนพนักงานเปิดอ่าน
+    // token อยู่ใน message ไม่ใช่ระดับ event — และ "ไม่ได้มาทุกครั้ง" ตามเอกสาร
+    // จึงต้องคง token เดิมไว้ถ้ารอบนี้ไม่มีมา (อย่าเขียนทับด้วย null)
+    await db.from("conversations").update({
+      last_message: preview,
+      last_message_at: ts,
+      ...(event.source.userId ? { customer_id: event.source.userId } : {}),
+      ...(m.markAsReadToken ? { mark_read_token: m.markAsReadToken } : {}),
+    }).eq("id", conv.id);
 
     // ดึงโปรไฟล์ครั้งเดียวตอนยังไม่มีชื่อ (แชทกลุ่มไม่มี userId ก็ข้ามไป)
     if ((!conv.customer_name || conv.customer_name === "ลูกค้า" || !conv.avatar_url) && event.source.userId) {
-      const prof = await fetchProfile(event.source.userId);
-      if (prof) {
+      const p = prof ?? await fetchProfile(event.source.userId);
+      if (p) {
         await db.from("conversations").update({
-          customer_name: prof.name ?? conv.customer_name,
-          avatar_url:    prof.avatar ?? conv.avatar_url,
+          customer_name: p.name ?? conv.customer_name,
+          avatar_url:    p.avatar ?? conv.avatar_url,
         }).eq("id", conv.id);
       }
     }
