@@ -36,12 +36,33 @@
   // บอกทุก 10 วินาทีว่าจับได้กี่รายการ — ใช้ดูว่า hook ทำงานหรือเปล่า
   if (IS_LINE) setInterval(() => console.log(TAG, "จับได้สะสม", captured, "รายการ"), 10000);
 
+  // ── ดัก "คำขาออก" ด้วย ───────────────────────────────────
+  // LINE ไม่มีทางแจ้งกลับมาว่าแอดมินตอบอะไรไปบ้าง (ไม่มี webhook สำหรับข้อความฝั่งร้าน)
+  // วิธีเดียวที่รู้ได้คืออ่านตอนที่หน้าเว็บ "กดส่ง" ออกไป
+  function reportReq(url, method, body) {
+    if (!body || typeof body !== "string") return;
+    if (!/^(post|put|patch)$/i.test(String(method || ""))) return;
+    if (NOISE.test(url)) return;
+    try {
+      window.postMessage(
+        { __rch: true, req: true, url, kind: "req", method, body: body.slice(0, 20000) }, "*");
+    } catch (_) {}
+  }
+
   // ── fetch ─────────────────────────────────────────────────
   const origFetch = window.fetch;
   window.fetch = async function (...args) {
+    let url = "", method = "GET", reqBody = null;
+    try {
+      const a0 = args[0], a1 = args[1] || {};
+      url    = typeof a0 === "string" ? a0 : a0?.url ?? "";
+      method = a1.method ?? a0?.method ?? "GET";
+      if (typeof a1.body === "string") reqBody = a1.body;
+      if (IS_LINE && reqBody) reportReq(url, method, reqBody);
+    } catch (_) {}
+
     const res = await origFetch.apply(this, args);
     try {
-      const url = typeof args[0] === "string" ? args[0] : args[0]?.url ?? "";
       if (WANTED.test(url)) res.clone().text().then((t) => report(url, "fetch", t)).catch(() => {});
     } catch (_) {}
     return res;
@@ -53,10 +74,16 @@
 
   XMLHttpRequest.prototype.open = function (method, url, ...rest) {
     this.__rchUrl = url;
+    this.__rchMethod = method;
     return origOpen.call(this, method, url, ...rest);
   };
 
   XMLHttpRequest.prototype.send = function (...args) {
+    try {
+      if (IS_LINE && typeof args[0] === "string") {
+        reportReq(this.__rchUrl || "", this.__rchMethod, args[0]);
+      }
+    } catch (_) {}
     this.addEventListener("load", () => {
       try {
         if (WANTED.test(this.__rchUrl || "")) report(this.__rchUrl, "xhr", this.responseText);
