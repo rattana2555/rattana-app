@@ -163,7 +163,9 @@ serve(async (req: Request) => {
 
   try {
     switch (conv.platform) {
-      case "line":        platformMsgId = await sendLine(conv.platform_conv_id, content);     sent = true; break;
+      // customer_id มาจาก webhook = รหัสที่ Messaging API ใช้ส่งได้จริง
+      // ส่วน platform_conv_id ของแชทที่ส่วนขยายสร้างขึ้นเป็นรหัสของ OA Manager ซึ่งส่งไม่ได้
+      case "line":        platformMsgId = await sendLine(conv.customer_id || conv.platform_conv_id, content); sent = true; break;
       case "facebook":    platformMsgId = await sendFacebook(conv.platform_conv_id, content); sent = true; break;
       case "tiktok":      await sendTikTok(conv.platform_conv_id, content);      sent = true; break;
       case "shopee":      await sendShopee(conv.platform_conv_id, content);      sent = true; break;
