@@ -27,7 +27,9 @@ async function sendLine(to: string, text: string): Promise<string | null> {
     body: JSON.stringify({ to, messages: [{ type: "text", text }] }),
   });
   const body = await res.text();
-  if (!res.ok) throw new Error(`LINE error: ${body}`);
+  // ต้องมีรหัส HTTP ด้วย — LINE ใช้ข้อความ "Failed to send messages" กับหลายสาเหตุมาก
+  // 400=ลูกค้าไม่ได้เป็นเพื่อน/บล็อก · 401=โทเคนผิด · 403=แพ็กเกจส่งไม่ได้ · 429=โควตาหมด
+  if (!res.ok) throw new Error(`LINE ${res.status}: ${body}`);
   try { return JSON.parse(body)?.sentMessages?.[0]?.id ?? null; } catch { return null; }
 }
 
