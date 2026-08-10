@@ -197,6 +197,19 @@ window.addEventListener("message", (ev) => {
   const d = ev.data;
   if (!d || d.__rch !== true || !cfg.enabled) return;
 
+  // LINE: ยังไม่รู้รูปแบบข้อมูล → ดูของดิบก่อน แม้จะแปลง JSON ไม่ได้
+  if (/line\.biz/i.test(location.hostname)) {
+    if (rawSeen < RAW_LIMIT) {
+      rawSeen++;
+      let path = url0(d.url);
+      const body = String(d.body || "");
+      let kind = "อื่นๆ";
+      try { JSON.parse(body); kind = "JSON"; } catch (_) {}
+      console.log(`${TAG} [ดิบ ${rawSeen}/${RAW_LIMIT}] ${d.kind} ${path} — ${kind} ${body.length} ตัวอักษร`);
+      console.log(body.slice(0, 1200));
+    }
+  }
+
   let parsed;
   try { parsed = JSON.parse(d.body); } catch { return; }
 
