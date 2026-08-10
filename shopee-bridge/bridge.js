@@ -184,6 +184,11 @@ function parseConvList(arr) {
     const convId = c.conversation_id ?? c.conversationId ?? c.id;
     if (!convId) continue;
 
+    // to_id ในรายการแชท = "ลูกค้า" เสมอ เพราะรายการนี้มองจากฝั่งร้าน
+    // เก็บไว้เป็นหลักฐานชั้นดีที่สุดว่าข้อความไหนใครส่ง
+    const buyerId = idOf(c.to_id ?? c.toId ?? c.to_user_id);
+    if (buyerId) buyerOf.set(String(convId), buyerId);
+
     const name = [c.to_name, c.to_user_name, c.username, c.nickname]
       .find((n) => n && !isShopUser(n));
     const preview = c.latest_message_content?.text
