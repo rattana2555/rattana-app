@@ -299,6 +299,42 @@ function parseLine(url, data) {
   return [];
 }
 
+// ── ข้อความที่ทีมงานตอบจาก LINE OA Manager ────────────────
+// LINE ไม่มี webhook แจ้งว่า "แอดมินตอบอะไรไป" (มีแต่ฝั่งลูกค้าทัก)
+// จึงต้องอ่านตอนหน้าเว็บกดส่งออกไป — hook.js ส่งเนื้อคำขอ (req) มาให้
+//
+// ยังไม่รู้รหัสข้อความจริงตอนนี้ จึงใส่ id ขึ้นต้นว่า local:
+// ฝั่งเซิร์ฟเวอร์จะเก็บเป็น "ยังไม่มีรหัส" ไว้ก่อน แล้วเติมให้เองเมื่อรหัสจริงตามมา
+// (ไม่งั้นพอ LINE ส่งข้อความเดียวกันกลับมา จะกลายเป็นข้อความเบิ้ล)
+function parseLineSend(url, body) {
+  let b;
+  try { b = JSON.parse(body); } catch { return null; }
+  if (!b || typeof b !== "object") return null;
+
+  const inPath = url.match(/\/chats\/([^/?#]+)/i);
+  const chatId = inPath?.[1] || b.chatId || b.to
+              || (Array.isArray(b.chatIds) ? b.chatIds[0] : "");
+  if (!chatId) return null;
+
+  const text = b.text ?? b.message?.text
+            ?? (Array.isArray(b.messages) ? b.messages[0]?.text : "");
+  if (!text || typeof text !== "string") return null;   // ไม่ใช่คำขอส่งข้อความ
+
+  const meta = convMeta.get(String(chatId)) ?? {};
+  return {
+    convId: String(chatId),
+    name:   meta.name || "",
+    avatar: meta.avatar || "",
+    messages: [{
+      id: `local:${chatId}:${Date.now()}`,
+      from: "seller",
+      text,
+      imageUrl: "",
+      sentAt: Date.now(),
+    }],
+  };
+}
+
 // ── ส่งขึ้น Chat Hub (รวบยอด ไม่ยิงถี่) ────────────────────
 let queue = [];
 let timer = null;
