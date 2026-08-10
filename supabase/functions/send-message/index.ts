@@ -27,9 +27,17 @@ async function sendLine(to: string, text: string): Promise<string | null> {
     body: JSON.stringify({ to, messages: [{ type: "text", text }] }),
   });
   const body = await res.text();
-  // ต้องมีรหัส HTTP ด้วย — LINE ใช้ข้อความ "Failed to send messages" กับหลายสาเหตุมาก
-  // 400=ลูกค้าไม่ได้เป็นเพื่อน/บล็อก · 401=โทเคนผิด · 403=แพ็กเกจส่งไม่ได้ · 429=โควตาหมด
-  if (!res.ok) throw new Error(`LINE ${res.status}: ${body}`);
+  // LINE ใช้ข้อความเดียว "Failed to send messages" กับหลายสาเหตุมาก
+  // ต้องดูรหัส HTTP ถึงจะรู้ว่าเกิดอะไรขึ้นจริง แล้วแปลเป็นภาษาคนให้พนักงานอ่านรู้เรื่อง
+  if (!res.ok) {
+    const why =
+      res.status === 429 ? "โควตาข้อความ LINE ของเดือนนี้หมดแล้ว"
+    : res.status === 401 ? "โทเคน LINE ไม่ถูกต้องหรือหมดอายุ"
+    : res.status === 403 ? "แพ็กเกจ LINE ปัจจุบันส่งข้อความหาลูกค้าโดยตรงไม่ได้"
+    : res.status === 400 ? "LINE ไม่รู้จักลูกค้ารายนี้ — ตอบใน LINE OA Manager แทน"
+    : `LINE ${res.status}: ${body}`;
+    throw new Error(why);
+  }
   try { return JSON.parse(body)?.sentMessages?.[0]?.id ?? null; } catch { return null; }
 }
 
