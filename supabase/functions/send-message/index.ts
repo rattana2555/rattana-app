@@ -17,19 +17,24 @@ const SHOPEE_TOKEN  = Deno.env.get("SHOPEE_ACCESS_TOKEN") ?? "";
 const TTS_TOKEN     = Deno.env.get("TIKTOKSHOP_ACCESS_TOKEN") ?? "";
 
 // ── ส่ง LINE ─────────────────────────────────────────────────
-async function sendLine(to: string, text: string) {
+// คืน "รหัสข้อความของแพลตฟอร์ม" กลับมาด้วย — สำคัญมาก
+// เพราะอีกสักครู่ตัวดึงข้อมูล (bridge/sync) จะเจอข้อความเดียวกันนี้อีกรอบ
+// ถ้าแถวเดิมไม่มีรหัสไว้เทียบ มันจะบันทึกซ้ำกลายเป็นข้อความเบิ้ล
+async function sendLine(to: string, text: string): Promise<string | null> {
   const res = await fetch("https://api.line.me/v2/bot/message/push", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${LINE_TOKEN}` },
     body: JSON.stringify({ to, messages: [{ type: "text", text }] }),
   });
-  if (!res.ok) throw new Error(`LINE error: ${await res.text()}`);
+  const body = await res.text();
+  if (!res.ok) throw new Error(`LINE error: ${body}`);
+  try { return JSON.parse(body)?.sentMessages?.[0]?.id ?? null; } catch { return null; }
 }
 
 // ── ส่ง Facebook ─────────────────────────────────────────────
 // messaging_type: RESPONSE = ตอบกลับข้อความลูกค้าภายใน 24 ชม. (ไม่ต้องขอสิทธิ์เพิ่ม)
 // recipientId คือ PSID จาก sender.id ของ webhook — ใช้ได้เฉพาะกับเพจนี้เท่านั้น
-async function sendFacebook(recipientId: string, text: string) {
+async function sendFacebook(recipientId: string, text: string): Promise<string | null> {
   const res = await fetch(
     `https://graph.facebook.com/v25.0/me/messages?access_token=${encodeURIComponent(FB_TOKEN)}`,
     {
@@ -42,7 +47,9 @@ async function sendFacebook(recipientId: string, text: string) {
       }),
     }
   );
-  if (!res.ok) throw new Error(`Facebook error: ${await res.text()}`);
+  const body = await res.text();
+  if (!res.ok) throw new Error(`Facebook error: ${body}`);
+  try { return JSON.parse(body)?.message_id ?? null; } catch { return null; }
 }
 
 // ── ส่ง TikTok DM ────────────────────────────────────────────
