@@ -143,24 +143,75 @@ serve(async (req: Request) => {
     }
     convCount++;
 
+    // ── เทียบกับของเดิมก่อนบันทึก ─────────────────────────
+    // แยกเป็น 2 กอง:
+    //   byId    = เคยเก็บแล้วและมีรหัสจากแพลตฟอร์ม
+    //   orphans = แถวที่ยังไม่มีรหัส = ข้อความที่ "ส่งจาก Chat Hub" เมื่อครู่
+    //             อีกสักพักแพลตฟอร์มจะส่งข้อความเดียวกันนี้กลับมาพร้อมรหัสจริง
+    //             ถ้าไม่จับคู่ให้ จะกลายเป็นข้อความเบิ้ล 2 อัน
     const { data: existing } = await db
       .from("messages")
-      .select("platform_msg_id")
+      .select("id, platform_msg_id, direction, content, sent_at")
       .eq("conversation_id", conv.id)
-      .not("platform_msg_id", "is", null);
-    const seen = new Set((existing ?? []).map((m: any) => m.platform_msg_id));
+      .order("sent_at", { ascending: false })
+      .limit(300);
 
-    const rows = norm
-      .filter((m) => !seen.has(m.id))
-      .map((m) => ({
+    const byId = new Map<string, any>();
+    const orphans: any[] = [];
+    for (const r of existing ?? []) {
+      if (r.platform_msg_id) byId.set(String(r.platform_msg_id), r);
+      else orphans.push(r);
+    }
+
+    const NEAR = 10 * 60 * 1000;   // ถือว่าเป็นข้อความเดียวกันถ้าห่างกันไม่เกิน 10 นาที
+    const rows: Record<string, unknown>[] = [];
+
+    for (const m of norm) {
+      // รหัสขึ้นต้นด้วย local: = ดักจากตอนกดส่งในหน้าเว็บ ยังไม่รู้รหัสจริงของแพลตฟอร์ม
+      const realId = m.id.startsWith("local:") ? null : m.id;
+
+      // 1) เคยเก็บแล้ว — แต่ถ้าทิศทางเคยบันทึกผิด (เช่น Shopee แยกฝั่งพลาด) ให้แก้ให้ถูก
+      if (realId && byId.has(realId)) {
+        const old = byId.get(realId);
+        if (old.direction !== m.direction) {
+          await db.from("messages").update({ direction: m.direction }).eq("id", old.id);
+          old.direction = m.direction;
+        }
+        continue;
+      }
+
+      // 2) ตรงกับข้อความที่ส่งจาก Chat Hub — เติมรหัสให้แถวเดิม ไม่สร้างแถวใหม่
+      const t = Date.parse(m.sent_at);
+      const k = orphans.findIndex((o) =>
+        o.direction === m.direction &&
+        o.content === m.content &&
+        Math.abs(Date.parse(o.sent_at) - t) < NEAR);
+
+      if (k >= 0) {
+        const twin = orphans.splice(k, 1)[0];
+        if (realId && twin.id) {
+          await db.from("messages")
+            .update({ platform_msg_id: realId, status: "sent" })
+            .eq("id", twin.id);
+          byId.set(realId, twin);
+        }
+        continue;
+      }
+
+      rows.push({
         conversation_id: conv.id,
         direction: m.direction,
         content: m.content,
         message_type: m.message_type,
-        platform_msg_id: m.id,
+        platform_msg_id: realId,          // local: → เก็บเป็น null รอรหัสจริงมาเติมทีหลัง
         status: "sent",
         sent_at: m.sent_at,
-      }));
+      });
+
+      // กันซ้ำกันเองภายในชุดเดียวกัน
+      const stub = { id: null, direction: m.direction, content: m.content, sent_at: m.sent_at };
+      if (realId) byId.set(realId, stub); else orphans.push(stub);
+    }
 
     if (rows.length) {
       const { error: insErr } = await db.from("messages").insert(rows);
