@@ -209,7 +209,10 @@ function parseConvList(arr) {
       avatar: c.to_avatar || c.avatar || "",
       messages: [{
         id: String(msgId),
-        from: isShopUser(c.latest_message_sender_name ?? "") ? "seller" : "buyer",
+        from: sellerSent({
+          from_id: c.latest_message_from_id ?? c.last_message_from_id,
+          from_user_name: c.latest_message_sender_name,
+        }, convId) ? "seller" : "buyer",
         text: String(preview),
         imageUrl: "",
         sentAt: pickTime({ created_timestamp: ts }),
