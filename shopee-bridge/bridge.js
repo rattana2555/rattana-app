@@ -286,35 +286,12 @@ window.addEventListener("message", (ev) => {
 
     const batchLine = parseLine(String(d.url), lineData);
     if (batchLine.length) {
+      const n = batchLine.reduce((s, c) => s + c.messages.length, 0);
+      console.log(`%c${TAG} LINE → เตรียมส่ง ${batchLine.length} แชท / ${n} ข้อความ`,
+                  "background:#06C755;color:#fff;font-weight:bold;padding:2px 6px");
       queue.push(...batchLine);
       if (!timer) timer = setTimeout(flush, 3000);
     }
-    return;
-  }
-
-  // (เลิกใช้) เก็บตัวอย่างไว้ตอนยังไม่รู้โครงสร้าง LINE — ตอนนี้มีตัวแปลงแล้ว
-  if (false) {
-    const path = url0(d.url);
-    const body = String(d.body || "");
-    if (body.length < 200) return;                       // เล็กเกินไป ไม่ใช่ข้อมูลแชท
-
-    // /bots/{id}/chats?...        → รายการแชท
-    // /bots/{id}/chats/{id}/...   → ข้อความในแชทนั้น
-    const isList = /\/chats\/?(\?|$)/i.test(path);
-    const isMsgs = /\/chats\/[^/]+\/(messages|events)/i.test(path)
-                || (/\/chats\/[^/]+\//i.test(path) && /"(text|contentType|createdTime|messages)"/i.test(body));
-    if (!isList && !isMsgs) return;
-
-    const slot = isList ? "sampleChatList" : "sampleChatMsgs";
-    chrome.storage.local.get([slot], (v) => {
-      const cur = v[slot];
-      if (cur && cur.body && cur.body.length >= body.length) return;   // มีอันใหญ่กว่าแล้ว
-      const rec = { path, body: body.slice(0, 6000), size: body.length };
-      chrome.storage.local.set({ [slot]: rec });
-      console.log(`%c${TAG} ★ เก็บตัวอย่าง ${isList ? "รายการแชท" : "ข้อความ"} — ${body.length} ตัวอักษร`,
-                  "background:#c9a84c;color:#0d1b3e;font-weight:bold;padding:2px 6px");
-      console.log(path);
-    });
     return;
   }
 
