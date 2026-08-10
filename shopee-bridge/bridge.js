@@ -394,6 +394,8 @@ window.addEventListener("message", (ev) => {
     return;
   }
 
+  if (d.req === true) return;   // Shopee ใช้เฉพาะข้อมูลขาเข้า
+
   let parsed;
   try { parsed = JSON.parse(d.body); } catch { return; }
 
