@@ -90,14 +90,26 @@ serve(async (req: Request) => {
     if (!norm.length) continue;
     const last = norm[norm.length - 1];
 
-    // อย่าเขียนทับชื่อ/รูปที่ webhook เคยเก็บไว้ถูกต้องแล้ว (กรณี LINE)
-    // ส่วนขยายอ่านได้แค่ชื่อที่แสดงบนหน้าจอ ซึ่งบางทีสู้ของ webhook ไม่ได้
-    const { data: prev } = await db
+    // ── หาบทสนทนาเดิม ─────────────────────────────────────
+    // LINE ใช้ id คนละชุดระหว่าง Messaging API (webhook) กับ OA Manager (ส่วนขยาย)
+    // ถ้าจับคู่ด้วย id อย่างเดียวจะได้แชทซ้ำคนละ 2 แถว จึงต้องจับคู่ด้วย "ชื่อ" เสริม
+    let { data: prev } = await db
       .from("conversations")
-      .select("customer_name, avatar_url")
+      .select("id, platform_conv_id, customer_name, avatar_url")
       .eq("platform", platform)
       .eq("platform_conv_id", String(c.convId))
       .maybeSingle();
+
+    if (!prev && platform === "line" && c.name) {
+      const { data: byName } = await db
+        .from("conversations")
+        .select("id, platform_conv_id, customer_name, avatar_url")
+        .eq("platform", "line")
+        .eq("customer_name", c.name)
+        .limit(1)
+        .maybeSingle();
+      if (byName) prev = byName;   // เจอคนเดียวกันที่ webhook สร้างไว้ → ใช้แถวนั้น
+    }
 
     const row: Record<string, unknown> = {
       platform,
