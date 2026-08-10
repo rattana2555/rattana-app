@@ -279,8 +279,12 @@ window.addEventListener("message", (ev) => {
   const d = ev.data;
   if (!d || d.__rch !== true || !cfg.enabled) return;
 
+  // ── LINE OA Manager ──────────────────────────────────────
   if (/line\.biz/i.test(location.hostname)) {
-    const batchLine = parseLine(url, parsed);
+    let lineData;
+    try { lineData = JSON.parse(d.body); } catch { return; }   // ไม่ใช่ JSON ก็ข้าม
+
+    const batchLine = parseLine(String(d.url), lineData);
     if (batchLine.length) {
       queue.push(...batchLine);
       if (!timer) timer = setTimeout(flush, 3000);
@@ -288,9 +292,8 @@ window.addEventListener("message", (ev) => {
     return;
   }
 
-  // LINE: เก็บตัวอย่าง 2 ชุด — "รายการแชท" กับ "ข้อความในแชท"
-  // เก็บอันที่ใหญ่ที่สุดของแต่ละชุด เพราะอันเล็กมักเป็น endpoint ประกอบที่ไม่มีข้อมูล
-  if (/line\.biz/i.test(location.hostname)) {
+  // (เลิกใช้) เก็บตัวอย่างไว้ตอนยังไม่รู้โครงสร้าง LINE — ตอนนี้มีตัวแปลงแล้ว
+  if (false) {
     const path = url0(d.url);
     const body = String(d.body || "");
     if (body.length < 200) return;                       // เล็กเกินไป ไม่ใช่ข้อมูลแชท
