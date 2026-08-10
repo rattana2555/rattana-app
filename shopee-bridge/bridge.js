@@ -202,6 +202,15 @@ window.addEventListener("message", (ev) => {
   const d = ev.data;
   if (!d || d.__rch !== true || !cfg.enabled) return;
 
+  if (/line\.biz/i.test(location.hostname)) {
+    const batchLine = parseLine(url, parsed);
+    if (batchLine.length) {
+      queue.push(...batchLine);
+      if (!timer) timer = setTimeout(flush, 3000);
+    }
+    return;
+  }
+
   // LINE: เก็บตัวอย่าง 2 ชุด — "รายการแชท" กับ "ข้อความในแชท"
   // เก็บอันที่ใหญ่ที่สุดของแต่ละชุด เพราะอันเล็กมักเป็น endpoint ประกอบที่ไม่มีข้อมูล
   if (/line\.biz/i.test(location.hostname)) {
