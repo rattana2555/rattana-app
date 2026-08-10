@@ -192,6 +192,11 @@ function flush() {
     .catch((e) => console.warn(TAG, "ส่งไม่สำเร็จ:", e.message));
 }
 
+// โหมดดูข้อมูลดิบ — จำกัดจำนวนไม่ให้ Console ท่วม
+let rawSeen = 0;
+const RAW_LIMIT = 25;
+const url0 = (u) => { try { return new URL(u, location.origin).pathname; } catch (_) { return String(u); } };
+
 // ── รับข้อมูลจาก hook.js ──────────────────────────────────
 window.addEventListener("message", (ev) => {
   const d = ev.data;
