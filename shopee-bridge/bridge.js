@@ -125,10 +125,17 @@ function parseMessages(url, arr) {
   const messages = [];
   let customerName = "";
 
+  // จำรหัสผู้ใช้ทั้งสองฝั่งไว้ก่อน — พอเปิดแชทที่ 2 จะรู้เองว่า id ไหนคือร้าน
+  for (const m of arr) {
+    if (!m) continue;
+    noteId(convId, m.from_id ?? m.fromId ?? m.from_user_id);
+    noteId(convId, m.to_id ?? m.toId ?? m.to_user_id);
+  }
+
   for (const m of arr) {
     if (!m || !m.id) continue;
 
-    const isSeller = isShopUser(m.from_user_name);
+    const isSeller = sellerSent(m, convId);
 
     // ชื่อลูกค้า = ฝั่งที่ไม่ใช่ร้าน (เช็คทั้งสองฝั่ง เผื่อบางข้อความมีแค่ฝั่งเดียว)
     if (!customerName) {
