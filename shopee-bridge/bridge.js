@@ -45,6 +45,42 @@ function isShopUser(name) {
   return base === shop;
 }
 
+// ── รู้ให้ได้ว่า "ฝั่งไหนคือร้าน" โดยไม่ต้องพึ่งชื่อที่พิมพ์ ──
+// ชื่อที่กรอกในหน้าตั้งค่ามักไม่ตรงกับที่ Shopee ส่งมาเป๊ะ (ชื่อร้าน ≠ username,
+// พนักงานบางคนใช้ชื่อย่อย) พอเทียบไม่ตรง ข้อความของร้านเลยไปโผล่ฝั่งลูกค้า
+// จึงเรียนรู้จากข้อมูลเองแทน 2 ทาง:
+//   1) รายการแชท — to_id ของแต่ละแชทคือ "ลูกค้า" เสมอ (รายการมองจากฝั่งร้าน)
+//   2) id ที่โผล่ในหลายแชท = ร้าน (ลูกค้า 1 คนมีได้แชทเดียว)
+let shopId = null;
+const buyerOf = new Map();   // convId → id ลูกค้า
+const idConvs = new Map();   // userId → Set(convId) ที่เคยเห็น id นี้
+
+chrome.storage.local.get(["shopId"], (v) => { if (v.shopId) shopId = String(v.shopId); });
+
+const idOf = (v) => (v === null || v === undefined || v === "" ? "" : String(v));
+
+function noteId(convId, id) {
+  const k = idOf(id);
+  if (!k || k === "0") return;
+  let s = idConvs.get(k);
+  if (!s) idConvs.set(k, (s = new Set()));
+  s.add(String(convId));
+  if (!shopId && s.size >= 2) {
+    shopId = k;
+    chrome.storage.local.set({ shopId: k });
+    console.log(TAG, "รู้แล้วว่ารหัสผู้ใช้ของร้านคือ", k, "— แยกฝั่งได้ถูกต้องแล้ว");
+  }
+}
+
+// ร้านเป็นคนส่งข้อความนี้หรือเปล่า — ไล่จากสัญญาณที่เชื่อถือได้มากไปน้อย
+function sellerSent(m, convId) {
+  const from  = idOf(m.from_id ?? m.fromId ?? m.from_user_id);
+  const buyer = buyerOf.get(String(convId));
+  if (from && buyer) return from !== buyer;          // แน่นอนที่สุด
+  if (from && shopId) return from === shopId;        // เรียนรู้มาแล้ว
+  return isShopUser(m.from_user_name);               // ทางสำรอง
+}
+
 function pickTime(m) {
   const v = m.created_timestamp ?? m.create_time ?? m.ctime ?? m.timestamp ?? m.created_at;
   if (v == null) return Date.now();
