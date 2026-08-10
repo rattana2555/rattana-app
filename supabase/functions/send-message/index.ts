@@ -92,7 +92,28 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
-  const { conversationId, content, action, messageId } = await req.json();
+  const { conversationId, content, action, messageId, lineUserId } = await req.json();
+
+  // ── ตรวจสภาพช่องทาง LINE (ใช้ตอนส่งไม่ผ่านแล้วอยากรู้ว่าเพราะอะไร) ──
+  // ลบทิ้งได้เมื่อแก้ปัญหาเสร็จ — ไม่ใช่ส่วนที่ใช้งานประจำ
+  if (action === "diag") {
+    const out: Record<string, unknown> = {};
+    const probe = async (k: string, url: string) => {
+      try {
+        const r = await fetch(url, { headers: { Authorization: `Bearer ${LINE_TOKEN}` } });
+        out[k] = { status: r.status, body: (await r.text()).slice(0, 300) };
+      } catch (e) { out[k] = { error: String(e) }; }
+    };
+    out.hasToken = LINE_TOKEN ? `ยาว ${LINE_TOKEN.length} ตัวอักษร` : "ไม่ได้ตั้งค่า";
+    await probe("botInfo", "https://api.line.me/v2/bot/info");
+    await probe("quota",   "https://api.line.me/v2/bot/message/quota");
+    await probe("used",    "https://api.line.me/v2/bot/message/quota/consumption");
+    if (lineUserId) await probe("profile", `https://api.line.me/v2/bot/profile/${lineUserId}`);
+    return new Response(JSON.stringify(out, null, 2), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   if (!conversationId) {
     return new Response(JSON.stringify({ error: "missing conversationId" }), { status: 400, headers: corsHeaders });
   }
