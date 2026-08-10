@@ -12,10 +12,12 @@
   const TAG = "[RCH]";
 
   // Shopee: รู้ endpoint แน่นอนแล้ว จับเฉพาะที่ต้องการ
-  // LINE  : ยังไม่รู้โครงสร้าง จับกว้างไว้ก่อนเพื่อสำรวจ แล้วค่อยแคบลงทีหลัง
+  // LINE  : หน้าเว็บเรียก API ด้วย path สั้นๆ เช่น "/api/v1/chats?..." ไม่มีชื่อโดเมนอยู่ในนั้น
+  //         จึงจับทุกอย่างไว้ก่อน (content script ทำงานเฉพาะบน line.biz อยู่แล้ว)
+  //         แล้วค่อยกรองด้วย NOISE กับตัวแปลงอีกที
   const IS_LINE = /\.line\.biz$/i.test(location.hostname);
   const WANTED  = IS_LINE
-    ? /\.line\.biz\//i
+    ? /^/                                        // ผ่านหมด
     : /seller\.shopee\.[a-z.]+\/webchat\/api\//i;
 
   const NOISE = /dem\.shopee\.com|web-performance|web-custom-event|analytics|tracking|beacon|\.(js|css|png|jpg|jpeg|gif|svg|woff2?|ico|map)(\?|$)/i;
