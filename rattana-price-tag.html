@@ -4887,18 +4887,37 @@ function flashWeekCard(arg) {
     </div>`;
   };
   const boxes = solo ? pbox(units[0], 'solo', 'L') : pbox(units[0], 'top', 'L') + pbox(units[1], 'bot', 'R');
-  // v6.61 — collage of every same-CAT-SIZE image in one frame (like the catalog); single product stays as one image
+  // v6.61/v6.63 — image frame. MERGED (same CAT SIZE): each variant is its OWN draggable/resizable element
+  // (data-fs-role="img:<sku>", keyed by the stable group key) so individual images can be nudged. SINGLE product: one image, whole frame draggable (role="img").
   const gimgs = group.filter(x => x.image).slice(0, 6);
-  const imgHtml = gimgs.length > 1
-    ? `<div class="fxw-collage" style="grid-template-columns:repeat(${Math.min(3, Math.ceil(Math.sqrt(gimgs.length)))},1fr)">${gimgs.map(x => `<img src="${escapeAttr(imgAtWidth(x.image,300))}" data-imgsku="${escapeAttr(x.sku)}" onerror="this.style.display='none'" crossorigin="anonymous">`).join('')}</div>`
-    : (gimgs.length === 1 ? `<img src="${escapeAttr(imgAtWidth(gimgs[0].image,300))}" data-imgsku="${sk}" onerror="this.style.display='none'" crossorigin="anonymous">` : '');
-  const nameHtml = group.length > 1 ? nameCellHtmlFor(gkey, flashGroupName(group), true) : nameCellHtml(p, true);
+  let imgFrame;
+  if (gimgs.length > 1) {
+    const cols = Math.min(3, Math.ceil(Math.sqrt(gimgs.length)));
+    const cells = gimgs.map(x => `<div class="fxw-citem" data-fs-sku="${sk}" data-fs-role="img:${escapeAttr(x.sku)}"><img src="${escapeAttr(imgAtWidth(x.image,300))}" data-imgsku="${escapeAttr(x.sku)}" onerror="this.style.display='none'" crossorigin="anonymous"></div>`).join('');
+    imgFrame = `<div class="fxw-img fxw-img-grp"><div class="fxw-collage" style="grid-template-columns:repeat(${cols},1fr)">${cells}</div></div>`;
+  } else {
+    const one = gimgs.length === 1 ? `<img src="${escapeAttr(imgAtWidth(gimgs[0].image,300))}" data-imgsku="${sk}" onerror="this.style.display='none'" crossorigin="anonymous">` : '';
+    imgFrame = `<div class="fxw-img" data-fs-sku="${sk}" data-fs-role="img">${one}</div>`;
+  }
+  // v6.63 — name. MERGED: line1 = CAT SIZE (bigger) · line2 = flavors (smaller); both editable, keyed by the stable group key. SINGLE: one editable product name (unchanged).
+  let nameBlock;
+  if (group.length > 1) {
+    const titleKey = `${sk}::fwgtitle`, flavKey = `${sk}::fwgflavor`;
+    const title = ovr(titleKey, escapeHtml(flashGroupTitle(group)));
+    const flav  = ovr(flavKey,  escapeHtml(flashGroupFlavors(group)));
+    nameBlock = `<div class="fxw-name fxw-name-grp" data-fs-sku="${sk}" data-fs-role="name">
+      <div class="fxw-gtitle editable-txt" data-edit="${titleKey}" contenteditable="true" spellcheck="false">${title}</div>
+      ${flav ? `<div class="fxw-gflavor editable-txt" data-edit="${flavKey}" contenteditable="true" spellcheck="false">${flav}</div>` : ''}
+    </div>`;
+  } else {
+    nameBlock = `<div class="fxw-name" data-fs-sku="${sk}" data-fs-role="name">${nameCellHtml(p, true)}</div>`;
+  }
   return `<div class="fxw-card">
     <div class="fxw-tab">FLASH<small>SALE</small></div>
     ${boxes}
-    <div class="fxw-img" data-fs-sku="${sk}" data-fs-role="img">${imgHtml}</div>
+    ${imgFrame}
     <div class="fxw-divider"></div>
-    <div class="fxw-name" data-fs-sku="${sk}" data-fs-role="name">${nameHtml}</div>
+    ${nameBlock}
   </div>`;
 }
 function flashCard(arg) {
