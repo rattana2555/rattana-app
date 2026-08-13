@@ -5413,8 +5413,17 @@ function buildFlashPreview() {
   const fmt = d => d ? formatThaiDate(d).split(' ')[0] : '';
   const ds = SHEET_CONFIG.promoStart, de = SHEET_CONFIG.promoEnd;
   const dateRange = (ds || de) ? `${fmt(ds) || '—'} → ${fmt(de) || '—'}` : '';
+  // v6.61 — weekly Flash (flash6): merge same-CAT-SIZE products into ONE card (image collage), like the catalog. Monthly = one card per product.
+  let entries;
+  if (SHEET_CONFIG.perPage === 'flash6') {
+    const groups = new Map();
+    sel.forEach(p => { const key = (String(p.size || '').trim()) || ('__solo:' + p.sku); if (!groups.has(key)) groups.set(key, []); groups.get(key).push(p); });
+    entries = Array.from(groups.values());
+  } else {
+    entries = sel.map(p => [p]);
+  }
   const pages = [];
-  for (let i = 0; i < sel.length; i += per) pages.push(sel.slice(i, i+per));
+  for (let i = 0; i < entries.length; i += per) pages.push(entries.slice(i, i+per));
   const inner = pages.map((items, pi) => {
     const dateKey = `__page${pi}::fsdate`;   // v6.15 — date is editable & movable
     const dateShown = textOverrides[dateKey] != null ? escapeHtml(textOverrides[dateKey]) : escapeHtml(dateRange);
@@ -5422,7 +5431,7 @@ function buildFlashPreview() {
     return `
     <div class="flash-page ${cfg.pageCls}" id="pdf-page-${pi}" style="background-image:url('${escapeAttr(tpl)}')">
       ${showDate ? `<div class="flash-date editable-txt" data-fs-sku="__page${pi}" data-fs-role="date" data-edit="${dateKey}" contenteditable="true" spellcheck="false">${dateShown}</div>` : ''}
-      ${(() => { const cards = cfg.slotsFor(items.length); return items.map((p, idx) => { const c = cards[idx]; return c ? `<div class="flash-slot" style="left:${c.x}%;top:${c.y}%;width:${c.w}%;height:${c.h}%">${render(p)}</div>` : ''; }).join(''); })()}
+      ${(() => { const cards = cfg.slotsFor(items.length); return items.map((entry, idx) => { const c = cards[idx]; return c ? `<div class="flash-slot" style="left:${c.x}%;top:${c.y}%;width:${c.w}%;height:${c.h}%">${render(entry)}</div>` : ''; }).join(''); })()}
     </div>`;
   }).join('');
   const vw = window.innerWidth;
