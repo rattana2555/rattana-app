@@ -5414,10 +5414,12 @@ function buildFlashPreview() {
   const ds = SHEET_CONFIG.promoStart, de = SHEET_CONFIG.promoEnd;
   const dateRange = (ds || de) ? `${fmt(ds) || '—'} → ${fmt(de) || '—'}` : '';
   // v6.61 — weekly Flash (flash6): merge same-CAT-SIZE products into ONE card (image collage), like the catalog. Monthly = one card per product.
+  // Only a REAL CAT SIZE groups; empty/placeholder sizes (ไม่กำหนด/ไม่ระบุ/ไม่มี/-/N/A) stay as their own card so unrelated items never merge.
   let entries;
   if (SHEET_CONFIG.perPage === 'flash6') {
+    const realSize = s => { const t = String(s || '').trim(); if (!t || /^ไม่(กำหนด|ระบุ|มี)/.test(t) || /^[-–—]+$/.test(t) || /^n\/?a$/i.test(t)) return ''; return t; };
     const groups = new Map();
-    sel.forEach(p => { const key = (String(p.size || '').trim()) || ('__solo:' + p.sku); if (!groups.has(key)) groups.set(key, []); groups.get(key).push(p); });
+    sel.forEach(p => { const rs = realSize(p.size); const key = rs || ('__solo:' + p.sku); if (!groups.has(key)) groups.set(key, []); groups.get(key).push(p); });
     entries = Array.from(groups.values());
   } else {
     entries = sel.map(p => [p]);
