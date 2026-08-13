@@ -4836,9 +4836,22 @@ function flashModeCfg(){
   return { slotsFor:flashWeekSlots, per:6, tpl:SHEET_CONFIG.flashTemplate, pageCls:'flash-page-w', render:flashWeekCard, name:'รายวัน/สัปดาห์' };
 }
 
+// v6.61 — name for a merged CAT-SIZE group: "CAT SIZE(+unit) — flavor / flavor / …" (flavors derived like the catalog)
+function flashGroupName(group) {
+  const rep = group[0];
+  const size = String(rep.size || '').trim();
+  const suffix = (group.find(x => x.sizeUnit)?.sizeUnit) || '';
+  const seen = new Set(), flavors = [];
+  group.forEach(x => { const f = deriveFlavor(x); if (f && !seen.has(f)) { seen.add(f); flavors.push(f); } });
+  const base = size ? (size + suffix) : (rep.name || '');
+  return flavors.length ? `${base} — ${flavors.join(' / ')}` : base;
+}
 /* v6.19 — Weekly card: white rounded card drawn on the cream area (image-2 style).
-   Left = price box(es), right = product image, bottom = name (dotted separator). */
-function flashWeekCard(p) {
+   Left = price box(es), right = product image, bottom = name (dotted separator).
+   v6.61 — accepts a GROUP of same-CAT-SIZE products → collage in the image frame; a single product still works. */
+function flashWeekCard(arg) {
+  const group = Array.isArray(arg) ? arg : [arg];
+  const p = group[0];
   if (!p) return '';
   const sk = escapeAttr(p.sku);
   const ovr = (key, def) => textOverrides[key] != null ? escapeHtml(textOverrides[key]) : def;
