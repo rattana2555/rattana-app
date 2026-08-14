@@ -4749,7 +4749,15 @@ function resetFlashLayout(){
     Object.keys(flashLayout).forEach(k => { if (String(k).startsWith('p:')) delete flashLayout[k]; });
     saveFlashLayout(); fsSelectedEl = null; fsSelectedEls = []; buildPromoPreview();
   } else {
-    Object.keys(flashLayout).forEach(k => { if (!String(k).startsWith('p:')) delete flashLayout[k]; });
+    // v6.64 — reset ONLY the active canvas mode's keys: Flash = bare-sku / 'g:' / '__page…' · Layout 16 = 'p16:…'.
+    // (Promo 'p:' keys are handled above and never touched here.) This keeps one mode's reset from wiping the other mode's saved layout.
+    const isP16 = isTagCanvasMode();
+    Object.keys(flashLayout).forEach(k => {
+      const key = String(k);
+      if (key.startsWith('p:')) return;              // promo — leave untouched
+      const p16 = key.startsWith('p16:');
+      if (isP16 ? p16 : !p16) delete flashLayout[k]; // 16 deletes only p16:*, Flash deletes only bare/g:/__page
+    });
     saveFlashLayout(); fsSelectedEl = null; fsSelectedEls = []; if (isFlashMode()) buildFlashPreview(); else if (isTagCanvasMode()) buildPdfPreview();   // v6.64 — rebuild Layout 16 too
   }
   if ($('#flashSize')) $('#flashSize').value = 100;
