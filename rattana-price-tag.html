@@ -4761,20 +4761,18 @@ function fsGroupBox(){
 }
 function resetFlashLayout(){
   // v6.33 — reset only the current mode's layout keys (promo keys are prefixed "p:")
+  // v6.64/v6.66 — reset ONLY the active mode's keys so one mode's reset never wipes another's saved layout.
+  // Namespaces: Promo='p:' · Layout 12/16 canvas='p12:'/'p16:' · Flash=bare-sku / 'g:' / '__page…'.
   if (isPromoMode()) {
     Object.keys(flashLayout).forEach(k => { if (String(k).startsWith('p:')) delete flashLayout[k]; });
     saveFlashLayout(); fsSelectedEl = null; fsSelectedEls = []; buildPromoPreview();
-  } else {
-    // v6.64 — reset ONLY the active canvas mode's keys: Flash = bare-sku / 'g:' / '__page…' · Layout 16 = 'p16:…'.
-    // (Promo 'p:' keys are handled above and never touched here.) This keeps one mode's reset from wiping the other mode's saved layout.
-    const isP16 = isTagCanvasMode();
-    Object.keys(flashLayout).forEach(k => {
-      const key = String(k);
-      if (key.startsWith('p:')) return;              // promo — leave untouched
-      const p16 = key.startsWith('p16:');
-      if (isP16 ? p16 : !p16) delete flashLayout[k]; // 16 deletes only p16:*, Flash deletes only bare/g:/__page
-    });
-    saveFlashLayout(); fsSelectedEl = null; fsSelectedEls = []; if (isFlashMode()) buildFlashPreview(); else if (isTagCanvasMode()) buildPdfPreview();   // v6.64 — rebuild Layout 16 too
+  } else if (isTagCanvasMode()) {
+    const pref = 'p' + SHEET_CONFIG.perPage + ':';   // delete only THIS layout's keys (p12: or p16:)
+    Object.keys(flashLayout).forEach(k => { if (String(k).startsWith(pref)) delete flashLayout[k]; });
+    saveFlashLayout(); fsSelectedEl = null; fsSelectedEls = []; buildPdfPreview();
+  } else {   // Flash — delete flash keys only (not promo 'p:' nor any 'p<N>:' tag-canvas key)
+    Object.keys(flashLayout).forEach(k => { const key = String(k); if (!key.startsWith('p:') && !/^p\d+:/.test(key)) delete flashLayout[k]; });
+    saveFlashLayout(); fsSelectedEl = null; fsSelectedEls = []; if (isFlashMode()) buildFlashPreview();
   }
   if ($('#flashSize')) $('#flashSize').value = 100;
   if ($('#flashSizeVal')) $('#flashSizeVal').textContent = '100%';
