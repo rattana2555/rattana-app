@@ -656,7 +656,7 @@ async function refreshInBackground(){
   } catch(e){ /* เงียบ */ }
 }
 function afterLoad(fromCache){
-  applyFilter(); renderStats(); renderSelStrip();
+  buildCatOptions(); applyFilter(); renderStats(); renderSelStrip();
   if (fromCache) console.log('แสดงข้อมูลจากแคช');
 }
 
@@ -665,6 +665,7 @@ function applyFilter(){
   const q = $('#q').value.trim().toLowerCase();
   const words = q ? q.split(/\s+/) : [];
   filtered = products.filter(p => {
+    if (catFilter && p.c !== catFilter) return false;
     if (curFilter === 'img'   && !p.img) return false;
     if (curFilter === 'price' && !Object.keys(p.p).length) return false;
     if (curFilter === 'both'  && (!p.img || !Object.keys(p.p).length)) return false;
@@ -675,6 +676,33 @@ function applyFilter(){
   });
   renderLimit = 120;
   renderGrid();
+}
+
+/* ── ตัวกรองหมวดสินค้า (v1.1) ── */
+function renderCatList(){
+  const q = ($('#catSearch').value || '').trim().toLowerCase();
+  const hits = q ? catOptions.filter(o => o.name.toLowerCase().includes(q)) : catOptions;
+  const total = catOptions.reduce((s, o) => s + o.count, 0);
+  const rows = [`<li class="${catFilter ? '' : 'on'}" data-cat=""><span class="n">📂 ทุกหมวดสินค้า</span><span class="c">${total.toLocaleString('th-TH')}</span></li>`];
+  for (const o of hits){
+    rows.push(`<li class="${o.name === catFilter ? 'on' : ''}" data-cat="${esc(o.name)}"><span class="n">${esc(o.name)}</span><span class="c">${o.count.toLocaleString('th-TH')}</span></li>`);
+  }
+  if (q && !hits.length) rows.push('<li class="no-result">ไม่พบหมวดที่ค้นหา</li>');
+  $('#catList').innerHTML = rows.join('');
+  $('#catLabel').textContent = catFilter ? '📂 ' + catFilter : '📂 ทุกหมวดสินค้า';
+  $('#catTrigger').classList.toggle('on', !!catFilter);
+}
+function openCatPanel(open){
+  const p = $('#catPanel');
+  const willOpen = open === undefined ? !p.classList.contains('open') : open;
+  p.classList.toggle('open', willOpen);
+  if (willOpen){ $('#catSearch').value = ''; renderCatList(); $('#catSearch').focus(); }
+}
+function setCatFilter(name){
+  catFilter = name || '';
+  openCatPanel(false);
+  renderCatList();
+  applyFilter();
 }
 
 function priceBitsHtml(p){
