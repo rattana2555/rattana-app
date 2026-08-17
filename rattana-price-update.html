@@ -1,0 +1,1595 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Rattana Price Update v1.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+:root{
+  --navy:#0d1b3e; --navy-mid:#1a2f5e; --navy-light:#243b73;
+  --gold:#c9a84c; --gold-light:#e8c86a;
+  --success:#2ecc71; --danger:#e74c3c; --warning:#f39c12; --info:#3498db;
+  --bg:#f4f6fb; --text:#0d1b3e; --card-bg:#ffffff; --border:#dde3f0; --muted:#6b7896; --row-alt:#fafbfd;
+  --space-xs:4px; --space-sm:8px; --space-md:16px; --space-lg:24px; --space-xl:32px;
+  --radius-sm:6px; --radius-md:12px; --radius-lg:16px; --radius-xl:20px;
+  --shadow-sm:0 1px 4px rgba(0,0,0,.06); --shadow-md:0 2px 8px rgba(0,0,0,.08);
+  --shadow-lg:0 8px 24px rgba(13,27,62,.12); --shadow-gold:0 4px 12px rgba(201,168,76,.35);
+}
+body.dark{ --bg:#0a1020; --text:#e8eaf0; --card-bg:#111c35; --border:#243b73; --muted:#8a98b8; --row-alt:#0f1830; }
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;font-size:14px;line-height:1.5;min-height:100dvh;overflow-x:hidden;background:var(--bg);color:var(--text);transition:background .25s,color .25s}
+button{font-family:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+input,select,textarea{font-family:inherit;font-size:16px}
+
+/* ── Header ── */
+header{background:var(--navy);color:#fff;padding:10px 14px;position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:10px;border-bottom:3px solid var(--gold);padding-top:max(10px,env(safe-area-inset-top))}
+header img.logo{height:36px;object-fit:contain;flex-shrink:0}
+.logo-text{font-weight:700;letter-spacing:1.2px;font-size:16px;color:#fff;white-space:nowrap}
+.logo-text span{color:var(--gold)}
+.ver{font-size:10px;background:rgba(201,168,76,.22);color:var(--gold-light);border:1px solid rgba(201,168,76,.45);padding:1px 7px;border-radius:10px;font-weight:700;letter-spacing:.5px}
+.hspace{flex:1}
+.icon-btn{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.2);width:38px;height:38px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:17px;transition:background .15s;flex-shrink:0}
+.icon-btn:hover{background:rgba(255,255,255,.12)}
+.user-chip{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:20px;padding:4px 10px 4px 6px;color:#fff;font-size:12px;max-width:190px}
+.user-chip .av{width:26px;height:26px;border-radius:50%;background:var(--gold);color:var(--navy);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
+.user-chip .un{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.user-chip .ur{font-size:10px;opacity:.75}
+@media(max-width:600px){.user-chip .un,.user-chip .ur{display:none}.user-chip{padding:4px;border-radius:50%}}
+
+/* ── Tabs ── */
+.tab-nav{display:flex;background:var(--navy);border-bottom:3px solid var(--gold);padding:0 8px;gap:4px;overflow-x:auto;position:sticky;top:59px;z-index:99;scrollbar-width:none}
+.tab-nav::-webkit-scrollbar{display:none}
+.tab-btn{background:transparent;color:rgba(255,255,255,.6);padding:11px 16px;font-size:13px;font-weight:600;border-bottom:3px solid transparent;white-space:nowrap;flex-shrink:0;transition:all .18s;margin-bottom:-3px;border-radius:var(--radius-sm) var(--radius-sm) 0 0}
+.tab-btn:hover{color:#fff;background:rgba(255,255,255,.06)}
+.tab-btn.active{color:var(--navy);background:var(--gold);font-weight:700}
+.tab-btn .cnt{background:rgba(0,0,0,.16);border-radius:9px;padding:0 6px;font-size:11px;margin-left:5px}
+.tabpane{display:none}
+.tabpane.active{display:block;animation:fadeIn .2s ease}
+
+/* ── Layout ── */
+.content{padding:12px;max-width:1500px;margin:0 auto;width:100%;padding-bottom:90px}
+@media(min-width:640px){.content{padding:16px}}
+.card{background:var(--card-bg);border-radius:var(--radius-md);border:1px solid var(--border);box-shadow:var(--shadow-md)}
+.card-gold{border-top:3px solid var(--gold)}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border);background:linear-gradient(to right,rgba(201,168,76,.07),transparent);flex-wrap:wrap}
+.card-head h3{font-size:14px;font-weight:700}
+.card-body{padding:14px}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 15px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;border:1px solid transparent;min-height:40px;transition:opacity .15s,transform .1s}
+.btn:hover{opacity:.88}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--navy);color:#fff}
+.btn-gold{background:var(--gold);color:var(--navy)}
+.btn-gold:hover{background:var(--gold-light)}
+.btn-outline{background:transparent;color:var(--text);border-color:var(--border)}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-success{background:var(--success);color:#fff}
+.btn-sm{padding:5px 10px;font-size:12px;min-height:32px}
+.btn-block{width:100%}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+
+/* ── Inputs ── */
+.input{height:42px;padding:0 13px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:16px;outline:none;width:100%;transition:border-color .15s}
+.input:focus{border-color:var(--gold)}
+.input-sm{height:34px;font-size:13px;padding:0 9px}
+select.input{padding-right:8px}
+textarea.input{height:auto;padding:10px 13px;resize:vertical;font-size:15px}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.4px;text-transform:uppercase}
+.chk{display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;user-select:none}
+.chk input{width:17px;height:17px;accent-color:var(--gold);cursor:pointer}
+
+/* ── Searchable dropdown ── */
+.dd-wrap{position:relative;width:100%}
+.dd-trigger{width:100%;min-height:42px;padding:9px 13px;background:var(--card-bg);border:1.5px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:inherit;font-size:15px;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.dd-trigger:hover{border-color:var(--gold)}
+.dd-panel{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--card-bg);border:1.5px solid var(--border);border-radius:var(--radius-sm);z-index:500;box-shadow:var(--shadow-lg);max-height:280px;display:none;flex-direction:column}
+.dd-panel.open{display:flex}
+.dd-search{padding:10px 13px;font-size:16px;border:none;border-bottom:1px solid var(--border);background:transparent;color:var(--text);outline:none}
+.dd-list{overflow-y:auto;flex:1;list-style:none;padding:4px 0;margin:0}
+.dd-list li{padding:9px 13px;cursor:pointer;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;justify-content:space-between;gap:8px}
+.dd-list li:hover{background:var(--navy-light);color:#fff}
+.dd-list li.sel{background:rgba(201,168,76,.16);font-weight:700}
+.dd-list li .c{opacity:.6;font-size:12px}
+
+/* ── Filter bar ── */
+.filter-bar{display:grid;grid-template-columns:1fr;gap:9px;padding:12px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);margin-bottom:12px;box-shadow:var(--shadow-sm)}
+@media(min-width:820px){.filter-bar{grid-template-columns:2fr 1.3fr auto}}
+
+/* ── Stats ── */
+.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px}
+@media(min-width:760px){.stat-grid{grid-template-columns:repeat(4,1fr);gap:12px}}
+.stat-card{background:var(--card-bg);border-radius:var(--radius-md);padding:13px;border:1px solid var(--border);border-top:3px solid var(--gold)}
+.stat-card .s-label{font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.4px;text-transform:uppercase;margin-bottom:5px}
+.stat-card .s-value{font-size:21px;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums}
+.stat-card .s-sub{font-size:11px;color:var(--muted);margin-top:3px}
+.stat-card.up{border-top-color:var(--danger)}.stat-card.up .s-value{color:var(--danger)}
+.stat-card.down{border-top-color:var(--success)}.stat-card.down .s-value{color:var(--success)}
+.stat-card.info{border-top-color:var(--info)}
+
+/* ── Product list (เลือกสินค้า) ── */
+.plist{display:grid;grid-template-columns:1fr;gap:8px}
+@media(min-width:700px){.plist{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:1150px){.plist{grid-template-columns:repeat(3,1fr)}}
+.pitem{display:flex;gap:10px;padding:10px 11px;border:1.5px solid var(--border);border-radius:var(--radius-md);background:var(--card-bg);cursor:pointer;transition:border-color .15s,background .15s;align-items:flex-start}
+.pitem:hover{border-color:var(--gold)}
+.pitem.on{border-color:var(--gold);background:rgba(201,168,76,.09)}
+.pitem .box{width:19px;height:19px;border-radius:5px;border:2px solid var(--border);flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;font-weight:700}
+.pitem.on .box{background:var(--gold);border-color:var(--gold);color:var(--navy)}
+.pitem .pn{font-size:13px;font-weight:600;line-height:1.35;word-break:break-word}
+.pitem .pm{font-size:11px;color:var(--muted);margin-top:3px;display:flex;flex-wrap:wrap;gap:4px 8px}
+.pitem .pp{font-size:11px;margin-top:4px;display:flex;flex-wrap:wrap;gap:4px}
+.tag{display:inline-block;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:700;background:rgba(13,27,62,.07);color:var(--muted);white-space:nowrap}
+body.dark .tag{background:rgba(255,255,255,.08)}
+.tag-gold{background:rgba(201,168,76,.2);color:#8a6d17}
+body.dark .tag-gold{color:var(--gold-light)}
+.code{font-family:'Courier New',monospace;font-weight:700;letter-spacing:.2px}
+
+/* ── Table ── */
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--card-bg)}
+.tbl{width:100%;border-collapse:separate;border-spacing:0;min-width:720px}
+.tbl thead th{background:var(--navy);color:#fff;padding:8px 9px;text-align:left;font-size:11.5px;font-weight:600;white-space:nowrap;border-bottom:2px solid var(--gold);position:sticky;top:0;z-index:6}
+.tbl thead tr:nth-child(2) th{top:31px;font-size:10.5px;background:var(--navy-mid);border-bottom:2px solid var(--gold)}
+.tbl thead th.sortable{cursor:pointer;user-select:none}
+.tbl thead th.sortable:hover{background:var(--navy-mid)}
+.tbl thead th .sort-ind{font-size:9px;color:var(--gold);margin-left:3px;font-weight:700}
+.tbl tbody tr{border-bottom:1px solid var(--border)}
+.tbl tbody td{padding:6px 9px;font-size:12.5px;vertical-align:middle;border-bottom:1px solid var(--border);background:var(--card-bg)}
+.tbl tbody tr:nth-child(even) td{background:var(--row-alt)}
+.tbl tbody tr.changed td{background:rgba(201,168,76,.11)}
+.tbl td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:600}
+.tbl td.sticky,.tbl th.sticky{position:sticky;left:0;z-index:4;min-width:190px;max-width:260px}
+.tbl thead th.sticky{z-index:7}
+.tbl td.sticky{box-shadow:1px 0 0 var(--border)}
+.tbl .empty-row td{text-align:center;padding:44px 18px;color:var(--muted);font-size:14px;background:var(--card-bg)}
+.tier-head{text-align:center!important;border-left:2px solid rgba(201,168,76,.5)!important}
+.tcell-first{border-left:2px solid rgba(201,168,76,.35)}
+.pname{font-weight:600;line-height:1.3;font-size:12.5px;display:block;word-break:break-word}
+.psub{font-size:10.5px;color:var(--muted)}
+.in-price{width:86px;height:32px;padding:0 7px;border-radius:5px;border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:13px;text-align:right;font-weight:700;outline:none;font-variant-numeric:tabular-nums}
+.in-price:focus{border-color:var(--gold);background:rgba(201,168,76,.08)}
+.in-price.set{border-color:var(--gold);background:rgba(201,168,76,.13)}
+.in-pct{width:64px;height:32px;padding:0 5px;border-radius:5px;border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:12.5px;text-align:right;outline:none;font-variant-numeric:tabular-nums}
+.in-pct:focus{border-color:var(--gold)}
+.in-pct.up{color:var(--danger);font-weight:700}
+.in-pct.down{color:var(--success);font-weight:700}
+.pct-up{color:var(--danger);font-weight:700}
+.pct-down{color:var(--success);font-weight:700}
+
+/* ── Bulk panel ── */
+.bulk{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
+@media(min-width:760px){.bulk{grid-template-columns:repeat(4,1fr)}}
+.pill-row{display:flex;flex-wrap:wrap;gap:6px}
+.pill{padding:6px 12px;border-radius:20px;border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:12px;font-weight:600;transition:all .15s}
+.pill.on{background:var(--gold);border-color:var(--gold);color:var(--navy)}
+.pill:hover{border-color:var(--gold)}
+
+/* ── Login ── */
+#loginScreen{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(150deg,var(--navy) 0%,var(--navy-mid) 55%,#0a1530 100%)}
+.login-card{background:#fff;border-radius:var(--radius-lg);padding:32px 26px;max-width:400px;width:100%;text-align:center;border-top:4px solid var(--gold);box-shadow:0 18px 50px rgba(0,0,0,.32)}
+.login-card img{height:78px;margin-bottom:14px}
+.login-card h1{font-size:20px;color:var(--navy);margin-bottom:4px}
+.login-card p{font-size:13px;color:#6b7896;margin-bottom:20px}
+.login-err{display:none;background:#ffd5d0;color:#c0392b;padding:10px 12px;border-radius:var(--radius-sm);font-size:13px;margin-bottom:14px;text-align:left}
+#gBtnHolder{display:flex;justify-content:center;min-height:44px}
+.login-foot{margin-top:18px;font-size:11px;color:#8a98b8;line-height:1.6}
+
+/* ── Modal ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.65);z-index:9000;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px);overflow-y:auto}
+.modal-overlay.open{display:flex}
+.modal{background:var(--card-bg);border-radius:var(--radius-lg);max-width:520px;width:100%;max-height:92dvh;overflow-y:auto;border-top:4px solid var(--gold);animation:slideUp .22s ease}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
+.modal-head h3{font-size:15px;font-weight:700}
+.modal-close{background:transparent;font-size:23px;color:var(--muted);padding:2px 7px;border-radius:var(--radius-sm);line-height:1}
+.modal-body{padding:18px}
+.modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+
+/* ── Misc ── */
+.toast{position:fixed;bottom:max(24px,env(safe-area-inset-bottom));right:16px;padding:12px 18px;border-radius:var(--radius-md);color:#fff;z-index:9999;animation:slideIn .3s ease;font-weight:500;box-shadow:var(--shadow-lg);max-width:90vw;font-size:13px}
+.toast-success{background:var(--success)}.toast-error{background:var(--danger)}
+.toast-warning{background:var(--warning);color:var(--navy)}.toast-info{background:var(--navy-mid);border-left:3px solid var(--gold)}
+.spinner-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.58);align-items:center;justify-content:center;z-index:99999;backdrop-filter:blur(3px)}
+.spinner-overlay.show{display:flex}
+.spinner-box{background:#fff;border-radius:var(--radius-lg);padding:30px 38px;text-align:center;border-top:4px solid var(--gold);min-width:250px}
+.spinner-ring{width:46px;height:46px;border:5px solid #dde3f0;border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 13px}
+body.dark .spinner-box{background:var(--card-bg)}
+#loadingBar{position:fixed;top:0;left:0;height:3px;background:var(--gold);width:0;transition:width .4s;z-index:10000}
+#backToTop{position:fixed;bottom:max(22px,calc(14px + env(safe-area-inset-bottom)));right:max(14px,calc(12px + env(safe-area-inset-right)));background:var(--gold);color:var(--navy);border-radius:50%;width:46px;height:46px;display:none;align-items:center;justify-content:center;box-shadow:var(--shadow-gold);z-index:90;font-size:18px;font-weight:700}
+#backToTop.show{display:flex}
+.empty{padding:44px 18px;text-align:center;color:var(--muted);font-size:14px}
+.hint{font-size:11.5px;color:var(--muted);line-height:1.6}
+.sec-title{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;margin-bottom:8px}
+.divider{height:1px;background:var(--border);margin:14px 0}
+.hidden{display:none!important}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes slideUp{from{transform:translateY(18px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── Print ── */
+#printArea{display:none}
+@media print{
+  body{background:#fff;color:#000}
+  header,.tab-nav,.filter-bar,.card,#backToTop,.toast,#loadingBar,.content{display:none!important}
+  #printArea{display:block!important;padding:0}
+  #printArea h2{font-size:16px;margin-bottom:2px}
+  #printArea .pmeta{font-size:11px;margin-bottom:8px;color:#333}
+  #printArea table{width:100%;border-collapse:collapse;font-size:10px}
+  #printArea th,#printArea td{border:1px solid #999;padding:3px 4px}
+  #printArea thead th{background:#e9edf6}
+  #printArea td.n{text-align:right}
+  @page{size:A4 landscape;margin:10mm}
+}
+</style>
+</head>
+<body>
+
+<div id="loadingBar"></div>
+
+<!-- ══════════ LOGIN ══════════ -->
+<div id="loginScreen">
+  <div class="login-card">
+    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln92zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJticczw5h5np+n7M7mFBwPDda7jznOdhOWemZ+bt6reqq6qrCfwNDkIIwzCEEEoppfQGJzCsk5OTzMnJ0cGBZVkAEATBxtksZovJZEIq/PIShmEYhkFESile" alt="Rattana" height="78">
+    <h1>Rattana <span style="color:#c9a84c">Price Update</span></h1>
+    <p>ระบบปรับราคาสินค้า — เข้าสู่ระบบด้วยบัญชีบริษัท</p>
+    <div class="login-err" id="loginErr"></div>
+    <div id="g_id_onload"
+         data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com"
+         data-callback="handleGoogleLogin"
+         data-auto_prompt="false"></div>
+    <div id="gBtnHolder">
+      <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with" data-shape="rectangular" data-width="280"></div>
+    </div>
+    <div class="login-foot">
+      ข้อมูลราคาเป็นข้อมูลภายใน — เปิดให้เฉพาะ<br><b>User Role 5 ขึ้นไป (Manager+)</b><br>
+      หากเข้าไม่ได้ ติดต่อผู้ดูแลระบบ
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ NO PERMISSION ══════════ -->
+<div id="noPermScreen" style="display:none;min-height:100dvh;align-items:center;justify-content:center;padding:20px">
+  <div class="login-card" style="background:var(--card-bg)">
+    <div style="font-size:46px;margin-bottom:8px">🔒</div>
+    <h1 style="color:var(--text)">ไม่มีสิทธิ์เข้าใช้งาน</h1>
+    <p id="noPermMsg" style="color:var(--muted)">บัญชีของคุณไม่มีสิทธิ์ดูข้อมูลราคา</p>
+    <button class="btn btn-outline btn-block" onclick="logout()">ออกจากระบบ</button>
+  </div>
+</div>
+
+<!-- ══════════ APP ══════════ -->
+<div id="appScreen" style="display:none">
+<header>
+  <img class="logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABJtElEQVR42t1dZ5gVxdKunjln92zOOedE2F1yzhIFFMyoIIo5K+pVrxkTIooBlKzknDMsYdnAJticczw5h5np+n7M7mFBwPDda7jznOdhOWemZ+bt6reqq6qrCfwNDkIIwzCEEEoppfQGJzCsk5OTzMnJ0cGBZVkAEATBxtksZovJZEIq/PIShmEYhkFESile" alt="Rattana">
+  <div>
+    <div class="logo-text">RATTANA <span>PRICE UPDATE</span></div>
+  </div>
+  <span class="ver" id="verChip">v1.0</span>
+  <div class="hspace"></div>
+  <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="โหลดข้อมูลใหม่จากชีท">🔄</button>
+  <button class="icon-btn" onclick="toggleDark()" title="สลับโหมดมืด">🌙</button>
+  <div class="user-chip" onclick="openUserModal()" style="cursor:pointer">
+    <div class="av" id="uAv">?</div>
+    <div style="overflow:hidden">
+      <div class="un" id="uName">-</div>
+      <div class="ur" id="uRole">-</div>
+    </div>
+  </div>
+</header>
+
+<nav class="tab-nav">
+  <button class="tab-btn active" data-tab="select" onclick="switchTab('select')">1 · เลือกสินค้า<span class="cnt" id="cntSel">0</span></button>
+  <button class="tab-btn" data-tab="adjust" onclick="switchTab('adjust')">2 · ปรับราคา<span class="cnt" id="cntChg">0</span></button>
+  <button class="tab-btn" data-tab="export" onclick="switchTab('export')">3 · สรุป &amp; ส่งออก</button>
+</nav>
+
+<div class="content">
+
+  <!-- ─────── TAB 1 : เลือกสินค้า ─────── -->
+  <div class="tabpane active" id="tab-select">
+    <div class="filter-bar">
+      <div class="field">
+        <label>ค้นหา ชื่อสินค้า / บาร์โค้ด</label>
+        <input class="input" id="qSearch" type="search" placeholder="🔍 พิมพ์ชื่อสินค้า หรือบาร์โค้ด..." autocomplete="off">
+      </div>
+      <div class="field">
+        <label>หมวดสินค้า</label>
+        <div class="dd-wrap" id="ddCat">
+          <button class="dd-trigger" type="button" onclick="toggleDD('ddCat')"><span id="ddCatLabel">ทุกหมวด</span><span>▾</span></button>
+          <div class="dd-panel">
+            <input class="dd-search" type="text" placeholder="🔍 ค้นหาหมวด..." oninput="filterDD(this,'ddCatList')" autocomplete="off">
+            <ul class="dd-list" id="ddCatList"></ul>
+          </div>
+        </div>
+      </div>
+      <div class="field" style="justify-content:flex-end">
+        <label>&nbsp;</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-gold btn-sm" onclick="openPasteModal()">📋 วางบาร์โค้ด</button>
+          <button class="btn btn-outline btn-sm" onclick="selectAllFiltered()">เลือกทั้งหมด</button>
+          <button class="btn btn-outline btn-sm" onclick="clearSelection()">ล้าง</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card info"><div class="s-label">สินค้าทั้งหมด</div><div class="s-value" id="stTotal">0</div><div class="s-sub">จากชีท PDDT</div></div>
+      <div class="stat-card"><div class="s-label">ผลการค้นหา</div><div class="s-value" id="stFound">0</div><div class="s-sub" id="stFoundSub">รายการ</div></div>
+      <div class="stat-card"><div class="s-label">เลือกไว้</div><div class="s-value" id="stSel">0</div><div class="s-sub">รายการ</div></div>
+      <div class="stat-card"><div class="s-label">อัพเดทล่าสุด</div><div class="s-value" id="stTime" style="font-size:15px">-</div><div class="s-sub" id="stTimeSub">&nbsp;</div></div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:9px">
+      <label class="chk"><input type="checkbox" id="chkOnlySel" onchange="applyFilter()"> แสดงเฉพาะที่เลือกไว้</label>
+      <div class="hspace"></div>
+      <button class="btn btn-gold btn-sm" onclick="switchTab('adjust')">ไปหน้าปรับราคา →</button>
+    </div>
+
+    <div class="plist" id="plist"></div>
+    <div style="text-align:center;margin-top:14px">
+      <button class="btn btn-outline" id="btnMore" onclick="showMore()" style="display:none">แสดงเพิ่ม 100 รายการ</button>
+    </div>
+  </div>
+
+  <!-- ─────── TAB 2 : ปรับราคา ─────── -->
+  <div class="tabpane" id="tab-adjust">
+    <div class="card card-gold" style="margin-bottom:12px">
+      <div class="card-head">
+        <h3>⚙️ ระดับราคา &amp; หน่วยที่ต้องการปรับ</h3>
+        <span class="hint" id="tierHint"></span>
+      </div>
+      <div class="card-body">
+        <div class="sec-title">ระดับราคา (คอลัมน์ที่จะแสดงในตาราง)</div>
+        <div class="pill-row" id="tierPills"></div>
+        <div class="divider"></div>
+        <div class="sec-title">หน่วยนับที่แสดง</div>
+        <div class="pill-row" id="unitPills"></div>
+        <div class="divider"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <label class="chk"><input type="checkbox" id="chkHidePriceless" checked onchange="renderAdjust()"> ซ่อนแถวที่ไม่มีราคาเดิมเลย</label>
+          <label class="chk"><input type="checkbox" id="chkOnlyChanged" onchange="renderAdjust()"> แสดงเฉพาะแถวที่ปรับแล้ว</label>
+          <div class="hspace"></div>
+          <button class="btn btn-danger btn-sm" onclick="clearAllEdits()">🗑️ ล้างราคาที่ปรับทั้งหมด</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-gold" style="margin-bottom:12px">
+      <div class="card-head"><h3>⚡ ปรับหลายรายการพร้อมกัน</h3></div>
+      <div class="card-body">
+        <div class="bulk">
+          <div class="field">
+            <label>วิธีปรับ</label>
+            <select class="input input-sm" id="bulkMode">
+              <option value="pct">ปรับเป็นเปอร์เซ็นต์ (%)</option>
+              <option value="amt">บวก/ลบ เป็นบาท</option>
+              <option value="set">ตั้งราคาใหม่คงที่</option>
+              <option value="clear">ล้างราคาที่ปรับ</option>
+            </select>
+          </div>
+          <div class="field">
+            <label id="bulkValLabel">ค่า (%) — ใส่ลบเพื่อลดราคา</label>
+            <input class="input input-sm" id="bulkVal" type="number" step="0.01" placeholder="เช่น 3 หรือ -2.5" inputmode="decimal">
+          </div>
+          <div class="field">
+            <label>ปัดเศษราคาใหม่</label>
+            <select class="input input-sm" id="bulkRound">
+              <option value="d2">ทศนิยม 2 ตำแหน่ง</option>
+              <option value="int">จำนวนเต็ม (ปัดใกล้สุด)</option>
+              <option value="up">จำนวนเต็ม (ปัดขึ้น)</option>
+              <option value="h">ปัดลงท้าย .50</option>
+              <option value="q">ปัดลงท้าย .25</option>
+              <option value="f5">ปัดเป็นทวีคูณของ 5</option>
+              <option value="e9">ลงท้ายเลข 9</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>ใช้กับ</label>
+            <select class="input input-sm" id="bulkScope">
+              <option value="all">ทุกแถวที่แสดงอยู่</option>
+              <option value="checked">เฉพาะแถวที่ติ๊กไว้</option>
+              <option value="empty">เฉพาะแถวที่ยังไม่ได้ปรับ</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:11px;flex-wrap:wrap;align-items:center">
+          <button class="btn btn-gold" onclick="applyBulk()">▶ ปรับเลย</button>
+          <span class="hint" id="bulkHint">ใช้กับทุกระดับราคา &amp; หน่วยที่เปิดแสดงอยู่</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <label class="chk"><input type="checkbox" id="chkAllRows" onchange="toggleAllRows(this.checked)"> ติ๊กทุกแถว</label>
+      <span class="hint" id="rowCntHint">0 แถว</span>
+      <div class="hspace"></div>
+      <button class="btn btn-gold btn-sm" onclick="switchTab('export')">ไปหน้าสรุป →</button>
+    </div>
+
+    <div class="tbl-wrap">
+      <table class="tbl" id="adjTbl">
+        <thead id="adjHead"></thead>
+        <tbody id="adjBody"></tbody>
+      </table>
+    </div>
+    <div style="text-align:center;margin-top:14px">
+      <button class="btn btn-outline" id="btnMoreRows" onclick="showMoreRows()" style="display:none">แสดงเพิ่ม 100 แถว</button>
+    </div>
+  </div>
+
+  <!-- ─────── TAB 3 : สรุป & ส่งออก ─────── -->
+  <div class="tabpane" id="tab-export">
+    <div class="stat-grid">
+      <div class="stat-card"><div class="s-label">รายการที่ปรับ</div><div class="s-value" id="exCount">0</div><div class="s-sub" id="exCountSub">ราคา</div></div>
+      <div class="stat-card up"><div class="s-label">ขึ้นราคา</div><div class="s-value" id="exUp">0</div><div class="s-sub" id="exUpAvg">เฉลี่ย 0%</div></div>
+      <div class="stat-card down"><div class="s-label">ลดราคา</div><div class="s-value" id="exDown">0</div><div class="s-sub" id="exDownAvg">เฉลี่ย 0%</div></div>
+      <div class="stat-card info"><div class="s-label">% ปรับเฉลี่ย</div><div class="s-value" id="exAvg">0%</div><div class="s-sub">ทุกรายการ</div></div>
+    </div>
+
+    <div class="card card-gold" style="margin-bottom:12px">
+      <div class="card-head"><h3>📄 ข้อมูลเอกสาร</h3></div>
+      <div class="card-body">
+        <div class="bulk">
+          <div class="field"><label>เลขที่เอกสาร</label><input class="input input-sm" id="docNo" type="text"></div>
+          <div class="field"><label>วันที่มีผล</label><input class="input input-sm" id="docDate" type="date"></div>
+          <div class="field"><label>ผู้จัดทำ</label><input class="input input-sm" id="docBy" type="text" readonly></div>
+          <div class="field"><label>เหตุผล / หมายเหตุ</label><input class="input input-sm" id="docNote" type="text" placeholder="เช่น ต้นทุนปรับขึ้น"></div>
+        </div>
+        <div class="divider"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-success" onclick="exportExcel()">📊 Excel (.xlsx)</button>
+          <button class="btn btn-primary" onclick="exportCsv()">📄 CSV</button>
+          <button class="btn btn-outline" onclick="copyTable()">📋 คัดลอก (วางลง Sheet)</button>
+          <button class="btn btn-outline" onclick="printDoc()">🖨️ พิมพ์ / PDF</button>
+        </div>
+        <div class="hint" style="margin-top:9px">ไฟล์ที่ได้จะมี 1 บรรทัดต่อ 1 ราคา (สินค้า × หน่วยนับ × ระดับราคา) พร้อมราคาเดิม ราคาใหม่ ส่วนต่าง และ % การปรับ</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>👁️ ตรวจทานก่อนส่งออก</h3><span class="hint" id="exPreviewHint"></span></div>
+      <div class="tbl-wrap" style="border:none;border-radius:0">
+        <table class="tbl" id="exTbl">
+          <thead>
+            <tr>
+              <th class="sticky sortable" data-key="name" data-type="str">ชื่อสินค้า <span class="sort-ind"></span></th>
+              <th class="sortable" data-key="code" data-type="str">บาร์โค้ด <span class="sort-ind"></span></th>
+              <th class="sortable" data-key="unit" data-type="str">หน่วยนับ <span class="sort-ind"></span></th>
+              <th class="sortable" data-key="tier" data-type="str">ระดับราคา <span class="sort-ind"></span></th>
+              <th class="sortable" data-key="old" data-type="num" style="text-align:right">ราคาเดิม <span class="sort-ind"></span></th>
+              <th class="sortable" data-key="new" data-type="num" style="text-align:right">ราคาใหม่ <span class="sort-ind"></span></th>
+              <th class="sortable" data-key="diff" data-type="num" style="text-align:right">ส่วนต่าง <span class="sort-ind"></span></th>
+              <th class="sortable" data-key="pct" data-type="num" style="text-align:right">% ปรับ <span class="sort-ind"></span></th>
+            </tr>
+          </thead>
+          <tbody id="exBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+<button id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+</div><!-- /appScreen -->
+
+<!-- ══════════ MODALS ══════════ -->
+<div class="modal-overlay" id="pasteModal">
+  <div class="modal">
+    <div class="modal-head"><h3>📋 วางรายการบาร์โค้ด / ชื่อสินค้า</h3><button class="modal-close" onclick="closeModal('pasteModal')">×</button></div>
+    <div class="modal-body">
+      <p class="hint" style="margin-bottom:9px">วางได้ทีละหลายบรรทัด (1 บรรทัด = 1 รายการ) รองรับทั้งบาร์โค้ดชิ้น / แพ็ค / บิ๊กแพ็ค / ลัง และชื่อสินค้าเต็ม</p>
+      <textarea class="input" id="pasteBox" rows="10" placeholder="8858669900047&#10;28858669900041&#10;กาแฟไทย คลาสสิค 500ก."></textarea>
+      <div id="pasteResult" style="margin-top:10px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeModal('pasteModal')">ปิด</button>
+      <button class="btn btn-gold" onclick="runPaste()">ค้นหา &amp; เลือก</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="userModal">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-head"><h3>👤 ผู้ใช้งาน</h3><button class="modal-close" onclick="closeModal('userModal')">×</button></div>
+    <div class="modal-body" id="userInfo"></div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeModal('userModal')">ปิด</button>
+      <button class="btn btn-danger" onclick="logout()">ออกจากระบบ</button>
+    </div>
+  </div>
+</div>
+
+<div class="spinner-overlay" id="spinner">
+  <div class="spinner-box"><div class="spinner-ring"></div><p id="spinnerMsg">กำลังโหลด...</p></div>
+</div>
+
+<div id="printArea"></div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   Rattana Price Update v1.0 — ระบบปรับราคาสินค้า
+   ข้อมูล: Google Sheet "Stocksync" ชีท PDDT
+     A  = PRODUCT NAME                     → ชื่อสินค้า
+     B/D/F/H = CODE EA/PA/BP/CS            → บาร์โค้ด ชิ้น/แพ็ค/บิ๊กแพ็ค/ลัง
+     J–M = UNIT EA/PA/BP/CS                → หน่วยนับ (เช่น "ลังx16(CS)")
+     U–X  = PRICE CC00 EA/PA/BP/CS         → ราคาควบคุม
+     Y–AB = PRICE CC01 …                   → ราคาเลท
+     AC–AF= PRICE CC02 …                   → ราคา 10 ลัง
+     AG–AJ= PRICE CC03 …                   → ราคาปลีก
+     BC = CAT GROUP                        → หมวดสินค้า (ใช้กรอง)
+   คอลัมน์ถูกค้นหาจาก "ชื่อหัวคอลัมน์" ก่อนเสมอ ถ้ามีคนแทรกคอลัมน์ในชีท
+   ตัวอักษรจะเลื่อน แต่แอพยังหาเจอ (ตัวอักษรด้านล่างเป็นแค่ค่าสำรอง)
+   ══════════════════════════════════════════════════════════════ */
+const APP_VERSION = 'v1.0';
+
+const SHEET = { id:'16mYDqAqqJma-_0vCIAajy6bcjdOZ7F6VagxkdkqAB2I', name:'PDDT' };
+const AUTH_CONFIG = {
+  clientId    : '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
+  usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
+  usersSheetName: 'Rattana Users for apps',
+};
+const MIN_ROLE = 5;   // Manager ขึ้นไปเท่านั้นถึงจะเห็นราคา
+
+const UNITS = [
+  { k:'EA', th:'ชิ้น' },
+  { k:'PA', th:'แพ็ค' },
+  { k:'BP', th:'บิ๊กแพ็ค' },
+  { k:'CS', th:'ลัง' },
+];
+const TIERS = [
+  { k:'CC00', th:'ราคาควบคุม' },
+  { k:'CC01', th:'ราคาเลท' },
+  { k:'CC02', th:'ราคา 10 ลัง' },
+  { k:'CC03', th:'ราคาปลีก' },
+];
+
+/* หัวคอลัมน์ที่ต้องหา → ชื่อจริงในชีท */
+const HEAD = { name:'PRODUCT NAME', cat:'CAT GROUP' };
+UNITS.forEach(u => { HEAD['code_'+u.k] = 'CODE ' + u.k; HEAD['unit_'+u.k] = 'UNIT ' + u.k; });
+TIERS.forEach(t => UNITS.forEach(u => { HEAD['p_'+t.k+'_'+u.k] = 'PRICE ' + t.k + ' ' + u.k; }));
+
+/* ค่าสำรองเมื่อหาหัวคอลัมน์ไม่เจอ */
+const FALLBACK_COLS = (() => {
+  const f = { name:'A', cat:'BC', code_EA:'B', code_PA:'D', code_BP:'F', code_CS:'H',
+              unit_EA:'J', unit_PA:'K', unit_BP:'L', unit_CS:'M' };
+  const price0 = 20;                                  // U = index 20 (0-based)
+  TIERS.forEach((t, ti) => UNITS.forEach((u, ui) => {
+    f['p_'+t.k+'_'+u.k] = colLetter(price0 + ti*4 + ui);
+  }));
+  return f;
+})();
+
+const NO_CAT = /^(ไม่(กำหนด|ระบุ|มี)|[-–—]+|n\/?a)$/i;
+
+const STORAGE = {
+  user  : 'rattanaUser',
+  cache : 'rattanaPriceUpd_cache',
+  sel   : 'rattanaPriceUpd_sel',
+  edits : 'rattanaPriceUpd_edits',
+  cfg   : 'rattanaPriceUpd_cfg',
+  doc   : 'rattanaPriceUpd_doc',
+  dark  : 'rattanaPriceUpd_dark',
+};
+const CACHE_TTL = 6 * 60 * 60 * 1000;   // 6 ชม.
+/* ⚠️ บวกเลขนี้ทุกครั้งที่เปลี่ยนคอลัมน์ที่ดึง / โครงสร้าง product */
+const CACHE_VER = 1;
+
+/* ── state ── */
+let currentUser = null;
+let products    = [];        // [{n, g, c:{EA..}, u:{EA..}, p:{CC00:{EA..}, ...}, key}]
+let byKey       = new Map();
+let byCode      = new Map();
+let filtered    = [];
+let selKeys     = [];        // ลำดับที่เลือก
+let selSet      = new Set();
+let edits       = {};        // "key|unit|tier" → ราคาใหม่ (number)
+let checkedRows = new Set(); // "key|unit" ที่ติ๊กไว้ในตารางปรับราคา
+let showTiers   = new Set(TIERS.map(t => t.k));
+let showUnits   = new Set(UNITS.map(u => u.k));
+let catFilter   = '';
+let catOptions  = [];
+let renderLimit = 100;
+let rowLimit    = 100;
+let adjRows     = [];
+let lastLoaded  = 0;
+let sortSel     = { key:'name', dir:'asc' };
+let exSort      = { key:'pct', dir:'desc' };
+let saveTimer   = null;
+
+/* ══════════ helpers ══════════ */
+const $  = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const showSpinner = m => { $('#spinnerMsg').textContent = m || 'กำลังโหลด...'; $('#spinner').classList.add('show'); };
+const hideSpinner = () => $('#spinner').classList.remove('show');
+const setLoading  = on => $('#loadingBar').style.width = on ? '85%' : '0';
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function showToast(msg, type='info'){
+  const t = document.createElement('div');
+  t.className = 'toast toast-' + type; t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
+}
+function safeSet(key, val){
+  try { localStorage.setItem(key, val); return true; }
+  catch(e){
+    try { if (key !== STORAGE.cache) localStorage.removeItem(STORAGE.cache); localStorage.setItem(key, val); return true; }
+    catch(e2){ console.warn('เก็บลง localStorage ไม่ได้:', key); return false; }
+  }
+}
+function colLetter(i){ let n = i + 1, s = ''; while (n > 0){ const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); } return s; }
+
+/* ตัวเลข → ราคา (ตัด , และช่องว่างออกก่อน) */
+function toPrice(v){
+  const n = parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,''));
+  return (isFinite(n) && n > 0) ? Math.round(n * 10000) / 10000 : 0;
+}
+function fmtPrice(v){
+  if (!v && v !== 0) return '-';
+  const n = Math.round(v * 100) / 100;
+  return n.toLocaleString('th-TH', { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 });
+}
+const fmtInt = n => Number(n||0).toLocaleString('th-TH');
+function fmtPct(v){
+  if (v === null || !isFinite(v)) return '-';
+  const s = (v > 0 ? '+' : '') + (Math.round(v * 100) / 100).toLocaleString('th-TH', { maximumFractionDigits:2 });
+  return s + '%';
+}
+/* วันที่ไทย พ.ศ. DD/MM/YYYY + เวลา HH.MM */
+function formatThaiDate(input){
+  const d = input instanceof Date ? input : new Date(input);
+  if (isNaN(d)) return '-';
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()+543}`;
+}
+function formatThaiTime(input){
+  const d = input instanceof Date ? input : new Date(input);
+  if (isNaN(d)) return '-';
+  return `${String(d.getHours()).padStart(2,'0')}.${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+/* RFC-4180 CSV parser → array ของ array */
+function parseCsv(text){
+  if (!text) return [];
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const rows = []; let row = [], cell = '', inQ = false;
+  for (let i = 0; i < text.length; i++){
+    const ch = text[i];
+    if (inQ){
+      if (ch === '"'){ if (text[i+1] === '"'){ cell += '"'; i++; } else inQ = false; }
+      else cell += ch;
+    } else {
+      if (ch === '"') inQ = true;
+      else if (ch === ',') { row.push(cell); cell = ''; }
+      else if (ch === '\r') { /* skip */ }
+      else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += ch;
+    }
+  }
+  if (cell.length || row.length){ row.push(cell); rows.push(row); }
+  return rows;
+}
+const cleanCell = s => String(s==null?'':s).replace(/[\u200B\u200C\u200D\uFEFF]/g,'').replace(/\u00A0/g,' ').trim();
+function csvToObjects(rows){
+  if (!rows.length) return [];
+  const headers = rows[0].map(cleanCell);
+  return rows.slice(1).filter(r => r.some(c => cleanCell(c)))
+             .map(r => Object.fromEntries(headers.map((k,i) => [k, cleanCell(r[i])])));
+}
+
+/* ══════════ AUTH ══════════ */
+function decodeJwtPayload(token){
+  const parts = String(token||'').split('.');
+  if (parts.length < 2) throw new Error('JWT format invalid');
+  let b64 = parts[1].replace(/-/g,'+').replace(/_/g,'/');
+  const pad = (4 - b64.length % 4) % 4;
+  if (pad) b64 += '='.repeat(pad);
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return JSON.parse(new TextDecoder('utf-8').decode(bytes));
+}
+const normalizeEmail = s => String(s||'').replace(/[\u200B\u200C\u200D\uFEFF]/g,'').replace(/\s+/g,'').toLowerCase();
+
+function showLoginError(msg){
+  const e = $('#loginErr'); e.textContent = msg; e.style.display = 'block';
+}
+async function loadSheetObjects(sheetId, sheetName){
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('fetch failed ' + res.status);
+  return csvToObjects(parseCsv(await res.text()));
+}
+async function handleGoogleLogin(r){
+  showSpinner('กำลังตรวจสอบสิทธิ์...');
+  try {
+    const email = normalizeEmail(decodeJwtPayload(r.credential).email);
+    const users = await loadSheetObjects(AUTH_CONFIG.usersSheetId, AUTH_CONFIG.usersSheetName);
+    const user  = users.find(u => normalizeEmail(u['E-mail']) === email);
+    if (!user){ showLoginError('ไม่พบอีเมลนี้ในระบบ — ติดต่อผู้ดูแลระบบ'); return; }
+    if (String(user['Status']||'').trim().toLowerCase() !== 'active'){ showLoginError('บัญชีถูกระงับ — ติดต่อผู้ดูแลระบบ'); return; }
+    currentUser = {
+      email, name: user['ชื่อ - สกุล'] || email, nickname: user['ชื่อเล่น'] || '',
+      role: parseInt(user['User Role']) || 1, dept: user['แผนก'] || '',
+      company: user['บริษัท'] || '', warehouse: user['W'] || '', empId: String(user['รหัสพนักงาน']||''),
+    };
+    safeSet(STORAGE.user, JSON.stringify({ data: currentUser, exp: Date.now() + 30*24*60*60*1000 }));
+    enterApp();
+  } catch(e){
+    console.error(e);
+    showLoginError('เข้าสู่ระบบไม่สำเร็จ ลองใหม่อีกครั้ง');
+  } finally { hideSpinner(); }
+}
+function checkSession(){
+  try {
+    const raw = localStorage.getItem(STORAGE.user);
+    if (!raw) return;
+    const { data, exp } = JSON.parse(raw);
+    if (Date.now() > exp){ localStorage.removeItem(STORAGE.user); return; }
+    currentUser = data;
+    enterApp();
+  } catch(e){ localStorage.removeItem(STORAGE.user); }
+}
+function logout(){ localStorage.removeItem(STORAGE.user); location.reload(); }
+
+function enterApp(){
+  $('#loginScreen').style.display = 'none';
+  if ((currentUser.role || 0) < MIN_ROLE){
+    $('#noPermMsg').innerHTML = `สวัสดี ${esc(currentUser.nickname || currentUser.name)}<br>
+      สิทธิ์ปัจจุบันของคุณคือ Role ${currentUser.role} — หน้านี้เปิดให้เฉพาะ Role ${MIN_ROLE} ขึ้นไป`;
+    $('#noPermScreen').style.display = 'flex';
+    return;
+  }
+  $('#appScreen').style.display = 'block';
+  const nm = currentUser.nickname || currentUser.name || '';
+  $('#uAv').textContent  = (nm.trim()[0] || '?').toUpperCase();
+  $('#uName').textContent = nm;
+  $('#uRole').textContent = 'Role ' + currentUser.role + (currentUser.warehouse ? ' · ' + currentUser.warehouse : '');
+  $('#docBy').value = currentUser.name + (currentUser.nickname ? ' (' + currentUser.nickname + ')' : '');
+  initApp();
+}
+function openUserModal(){
+  const u = currentUser || {};
+  const W = { W1:'สมุทรสงคราม', W2:'สุพรรณบุรี', W3:'ราชบุรี', W4:'นครปฐม', HQ:'สำนักงานใหญ่' };
+  $('#userInfo').innerHTML = `
+    <div style="display:grid;gap:7px;font-size:13px">
+      <div><b>${esc(u.name||'-')}</b> ${u.nickname ? '(' + esc(u.nickname) + ')' : ''}</div>
+      <div class="hint">${esc(u.email||'')}</div>
+      <div class="divider" style="margin:4px 0"></div>
+      <div>รหัสพนักงาน: <b>${esc(u.empId||'-')}</b></div>
+      <div>แผนก: <b>${esc(u.dept||'-')}</b></div>
+      <div>คลัง: <b>${esc(u.warehouse||'-')} ${W[u.warehouse] ? '· ' + W[u.warehouse] : ''}</b></div>
+      <div>สิทธิ์: <b>Role ${u.role}</b></div>
+    </div>`;
+  $('#userModal').classList.add('open');
+}
+
+/* ══════════ โหลดข้อมูลจากชีท PDDT ══════════ */
+const gvizUrl = tq => `https://docs.google.com/spreadsheets/d/${SHEET.id}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET.name)}&tq=${encodeURIComponent(tq)}`;
+
+/* ขั้นที่ 1 — ดึงแค่แถวหัวคอลัมน์ เพื่อหาว่าคอลัมน์ที่ต้องใช้อยู่ตัวอักษรไหน */
+async function discoverColumns(){
+  try {
+    const res = await fetch(gvizUrl('select * limit 1'));
+    if (!res.ok) throw new Error('probe ' + res.status);
+    const head = (parseCsv(await res.text())[0] || []).map(h => cleanCell(h).toUpperCase());
+    if (!head.length) throw new Error('ไม่พบหัวคอลัมน์');
+    const out = {};
+    for (const key in HEAD){
+      const idx = head.indexOf(HEAD[key].toUpperCase());
+      out[key] = idx >= 0 ? colLetter(idx) : FALLBACK_COLS[key];
+    }
+    return out;
+  } catch(e){
+    console.warn('หาคอลัมน์อัตโนมัติไม่สำเร็จ ใช้ค่าเริ่มต้น A/B-H/J-M/U-AJ/BC:', e.message);
+    return { ...FALLBACK_COLS };
+  }
+}
+
+const FETCH_ORDER = (() => {
+  const o = ['name'];
+  UNITS.forEach(u => o.push('code_'+u.k));
+  UNITS.forEach(u => o.push('unit_'+u.k));
+  TIERS.forEach(t => UNITS.forEach(u => o.push('p_'+t.k+'_'+u.k)));
+  o.push('cat');
+  return o;
+})();
+
+async function fetchProducts(){
+  const col = await discoverColumns();
+  const res = await fetch(gvizUrl('select ' + FETCH_ORDER.map(k => col[k]).join(',')));
+  if (!res.ok) throw new Error('โหลดชีทไม่สำเร็จ (' + res.status + ')');
+  const rows = parseCsv(await res.text());
+  if (rows.length < 2) throw new Error('ชีทว่างเปล่า');
+
+  /* หา index จากหัวคอลัมน์ของผลลัพธ์อีกชั้น เผื่อ gviz จัดลำดับไม่ตรง */
+  const head = rows[0].map(c => cleanCell(c).toUpperCase());
+  const at = key => {
+    const i = head.indexOf(HEAD[key].toUpperCase());
+    return i >= 0 ? i : FETCH_ORDER.indexOf(key);
+  };
+  const iName = at('name'), iCat = at('cat');
+  const iCode = {}, iUnit = {}, iPrice = {};
+  UNITS.forEach(u => { iCode[u.k] = at('code_'+u.k); iUnit[u.k] = at('unit_'+u.k); });
+  TIERS.forEach(t => { iPrice[t.k] = {}; UNITS.forEach(u => { iPrice[t.k][u.k] = at('p_'+t.k+'_'+u.k); }); });
+
+  const list = [];
+  for (let r = 1; r < rows.length; r++){
+    const row = rows[r];
+    if (!row || !row.length) continue;
+    const name = cleanCell(row[iName]).replace(/^\w+@/, '');   // ตัดรหัสภายในนำหน้า เช่น 12345@
+    if (!name) continue;
+
+    const c = {}, u = {}, p = {};
+    let hasCode = false, hasPrice = false;
+    for (const un of UNITS){
+      /* บาร์โค้ดต้องเป็น string เสมอ (เลข 0 นำหน้าห้ามหาย) */
+      const code = cleanCell(row[iCode[un.k]]);
+      if (code){ c[un.k] = code; hasCode = true; }
+      const ut = cleanCell(row[iUnit[un.k]]);
+      if (ut) u[un.k] = ut;
+    }
+    for (const t of TIERS){
+      const tp = {};
+      for (const un of UNITS){
+        const v = toPrice(row[iPrice[t.k][un.k]]);
+        if (v){ tp[un.k] = v; hasPrice = true; }
+      }
+      if (Object.keys(tp).length) p[t.k] = tp;
+    }
+    if (!hasCode && !hasPrice) continue;                       // ไม่มีทั้งบาร์โค้ดและราคา → ข้าม
+
+    let g = cleanCell(row[iCat]);
+    if (NO_CAT.test(g)) g = '';
+    list.push({ n:name, g, c, u, p, key: c.EA || c.PA || c.BP || c.CS || ('N:' + name) });
+  }
+  return list;
+}
+
+function indexProducts(){
+  byKey = new Map(); byCode = new Map();
+  for (const p of products){
+    if (!byKey.has(p.key)) byKey.set(p.key, p);
+    for (const un of UNITS){
+      const code = p.c[un.k];
+      if (code && !byCode.has(code)) byCode.set(code, p);
+    }
+  }
+  /* เผื่อสินค้าที่ key ซ้ำกัน — ทำให้ key ไม่ซ้ำ */
+  const seen = new Set();
+  for (const p of products){
+    let k = p.key, i = 2;
+    while (seen.has(k)) k = p.key + '#' + (i++);
+    p.key = k; seen.add(k);
+  }
+  byKey = new Map(products.map(p => [p.key, p]));
+}
+
+async function loadData(force){
+  setLoading(true);
+  if (!force){
+    try {
+      const raw = localStorage.getItem(STORAGE.cache);
+      if (raw){
+        const c = JSON.parse(raw);
+        if (c && c.v === CACHE_VER && c.ts && Date.now() - c.ts < CACHE_TTL && Array.isArray(c.d) && c.d.length){
+          products = c.d; lastLoaded = c.ts;
+          indexProducts(); afterLoad();
+          setLoading(false);
+          refreshInBackground();
+          return;
+        }
+      }
+    } catch(e){ /* cache เสีย → โหลดใหม่ */ }
+  }
+  showSpinner('กำลังโหลดสินค้าและราคาจากชีท PDDT...');
+  try {
+    products = await fetchProducts();
+    lastLoaded = Date.now();
+    indexProducts();
+    safeSet(STORAGE.cache, JSON.stringify({ v: CACHE_VER, ts: lastLoaded, d: products }));
+    afterLoad();
+    showToast(`โหลดสินค้า ${fmtInt(products.length)} รายการแล้ว ✓`, 'success');
+  } catch(e){
+    console.error(e);
+    showToast('โหลดข้อมูลไม่สำเร็จ: ' + (e.message || ''), 'error');
+    $('#plist').innerHTML = '<div class="empty">โหลดข้อมูลไม่สำเร็จ — ตรวจสอบว่าชีทเปิดให้ "ผู้ที่มีลิงก์" ดูได้ แล้วกด 🔄 อีกครั้ง</div>';
+  } finally { hideSpinner(); setLoading(false); }
+}
+async function refreshInBackground(){
+  try {
+    const fresh = await fetchProducts();
+    if (fresh.length){
+      products = fresh; lastLoaded = Date.now();
+      indexProducts();
+      safeSet(STORAGE.cache, JSON.stringify({ v: CACHE_VER, ts: lastLoaded, d: products }));
+      afterLoad();
+    }
+  } catch(e){ /* เงียบ */ }
+}
+async function refreshData(){
+  const b = $('#btnRefresh');
+  b.disabled = true; b.style.transition = 'transform .6s'; b.style.transform = 'rotate(360deg)';
+  await loadData(true);
+  b.disabled = false; setTimeout(() => { b.style.transform = ''; b.style.transition = ''; }, 600);
+}
+function afterLoad(){
+  pruneSelection();
+  buildCatOptions();
+  applyFilter();
+  renderTime();
+  renderAdjust();
+}
+function renderTime(){
+  $('#stTotal').textContent = fmtInt(products.length);
+  $('#stTime').textContent  = lastLoaded ? formatThaiTime(lastLoaded) + ' น.' : '-';
+  $('#stTimeSub').textContent = lastLoaded ? formatThaiDate(lastLoaded) : '';
+}
+/* สินค้าที่เคยเลือกไว้แต่หายไปจากชีท → เอาออก */
+function pruneSelection(){
+  const keep = selKeys.filter(k => byKey.has(k));
+  if (keep.length !== selKeys.length){ selKeys = keep; selSet = new Set(keep); saveSelection(); }
+}
+
+/* ══════════ TAB 1 : เลือกสินค้า ══════════ */
+function buildCatOptions(){
+  const m = new Map();
+  for (const p of products) if (p.g) m.set(p.g, (m.get(p.g) || 0) + 1);
+  catOptions = Array.from(m, ([name, count]) => ({ name, count }))
+                    .sort((a,b) => b.count - a.count || a.name.localeCompare(b.name,'th'));
+  if (catFilter && !m.has(catFilter)) catFilter = '';
+  renderCatList();
+}
+function renderCatList(){
+  const ul = $('#ddCatList');
+  ul.innerHTML = `<li class="${catFilter===''?'sel':''}" onclick="pickCat('')"><span>ทุกหมวด</span><span class="c">${fmtInt(products.length)}</span></li>`
+    + catOptions.map(c => `<li class="${catFilter===c.name?'sel':''}" onclick="pickCat(${JSON.stringify(c.name).replace(/"/g,'&quot;')})">
+         <span>${esc(c.name)}</span><span class="c">${fmtInt(c.count)}</span></li>`).join('');
+  $('#ddCatLabel').textContent = catFilter || 'ทุกหมวด';
+}
+function pickCat(name){
+  catFilter = name;
+  $('#ddCat').querySelector('.dd-panel').classList.remove('open');
+  renderCatList(); applyFilter();
+}
+function toggleDD(wrapId){
+  const p = document.querySelector('#' + wrapId + ' .dd-panel');
+  const open = p.classList.contains('open');
+  $$('.dd-panel').forEach(x => x.classList.remove('open'));
+  if (!open){ p.classList.add('open'); const s = p.querySelector('.dd-search'); if (s){ s.value=''; filterDD(s,'ddCatList'); s.focus(); } }
+}
+function filterDD(inp, listId){
+  const q = inp.value.toLowerCase();
+  $$('#' + listId + ' li').forEach(li => { li.style.display = li.textContent.toLowerCase().includes(q) ? '' : 'none'; });
+}
+document.addEventListener('click', e => { if (!e.target.closest('.dd-wrap')) $$('.dd-panel').forEach(x => x.classList.remove('open')); });
+
+function applyFilter(){
+  const q = ($('#qSearch').value || '').trim().toLowerCase();
+  const onlySel = $('#chkOnlySel').checked;
+  filtered = products.filter(p => {
+    if (onlySel && !selSet.has(p.key)) return false;
+    if (catFilter && p.g !== catFilter) return false;
+    if (!q) return true;
+    if (p.n.toLowerCase().includes(q)) return true;
+    for (const un of UNITS){ const c = p.c[un.k]; if (c && c.toLowerCase().includes(q)) return true; }
+    return false;
+  });
+  filtered.sort((a,b) => a.n.localeCompare(b.n,'th'));
+  renderLimit = 100;
+  renderList();
+  $('#stFound').textContent = fmtInt(filtered.length);
+  $('#stFoundSub').textContent = (catFilter ? catFilter : 'ทุกหมวด');
+  renderCounts();
+}
+function unitLabel(p, uk){
+  const raw = p.u[uk] || '';
+  const m = raw.match(/^(.+?)x(\d+(?:\.\d+)?)\((EA|PA|BP|CS)\)$/i);
+  const base = UNITS.find(u => u.k === uk).th;
+  if (m){
+    const per = parseFloat(m[2]);
+    return per > 1 ? `${base} (${m[1]}×${fmtInt(per)})` : `${base} (${m[1]})`;
+  }
+  return raw ? `${base} (${raw})` : base;
+}
+function renderList(){
+  const box = $('#plist');
+  if (!filtered.length){
+    box.innerHTML = '<div class="empty" style="grid-column:1/-1">ไม่พบสินค้าที่ตรงกับเงื่อนไข</div>';
+    $('#btnMore').style.display = 'none';
+    return;
+  }
+  const show = filtered.slice(0, renderLimit);
+  box.innerHTML = show.map(p => {
+    const codes = UNITS.filter(u => p.c[u.k]).map(u => `<span class="tag"><b>${u.th}</b> <span class="code">${esc(p.c[u.k])}</span></span>`).join('');
+    const prices = UNITS.filter(u => (p.p.CC00||{})[u.k] || (p.p.CC03||{})[u.k]).map(u =>
+      `<span class="tag tag-gold">${u.th} ${fmtPrice((p.p.CC00||{})[u.k] || (p.p.CC03||{})[u.k])}฿</span>`).join('');
+    return `<div class="pitem ${selSet.has(p.key)?'on':''}" onclick="toggleSel(${JSON.stringify(p.key).replace(/"/g,'&quot;')})">
+      <div class="box">${selSet.has(p.key)?'✓':''}</div>
+      <div style="flex:1;min-width:0">
+        <div class="pn">${esc(p.n)}</div>
+        <div class="pm">${codes || '<span class="tag">ไม่มีบาร์โค้ด</span>'}</div>
+        <div class="pp">${prices}${p.g ? `<span class="tag">${esc(p.g)}</span>` : ''}</div>
+      </div>
+    </div>`;
+  }).join('');
+  $('#btnMore').style.display = filtered.length > renderLimit ? 'inline-flex' : 'none';
+}
+function showMore(){ renderLimit += 100; renderList(); }
+function toggleSel(key){
+  if (selSet.has(key)){ selSet.delete(key); selKeys = selKeys.filter(k => k !== key); }
+  else { selSet.add(key); selKeys.push(key); }
+  saveSelection(); renderList(); renderCounts(); renderAdjust();
+}
+function selectAllFiltered(){
+  let added = 0;
+  for (const p of filtered) if (!selSet.has(p.key)){ selSet.add(p.key); selKeys.push(p.key); added++; }
+  saveSelection(); renderList(); renderCounts(); renderAdjust();
+  showToast(`เลือกเพิ่ม ${fmtInt(added)} รายการ`, 'success');
+}
+function clearSelection(){
+  if (!selKeys.length) return;
+  if (!confirm('ล้างรายการที่เลือกทั้งหมด? (ราคาที่ปรับไว้จะยังอยู่)')) return;
+  selKeys = []; selSet = new Set();
+  saveSelection(); renderList(); renderCounts(); renderAdjust();
+}
+function saveSelection(){ safeSet(STORAGE.sel, JSON.stringify(selKeys)); }
+function renderCounts(){
+  $('#stSel').textContent  = fmtInt(selKeys.length);
+  $('#cntSel').textContent = fmtInt(selKeys.length);
+  $('#cntChg').textContent = fmtInt(Object.keys(edits).length);
+}
+
+/* ── วางบาร์โค้ดหลายรายการ ── */
+function openPasteModal(){ $('#pasteResult').innerHTML=''; $('#pasteModal').classList.add('open'); setTimeout(()=>$('#pasteBox').focus(),100); }
+function closeModal(id){ $('#'+id).classList.remove('open'); }
+function runPaste(){
+  const lines = ($('#pasteBox').value || '').split(/[\n\r\t;]+/).map(s => cleanCell(s)).filter(Boolean);
+  if (!lines.length){ showToast('ยังไม่ได้วางรายการ', 'warning'); return; }
+  const nameMap = new Map(products.map(p => [p.n.toLowerCase(), p]));
+  let added = 0, dup = 0; const miss = [];
+  for (const line of lines){
+    const p = byCode.get(line) || nameMap.get(line.toLowerCase());
+    if (!p){ miss.push(line); continue; }
+    if (selSet.has(p.key)){ dup++; continue; }
+    selSet.add(p.key); selKeys.push(p.key); added++;
+  }
+  saveSelection(); applyFilter(); renderAdjust();
+  $('#pasteResult').innerHTML = `
+    <div class="tag tag-gold" style="font-size:12px;padding:4px 10px">เลือกเพิ่ม ${fmtInt(added)}</div>
+    <div class="tag" style="font-size:12px;padding:4px 10px">เลือกไว้อยู่แล้ว ${fmtInt(dup)}</div>
+    <div class="tag" style="font-size:12px;padding:4px 10px;${miss.length?'background:#ffd5d0;color:#c0392b':''}">ไม่พบ ${fmtInt(miss.length)}</div>
+    ${miss.length ? `<div class="hint" style="margin-top:8px"><b>ไม่พบในชีท:</b><br>${miss.slice(0,40).map(esc).join('<br>')}${miss.length>40?`<br>… และอีก ${miss.length-40} รายการ`:''}</div>` : ''}`;
+  if (added) showToast(`เลือกเพิ่ม ${fmtInt(added)} รายการ ✓`, 'success');
+}
+
+/* ══════════ TAB 2 : ปรับราคา ══════════ */
+function renderPills(){
+  $('#tierPills').innerHTML = TIERS.map(t =>
+    `<button class="pill ${showTiers.has(t.k)?'on':''}" onclick="toggleTier('${t.k}')">${t.th} <span style="opacity:.6">${t.k}</span></button>`).join('');
+  $('#unitPills').innerHTML = UNITS.map(u =>
+    `<button class="pill ${showUnits.has(u.k)?'on':''}" onclick="toggleUnit('${u.k}')">${u.th} <span style="opacity:.6">${u.k}</span></button>`).join('');
+  $('#tierHint').textContent = `แสดง ${showTiers.size} ระดับราคา × ${showUnits.size} หน่วย`;
+}
+function toggleTier(k){
+  if (showTiers.has(k)){ if (showTiers.size === 1){ showToast('ต้องเลือกอย่างน้อย 1 ระดับราคา','warning'); return; } showTiers.delete(k); }
+  else showTiers.add(k);
+  saveCfg(); renderPills(); renderAdjust();
+}
+function toggleUnit(k){
+  if (showUnits.has(k)){ if (showUnits.size === 1){ showToast('ต้องเลือกอย่างน้อย 1 หน่วย','warning'); return; } showUnits.delete(k); }
+  else showUnits.add(k);
+  saveCfg(); renderPills(); renderAdjust();
+}
+function saveCfg(){
+  safeSet(STORAGE.cfg, JSON.stringify({ tiers:[...showTiers], units:[...showUnits] }));
+}
+const editKey = (key, u, t) => key + '|' + u + '|' + t;
+const rowKey  = (key, u)    => key + '|' + u;
+
+/* สร้างรายการแถว = สินค้าที่เลือก × หน่วยที่แสดง */
+function buildRows(){
+  const hidePriceless = $('#chkHidePriceless').checked;
+  const onlyChanged   = $('#chkOnlyChanged').checked;
+  const rows = [];
+  for (const key of selKeys){
+    const p = byKey.get(key);
+    if (!p) continue;
+    for (const un of UNITS){
+      if (!showUnits.has(un.k)) continue;
+      const hasAnyOld = TIERS.some(t => showTiers.has(t.k) && (p.p[t.k]||{})[un.k]);
+      const hasCode   = !!p.c[un.k];
+      const hasUnit   = !!p.u[un.k];
+      if (!hasAnyOld && !hasCode && !hasUnit) continue;         // หน่วยนี้ไม่มีอยู่จริง
+      if (hidePriceless && !hasAnyOld) continue;
+      const changed = TIERS.some(t => showTiers.has(t.k) && edits[editKey(key, un.k, t.k)] !== undefined);
+      if (onlyChanged && !changed) continue;
+      rows.push({ p, u: un.k, key, changed });
+    }
+  }
+  return rows;
+}
+function renderAdjust(){
+  renderPills();
+  adjRows = buildRows();
+  const tiers = TIERS.filter(t => showTiers.has(t.k));
+
+  /* หัวตาราง 2 ชั้น */
+  $('#adjHead').innerHTML = `
+    <tr>
+      <th rowspan="2" style="width:34px"></th>
+      <th rowspan="2" class="sticky sortable" data-key="name" data-type="str">สินค้า <span class="sort-ind"></span></th>
+      <th rowspan="2" class="sortable" data-key="code" data-type="str">บาร์โค้ด <span class="sort-ind"></span></th>
+      <th rowspan="2" class="sortable" data-key="unit" data-type="str">หน่วยนับ <span class="sort-ind"></span></th>
+      ${tiers.map(t => `<th colspan="3" class="tier-head">${t.th} <span style="opacity:.6">${t.k}</span></th>`).join('')}
+    </tr>
+    <tr>
+      ${tiers.map(t => `
+        <th class="tcell-first" style="text-align:right">เดิม</th>
+        <th style="text-align:right">ใหม่</th>
+        <th class="sortable" data-key="pct:${t.k}" data-type="num" style="text-align:right">% <span class="sort-ind"></span></th>`).join('')}
+    </tr>`;
+
+  sortRows();
+  const body = $('#adjBody');
+  if (!adjRows.length){
+    body.innerHTML = `<tr class="empty-row"><td colspan="${4 + tiers.length*3}">
+      ${selKeys.length ? 'ไม่มีแถวที่ตรงเงื่อนไข — ลองปิด "ซ่อนแถวที่ไม่มีราคาเดิม" หรือเปิดหน่วยเพิ่ม' : 'ยังไม่ได้เลือกสินค้า — ไปที่แท็บ "1 · เลือกสินค้า" ก่อน'}
+    </td></tr>`;
+    $('#btnMoreRows').style.display = 'none';
+    $('#rowCntHint').textContent = '0 แถว';
+    updateSortIndicators('adjTbl', sortSel);
+    return;
+  }
+  const show = adjRows.slice(0, rowLimit);
+  body.innerHTML = show.map(r => rowHtml(r, tiers)).join('');
+  $('#btnMoreRows').style.display = adjRows.length > rowLimit ? 'inline-flex' : 'none';
+  $('#rowCntHint').textContent = `${fmtInt(adjRows.length)} แถว · ติ๊กไว้ ${fmtInt(checkedRows.size)}`;
+  updateSortIndicators('adjTbl', sortSel);
+  bindHeaderSort('adjTbl', sortSel, () => { rowLimit = 100; renderAdjust(); });
+  renderCounts();
+}
+function rowHtml(r, tiers){
+  const p = r.p, k = r.key, u = r.u;
+  const rk = rowKey(k, u);
+  const cells = tiers.map((t, i) => {
+    const old = (p.p[t.k]||{})[u] || 0;
+    const ek  = editKey(k, u, t.k);
+    const nw  = edits[ek];
+    const has = nw !== undefined;
+    const pct = (has && old) ? (nw - old) / old * 100 : null;
+    return `
+      <td class="num ${i===0?'tcell-first':''}">${old ? fmtPrice(old) : '<span class="psub">–</span>'}</td>
+      <td class="num"><input class="in-price ${has?'set':''}" type="number" step="0.01" inputmode="decimal"
+            data-k="${esc(k)}" data-u="${u}" data-t="${t.k}" value="${has ? nw : ''}"
+            placeholder="${old ? fmtPrice(old) : '-'}" oninput="onPriceInput(this)"></td>
+      <td class="num"><input class="in-pct ${pct>0?'up':pct<0?'down':''}" type="number" step="0.01" inputmode="decimal"
+            data-k="${esc(k)}" data-u="${u}" data-t="${t.k}" value="${pct===null?'':Math.round(pct*100)/100}"
+            placeholder="%" ${old?'':'disabled'} oninput="onPctInput(this)"></td>`;
+  }).join('');
+  return `<tr class="${r.changed?'changed':''}" data-rk="${esc(rk)}">
+    <td style="text-align:center"><input type="checkbox" class="rowchk" style="width:16px;height:16px;accent-color:var(--gold)"
+        data-rk="${esc(rk)}" ${checkedRows.has(rk)?'checked':''} onchange="onRowCheck(this)"></td>
+    <td class="sticky"><span class="pname">${esc(p.n)}</span>${p.g?`<span class="psub">${esc(p.g)}</span>`:''}</td>
+    <td class="code">${p.c[u] ? esc(p.c[u]) : '<span class="psub">–</span>'}</td>
+    <td><span class="psub">${esc(unitLabel(p, u))}</span></td>
+    ${cells}</tr>`;
+}
+function showMoreRows(){ rowLimit += 100; renderAdjust(); }
+function onRowCheck(el){
+  const rk = el.dataset.rk;
+  if (el.checked) checkedRows.add(rk); else checkedRows.delete(rk);
+  $('#rowCntHint').textContent = `${fmtInt(adjRows.length)} แถว · ติ๊กไว้ ${fmtInt(checkedRows.size)}`;
+}
+function toggleAllRows(on){
+  checkedRows = new Set();
+  if (on) for (const r of adjRows) checkedRows.add(rowKey(r.key, r.u));
+  $$('#adjBody .rowchk').forEach(c => c.checked = on);
+  $('#rowCntHint').textContent = `${fmtInt(adjRows.length)} แถว · ติ๊กไว้ ${fmtInt(checkedRows.size)}`;
+}
+
+/* ── แก้ราคาทีละช่อง ── */
+function setEdit(key, u, t, val){
+  const ek = editKey(key, u, t);
+  if (val === null || val === undefined || val === '' || !isFinite(val)) delete edits[ek];
+  else edits[ek] = Math.round(Number(val) * 10000) / 10000;
+  scheduleSaveEdits();
+}
+function onPriceInput(el){
+  const { k, u, t } = el.dataset;
+  const p = byKey.get(k); if (!p) return;
+  const old = (p.p[t]||{})[u] || 0;
+  const raw = el.value.trim();
+  if (raw === ''){ setEdit(k, u, t, null); el.classList.remove('set'); syncPctCell(k, u, t, null); markRow(k, u); return; }
+  const nw = Number(raw);
+  if (!isFinite(nw)) return;
+  setEdit(k, u, t, nw);
+  el.classList.add('set');
+  syncPctCell(k, u, t, old ? (nw - old) / old * 100 : null);
+  markRow(k, u);
+  renderCounts();
+}
+function onPctInput(el){
+  const { k, u, t } = el.dataset;
+  const p = byKey.get(k); if (!p) return;
+  const old = (p.p[t]||{})[u] || 0;
+  const raw = el.value.trim();
+  const priceEl = document.querySelector(`.in-price[data-k="${cssEsc(k)}"][data-u="${u}"][data-t="${t}"]`);
+  if (raw === '' || !old){ setEdit(k, u, t, null); if (priceEl){ priceEl.value = ''; priceEl.classList.remove('set'); } markRow(k, u); renderCounts(); return; }
+  const pct = Number(raw);
+  if (!isFinite(pct)) return;
+  const nw = roundBy(old * (1 + pct/100), $('#bulkRound').value);
+  setEdit(k, u, t, nw);
+  if (priceEl){ priceEl.value = nw; priceEl.classList.add('set'); }
+  el.classList.toggle('up', pct > 0); el.classList.toggle('down', pct < 0);
+  markRow(k, u);
+  renderCounts();
+}
+const cssEsc = s => String(s).replace(/["\\]/g, '\\$&');
+function syncPctCell(k, u, t, pct){
+  const el = document.querySelector(`.in-pct[data-k="${cssEsc(k)}"][data-u="${u}"][data-t="${t}"]`);
+  if (!el) return;
+  el.value = (pct === null || !isFinite(pct)) ? '' : Math.round(pct * 100) / 100;
+  el.classList.toggle('up', pct > 0); el.classList.toggle('down', pct < 0);
+}
+function markRow(k, u){
+  const tr = document.querySelector(`#adjBody tr[data-rk="${cssEsc(rowKey(k,u))}"]`);
+  if (!tr) return;
+  const changed = TIERS.some(t => showTiers.has(t.k) && edits[editKey(k, u, t.k)] !== undefined);
+  tr.classList.toggle('changed', changed);
+}
+function scheduleSaveEdits(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => safeSet(STORAGE.edits, JSON.stringify(edits)), 400);
+}
+function clearAllEdits(){
+  if (!Object.keys(edits).length){ showToast('ยังไม่มีราคาที่ปรับ', 'info'); return; }
+  if (!confirm(`ล้างราคาที่ปรับทั้งหมด ${fmtInt(Object.keys(edits).length)} รายการ?`)) return;
+  edits = {}; safeSet(STORAGE.edits, JSON.stringify(edits));
+  renderAdjust(); renderExport();
+  showToast('ล้างราคาที่ปรับแล้ว', 'success');
+}
+
+/* ── ปัดเศษ ── */
+function roundBy(v, mode){
+  if (!isFinite(v)) return 0;
+  if (v < 0) v = 0;
+  switch(mode){
+    case 'int': return Math.round(v);
+    case 'up' : return Math.ceil(v);
+    case 'h'  : return Math.round(v * 2) / 2;
+    case 'q'  : return Math.round(v * 4) / 4;
+    case 'f5' : return Math.round(v / 5) * 5;
+    case 'e9' : { const t = Math.round(v / 10) * 10; return Math.max(9, t - 1); }
+    default   : return Math.round(v * 100) / 100;
+  }
+}
+
+/* ── ปรับหลายรายการพร้อมกัน ── */
+$('#bulkMode') && $('#bulkMode').addEventListener('change', function(){
+  const L = { pct:'ค่า (%) — ใส่ลบเพื่อลดราคา', amt:'จำนวนเงิน (บาท) — ใส่ลบเพื่อลด', set:'ราคาใหม่ (บาท)', clear:'ไม่ต้องใส่ค่า' };
+  $('#bulkValLabel').textContent = L[this.value];
+  $('#bulkVal').disabled = this.value === 'clear';
+});
+function applyBulk(){
+  const mode  = $('#bulkMode').value;
+  const scope = $('#bulkScope').value;
+  const round = $('#bulkRound').value;
+  const val   = Number($('#bulkVal').value);
+  if (mode !== 'clear' && !isFinite(val)){ showToast('ใส่ค่าที่ต้องการปรับก่อน', 'warning'); return; }
+  if (mode === 'set' && val <= 0){ showToast('ราคาใหม่ต้องมากกว่า 0', 'warning'); return; }
+
+  const tiers = TIERS.filter(t => showTiers.has(t.k)).map(t => t.k);
+  let target = adjRows;
+  if (scope === 'checked'){
+    target = adjRows.filter(r => checkedRows.has(rowKey(r.key, r.u)));
+    if (!target.length){ showToast('ยังไม่ได้ติ๊กแถวไหนเลย', 'warning'); return; }
+  }
+  let n = 0;
+  for (const r of target){
+    for (const tk of tiers){
+      const ek  = editKey(r.key, r.u, tk);
+      const old = (r.p.p[tk]||{})[r.u] || 0;
+      if (scope === 'empty' && edits[ek] !== undefined) continue;
+      if (mode === 'clear'){ if (edits[ek] !== undefined){ delete edits[ek]; n++; } continue; }
+      let nw;
+      if (mode === 'set') nw = val;
+      else {
+        if (!old) continue;                                  // ไม่มีราคาเดิม → คำนวณ % / บวกลบไม่ได้
+        nw = mode === 'pct' ? old * (1 + val/100) : old + val;
+      }
+      nw = roundBy(nw, round);
+      if (nw <= 0) continue;
+      edits[ek] = nw; n++;
+    }
+  }
+  safeSet(STORAGE.edits, JSON.stringify(edits));
+  rowLimit = Math.max(rowLimit, 100);
+  renderAdjust(); renderExport();
+  showToast(mode === 'clear' ? `ล้าง ${fmtInt(n)} ราคา` : `ปรับราคา ${fmtInt(n)} รายการแล้ว ✓`, 'success');
+}
+
+/* ══════════ SORT (ใช้ร่วมกัน 2 ตาราง) ══════════ */
+function sortRows(){
+  const { key, dir } = sortSel;
+  const m = dir === 'asc' ? 1 : -1;
+  const pctOf = (r, tk) => {
+    const old = (r.p.p[tk]||{})[r.u] || 0;
+    const nw  = edits[editKey(r.key, r.u, tk)];
+    return (nw === undefined || !old) ? null : (nw - old) / old * 100;
+  };
+  adjRows.sort((a,b) => {
+    if (key.startsWith('pct:')){
+      const tk = key.slice(4);
+      const va = pctOf(a, tk), vb = pctOf(b, tk);
+      if (va === null && vb === null) return a.p.n.localeCompare(b.p.n,'th');
+      if (va === null) return 1;
+      if (vb === null) return -1;
+      return (va - vb) * m;
+    }
+    if (key === 'code') return String(a.p.c[a.u]||'').localeCompare(String(b.p.c[b.u]||'')) * m;
+    if (key === 'unit') return (UNITS.findIndex(u=>u.k===a.u) - UNITS.findIndex(u=>u.k===b.u)) * m
+                            || a.p.n.localeCompare(b.p.n,'th');
+    return a.p.n.localeCompare(b.p.n,'th') * m;
+  });
+}
+function updateSortIndicators(tableId, state){
+  $$('#' + tableId + ' thead th').forEach(th => {
+    const ind = th.querySelector('.sort-ind');
+    if (!ind) return;
+    ind.textContent = th.dataset.key === state.key ? (state.dir === 'asc' ? '▲' : '▼') : '';
+  });
+}
+function bindHeaderSort(tableId, state, rerender){
+  $$('#' + tableId + ' thead th.sortable').forEach(th => {
+    if (th._bound) return;
+    th._bound = true;
+    th.addEventListener('click', () => {
+      const key = th.dataset.key, type = th.dataset.type || 'str';
+      if (state.key === key) state.dir = state.dir === 'asc' ? 'desc' : 'asc';
+      else { state.key = key; state.dir = (type === 'num') ? 'desc' : 'asc'; }
+      rerender();
+    });
+  });
+}
+
+/* ══════════ TAB 3 : สรุป & ส่งออก ══════════ */
+/* รวมรายการที่ปรับแล้วทั้งหมด (ไม่สนตัวกรองในแท็บ 2 — ส่งออกครบเสมอ) */
+function buildExportRows(){
+  const out = [];
+  for (const ek in edits){
+    const i1 = ek.lastIndexOf('|'), i2 = ek.lastIndexOf('|', i1 - 1);
+    const key = ek.slice(0, i2), u = ek.slice(i2 + 1, i1), tk = ek.slice(i1 + 1);
+    const p = byKey.get(key);
+    if (!p) continue;
+    const tier = TIERS.find(t => t.k === tk); if (!tier) continue;
+    const old = (p.p[tk]||{})[u] || 0;
+    const nw  = edits[ek];
+    if (nw === undefined || nw === null) continue;
+    if (old && Math.abs(nw - old) < 0.0001) continue;              // ราคาไม่เปลี่ยน → ไม่ต้องส่งออก
+    out.push({
+      name: p.n, cat: p.g || '', code: p.c[u] || '', unitK: u,
+      unit: unitLabel(p, u), unitRaw: p.u[u] || '',
+      tierK: tk, tier: tier.th, old, new: nw,
+      diff: old ? Math.round((nw - old) * 10000)/10000 : null,
+      pct : old ? (nw - old) / old * 100 : null,
+    });
+  }
+  const m = exSort.dir === 'asc' ? 1 : -1;
+  const K = exSort.key;
+  out.sort((a,b) => {
+    if (['old','new','diff','pct'].includes(K)){
+      const va = a[K], vb = b[K];
+      if (va === null && vb === null) return 0;
+      if (va === null) return 1;
+      if (vb === null) return -1;
+      return (va - vb) * m;
+    }
+    if (K === 'unit') return (UNITS.findIndex(u=>u.k===a.unitK) - UNITS.findIndex(u=>u.k===b.unitK)) * m;
+    if (K === 'tier') return (TIERS.findIndex(t=>t.k===a.tierK) - TIERS.findIndex(t=>t.k===b.tierK)) * m;
+    return String(a[K]||'').localeCompare(String(b[K]||''),'th') * m;
+  });
+  return out;
+}
+function renderExport(){
+  const rows = buildExportRows();
+  const ups   = rows.filter(r => r.pct !== null && r.pct > 0);
+  const downs = rows.filter(r => r.pct !== null && r.pct < 0);
+  const withPct = rows.filter(r => r.pct !== null);
+  const avg = arr => arr.length ? arr.reduce((s,r) => s + r.pct, 0) / arr.length : 0;
+
+  $('#exCount').textContent = fmtInt(rows.length);
+  $('#exCountSub').textContent = `${fmtInt(new Set(rows.map(r=>r.name)).size)} สินค้า`;
+  $('#exUp').textContent   = fmtInt(ups.length);
+  $('#exUpAvg').textContent = 'เฉลี่ย ' + fmtPct(avg(ups));
+  $('#exDown').textContent = fmtInt(downs.length);
+  $('#exDownAvg').textContent = 'เฉลี่ย ' + fmtPct(avg(downs));
+  $('#exAvg').textContent  = fmtPct(avg(withPct));
+  $('#exPreviewHint').textContent = `${fmtInt(rows.length)} บรรทัด`;
+
+  const body = $('#exBody');
+  if (!rows.length){
+    body.innerHTML = '<tr class="empty-row"><td colspan="8">ยังไม่มีราคาที่ปรับ — กลับไปที่แท็บ "2 · ปรับราคา"</td></tr>';
+  } else {
+    body.innerHTML = rows.slice(0, 400).map(r => `<tr>
+      <td class="sticky"><span class="pname">${esc(r.name)}</span>${r.cat?`<span class="psub">${esc(r.cat)}</span>`:''}</td>
+      <td class="code">${r.code ? esc(r.code) : '<span class="psub">–</span>'}</td>
+      <td><span class="psub">${esc(r.unit)}</span></td>
+      <td>${esc(r.tier)} <span class="psub">${r.tierK}</span></td>
+      <td class="num">${r.old ? fmtPrice(r.old) : '<span class="psub">ใหม่</span>'}</td>
+      <td class="num">${fmtPrice(r.new)}</td>
+      <td class="num ${r.diff>0?'pct-up':r.diff<0?'pct-down':''}">${r.diff===null?'-':(r.diff>0?'+':'')+fmtPrice(r.diff)}</td>
+      <td class="num ${r.pct>0?'pct-up':r.pct<0?'pct-down':''}">${fmtPct(r.pct)}</td>
+    </tr>`).join('')
+    + (rows.length > 400 ? `<tr><td colspan="8" class="hint" style="text-align:center;padding:10px">แสดง 400 บรรทัดแรก — ไฟล์ที่ส่งออกจะมีครบ ${fmtInt(rows.length)} บรรทัด</td></tr>` : '');
+  }
+  updateSortIndicators('exTbl', exSort);
+  bindHeaderSort('exTbl', exSort, renderExport);
+}
+
+/* ── ข้อมูลเอกสาร ── */
+function docInfo(){
+  return {
+    no  : $('#docNo').value.trim(),
+    date: $('#docDate').value,
+    by  : $('#docBy').value,
+    note: $('#docNote').value.trim(),
+  };
+}
+function saveDoc(){ safeSet(STORAGE.doc, JSON.stringify({ no:$('#docNo').value, date:$('#docDate').value, note:$('#docNote').value })); }
+function initDoc(){
+  const d = new Date();
+  const ymd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(STORAGE.doc) || '{}'); } catch(e){}
+  $('#docNo').value   = saved.no   || 'PU-' + ymd.replace(/-/g,'');
+  $('#docDate').value = saved.date || ymd;
+  $('#docNote').value = saved.note || '';
+  ['docNo','docDate','docNote'].forEach(id => $('#'+id).addEventListener('change', saveDoc));
+}
+
+/* ── ตารางสำหรับส่งออก (array of array) ── */
+const EX_HEADERS = ['ลำดับ','ชื่อสินค้า','หมวดสินค้า','บาร์โค้ด','หน่วยนับ','หน่วยในชีท','ระดับราคา','รหัสระดับ','ราคาเดิม','ราคาใหม่','ส่วนต่าง','% ปรับ'];
+function buildAoa(){
+  const rows = buildExportRows();
+  const d = docInfo();
+  const meta = [
+    ['ใบปรับราคาสินค้า — Rattana Price Update ' + APP_VERSION],
+    ['เลขที่เอกสาร', d.no, '', 'วันที่มีผล', d.date ? formatThaiDate(d.date) : '-'],
+    ['ผู้จัดทำ', d.by, '', 'พิมพ์เมื่อ', formatThaiDate(new Date()) + ' ' + formatThaiTime(new Date()) + ' น.'],
+    ['หมายเหตุ', d.note || '-'],
+    [],
+  ];
+  const body = rows.map((r,i) => [
+    i+1, r.name, r.cat, r.code ? "'" + r.code : '', r.unit, r.unitRaw, r.tier, r.tierK,
+    r.old || '', r.new, r.diff === null ? '' : r.diff,
+    r.pct === null ? '' : Math.round(r.pct*100)/100,
+  ]);
+  return { aoa: meta.concat([EX_HEADERS], body), rows };
+}
+function exportExcel(){
+  const { aoa, rows } = buildAoa();
+  if (!rows.length){ showToast('ยังไม่มีราคาที่ปรับ', 'warning'); return; }
+  /* บาร์โค้ดต้องเป็น text — ตัด ' ที่ใส่ไว้ออกแล้วบังคับชนิดเป็น string */
+  const clean = aoa.map(r => r.map(c => (typeof c === 'string' && c.startsWith("'")) ? c.slice(1) : c));
+  const ws = XLSX.utils.aoa_to_sheet(clean);
+  const headRow = 5;                                    // แถวหัวตาราง (0-based) = 5
+  for (let i = 0; i < rows.length; i++){
+    const addr = XLSX.utils.encode_cell({ r: headRow + 1 + i, c: 3 });
+    if (ws[addr]){ ws[addr].t = 's'; ws[addr].z = '@'; }
+  }
+  ws['!cols'] = [{wch:6},{wch:42},{wch:18},{wch:16},{wch:18},{wch:14},{wch:14},{wch:9},{wch:11},{wch:11},{wch:10},{wch:9}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'ปรับราคา');
+  XLSX.writeFile(wb, `Rattana-Price-Update-${docInfo().no || 'doc'}.xlsx`);
+  showToast(`ส่งออก Excel ${fmtInt(rows.length)} บรรทัดแล้ว ✓`, 'success');
+}
+function exportCsv(){
+  const { aoa, rows } = buildAoa();
+  if (!rows.length){ showToast('ยังไม่มีราคาที่ปรับ', 'warning'); return; }
+  const q = v => { const s = String(v==null?'':v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s; };
+  const csv = '\uFEFF' + aoa.map(r => r.map(q).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `Rattana-Price-Update-${docInfo().no || 'doc'}.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
+  showToast('ส่งออก CSV แล้ว ✓', 'success');
+}
+async function copyTable(){
+  const rows = buildExportRows();
+  if (!rows.length){ showToast('ยังไม่มีราคาที่ปรับ', 'warning'); return; }
+  const tsv = [EX_HEADERS.join('\t')].concat(rows.map((r,i) => [
+    i+1, r.name, r.cat, r.code, r.unit, r.unitRaw, r.tier, r.tierK,
+    r.old || '', r.new, r.diff === null ? '' : r.diff, r.pct === null ? '' : Math.round(r.pct*100)/100,
+  ].join('\t'))).join('\n');
+  try {
+    await navigator.clipboard.writeText(tsv);
+    showToast(`คัดลอก ${fmtInt(rows.length)} บรรทัดแล้ว — วางลง Google Sheet ได้เลย ✓`, 'success');
+  } catch(e){
+    const ta = document.createElement('textarea');
+    ta.value = tsv; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove();
+    showToast('คัดลอกแล้ว ✓', 'success');
+  }
+}
+function printDoc(){
+  const rows = buildExportRows();
+  if (!rows.length){ showToast('ยังไม่มีราคาที่ปรับ', 'warning'); return; }
+  const d = docInfo();
+  $('#printArea').innerHTML = `
+    <h2>ใบปรับราคาสินค้า — บริษัท รัตนไพบูลย์</h2>
+    <div class="pmeta">
+      เลขที่ <b>${esc(d.no||'-')}</b> · วันที่มีผล <b>${d.date ? formatThaiDate(d.date) : '-'}</b> ·
+      ผู้จัดทำ <b>${esc(d.by||'-')}</b> · พิมพ์ ${formatThaiDate(new Date())} ${formatThaiTime(new Date())} น.
+      ${d.note ? '<br>หมายเหตุ: ' + esc(d.note) : ''}
+      <br>รวม <b>${fmtInt(rows.length)}</b> รายการราคา (${fmtInt(new Set(rows.map(r=>r.name)).size)} สินค้า)
+    </div>
+    <table><thead><tr>
+      <th>#</th><th>ชื่อสินค้า</th><th>บาร์โค้ด</th><th>หน่วยนับ</th><th>ระดับราคา</th>
+      <th>ราคาเดิม</th><th>ราคาใหม่</th><th>ส่วนต่าง</th><th>% ปรับ</th>
+    </tr></thead><tbody>
+      ${rows.map((r,i) => `<tr>
+        <td class="n">${i+1}</td><td>${esc(r.name)}</td><td>${esc(r.code||'-')}</td>
+        <td>${esc(r.unit)}</td><td>${esc(r.tier)} (${r.tierK})</td>
+        <td class="n">${r.old?fmtPrice(r.old):'-'}</td><td class="n">${fmtPrice(r.new)}</td>
+        <td class="n">${r.diff===null?'-':(r.diff>0?'+':'')+fmtPrice(r.diff)}</td>
+        <td class="n">${fmtPct(r.pct)}</td></tr>`).join('')}
+    </tbody></table>`;
+  window.print();
+}
+
+/* ══════════ TABS / UI ══════════ */
+function switchTab(name){
+  $$('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  $$('.tabpane').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
+  if (name === 'adjust') renderAdjust();
+  if (name === 'export') renderExport();
+  window.scrollTo({ top:0, behavior:'smooth' });
+}
+function toggleDark(){
+  document.body.classList.toggle('dark');
+  safeSet(STORAGE.dark, document.body.classList.contains('dark') ? '1' : '0');
+}
+window.addEventListener('scroll', () => {
+  const b = $('#backToTop'); if (b) b.classList.toggle('show', window.scrollY > 300);
+});
+$$('.modal-overlay').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); }));
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $$('.modal-overlay').forEach(m => m.classList.remove('open')); });
+
+/* ══════════ BOOT ══════════ */
+function restoreState(){
+  try { const s = JSON.parse(localStorage.getItem(STORAGE.sel) || '[]'); if (Array.isArray(s)){ selKeys = s; selSet = new Set(s); } } catch(e){}
+  try { const e2 = JSON.parse(localStorage.getItem(STORAGE.edits) || '{}'); if (e2 && typeof e2 === 'object') edits = e2; } catch(e){}
+  try {
+    const c = JSON.parse(localStorage.getItem(STORAGE.cfg) || 'null');
+    if (c){
+      if (Array.isArray(c.tiers) && c.tiers.length) showTiers = new Set(c.tiers.filter(k => TIERS.some(t => t.k === k)));
+      if (Array.isArray(c.units) && c.units.length) showUnits = new Set(c.units.filter(k => UNITS.some(u => u.k === k)));
+    }
+  } catch(e){}
+  if (localStorage.getItem(STORAGE.dark) === '1') document.body.classList.add('dark');
+}
+async function initApp(){
+  $('#verChip').textContent = APP_VERSION;
+  document.title = 'Rattana Price Update ' + APP_VERSION;
+  restoreState();
+  initDoc();
+  renderPills();
+  renderCounts();
+  $('#qSearch').addEventListener('input', debounce(applyFilter, 220));
+  await loadData(false);
+  renderExport();
+}
+function debounce(fn, ms){ let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+
+window.onload = checkSession;
+</script>
+</body>
+</html>
