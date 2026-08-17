@@ -1208,11 +1208,31 @@ bindCfg('#cPrice','cPrice'); bindCfg('#cPriceTx','cPriceTx');
 bindCfg('#cutWhite','cutWhite','change'); bindCfg('#showUnitLabel','showUnitLabel','change');
 bindCfg('#showLogo','showLogo','change');
 
+/* ย่อรูปพื้นหลังที่อัพโหลดให้กว้างไม่เกิน 1600px ก่อนเก็บ
+   (ไฟล์กล้อง 4-6 MB จะเก็บลง localStorage ไม่ได้ และทำให้พรีวิวหน่วง) */
+function shrinkImage(dataUrl, maxW = 1600){
+  return new Promise(resolve => {
+    const im = new Image();
+    im.onload = () => {
+      if (im.naturalWidth <= maxW) return resolve(dataUrl);
+      const c = document.createElement('canvas');
+      c.width = maxW;
+      c.height = Math.round(im.naturalHeight * maxW / im.naturalWidth);
+      c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+      try { resolve(c.toDataURL('image/jpeg', 0.88)); } catch(e){ resolve(dataUrl); }
+    };
+    im.onerror = () => resolve(dataUrl);
+    im.src = dataUrl;
+  });
+}
 $('#bgFile').addEventListener('change', e => {
   const f = e.target.files && e.target.files[0]; if (!f) return;
-  if (f.size > 6 * 1024 * 1024){ showToast('ไฟล์ใหญ่เกิน 6 MB — ย่อรูปก่อนนะครับ', 'warning'); return; }
+  if (f.size > 12 * 1024 * 1024){ showToast('ไฟล์ใหญ่เกิน 12 MB — ย่อรูปก่อนนะครับ', 'warning'); return; }
   const fr = new FileReader();
-  fr.onload = () => { cfg.bgImg = fr.result; saveCfg(); buildPreview(); showToast('ตั้งรูปพื้นหลังแล้ว ✓', 'success'); };
+  fr.onload = async () => {
+    cfg.bgImg = await shrinkImage(fr.result);
+    saveCfg(); buildPreview(); showToast('ตั้งรูปพื้นหลังแล้ว ✓', 'success');
+  };
   fr.readAsDataURL(f);
 });
 $('#bgApplyUrl').addEventListener('click', () => {
