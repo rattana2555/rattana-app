@@ -579,7 +579,7 @@ async function fetchProducts(){
     const i = head.findIndex(h => HEAD[key].some(w => h === w));
     return i >= 0 ? i : order.indexOf(key);
   };
-  const iName = at('name'), iImg = at('img');
+  const iName = at('name'), iImg = at('img'), iCat = at('cat');
   const iU = { EA:at('EA'), PA:at('PA'), BP:at('BP'), CS:at('CS') };
 
   const list = [];
@@ -593,9 +593,21 @@ async function fetchProducts(){
     for (const u of UNITS){ const v = toPrice(row[iU[u]]); if (v){ p[u] = v; has = true; } }
     const img = fixImageUrl(cleanCell(row[iImg]));
     if (!has && !img) continue;                                 // ไม่มีทั้งราคาและรูป → ข้าม
-    list.push({ n:name, img, p });
+    let cat = cleanCell(row[iCat]);
+    if (NO_CAT.test(cat)) cat = '';
+    list.push({ n:name, img, p, c:cat });
   }
   return list;
+}
+
+/* รวมรายชื่อหมวด + จำนวนสินค้าในแต่ละหมวด (นับจากที่โหลดมาจริง) */
+function buildCatOptions(){
+  const m = new Map();
+  for (const p of products) if (p.c) m.set(p.c, (m.get(p.c) || 0) + 1);
+  catOptions = Array.from(m, ([name, count]) => ({ name, count }))
+                    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'th'));
+  if (catFilter && !m.has(catFilter)) catFilter = '';           // หมวดที่เคยเลือกหายไปจากชีท
+  renderCatList();
 }
 
 function indexProducts(){
