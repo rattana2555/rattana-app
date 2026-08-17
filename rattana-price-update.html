@@ -1458,7 +1458,13 @@ function initDoc(){
 
 /* ── ตารางสำหรับส่งออก (array of array) ── */
 const EX_HEADERS = ['ลำดับ','ชื่อสินค้า','หมวดสินค้า','บาร์โค้ด','หน่วยนับ','หน่วยในชีท','ระดับราคา','รหัสระดับ','ราคาเดิม','ราคาใหม่','ส่วนต่าง','% ปรับ'];
-function buildAoa(){
+const HEAD_ROW = 5;                                     // แถวหัวตาราง (0-based) ใน aoa
+
+/* บาร์โค้ดมีเลข 0 นำหน้าจริง (เช่น 005012000082) — ถ้าปล่อยเป็นตัวเลข Excel/Sheet จะกิน 0 ทิ้ง
+   xlsx เก็บเป็น cell ชนิด string ได้เลย แต่ CSV / คลิปบอร์ดต้องใช้รูปแบบ ="..." บังคับเป็นข้อความ */
+const codeCell = (code, mode) => !code ? '' : (mode === 'xlsx' ? code : '="' + code + '"');
+
+function buildAoa(mode){
   const rows = buildExportRows();
   const d = docInfo();
   const meta = [
@@ -1469,21 +1475,18 @@ function buildAoa(){
     [],
   ];
   const body = rows.map((r,i) => [
-    i+1, r.name, r.cat, r.code ? "'" + r.code : '', r.unit, r.unitRaw, r.tier, r.tierK,
+    i+1, r.name, r.cat, codeCell(r.code, mode), r.unit, r.unitRaw, r.tier, r.tierK,
     r.old || '', r.new, r.diff === null ? '' : r.diff,
     r.pct === null ? '' : Math.round(r.pct*100)/100,
   ]);
   return { aoa: meta.concat([EX_HEADERS], body), rows };
 }
 function exportExcel(){
-  const { aoa, rows } = buildAoa();
+  const { aoa, rows } = buildAoa('xlsx');
   if (!rows.length){ showToast('ยังไม่มีราคาที่ปรับ', 'warning'); return; }
-  /* บาร์โค้ดต้องเป็น text — ตัด ' ที่ใส่ไว้ออกแล้วบังคับชนิดเป็น string */
-  const clean = aoa.map(r => r.map(c => (typeof c === 'string' && c.startsWith("'")) ? c.slice(1) : c));
-  const ws = XLSX.utils.aoa_to_sheet(clean);
-  const headRow = 5;                                    // แถวหัวตาราง (0-based) = 5
-  for (let i = 0; i < rows.length; i++){
-    const addr = XLSX.utils.encode_cell({ r: headRow + 1 + i, c: 3 });
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  for (let i = 0; i < rows.length; i++){          // บังคับคอลัมน์บาร์โค้ดเป็นข้อความ
+    const addr = XLSX.utils.encode_cell({ r: HEAD_ROW + 1 + i, c: 3 });
     if (ws[addr]){ ws[addr].t = 's'; ws[addr].z = '@'; }
   }
   ws['!cols'] = [{wch:6},{wch:42},{wch:18},{wch:16},{wch:18},{wch:14},{wch:14},{wch:9},{wch:11},{wch:11},{wch:10},{wch:9}];
