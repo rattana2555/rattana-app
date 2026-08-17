@@ -840,19 +840,67 @@ function buildPreview(){
 
   $$('.promo-canvas [data-el]').forEach(applyL);
   fitStage();
-  if (cfg.cutWhite) bakeVisibleImages();
+  queuePosterImages();
 }
 
-/* รูปจาก Drive โดนจำกัดอัตราบ้าง → ลองใหม่ 2 ครั้งก่อนซ่อน */
-function promoImgRetry(el){
+/* ── การโหลดรูปสินค้าให้ทนทาน ──────────────────────────────────────────────
+   Google Drive จะตอบ 429 (โหลดถี่เกินไป) ถ้ายิงรูปพร้อมกันหลายสิบรูป
+   จึงต้อง (1) ทยอยโหลดทีละไม่กี่รูป  (2) ลองใหม่แบบถอยห่างขึ้นเรื่อย ๆ
+   (3) ถ้ายังไม่ได้ ค่อยเปลี่ยนไปใช้ปลายทางสำรอง drive.google.com/thumbnail */
+const RETRY_WAIT = [0, 700, 1600, 3200, 5000];
+const MAX_TRY = 4;
+function driveIdOf(u){
+  const s = String(u || '');
+  const m = s.match(/googleusercontent\.com\/d\/([\w-]+)/) || s.match(/[?&]id=([\w-]+)/) || s.match(/\/d\/([\w-]+)/);
+  return m ? m[1] : '';
+}
+function imgRetry(el, mode){
   const n = (+el.dataset.try || 0) + 1;
   el.dataset.try = n;
-  if (n > 2){ el.style.visibility = 'hidden'; return; }
-  const src = el.getAttribute('src');
-  if (n === 2) el.removeAttribute('crossorigin');
-  setTimeout(() => { el.setAttribute('src', src.split('#')[0] + '#r' + n); }, 300 * n);
+  if (n > MAX_TRY){
+    el.onerror = null;
+    if (mode === 'grid' && el.parentNode) el.parentNode.innerHTML = '<span class="noimg">โหลดรูปไม่ได้</span>';
+    else el.style.visibility = 'hidden';
+    imgPumpDone(el);
+    return;
+  }
+  const base = el.dataset.src0 || (el.getAttribute('src') || '').split('#')[0];
+  el.dataset.src0 = base;
+  const id = driveIdOf(base);
+  // ลองครั้งที่ 3 เป็นต้นไป → เปลี่ยนไปปลายทางสำรอง (ไม่มี CORS จึงเลิกใช้ crossorigin)
+  let next = base;
+  if (n >= 3 && id){ next = `https://drive.google.com/thumbnail?id=${id}&sz=w600`; el.removeAttribute('crossorigin'); }
+  setTimeout(() => { el.setAttribute('src', next + '#r' + n); }, RETRY_WAIT[n] || 3000);
 }
-window.promoImgRetry = promoImgRetry;
+window.imgRetry = imgRetry;
+
+/* คิวโหลดรูปบนโปสเตอร์ — พร้อมกันไม่เกิน 4 รูป */
+const imgQ = { items: [], active: 0, max: 4 };
+function queuePosterImages(){
+  imgQ.items = [];
+  $$('.promo-canvas img[data-lazy]').forEach(img => imgQ.items.push(img));
+  imgPump();
+}
+function imgPump(){
+  while (imgQ.active < imgQ.max && imgQ.items.length){
+    const img = imgQ.items.shift();
+    const src = img.dataset.lazy;
+    if (!src || !img.isConnected) continue;
+    imgQ.active++;
+    delete img.dataset.lazy;
+    img.addEventListener('load', () => {
+      imgPumpDone(img);
+      if (cfg.cutWhite) bakeOne(img);
+    }, { once:true });
+    img.setAttribute('src', src);
+  }
+}
+function imgPumpDone(img){
+  if (img.dataset.qdone) return;
+  img.dataset.qdone = '1';
+  imgQ.active = Math.max(0, imgQ.active - 1);
+  imgPump();
+}
 
 /* ปรับสเกลให้ภาพพอดีความกว้างจอ */
 function fitStage(){
