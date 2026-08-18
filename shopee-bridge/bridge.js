@@ -335,6 +335,44 @@ function parseLineSend(url, body) {
   };
 }
 
+// ── TikTok / TikTok Shop — โหมดสำรวจ ─────────────────────
+// ยังไม่รู้โครงสร้าง API แชทของ TikTok (ไม่มีเอกสารสาธารณะ)
+// รอบนี้จึงยังไม่แปลงข้อมูล แต่ "ดูให้ก่อน" ว่าหน้าเว็บเรียกอะไรบ้าง
+// แล้วเก็บตัวอย่างที่ใหญ่ที่สุดของแต่ละ path ไว้ให้ก๊อปไปเขียนตัวแปลง
+const IS_TIKTOK = /(^|\.)tiktok\.com$/i.test(location.hostname);
+const TT_PATH   = /\/(im|imapi|message|messages|msg|chat|conversation|conversations|inbox)(\/|\?|$)/i;
+const TT_BODY   = /"(conversation|conv_id|conversation_id|message|msg_id|server_message_id|sender|content|participants)"/i;
+
+let ttSeen = 0;
+function collectTikTok(d) {
+  const raw  = String(d.url || "");
+  const body = String(d.body || "");
+  if (body.length < 40) return;
+
+  let path = raw;
+  try { path = new URL(raw, location.origin).pathname; } catch (_) {}
+
+  // เอาเฉพาะที่หน้าตาเหมือนข้อมูลแชท ไม่งั้น Console ท่วมด้วย telemetry
+  if (!TT_PATH.test(path) && !TT_BODY.test(body.slice(0, 4000))) return;
+
+  if (++ttSeen <= 30) {
+    console.log(`%c${TAG} TikTok [${d.kind}${d.req ? " ขาออก" : ""}] ${path}  (${body.length} ตัวอักษร)`,
+                "background:#000;color:#25F4EE;font-weight:bold;padding:2px 6px");
+    console.log(body.slice(0, 2500));
+  }
+
+  // เก็บตัวอย่างใหญ่สุดของแต่ละ path (สูงสุด 6 path) ไว้ดูในหน้าตั้งค่า
+  chrome.storage.local.get(["ttSamples"], (v) => {
+    const all = v.ttSamples || {};
+    if (all[path] && all[path].size >= body.length) return;
+    all[path] = { size: body.length, body: body.slice(0, 40000), req: !!d.req };
+    const keep = {};
+    Object.keys(all).sort((a, b) => all[b].size - all[a].size).slice(0, 6)
+      .forEach((k) => { keep[k] = all[k]; });
+    chrome.storage.local.set({ ttSamples: keep });
+  });
+}
+
 // ── ส่งขึ้น Chat Hub (รวบยอด ไม่ยิงถี่) ────────────────────
 let queue = [];
 let timer = null;
@@ -365,6 +403,9 @@ const url0 = (u) => { try { return new URL(u, location.origin).pathname; } catch
 window.addEventListener("message", (ev) => {
   const d = ev.data;
   if (!d || d.__rch !== true || !cfg.enabled) return;
+
+  // ── TikTok / TikTok Shop ─────────────────────────────────
+  if (IS_TIKTOK) { collectTikTok(d); return; }
 
   // ── LINE OA Manager ──────────────────────────────────────
   if (/line\.biz/i.test(location.hostname)) {

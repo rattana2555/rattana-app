@@ -16,7 +16,9 @@
   //         จึงจับทุกอย่างไว้ก่อน (content script ทำงานเฉพาะบน line.biz อยู่แล้ว)
   //         แล้วค่อยกรองด้วย NOISE กับตัวแปลงอีกที
   const IS_LINE = /\.line\.biz$/i.test(location.hostname);
-  const WANTED  = IS_LINE
+  const IS_TT   = /(^|\.)tiktok\.com$/i.test(location.hostname);
+  const OPEN    = IS_LINE || IS_TT;              // สองเว็บนี้ใช้ path สั้น ต้องจับทุกอย่างก่อน
+  const WANTED  = OPEN
     ? /^/                                        // ผ่านหมด
     : /seller\.shopee\.[a-z.]+\/webchat\/api\//i;
 
@@ -27,14 +29,14 @@
     if (!body) return;
     if (NOISE.test(url)) return;
     captured++;
-    if (IS_LINE && captured <= 3) console.log(TAG, "hook จับได้:", kind, String(url).slice(0, 90));
+    if (OPEN && captured <= 3) console.log(TAG, "hook จับได้:", kind, String(url).slice(0, 90));
     try {
       window.postMessage({ __rch: true, url, kind, body: String(body).slice(0, 200000) }, "*");
     } catch (_) {}
   }
 
   // บอกทุก 10 วินาทีว่าจับได้กี่รายการ — ใช้ดูว่า hook ทำงานหรือเปล่า
-  if (IS_LINE) setInterval(() => console.log(TAG, "จับได้สะสม", captured, "รายการ"), 10000);
+  if (OPEN) setInterval(() => console.log(TAG, "จับได้สะสม", captured, "รายการ"), 10000);
 
   // ── ดัก "คำขาออก" ด้วย ───────────────────────────────────
   // LINE ไม่มีทางแจ้งกลับมาว่าแอดมินตอบอะไรไปบ้าง (ไม่มี webhook สำหรับข้อความฝั่งร้าน)
@@ -58,7 +60,7 @@
       url    = typeof a0 === "string" ? a0 : a0?.url ?? "";
       method = a1.method ?? a0?.method ?? "GET";
       if (typeof a1.body === "string") reqBody = a1.body;
-      if (IS_LINE && reqBody) reportReq(url, method, reqBody);
+      if (OPEN && reqBody) reportReq(url, method, reqBody);
     } catch (_) {}
 
     const res = await origFetch.apply(this, args);
@@ -80,7 +82,7 @@
 
   XMLHttpRequest.prototype.send = function (...args) {
     try {
-      if (IS_LINE && typeof args[0] === "string") {
+      if (OPEN && typeof args[0] === "string") {
         reportReq(this.__rchUrl || "", this.__rchMethod, args[0]);
       }
     } catch (_) {}
@@ -108,6 +110,6 @@
   ["CONNECTING", "OPEN", "CLOSING", "CLOSED"].forEach((k, i) => { PatchedWS[k] = i; });
   window.WebSocket = PatchedWS;
 
-  console.log(TAG, "hook v4 พร้อม —", location.hostname,
+  console.log(TAG, "hook v5 พร้อม —", location.hostname,
               window.top === window ? "(หน้าหลัก)" : "(เฟรมซ้อน)");
 })();

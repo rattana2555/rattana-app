@@ -10,7 +10,7 @@ chrome.storage.local.get(["secret", "discovery", "enabled", "shopUser"], (v) => 
 
 // แสดงตัวอย่างที่ดักได้ — เก็บ 2 ชุด: รายการแชท กับ ข้อความในแชท
 // เก็บอันที่ใหญ่ที่สุดของแต่ละชุด เพราะอันเล็กมักไม่มีข้อมูลจริง
-chrome.storage.local.get(["sampleChatList", "sampleChatMsgs"], (v) => {
+chrome.storage.local.get(["sampleChatList", "sampleChatMsgs", "ttSamples"], (v) => {
   const parts = [];
   if (v.sampleChatList) parts.push(`===== รายการแชท (${v.sampleChatList.size} ตัวอักษร) =====\n${v.sampleChatList.path}\n${v.sampleChatList.body}`);
   if (v.sampleChatMsgs) parts.push(`===== ข้อความในแชท (${v.sampleChatMsgs.size} ตัวอักษร) =====\n${v.sampleChatMsgs.path}\n${v.sampleChatMsgs.body}`);
@@ -19,7 +19,7 @@ chrome.storage.local.get(["sampleChatList", "sampleChatMsgs"], (v) => {
 
 // ล้างตัวอย่างเก่า เพื่อเริ่มเก็บใหม่
 $("clear").addEventListener("click", () => {
-  chrome.storage.local.remove(["sampleChatList", "sampleChatMsgs", "lastChatSample"], () => {
+  chrome.storage.local.remove(["sampleChatList", "sampleChatMsgs", "lastChatSample", "ttSamples"], () => {
     $("sample").value = "";
     $("ok").style.color = "#2ecc71";
     $("ok").textContent = "ล้างแล้ว — รีเฟรชหน้า LINE เพื่อเก็บใหม่";
