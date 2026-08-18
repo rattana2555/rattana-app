@@ -93,7 +93,9 @@ serve(async (req: Request) => {
       .from("messages")
       .select("id, content, conversation_id")
       .eq("direction", "out")
-      .eq("status", "queued")
+      // failed = ข้อความเก่าที่เคยพยายามส่งผ่าน API (ซึ่ง TikTok ไม่มี) — เอามาส่งใหม่ให้
+      // ถ้าส่วนขยายส่งแล้วยังไม่สำเร็จจะกลายเป็น error แล้วหยุด ไม่วนซ้ำไม่จบ
+      .in("status", ["queued", "failed"])
       .in("conversation_id", [...meta.keys()])
       .order("sent_at", { ascending: true })
       .limit(10);
@@ -116,7 +118,7 @@ serve(async (req: Request) => {
     if (!ids.length) return json({ ok: true, updated: 0 });
     const { error } = await db0
       .from("messages")
-      .update({ status: payload.ok ? "sent" : "failed" })
+      .update({ status: payload.ok ? "sent" : "error" })
       .in("id", ids);
     if (error) return json({ ok: false, error: error.message });
     if (!payload.ok) console.error("ส่ง TikTok ไม่สำเร็จ:", payload.note, ids);
