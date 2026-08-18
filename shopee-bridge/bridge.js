@@ -341,7 +341,19 @@ function parseLineSend(url, body) {
 // แล้วเก็บตัวอย่างที่ใหญ่ที่สุดของแต่ละ path ไว้ให้ก๊อปไปเขียนตัวแปลง
 const IS_TIKTOK = /(^|\.)tiktok\.com$/i.test(location.hostname);
 const TT_PATH   = /\/(im|imapi|message|messages|msg|chat|conversation|conversations|inbox)(\/|\?|$)/i;
-const TT_BODY   = /"(conversation|conv_id|conversation_id|message|msg_id|server_message_id|sender|content|participants)"/i;
+const TT_BODY   = /("(conversation|conv_id|conversation_id|message|msg_id|server_message_id|sender|content|participants)"|conversation_short_id|server_message_id)/i;
+
+// สำมะโน endpoint — สำคัญกว่าตัวอย่าง เพราะถ้าตัวกรองพลาด อย่างน้อยยังรู้ว่ามีอะไรบ้าง
+const ttPaths = new Map();
+if (IS_TIKTOK) {
+  setInterval(() => {
+    if (!ttPaths.size) return;
+    console.log(`%c${TAG} TikTok เจอ ${ttPaths.size} endpoint — ถ้าไม่มีอันไหนหน้าตาเหมือนแชท ส่งตารางนี้ให้ผู้พัฒนา`,
+                "background:#FE2C55;color:#fff;font-weight:bold;padding:2px 6px");
+    console.table([...ttPaths].sort((a, b) => b[1].max - a[1].max).slice(0, 40)
+      .map(([path, v]) => ({ path, ครั้ง: v.n, ใหญ่สุด: v.max, ชนิด: v.kind })));
+  }, 10000);
+}
 
 let ttSeen = 0;
 function collectTikTok(d) {
@@ -352,7 +364,12 @@ function collectTikTok(d) {
   let path = raw;
   try { path = new URL(raw, location.origin).pathname; } catch (_) {}
 
-  // เอาเฉพาะที่หน้าตาเหมือนข้อมูลแชท ไม่งั้น Console ท่วมด้วย telemetry
+  // นับทุก endpoint ไว้ก่อน แม้ยังไม่รู้ว่าอันไหนคือแชท
+  const p0 = ttPaths.get(path) || { n: 0, max: 0, kind: d.kind };
+  p0.n++; p0.max = Math.max(p0.max, body.length); p0.kind = d.kind;
+  ttPaths.set(path, p0);
+
+  // เก็บตัวอย่างเฉพาะที่หน้าตาเหมือนข้อมูลแชท ไม่งั้น Console ท่วมด้วย telemetry
   if (!TT_PATH.test(path) && !TT_BODY.test(body.slice(0, 4000))) return;
 
   if (++ttSeen <= 30) {
