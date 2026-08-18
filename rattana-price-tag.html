@@ -5713,6 +5713,402 @@ function buildFlashPreview() {
   if (typeof updateFlashSizeUI === 'function') updateFlashSizeUI();   // v6.24 — reset slider (nothing selected yet)
 }
 
+/* ═══════════════════════ POSTER MODE (unified ป้ายราคา — v7.0) ═══════════════════════
+   ONE flexible feature replacing layouts 1/2/4/6/12/16. Engine ported from rattana-promo-image:
+   • every aspect ratio (1:1 / 4:5 / 3:4 / 9:16 / 16:9 / A4 ตั้ง / A4 นอน / กำหนดเอง) — A4 exports ×2 ≈300dpi
+   • any count per image (0 = all on one) + auto/1–6 columns → auto-paginates
+   • all priced units EA→PA→BP→CS (blanks skipped)
+   • Canva-style drag/resize on its OWN {x,y,s} layout (data-el) — isolated from the flash canvas
+   • white-bg flood-fill removal · card colour/opacity · optional heading+logo · ▲▼ reorder
+   CSS-var driven: --u (outer, = w/1080) and --cu (in-card). */
+function isPosterMode(){ return SHEET_CONFIG.perPage === 'poster'; }
+
+const POSTER_SIZES = [
+  { k:'1x1',  n:'1:1',       w:1080, h:1080, s:1 },
+  { k:'4x5',  n:'4:5',       w:1080, h:1350, s:1 },
+  { k:'3x4',  n:'3:4',       w:1080, h:1440, s:1 },
+  { k:'9x16', n:'9:16',      w:1080, h:1920, s:1 },
+  { k:'16x9', n:'16:9',      w:1920, h:1080, s:1 },
+  { k:'a4p',  n:'A4 ตั้ง',   w:1240, h:1754, s:2 },
+  { k:'a4l',  n:'A4 นอน',    w:1754, h:1240, s:2 },
+  { k:'cus',  n:'กำหนดเอง',  w:1080, h:1080, s:1 },
+];
+const POSTER_THEMES = [
+  { k:'navy',  n:'น้ำเงิน-ทอง', bg1:'#0d1b3e', bg2:'#1a2f5e', cTitle:'#e8c86a', cSub:'#ffffff', cCard:'#ffffff', cName:'#0d1b3e', cPrice:'#0d1b3e', cPriceTx:'#e8c86a' },
+  { k:'red',   n:'แดง-เหลือง',  bg1:'#b3121b', bg2:'#7d0a10', cTitle:'#ffe14d', cSub:'#ffffff', cCard:'#ffffff', cName:'#7d0a10', cPrice:'#b3121b', cPriceTx:'#ffe14d' },
+  { k:'gold',  n:'ดำ-ทอง',      bg1:'#141414', bg2:'#2b2415', cTitle:'#e8c86a', cSub:'#f2f2f2', cCard:'#ffffff', cName:'#141414', cPrice:'#141414', cPriceTx:'#e8c86a' },
+  { k:'green', n:'เขียวสด',     bg1:'#0e6b3d', bg2:'#0a4a2a', cTitle:'#ffef9e', cSub:'#ffffff', cCard:'#ffffff', cName:'#0a4a2a', cPrice:'#0e6b3d', cPriceTx:'#ffef9e' },
+  { k:'blue',  n:'ฟ้าสดใส',     bg1:'#1266b8', bg2:'#0a3f75', cTitle:'#ffffff', cSub:'#dff0ff', cCard:'#ffffff', cName:'#0a3f75', cPrice:'#1266b8', cPriceTx:'#ffffff' },
+  { k:'pink',  n:'ชมพูหวาน',    bg1:'#d63384', bg2:'#8c1e58', cTitle:'#fff3bf', cSub:'#ffffff', cCard:'#ffffff', cName:'#8c1e58', cPrice:'#d63384', cPriceTx:'#fff3bf' },
+  { k:'white', n:'ขาวมินิมอล',  bg1:'#f4f6fb', bg2:'#dfe5f2', cTitle:'#0d1b3e', cSub:'#3d4c72', cCard:'#ffffff', cName:'#0d1b3e', cPrice:'#0d1b3e', cPriceTx:'#c9a84c' },
+];
+const POSTER_UNIT_ORDER = ['EA','PA','BP','CS'];
+const POSTER_UNAME = { EA:'ชิ้น', PA:'แพ็ค', BP:'แพ็คใหญ่', CS:'ลัง' };
+const POSTER_DEFAULT = {
+  size:'a4p', cw:1080, ch:1080, per:6, cols:0, theme:'navy',
+  bg1:'#0d1b3e', bg2:'#1a2f5e', bgImg:'', dim:25,
+  title:'', sub:'', foot:'',
+  cTitle:'#e8c86a', cSub:'#ffffff',
+  cCard:'#ffffff', cardAlpha:96, cName:'#0d1b3e', cPrice:'#0d1b3e', cPriceTx:'#e8c86a',
+  cutWhite:true, showUnitLabel:true, showLogo:false,
+};
+let posterCfg = { ...POSTER_DEFAULT };
+let posterLayout = {};       // "p:<sku>:<role>" | "h:<pi>:<role>" → {x,y,s}
+let posterOrder = [];        // sku render order (▲▼)
+let posterStageScale = 1;    // preview fit scale
+let posterSelectedEl = null;
+
+function posterRestore(){
+  try { posterCfg = { ...POSTER_DEFAULT, ...JSON.parse(localStorage.getItem('rattanaPriceTag_posterCfg') || '{}') }; } catch { posterCfg = { ...POSTER_DEFAULT }; }
+  posterCfg.bgImg = '';   // bg images are session-only (never persisted → avoid localStorage quota blowout)
+  try { posterLayout = JSON.parse(localStorage.getItem('rattanaPriceTag_posterLayout') || '{}'); } catch { posterLayout = {}; }
+  try { posterOrder = JSON.parse(localStorage.getItem('rattanaPriceTag_posterOrder') || '[]'); } catch { posterOrder = []; }
+}
+function posterSaveCfg(){ const { bgImg, ...rest } = posterCfg; safeSetItem('rattanaPriceTag_posterCfg', JSON.stringify(rest)); }
+function posterSaveLayout(){ safeSetItem('rattanaPriceTag_posterLayout', JSON.stringify(posterLayout)); }
+function posterSaveOrder(){ safeSetItem('rattanaPriceTag_posterOrder', JSON.stringify(posterOrder)); }
+
+function posterCurSize(){
+  const z = POSTER_SIZES.find(s => s.k === posterCfg.size) || POSTER_SIZES[0];
+  if (z.k === 'cus') return { ...z, w: Math.max(200, +posterCfg.cw || 1080), h: Math.max(200, +posterCfg.ch || 1080) };
+  return z;
+}
+function posterAutoCols(n, w, h){ if (n <= 1) return 1; const c = Math.round(Math.sqrt(n * (w / h))); return Math.max(1, Math.min(n, c)); }
+function posterHexToRgba(hex, a){
+  let h = String(hex || '#ffffff').replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  const n = parseInt(h, 16) || 0; const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return `rgba(${r},${g},${b},${Math.max(0, Math.min(1, a))})`;
+}
+function posterElKey(kind, id, role){ return kind + ':' + id + ':' + role; }
+function posterGetL(k){ return posterLayout[k] || { x:0, y:0, s:1 }; }
+function applyPosterEl(el){ const L = posterGetL(el.dataset.el); el.style.transform = `translate(${L.x||0}px,${L.y||0}px) scale(${L.s||1})`; }
+function applyAllPosterEls(){ document.querySelectorAll('#pdfStage .poster-canvas [data-el]').forEach(applyPosterEl); }
+function posterImgErr(img){ img.onerror = null; const s = document.createElement('span'); s.className = 'nopic'; s.textContent = '📦'; img.replaceWith(s); }
+
+// selection order (▲▼) — keep sync'd with the checkbox selection
+function posterItems(){
+  const sel = getSortedSelection();
+  const bySku = new Map(sel.map(p => [p.sku, p]));
+  posterOrder = posterOrder.filter(sku => bySku.has(sku));
+  sel.forEach(p => { if (!posterOrder.includes(p.sku)) posterOrder.push(p.sku); });
+  posterSaveOrder();
+  return posterOrder.map(sku => bySku.get(sku)).filter(Boolean);
+}
+function posterMoveIdx(i, dir){
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= posterOrder.length) return;
+  [posterOrder[i], posterOrder[j]] = [posterOrder[j], posterOrder[i]];
+  posterSaveOrder(); buildPosterPreview();
+}
+
+function buildPosterPreview(){
+  const stage = $('#pdfStage'); if (!stage) return;
+  posterSyncPanel();
+  const items = posterItems();
+  posterRenderSelStrip();
+  if (!items.length){
+    stage.innerHTML = `<div class="empty-state"><div class="emoji">🏷️</div><h3>ยังไม่มีสินค้าที่เลือก</h3><div class="empty-sub">ไปที่แท็บ “เลือกสินค้า” ติ๊กเลือกสินค้าก่อน แล้วกลับมาหน้านี้</div></div>`;
+    return;
+  }
+  const sz = posterCurSize();
+  const per = (+posterCfg.per > 0) ? +posterCfg.per : items.length;
+  const pages = [];
+  for (let i = 0; i < items.length; i += per) pages.push(items.slice(i, i + per));
+  stage.innerHTML = `<div class="poster-stage">` + pages.map((pg, pi) => {
+    const cols = +posterCfg.cols > 0 ? +posterCfg.cols : posterAutoCols(pg.length, sz.w, sz.h);
+    const rows = Math.ceil(pg.length / cols);
+    const u  = sz.w / 1080;
+    const cu = u * (2.6 / (cols + 0.6));
+    const cardBg = posterHexToRgba(posterCfg.cCard, posterCfg.cardAlpha / 100);
+    const bgImg = posterCfg.bgImg ? `<img class="pc-bgimg" src="${escapeAttr(posterCfg.bgImg)}" crossorigin="anonymous" alt="">` : '';
+    const shade = `<div class="pc-shade" style="background:${ posterCfg.bgImg
+        ? `linear-gradient(180deg,rgba(0,0,0,${posterCfg.dim/100}),rgba(0,0,0,${Math.min(0.9, posterCfg.dim/100 + .12)}))`
+        : `linear-gradient(150deg, ${posterCfg.bg1}, ${posterCfg.bg2})` }"></div>`;
+    const cards = pg.map(p => {
+      const kImg = posterElKey('p', p.sku, 'img'), kName = posterElKey('p', p.sku, 'name');
+      const kPr  = posterElKey('p', p.sku, 'price'), kCard = posterElKey('p', p.sku, 'card');
+      const pic = p.image
+        ? `<img src="${escapeAttr(p.image)}" crossorigin="anonymous" alt="" onerror="posterImgErr(this)">`
+        : `<span class="nopic">ไม่มีรูป</span>`;
+      const prices = POSTER_UNIT_ORDER.filter(u2 => p.unitPrices && p.unitPrices[u2]).map(u2 => {
+        const up = p.unitPrices[u2];
+        const label = String(up.name || POSTER_UNAME[u2] || '').trim();
+        return `<div class="pc-price" style="background:${posterCfg.cPrice}">${
+          posterCfg.showUnitLabel && label ? `<span class="pu" style="color:${posterCfg.cPriceTx}">${escapeHtml(label)}</span>` : ''
+        }<span class="pv" style="color:${posterCfg.cPriceTx}">${fmtThaiBaht(up.price)}</span><span class="pb" style="color:${posterCfg.cPriceTx}">฿</span></div>`;
+      }).join('');
+      return `<div class="pc-card" data-el="${escapeAttr(kCard)}" style="background:${cardBg}">
+          <div class="pc-img" data-el="${escapeAttr(kImg)}">${pic}</div>
+          <div class="pc-name" data-el="${escapeAttr(kName)}" style="color:${posterCfg.cName}">${escapeHtml(p.name)}</div>
+          <div class="pc-prices" data-el="${escapeAttr(kPr)}">${prices || `<div class="pc-price" style="background:${posterCfg.cPrice}"><span class="pv" style="color:${posterCfg.cPriceTx};font-size:calc(15px*var(--cu))">สอบถามราคา</span></div>`}</div>
+        </div>`;
+    }).join('');
+    const head = `<div class="pc-head">
+        ${posterCfg.showLogo ? `<img class="pc-logo" data-el="${escapeAttr(posterElKey('h', pi, 'logo'))}" src="rattana-cart.png" crossorigin="anonymous" alt="">` : ''}
+        ${posterCfg.title ? `<div class="pc-line"><div class="pc-title" data-el="${escapeAttr(posterElKey('h', pi, 'title'))}" style="color:${posterCfg.cTitle}">${escapeHtml(posterCfg.title)}</div></div>` : ''}
+        ${posterCfg.sub ? `<div class="pc-line"><div class="pc-sub" data-el="${escapeAttr(posterElKey('h', pi, 'sub'))}" style="color:${posterCfg.cSub}">${escapeHtml(posterCfg.sub)}</div></div>` : ''}
+      </div>`;
+    return `<div class="poster-pgwrap">
+        <div class="poster-pgnum">ภาพที่ ${pi+1} / ${pages.length} · ${sz.w*sz.s}×${sz.h*sz.s}px</div>
+        <div class="poster-hold">
+          <div class="poster-canvas" data-page="${pi}" style="width:${sz.w}px;height:${sz.h}px;--u:${u};--cu:${cu}">
+            ${bgImg}${shade}
+            <div class="pc-inner">
+              ${head}
+              <div class="pc-grid" style="grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr)">${cards}</div>
+              ${posterCfg.foot ? `<div class="pc-foot" data-el="${escapeAttr(posterElKey('h', pi, 'foot'))}" style="color:${posterCfg.cSub}">${escapeHtml(posterCfg.foot)}</div>` : ''}
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }).join('') + `</div>`;
+  applyAllPosterEls();
+  fitPosterStage();
+  if (posterCfg.cutWhite) { bakeImages('#pdfStage .poster-canvas .pc-img img').then(fitPosterStage).catch(()=>{}); }
+}
+
+function fitPosterStage(){
+  const sz = posterCurSize();
+  const stage = $('#pdfStage');
+  const avail = Math.max(200, (stage ? stage.clientWidth : 900) - 10);
+  posterStageScale = Math.min(1, avail / sz.w);
+  document.querySelectorAll('#pdfStage .poster-pgwrap').forEach(wrap => {
+    const canvas = wrap.querySelector('.poster-canvas');
+    const hold = wrap.querySelector('.poster-hold');
+    if (!canvas || !hold) return;
+    const w = parseFloat(canvas.style.width) || sz.w;
+    const h = parseFloat(canvas.style.height) || sz.h;
+    canvas.style.transform = `scale(${posterStageScale})`;
+    hold.style.width = (w * posterStageScale) + 'px';
+    hold.style.height = (h * posterStageScale) + 'px';
+  });
+  posterSyncHandle();
+}
+
+/* ── poster canvas selection + resize UI ── */
+function posterSelect(el){
+  if (posterSelectedEl === el){ posterUpdateSizeUI(); return; }
+  posterDeselect();
+  posterSelectedEl = el;
+  el.classList.add('ps-on');
+  const h = document.createElement('div'); h.className = 'ps-handle'; el.appendChild(h);
+  posterSyncHandle();
+  posterUpdateSizeUI();
+}
+function posterDeselect(){
+  if (!posterSelectedEl) return;
+  posterSelectedEl.classList.remove('ps-on');
+  const h = posterSelectedEl.querySelector(':scope > .ps-handle'); if (h) h.remove();
+  posterSelectedEl = null;
+  posterUpdateSizeUI();
+}
+function posterSyncHandle(){
+  if (!posterSelectedEl) return;
+  const h = posterSelectedEl.querySelector(':scope > .ps-handle'); if (!h) return;
+  const s = posterGetL(posterSelectedEl.dataset.el).s || 1;
+  h.style.transform = `scale(${1 / s})`;
+}
+function posterRoleLabel(key){
+  const role = String(key || '').split(':').pop();
+  return ({ img:'🖼️ รูปสินค้า', name:'📝 ชื่อสินค้า', price:'💰 กล่องราคา', card:'🃏 การ์ดทั้งใบ', title:'🏷️ หัวเรื่อง', sub:'หัวเรื่องรอง', foot:'ท้ายภาพ', logo:'🅡 โลโก้' })[role] || role;
+}
+function posterUpdateSizeUI(){
+  const has = !!posterSelectedEl;
+  const s = has ? Math.round((posterGetL(posterSelectedEl.dataset.el).s || 1) * 100) : 100;
+  if ($('#posterSize')) $('#posterSize').value = s;
+  if ($('#posterSizeVal')) $('#posterSizeVal').textContent = s + '%';
+  if ($('#posterSizeSel')) $('#posterSizeSel').textContent = has
+    ? ('เลือก: ' + posterRoleLabel(posterSelectedEl.dataset.el) + ' — ลากปุ่มมุมทอง หรือเลื่อนสไลเดอร์')
+    : '👆 คลิกที่ รูป/ชื่อ/ราคา/การ์ด/หัวเรื่อง/โลโก้ ในภาพเพื่อลากย้าย·ย่อ-ขยาย';
+}
+function applyPosterSize(v){
+  if (!posterSelectedEl) return;
+  const key = posterSelectedEl.dataset.el;
+  const L = posterGetL(key);
+  L.s = Math.max(0.2, Math.min(5, (+v || 100) / 100));
+  posterLayout[key] = L;
+  applyPosterEl(posterSelectedEl); posterSyncHandle();
+  if ($('#posterSizeVal')) $('#posterSizeVal').textContent = Math.round(L.s * 100) + '%';
+  posterSaveLayout();
+}
+function posterResetSelected(){
+  if (!posterSelectedEl) return;
+  delete posterLayout[posterSelectedEl.dataset.el];
+  applyPosterEl(posterSelectedEl); posterSyncHandle(); posterUpdateSizeUI(); posterSaveLayout();
+}
+function posterResetLayout(){
+  posterLayout = {}; posterSaveLayout(); posterSelectedEl = null;
+  buildPosterPreview();
+  showToast('รีเซ็ตตำแหน่ง/ขนาดทั้งหมดแล้ว', 'success');
+}
+
+/* ── poster control panel ── */
+function posterBuildChips(){
+  const sc = $('#posterSizeChips');
+  if (sc && !sc.dataset.built){ sc.dataset.built = '1';
+    sc.innerHTML = POSTER_SIZES.map(s => `<button type="button" class="pp-chip" data-size="${s.k}" onclick="setPosterSize('${s.k}')">${escapeHtml(s.n)}</button>`).join('');
+  }
+  const tc = $('#posterThemeChips');
+  if (tc && !tc.dataset.built){ tc.dataset.built = '1';
+    tc.innerHTML = POSTER_THEMES.map(t => `<button type="button" class="pp-chip" data-theme="${t.k}" onclick="posterApplyTheme('${t.k}')">${escapeHtml(t.n)}</button>`).join('');
+  }
+}
+function setPosterSize(k){ posterCfg.size = k; posterSaveCfg(); if ($('#posterCustomWrap')) $('#posterCustomWrap').style.display = (k === 'cus') ? '' : 'none'; buildPosterPreview(); }
+function posterApplyTheme(k){
+  const t = POSTER_THEMES.find(x => x.k === k); if (!t) return;
+  posterCfg.theme = k;
+  ['bg1','bg2','cTitle','cSub','cCard','cName','cPrice','cPriceTx'].forEach(f => posterCfg[f] = t[f]);
+  posterSaveCfg(); buildPosterPreview();
+}
+function setPoster(key, val, rebuild = true){
+  posterCfg[key] = val;
+  if (['cCard','cName','cPrice','cPriceTx','bg1','bg2'].includes(key)) posterCfg.theme = '';   // custom colour → clear active theme highlight
+  posterSaveCfg();
+  if (rebuild) buildPosterPreview(); else posterSyncPanel();
+}
+function posterLoadBg(file){
+  if (!file) return;
+  const rd = new FileReader();
+  rd.onload = () => { posterCfg.bgImg = rd.result; buildPosterPreview(); };   // session-only (not persisted)
+  rd.readAsDataURL(file);
+}
+function posterSyncPanel(){
+  posterBuildChips();
+  const set = (id, val) => { const el = $(id); if (el) el.value = val; };
+  set('#posterPer', posterCfg.per); set('#posterCols', posterCfg.cols);
+  set('#posterCw', posterCfg.cw); set('#posterCh', posterCfg.ch);
+  set('#posterCCard', posterCfg.cCard); set('#posterCName', posterCfg.cName);
+  set('#posterCPrice', posterCfg.cPrice); set('#posterCPriceTx', posterCfg.cPriceTx); set('#posterCTitle', posterCfg.cTitle);
+  set('#posterCardAlpha', posterCfg.cardAlpha); set('#posterDim', posterCfg.dim);
+  set('#posterTitle', posterCfg.title); set('#posterSub', posterCfg.sub); set('#posterFoot', posterCfg.foot);
+  const ck = (id, v) => { const el = $(id); if (el) el.checked = !!v; };
+  ck('#posterShowUnit', posterCfg.showUnitLabel); ck('#posterCutWhite', posterCfg.cutWhite); ck('#posterShowLogo', posterCfg.showLogo);
+  if ($('#posterCardAlphaVal')) $('#posterCardAlphaVal').textContent = posterCfg.cardAlpha + '%';
+  if ($('#posterDimVal')) $('#posterDimVal').textContent = posterCfg.dim + '%';
+  if ($('#posterCustomWrap')) $('#posterCustomWrap').style.display = (posterCfg.size === 'cus') ? '' : 'none';
+  document.querySelectorAll('#posterSizeChips .pp-chip').forEach(c => c.classList.toggle('active', c.dataset.size === posterCfg.size));
+  document.querySelectorAll('#posterThemeChips .pp-chip').forEach(c => c.classList.toggle('active', c.dataset.theme === posterCfg.theme));
+}
+function posterRenderSelStrip(){
+  const el = $('#posterSelStrip'); if (!el) return;
+  const items = posterOrder.map(sku => products.find(p => p.sku === sku)).filter(Boolean);
+  if (!items.length){ el.innerHTML = '<span class="txt-muted" style="font-size:12px">ยังไม่ได้เลือกสินค้า</span>'; return; }
+  el.innerHTML = items.map((p, i) => `<span class="poster-selchip" title="${escapeAttr(p.name)}">
+      <button data-pm="${i}" data-dir="-1" ${i === 0 ? 'disabled' : ''}>▲</button>
+      <button data-pm="${i}" data-dir="1" ${i === items.length - 1 ? 'disabled' : ''}>▼</button>
+      <span class="pc-nm">${escapeHtml(p.name)}</span>
+    </span>`).join('');
+}
+function posterInitUI(){
+  posterBuildChips();
+  posterSyncPanel();
+  const ss = $('#posterSelStrip');
+  if (ss && !ss.dataset.wired){ ss.dataset.wired = '1';
+    ss.addEventListener('click', e => { const b = e.target.closest('[data-pm]'); if (!b) return; posterMoveIdx(+b.dataset.pm, +b.dataset.dir); });
+  }
+}
+
+/* ── poster free-form drag/resize canvas (self-contained; gated to poster mode) ── */
+(function initPosterCanvas(){
+  const stage = $('#pdfStage');
+  if (!stage) return;
+  let drag = null;
+  stage.addEventListener('pointerdown', e => {
+    if (!isPosterMode()) return;
+    const handle = e.target.closest('.ps-handle');
+    if (handle && posterSelectedEl){
+      const key = posterSelectedEl.dataset.el;
+      const r = posterSelectedEl.getBoundingClientRect();
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      drag = { mode:'rz', key, el: posterSelectedEl, cx, cy, d0: Math.max(12, Math.hypot(e.clientX - cx, e.clientY - cy)), s0: posterGetL(key).s || 1, pid: e.pointerId };
+      try { handle.setPointerCapture(e.pointerId); } catch {}
+      e.preventDefault(); return;
+    }
+    const el = e.target.closest('.poster-canvas [data-el]');
+    if (!el){ posterDeselect(); return; }
+    posterSelect(el);
+    const L = posterGetL(el.dataset.el);
+    drag = { mode:'mv', key: el.dataset.el, el, sx: e.clientX, sy: e.clientY, x0: L.x || 0, y0: L.y || 0, pid: e.pointerId };
+    try { stage.setPointerCapture(e.pointerId); } catch {}
+    e.preventDefault();
+  });
+  stage.addEventListener('pointermove', e => {
+    if (!drag || (drag.pid != null && e.pointerId !== drag.pid)) return;
+    const sc = posterStageScale || 1;
+    if (drag.mode === 'mv'){
+      const L = posterGetL(drag.key);
+      L.x = drag.x0 + (e.clientX - drag.sx) / sc;
+      L.y = drag.y0 + (e.clientY - drag.sy) / sc;
+      posterLayout[drag.key] = L; applyPosterEl(drag.el);
+    } else if (drag.mode === 'rz'){
+      const d = Math.max(12, Math.hypot(e.clientX - drag.cx, e.clientY - drag.cy));
+      const L = posterGetL(drag.key);
+      L.s = Math.max(0.2, Math.min(5, drag.s0 * d / drag.d0));
+      posterLayout[drag.key] = L; applyPosterEl(drag.el); posterSyncHandle(); posterUpdateSizeUI();
+    }
+  });
+  const end = e => { if (!drag) return; if (drag.pid != null && e.pointerId !== drag.pid) return; drag = null; posterSaveLayout(); };
+  stage.addEventListener('pointerup', end);
+  stage.addEventListener('pointercancel', end);
+  window.addEventListener('resize', () => { if (isPosterMode()) fitPosterStage(); });
+})();
+
+/* ── poster export (PNG/JPG per image, PDF A4 or image-sized) ── */
+async function exportPoster(format){   // 'png' | 'jpeg' | 'pdf'
+  posterDeselect();
+  if (!posterItems().length){ showToast('ยังไม่ได้เลือกสินค้า', 'warning'); return; }
+  showSpinner('กำลังสร้างไฟล์...');
+  buildPosterPreview();
+  await new Promise(r => setTimeout(r, 600));
+  try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch {}
+  if (posterCfg.cutWhite){ try { await bakeImages('#pdfStage .poster-canvas .pc-img img'); } catch {} }
+  const sz = posterCurSize();
+  const canvases = Array.from(document.querySelectorAll('#pdfStage .poster-canvas'));
+  const prevTf = canvases.map(c => c.style.transform);
+  canvases.forEach(c => c.style.transform = 'none');   // capture at native px (remove fit-scale)
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    if (format === 'pdf'){
+      const { jsPDF } = window.jspdf;
+      const isA4 = (sz.k === 'a4p' || sz.k === 'a4l');
+      const orient = (sz.w >= sz.h) ? 'landscape' : 'portrait';
+      const pdf = isA4
+        ? new jsPDF({ orientation: sz.k === 'a4l' ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' })
+        : new jsPDF({ orientation: orient, unit: 'px', format: [sz.w * sz.s, sz.h * sz.s] });
+      for (let i = 0; i < canvases.length; i++){
+        $('#spinnerMsg').textContent = `กำลังสร้างหน้า ${i+1}/${canvases.length}...`;
+        await waitForPageImages(canvases[i]);
+        const cv = await html2canvas(canvases[i], { scale: sz.s, useCORS: true, allowTaint: false, backgroundColor: '#ffffff', logging: false, imageTimeout: 12000, removeContainer: true, width: sz.w, height: sz.h, windowWidth: sz.w, windowHeight: sz.h });
+        const img = cv.toDataURL('image/jpeg', 0.92); freeCanvas(cv);
+        if (i > 0){ isA4 ? pdf.addPage('a4', sz.k === 'a4l' ? 'landscape' : 'portrait') : pdf.addPage([sz.w * sz.s, sz.h * sz.s], orient); }
+        if (isA4){ const pw = sz.k === 'a4l' ? 297 : 210, ph = sz.k === 'a4l' ? 210 : 297; pdf.addImage(img, 'JPEG', 0, 0, pw, ph); }
+        else { pdf.addImage(img, 'JPEG', 0, 0, sz.w * sz.s, sz.h * sz.s); }
+        await new Promise(r => setTimeout(r, 50));
+      }
+      pdf.save(`Rattana-Poster-${today}.pdf`);
+      showToast(`✅ บันทึก PDF แล้ว (${canvases.length} หน้า)`, 'success');
+    } else {
+      const mime = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+      const ext = format === 'jpeg' ? 'jpg' : 'png';
+      for (let i = 0; i < canvases.length; i++){
+        $('#spinnerMsg').textContent = `กำลังสร้างภาพ ${i+1}/${canvases.length}...`;
+        await waitForPageImages(canvases[i]);
+        const cv = await html2canvas(canvases[i], { scale: sz.s, useCORS: true, allowTaint: false, backgroundColor: format === 'jpeg' ? '#ffffff' : null, logging: false, imageTimeout: 12000, removeContainer: true, width: sz.w, height: sz.h, windowWidth: sz.w, windowHeight: sz.h });
+        const url = cv.toDataURL(mime, format === 'jpeg' ? 0.95 : undefined); freeCanvas(cv);
+        const a = document.createElement('a'); a.href = url; a.download = `Rattana-Poster-${today}${canvases.length > 1 ? '-' + (i+1) : ''}.${ext}`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        await new Promise(r => setTimeout(r, 200));
+      }
+      showToast(`✅ บันทึก ${format.toUpperCase()} แล้ว (${canvases.length} ไฟล์)`, 'success');
+    }
+  } catch (e){ console.error(e); showToast('สร้างไฟล์ไม่สำเร็จ: ' + (e.message || ''), 'error'); }
+  finally { canvases.forEach((c, i) => c.style.transform = prevTf[i]); hideSpinner(); }
+}
+
+// initialise poster state + panel on load (script runs after the DOM is parsed)
+posterRestore();
+posterInitUI();
+
 function buildPdfPreview() {
   const stage = $('#pdfStage');
   const isFlash = isFlashMode();
