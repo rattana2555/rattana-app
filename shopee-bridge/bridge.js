@@ -761,16 +761,15 @@ async function ttOutbox() {
     });
     const j = await r.json();
 
+    // พูดทุกครั้ง — เงียบแล้วหาสาเหตุไม่ได้
+    console.log(`%c${TAG} คิว TikTok: ${j.items?.length ?? "ไม่รู้จักคำสั่ง"} รายการ`,
+                "background:#c9a84c;color:#0d1b3e;font-weight:bold;padding:2px 6px", j);
+
     if (j.items === undefined) {
-      // ฟังก์ชันฝั่งเซิร์ฟเวอร์ยังเป็นตัวเก่า ไม่รู้จักคำสั่ง outbox
-      if (++ttOutTick % 8 === 1)
-        console.error(`${TAG} TikTok: ingest-shopee ยังเป็นเวอร์ชันเก่า — ยังวางโค้ดใหม่ไม่ครบ`, j);
+      console.error(`${TAG} ingest-shopee ยังเป็นเวอร์ชันเก่า — ยังวางโค้ดใหม่ไม่ครบ`);
       return;
     }
-    if (!j.items.length) {
-      if (++ttOutTick % 20 === 1) console.log(TAG, "TikTok: ไม่มีข้อความรอส่ง");
-      return;
-    }
+    if (!j.items.length) return;
 
     console.log(`%c${TAG} TikTok มีข้อความรอส่ง ${j.items.length} ข้อความ`,
                 "background:#c9a84c;color:#0d1b3e;font-weight:bold;padding:2px 6px");

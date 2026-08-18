@@ -101,8 +101,17 @@ serve(async (req: Request) => {
       .limit(10);
     if (mErr) return json({ ok: false, error: mErr.message, items: [] });
 
+    // นับข้อความขาออกทุกสถานะไว้ด้วย เพื่อให้เห็นทันทีว่าฝั่งเซิร์ฟเวอร์เห็นอะไรบ้าง
+    const { data: all } = await db0
+      .from("messages").select("status")
+      .eq("direction", "out").in("conversation_id", [...meta.keys()]);
+    const tally: Record<string, number> = {};
+    for (const r of all ?? []) tally[r.status ?? "null"] = (tally[r.status ?? "null"] ?? 0) + 1;
+
     return json({
       ok: true,
+      แชททั้งหมด: meta.size,
+      ข้อความขาออกแยกตามสถานะ: tally,
       items: (msgs ?? []).map((m: any) => ({
         id: m.id,
         text: m.content,
