@@ -5785,6 +5785,34 @@ function posterGetL(k){ return posterLayout[k] || { x:0, y:0, s:1 }; }
 function applyPosterEl(el){ const L = posterGetL(el.dataset.el); el.style.transform = `translate(${L.x||0}px,${L.y||0}px) scale(${L.s||1})`; }
 function applyAllPosterEls(){ document.querySelectorAll('#pdfStage .poster-canvas [data-el]').forEach(applyPosterEl); }
 function posterImgErr(img){ img.onerror = null; const s = document.createElement('span'); s.className = 'nopic'; s.textContent = '📦'; img.replaceWith(s); }
+// v7.0 — throttled product-image loader: posters can pack many Drive photos; loading all at once → HTTP 429.
+// Load ≤4 at a time, retry with backoff (cache-busting the retry), keep crossorigin so export stays CORS-clean.
+let posterLoadPromise = Promise.resolve();
+function posterLoadImages(){
+  const imgs = Array.from(document.querySelectorAll('#pdfStage .poster-canvas img[data-src]'));
+  if (!imgs.length) return Promise.resolve();
+  imgs.forEach(img => { img.dataset.osrc = img.dataset.src; img.removeAttribute('data-src'); });   // claim so a concurrent rebuild's loader won't double-load them
+  const WAIT = [400, 900, 1800, 3000], MAX = 4;
+  const load1 = img => new Promise(res => {
+    const url = img.dataset.osrc || '';
+    let tries = 0;
+    const attempt = () => {
+      if (!img.isConnected) return res();
+      tries++;
+      img.onload = () => { img.onload = img.onerror = null; res(); };
+      img.onerror = () => {
+        img.onload = img.onerror = null;
+        if (tries >= MAX){ posterImgErr(img); return res(); }
+        setTimeout(attempt, WAIT[Math.min(tries - 1, WAIT.length - 1)]);
+      };
+      img.src = (tries === 1) ? url : url + (url.includes('?') ? '&' : '?') + 'rt=' + tries;   // cache-bust retries so a 429'd request actually re-fires
+    };
+    attempt();
+  });
+  let idx = 0;
+  const worker = async () => { while (idx < imgs.length) await load1(imgs[idx++]); };
+  return Promise.all(Array.from({ length: Math.min(MAX, imgs.length) }, worker)).then(() => {});
+}
 
 // selection order (▲▼) — keep sync'd with the checkbox selection
 function posterItems(){
