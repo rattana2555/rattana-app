@@ -118,7 +118,11 @@ serve(async (req: Request) => {
     if (!ids.length) return json({ ok: true, updated: 0 });
     const { error } = await db0
       .from("messages")
-      .update({ status: payload.ok ? "sent" : "error" })
+      .update({
+        status: payload.ok ? "sent" : "error",
+        // เก็บเหตุผลไว้ให้พนักงานเห็นในแอพเลย ไม่ต้องเปิด Console ดู
+        note: payload.ok ? null : String(payload.note ?? "").slice(0, 200),
+      })
       .in("id", ids);
     if (error) return json({ ok: false, error: error.message });
     if (!payload.ok) console.error("ส่ง TikTok ไม่สำเร็จ:", payload.note, ids);

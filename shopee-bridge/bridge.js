@@ -475,6 +475,12 @@ function ttReadOpenChat() {
     if (!cls.includes("--PText")) continue;
 
     const r = el.getBoundingClientRect();
+    if (r.width < 5 || r.height < 5) continue;              // ก้อนที่ไม่ได้แสดงจริง
+
+    // หน้าเว็บบางจังหวะวาดฟองเดียวซ้อนกันสองชั้น — ฟองจริงคนละอันจะอยู่คนละบรรทัด
+    const key = `${Math.round(r.top)}|${txt}`;
+    if (usedIds.has(key)) continue;
+    usedIds.add(key);
     // ฟองของเราชิดขอบขวา ฟองลูกค้าชิดขอบซ้าย — จริงเสมอไม่ว่าหน้าตาจะเปลี่ยนยังไง
     const fromShop = (br.right - r.right) < (r.left - br.left);
     const when = ts || Date.now();
@@ -563,6 +569,39 @@ function ttClick(el) {
     el.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window }));
 }
 
+// รายการแชทของ TikTok วาดเฉพาะที่มองเห็น (~8 แถว) ที่เหลือยังไม่มีใน DOM
+// จะคลิกหาใครต้องเลื่อนลงไปให้เขาโผล่ก่อน
+function ttListScroller() {
+  const rows = ttListRows();
+  if (!rows.length) return null;
+  let el = rows[0].row;
+  for (let i = 0; i < 10 && el; i++) {
+    if (el.scrollHeight > el.clientHeight + 40) return el;
+    el = el.parentElement;
+  }
+  return null;
+}
+
+async function ttFindRow(name) {
+  let hit = ttListRows().find((r) => r.name === name);
+  if (hit) return hit;
+
+  const sc = ttListScroller();
+  if (!sc) return null;
+  const back = sc.scrollTop;
+  sc.scrollTop = 0;
+
+  for (let i = 0; i < 30; i++) {
+    await wait(320);
+    hit = ttListRows().find((r) => r.name === name);
+    if (hit) return hit;
+    if (sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 5) break;
+    sc.scrollTop += Math.floor(sc.clientHeight * 0.8);
+  }
+  sc.scrollTop = back;
+  return null;
+}
+
 // ── ดึงแชททั้งหมดเอง ──────────────────────────────────────
 // TikTok โหลดเนื้อหาแชทเมื่อถูกเปิดเท่านั้น จึงต้องเปิดทีละอันแล้วอ่าน
 // ทำเฉพาะตอนไม่มีคนแตะเครื่อง จะได้ไม่ไปแย่งเมาส์พนักงานกลางคัน
@@ -573,18 +612,36 @@ async function ttSweep(manual) {
   if (ttSweeping || !cfg.secret || cfg.discovery) return;
   ttSweeping = true;
   try {
-    const rows = ttListRows();
-    console.log(`%c${TAG} TikTok เริ่มดึงทั้งหมด ${rows.length} แชท`,
+    const sc = ttListScroller();
+    if (sc) sc.scrollTop = 0;
+    await wait(400);
+
+    console.log(`%c${TAG} TikTok เริ่มดึงทั้งหมด`,
                 "background:#25F4EE;color:#000;font-weight:bold;padding:2px 6px");
 
-    let got = 0;
-    for (const r of rows) {
-      if (!manual && ttIdle() < 20000) break;     // มีคนกลับมาใช้งาน หยุดทันที
-      ttClick(r.row);
-      await wait(1400 + Math.floor(Math.random() * 600));   // เว้นจังหวะแบบคนอ่าน
-      const conv = ttReadOpenChat();
-      if (conv && conv.messages.length) { queue.push(conv); got += conv.messages.length; }
+    const done = new Set();
+    let got = 0, guard = 0;
+
+    while (guard++ < 60) {
+      const rows = ttListRows().filter((r) => !done.has(r.name));
+
+      if (!rows.length) {                          // หมดที่มองเห็น เลื่อนหาต่อ
+        if (!sc || sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 5) break;
+        sc.scrollTop += Math.floor(sc.clientHeight * 0.8);
+        await wait(500);
+        continue;
+      }
+
+      for (const r of rows) {
+        if (!manual && ttIdle() < 20000) { guard = 999; break; }   // มีคนกลับมาใช้ หยุดทันที
+        done.add(r.name);
+        ttClick(r.row);
+        await wait(1400 + Math.floor(Math.random() * 600));        // เว้นจังหวะแบบคนอ่าน
+        const conv = ttReadOpenChat();
+        if (conv && conv.messages.length) { queue.push(conv); got += conv.messages.length; }
+      }
     }
+    console.log(`${TAG} TikTok เปิดอ่านไปแล้ว ${done.size} แชท`);
     ttSweptAt = Date.now();
     console.log(`${TAG} TikTok ดึงครบแล้ว — ได้ ${got} ข้อความ`);
     if (queue.length && !timer) timer = setTimeout(flush, 1500);
@@ -643,8 +700,11 @@ async function ttAck(id, ok, why) {
 }
 
 async function ttSendOne(item) {
-  const row = ttListRows().find((r) => r.name === item.name);
-  if (!row) { await ttAck(item.id, false, "หาแชทในรายการไม่เจอ"); return false; }
+  const row = await ttFindRow(item.name);
+  if (!row) {
+    await ttAck(item.id, false, `หาแชท "${item.name}" ในรายการไม่เจอ`);
+    return false;
+  }
 
   ttClick(row.row);
   await wait(1600);
