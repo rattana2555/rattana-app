@@ -41,6 +41,9 @@ type InConv = {
   name?: string;
   avatar?: string;
   messages: InMsg[];
+  // TikTok: อ่านจากรายการแชทฝั่งซ้ายได้แค่บรรทัดล่าสุด (ยังไม่มีใครคลิกเปิด)
+  preview?: string;
+  previewAt?: number;
 };
 
 // รับได้ทั้ง shopee และ line (ส่วนขยายอ่านจากหน้าเว็บที่พนักงานเปิดอยู่)
