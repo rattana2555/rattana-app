@@ -55,6 +55,16 @@ $("copy").addEventListener("click", () => {
   });
 });
 
+// สั่งให้ส่วนขยายที่หน้า TikTok เริ่มไล่เปิดแชททีละอันเดี๋ยวนี้
+// สื่อสารผ่าน storage เพราะไม่ต้องขอสิทธิ์ tabs เพิ่ม
+$("sweep").addEventListener("click", () => {
+  chrome.storage.local.set({ ttSweepNow: Date.now() }, () => {
+    $("ok").style.color = "#25F4EE";
+    $("ok").textContent = "สั่งแล้ว — ดูความคืบหน้าใน Console หน้า TikTok";
+    setTimeout(() => ($("ok").textContent = ""), 4000);
+  });
+});
+
 $("save").addEventListener("click", () => {
   const shopUser = $("shopUser").value.trim();
   if (!shopUser) {

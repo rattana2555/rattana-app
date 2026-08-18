@@ -44,6 +44,7 @@ type InConv = {
   // TikTok: อ่านจากรายการแชทฝั่งซ้ายได้แค่บรรทัดล่าสุด (ยังไม่มีใครคลิกเปิด)
   preview?: string;
   previewAt?: number;
+  unread?: number;      // เลขยังไม่อ่านที่เห็นบนหน้าเว็บ ก่อนส่วนขยายจะเปิดอ่านเอง
 };
 
 // รับได้ทั้ง shopee และ line (ส่วนขยายอ่านจากหน้าเว็บที่พนักงานเปิดอยู่)
@@ -63,17 +64,59 @@ serve(async (req: Request) => {
     return json({ error: "unauthorized" }, 401);
   }
 
-  let payload: { conversations?: InConv[]; platform?: string };
+  let payload: {
+    conversations?: InConv[]; platform?: string;
+    action?: string; ids?: string[]; ok?: boolean; note?: string;
+  };
   try { payload = await req.json(); }
   catch { return json({ error: "invalid json" }, 400); }
 
   const platform = String(payload.platform ?? "shopee");
   if (!ALLOWED.has(platform)) return json({ error: "unknown platform" }, 400);
 
+  const db0 = createClient(SUPABASE_URL, SERVICE_KEY);
+
+  // ── คิวข้อความที่รอส่ง ────────────────────────────────────
+  // TikTok ไม่มี API ส่งข้อความ พนักงานกดส่งใน Chat Hub แล้วข้อความจะค้างเป็น queued
+  // ส่วนขยายที่เปิดหน้า TikTok อยู่จะมาถามคิวนี้ แล้วพิมพ์ส่งให้บนหน้าเว็บจริง
+  if (payload.action === "outbox") {
+    const { data, error } = await db0
+      .from("messages")
+      .select("id, content, conversations!inner(platform, platform_conv_id, customer_name)")
+      .eq("direction", "out")
+      .eq("status", "queued")
+      .eq("conversations.platform", platform)
+      .order("sent_at", { ascending: true })
+      .limit(10);
+    if (error) return json({ ok: false, error: error.message });
+    return json({
+      ok: true,
+      items: (data ?? []).map((m: any) => ({
+        id: m.id,
+        text: m.content,
+        convId: m.conversations.platform_conv_id,
+        name: m.conversations.customer_name,
+      })),
+    });
+  }
+
+  // ── รายงานผลการส่งกลับมา ──────────────────────────────────
+  if (payload.action === "ack") {
+    const ids = (payload.ids ?? []).filter(Boolean).slice(0, 50);
+    if (!ids.length) return json({ ok: true, updated: 0 });
+    const { error } = await db0
+      .from("messages")
+      .update({ status: payload.ok ? "sent" : "failed" })
+      .in("id", ids);
+    if (error) return json({ ok: false, error: error.message });
+    if (!payload.ok) console.error("ส่ง TikTok ไม่สำเร็จ:", payload.note, ids);
+    return json({ ok: true, updated: ids.length });
+  }
+
   const convs = payload.conversations ?? [];
   if (!Array.isArray(convs) || !convs.length) return json({ ok: true, conversations: 0, newMessages: 0 });
 
-  const db = createClient(SUPABASE_URL, SERVICE_KEY);
+  const db = db0;
   let convCount = 0, msgCount = 0;
   // เก็บสาเหตุที่บันทึกไม่ได้ ส่งกลับไปให้เห็นใน Console ของเบราว์เซอร์
   // ไม่งั้นต้องไล่หาใน log ของ Supabase ทุกครั้งซึ่งช้ามาก
@@ -130,6 +173,9 @@ serve(async (req: Request) => {
       row.last_message = last.message_type === "image" ? "[รูปภาพ]" : last.content;
       row.last_message_at = last.sent_at;
     }
+    const unread = Number((c as any).unread) || 0;
+    if (unread > 0) row.unread_count = unread;
+
     const hasName = prev?.customer_name && prev.customer_name !== "ลูกค้า";
     if (c.name && !hasName) row.customer_name = c.name;
     if (c.avatar && !prev?.avatar_url) row.avatar_url = c.avatar;
