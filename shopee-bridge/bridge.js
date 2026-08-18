@@ -355,6 +355,37 @@ if (IS_TIKTOK) {
   }, 10000);
 }
 
+// ── สำรวจหน้าจอ (DOM) ────────────────────────────────────
+// TikTok ส่งแชทเป็น protobuf ทาง WebSocket ซึ่งถอดยากและพังง่ายเวลาเขาอัปเดต
+// แต่ข้อความมันแสดงอยู่บนหน้าจอเห็นๆ อ่านจากตรงนั้นตรงกว่าและทนกว่า
+// รอบนี้ยังเป็นการ "สำรวจ" — ดูว่าโครงหน้าเว็บใช้ป้ายชื่ออะไรบ้าง จะได้เขียนตัวอ่านให้ตรง
+let domRuns = 0;
+function surveyTikTokDom() {
+  if (++domRuns > 12) return;                       // สำรวจ 1 นาทีพอ ไม่กวนเครื่อง
+
+  const tags = new Map();
+  document.querySelectorAll("[data-e2e]").forEach((el) => {
+    const k = el.getAttribute("data-e2e");
+    const c = tags.get(k) || { n: 0, ตัวอย่าง: "" };
+    c.n++;
+    if (!c.ตัวอย่าง) {
+      const t = (el.innerText || "").trim().replace(/\s+/g, " ");
+      if (t) c.ตัวอย่าง = t.slice(0, 50);
+    }
+    tags.set(k, c);
+  });
+  if (!tags.size) return;
+
+  const rows = [...tags].map(([tag, v]) => ({ tag, จำนวน: v.n, ตัวอย่าง: v.ตัวอย่าง }));
+  console.log(`%c${TAG} TikTok หน้าจอ — เจอป้าย data-e2e ${rows.length} แบบ (ส่งตารางนี้ให้ผู้พัฒนา)`,
+              "background:#25F4EE;color:#000;font-weight:bold;padding:2px 6px");
+  console.table(rows);
+
+  chrome.storage.local.set({ ttDom: { url: location.pathname, rows } });
+}
+
+if (IS_TIKTOK) setInterval(surveyTikTokDom, 5000);
+
 let ttSeen = 0;
 function collectTikTok(d) {
   const raw  = String(d.url || "");
