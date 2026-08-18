@@ -335,106 +335,214 @@ function parseLineSend(url, body) {
   };
 }
 
-// ── TikTok / TikTok Shop — โหมดสำรวจ ─────────────────────
-// ยังไม่รู้โครงสร้าง API แชทของ TikTok (ไม่มีเอกสารสาธารณะ)
-// รอบนี้จึงยังไม่แปลงข้อมูล แต่ "ดูให้ก่อน" ว่าหน้าเว็บเรียกอะไรบ้าง
-// แล้วเก็บตัวอย่างที่ใหญ่ที่สุดของแต่ละ path ไว้ให้ก๊อปไปเขียนตัวแปลง
+// ── TikTok ────────────────────────────────────────────────
+// TikTok ส่งแชทเป็น protobuf ทาง WebSocket ถอดไม่ได้ จึงอ่านจากหน้าจอแทน
+//
+// ชื่อคลาสของ TikTok เป็นแบบ "css-1k81tbu-7937d88b--PText e1jltgo015"
+// ส่วน css-xxxx เปลี่ยนทุกครั้งที่เขา deploy แต่ท้าย --PText คือชื่อคอมโพเนนต์
+// ซึ่งอยู่ยาวกว่ามาก จึงจับด้วย [class*="--PText"]
+//   --PInfoNickname / --SpanInfoExtract / --SpanInfoTime  = รายการแชทฝั่งซ้าย
+//   --PNickname / --PUniqueId / --PText                   = แชทที่เปิดอยู่
+//
+// ส่วน user_id + รูปโปรไฟล์ ได้จาก /tiktok/v1/im/user/profile/ ที่ดักมาจากเน็ตเวิร์ก
 const IS_TIKTOK = /(^|\.)tiktok\.com$/i.test(location.hostname);
-const TT_PATH   = /\/(im|imapi|message|messages|msg|chat|conversation|conversations|inbox)(\/|\?|$)/i;
-const TT_BODY   = /("(conversation|conv_id|conversation_id|message|msg_id|server_message_id|sender|content|participants)"|conversation_short_id|server_message_id)/i;
 
-// สำมะโน endpoint — สำคัญกว่าตัวอย่าง เพราะถ้าตัวกรองพลาด อย่างน้อยยังรู้ว่ามีอะไรบ้าง
-const ttPaths = new Map();
-if (IS_TIKTOK) {
-  setInterval(() => {
-    if (!ttPaths.size) return;
-    console.log(`%c${TAG} TikTok เจอ ${ttPaths.size} endpoint — ถ้าไม่มีอันไหนหน้าตาเหมือนแชท ส่งตารางนี้ให้ผู้พัฒนา`,
-                "background:#FE2C55;color:#fff;font-weight:bold;padding:2px 6px");
-    console.table([...ttPaths].sort((a, b) => b[1].max - a[1].max).slice(0, 40)
-      .map(([path, v]) => ({ path, ครั้ง: v.n, ใหญ่สุด: v.max, ชนิด: v.kind })));
-  }, 10000);
+const ttByName   = new Map();   // ชื่อที่แสดง → ข้อมูลผู้ใช้
+const ttByUnique = new Map();   // @username  → ข้อมูลผู้ใช้
+
+chrome.storage.local.get(["ttUsers"], (v) => {
+  for (const u of v.ttUsers || []) {
+    if (u.name)   ttByName.set(u.name, u);
+    if (u.unique) ttByUnique.set(u.unique, u);
+  }
+});
+
+function ttSaveUsers() {
+  chrome.storage.local.set({ ttUsers: [...ttByUnique.values()].slice(-400) });
 }
 
-// ── สำรวจหน้าจอ (DOM) ────────────────────────────────────
-// TikTok ส่งแชทเป็น protobuf ทาง WebSocket ซึ่งถอดยากและพังง่ายเวลาเขาอัปเดต
-// แต่ข้อความมันแสดงอยู่บนหน้าจอเห็นๆ อ่านจากตรงนั้นตรงกว่าและทนกว่า
-// รอบนี้ยังเป็นการ "สำรวจ" — ดูว่าโครงหน้าเว็บใช้ป้ายชื่ออะไรบ้าง จะได้เขียนตัวอ่านให้ตรง
-let domRuns = 0;
-function surveyTikTokDom() {
-  if (++domRuns > 8) return;
+function ttNote(u) {
+  if (!u || !u.uid) return;
+  if (u.name)   ttByName.set(u.name, u);
+  if (u.unique) ttByUnique.set(u.unique, u);
+}
 
-  // ไม่พึ่งชื่อคลาสหรือ data-e2e เพราะ TikTok สุ่มชื่อใหม่ทุกครั้งที่ deploy
-  // ใช้สิ่งที่เปลี่ยนยากแทน: "ก้อนข้อความสั้นๆ ที่มองเห็นบนจอ" + ตำแหน่งซ้าย/ขวา
-  // (ฟองแชทของเราชิดขวา ของลูกค้าชิดซ้าย — จริงเสมอไม่ว่าหน้าตาจะเปลี่ยนยังไง)
-  const leaves = [];
-  const all = document.querySelectorAll("div,span,p");
-  const cap = Math.min(all.length, 6000);
-  for (let i = 0; i < cap; i++) {
-    const el = all[i];
-    if (el.children.length) continue;                       // เอาเฉพาะใบสุดท้าย
-    const t = (el.textContent || "").trim().replace(/\s+/g, " ");
-    if (!t || t.length > 300) continue;
+// อ่านข้อมูลผู้ใช้จาก 2 endpoint ที่ TikTok เรียกเองอยู่แล้ว
+function ttLearnUsers(body) {
+  let j; try { j = JSON.parse(body); } catch { return; }
+  let n = 0;
+
+  for (const w of j.users || []) {                      // /tiktok/v1/im/user/profile/
+    const p = w.im_user_profile; if (!p) continue;
+    ttNote({
+      uid: String(p.user_id_str || p.user_id || ""),
+      name: String(p.nick_name || ""),
+      unique: String(p.unique_id || ""),
+      avatar: p.avatars?.avatar_small?.url_list?.[0] || p.avatars?.avatar_medium?.url_list?.[0] || "",
+    }); n++;
+  }
+  for (const f of j.followings || []) {                 // /api/im/spotlight/relation
+    ttNote({
+      uid: String(f.uid || ""),
+      name: String(f.nickname || ""),
+      unique: String(f.unique_id || ""),
+      avatar: f.avatar_thumb?.url_list?.[0] || "",
+    }); n++;
+  }
+  if (n) { ttSaveUsers(); console.log(TAG, "TikTok รู้จักผู้ใช้แล้ว", ttByUnique.size, "คน"); }
+}
+
+// ── แปลงวันเวลาแบบไทยเป็นเวลาเครื่อง ──────────────────────
+const TH_MONTH = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน",
+                  "กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
+
+function ttTime(txt) {
+  const t = String(txt || "").trim();
+
+  // "1 สิงหาคม 2026 10:29"
+  let m = t.match(/^(\d{1,2})\s+(\S+)\s+(\d{4})(?:\s+(\d{1,2}):(\d{2}))?$/);
+  if (m) {
+    const mi = TH_MONTH.indexOf(m[2]);
+    if (mi >= 0) return new Date(+m[3], mi, +m[1], +(m[4] || 0), +(m[5] || 0)).getTime();
+  }
+  // "13/8/2026"
+  m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return new Date(+m[3], +m[2] - 1, +m[1]).getTime();
+
+  // "วันนี้ 10:29" / "เมื่อวาน 22:42" / "10:29"
+  m = t.match(/^(วันนี้|เมื่อวาน)?\s*(\d{1,2}):(\d{2})$/);
+  if (m) {
+    const d = new Date();
+    if (m[1] === "เมื่อวาน") d.setDate(d.getDate() - 1);
+    d.setHours(+m[2], +m[3], 0, 0);
+    return d.getTime();
+  }
+  return 0;
+}
+
+const isTtDate = (t) => ttTime(t) > 0;
+
+// รหัสข้อความ — TikTok ไม่ให้มา จึงสร้างจากเนื้อหา+เวลาให้ได้ค่าเดิมทุกครั้ง
+function h32(s) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+const q = (sel, root) => [...(root || document).querySelectorAll(sel)];
+
+// ── อ่านแชทที่เปิดอยู่ ─────────────────────────────────────
+function ttReadOpenChat() {
+  const uidEl = q('[class*="--PUniqueId"]')[0];
+  if (!uidEl) return null;
+  const unique = (uidEl.textContent || "").trim().replace(/^@/, "");
+  if (!unique) return null;
+
+  const bubbles = q('[class*="--PText"]');
+  if (!bubbles.length) return null;
+
+  const nameEl = q('[class*="--PNickname"]')[0];
+  const user = ttByUnique.get(unique) || {};
+  const convId = user.uid || unique;
+  const name = user.name || (nameEl && nameEl.textContent.trim()) || unique;
+
+  // กล่องข้อความ = บรรพบุรุษร่วมของทุกฟอง ใช้ขอบซ้าย/ขวาตัดสินว่าใครส่ง
+  let box = bubbles[0].parentElement;
+  while (box && box.parentElement && !bubbles.every((el) => box.contains(el))) box = box.parentElement;
+  if (!box) return null;
+  const br = box.getBoundingClientRect();
+
+  const messages = [];
+  let ts = 0;
+
+  for (const el of q("span,p,div", box)) {
+    const cls = String(el.className || "");
+    const txt = (el.textContent || "").trim().replace(/\s+/g, " ");
+    if (!txt) continue;
+
+    if (!el.children.length && isTtDate(txt)) { ts = ttTime(txt); continue; }
+    if (!cls.includes("--PText")) continue;
+
     const r = el.getBoundingClientRect();
-    if (r.width < 20 || r.height < 10 || r.bottom < 0 || r.top > innerHeight) continue;
-    leaves.push({ el, t, r });
+    // ฟองของเราชิดขอบขวา ฟองลูกค้าชิดขอบซ้าย — จริงเสมอไม่ว่าหน้าตาจะเปลี่ยนยังไง
+    const fromShop = (br.right - r.right) < (r.left - br.left);
+    const when = ts || Date.now();
+
+    messages.push({
+      id: `tt:${convId}:${when}:${h32(txt)}`,
+      from: fromShop ? "seller" : "buyer",
+      text: txt,
+      imageUrl: "",
+      sentAt: when,
+    });
   }
-  if (leaves.length < 3) return;
 
-  // แบ่งซ้าย/ขวาด้วยกึ่งกลางของบริเวณที่มีข้อความจริง ไม่ใช่กึ่งกลางจอ
-  const cs = leaves.map((l) => l.r.left + l.r.width / 2);
-  const mid = (Math.min.apply(null, cs) + Math.max.apply(null, cs)) / 2;
-
-  const rows = leaves.slice(-45).map((l) => ({
-    side: (l.r.left + l.r.width / 2) > mid ? "ขวา" : "ซ้าย",
-    x: Math.round(l.r.left),
-    y: Math.round(l.r.top),
-    tag: l.el.tagName.toLowerCase(),
-    cls: String(l.el.className || "").split(/\s+/).slice(0, 2).join(" ").slice(0, 45),
-    text: l.t.slice(0, 70),
-  }));
-
-  console.log(`%c${TAG} TikTok หน้าจอ — อ่านได้ ${rows.length} ก้อนข้อความ (กดไอคอนส่วนขยาย > คัดลอกตัวอย่าง)`,
-              "background:#25F4EE;color:#000;font-weight:bold;padding:2px 6px");
-  console.table(rows);
-
-  chrome.storage.local.set({ ttDom: { url: location.pathname, w: innerWidth, rows } });
+  if (!messages.length) return null;
+  return { convId: String(convId), name, avatar: user.avatar || "", messages };
 }
 
-if (IS_TIKTOK) setInterval(surveyTikTokDom, 6000);
+// ── อ่านรายการแชทฝั่งซ้าย (รู้ว่าใครทักมาใหม่ โดยไม่ต้องคลิกเปิด) ──
+function ttReadList() {
+  const out = [];
+  for (const el of q('[class*="--PInfoNickname"]')) {
+    const name = (el.textContent || "").trim();
+    if (!name || name === "คำขอส่งข้อความ") continue;
 
-let ttSeen = 0;
-function collectTikTok(d) {
-  const raw  = String(d.url || "");
-  const body = String(d.body || "");
-  if (body.length < 40) return;
+    let row = el, ex = null, tm = null;
+    for (let i = 0; i < 5 && row; i++) {
+      ex = q('[class*="--SpanInfoExtract"]', row)[0];
+      tm = q('[class*="--SpanInfoTime"]', row)[0];
+      if (ex && tm) break;
+      row = row.parentElement;
+    }
+    if (!ex || !tm) continue;
 
-  let path = raw;
-  try { path = new URL(raw, location.origin).pathname; } catch (_) {}
+    const user = ttByName.get(name);
+    if (!user || !user.uid) continue;          // ยังไม่รู้รหัส รอ TikTok โหลดโปรไฟล์ก่อน
 
-  // นับทุก endpoint ไว้ก่อน แม้ยังไม่รู้ว่าอันไหนคือแชท
-  const p0 = ttPaths.get(path) || { n: 0, max: 0, kind: d.kind };
-  p0.n++; p0.max = Math.max(p0.max, body.length); p0.kind = d.kind;
-  ttPaths.set(path, p0);
-
-  // เก็บตัวอย่างเฉพาะที่หน้าตาเหมือนข้อมูลแชท ไม่งั้น Console ท่วมด้วย telemetry
-  if (!TT_PATH.test(path) && !TT_BODY.test(body.slice(0, 4000))) return;
-
-  if (++ttSeen <= 30) {
-    console.log(`%c${TAG} TikTok [${d.kind}${d.req ? " ขาออก" : ""}] ${path}  (${body.length} ตัวอักษร)`,
-                "background:#000;color:#25F4EE;font-weight:bold;padding:2px 6px");
-    console.log(body.slice(0, 2500));
+    out.push({
+      convId: String(user.uid),
+      name,
+      avatar: user.avatar || "",
+      messages: [],
+      preview: (ex.textContent || "").trim(),
+      previewAt: ttTime((tm.textContent || "").trim()) || Date.now(),
+    });
   }
+  return out;
+}
 
-  // เก็บตัวอย่างใหญ่สุดของแต่ละ path (สูงสุด 6 path) ไว้ดูในหน้าตั้งค่า
-  chrome.storage.local.get(["ttSamples"], (v) => {
-    const all = v.ttSamples || {};
-    if (all[path] && all[path].size >= body.length) return;
-    all[path] = { size: body.length, body: body.slice(0, 40000), req: !!d.req };
-    const keep = {};
-    Object.keys(all).sort((a, b) => all[b].size - all[a].size).slice(0, 6)
-      .forEach((k) => { keep[k] = all[k]; });
-    chrome.storage.local.set({ ttSamples: keep });
-  });
+// ── ตรวจหน้าจอเป็นระยะ ส่งเฉพาะตอนมีอะไรเปลี่ยน ──────────
+let ttLastSig = "";
+
+function ttScan() {
+  if (!cfg.enabled || cfg.discovery) return;
+  const batch = [];
+
+  const open = ttReadOpenChat();
+  if (open) batch.push(open);
+  batch.push(...ttReadList());
+  if (!batch.length) return;
+
+  const sig = JSON.stringify(batch.map((c) =>
+    [c.convId, c.preview || "", c.messages.length, c.messages.at(-1)?.id || ""]));
+  if (sig === ttLastSig) return;               // ไม่มีอะไรเปลี่ยน ไม่ต้องยิงซ้ำ
+  ttLastSig = sig;
+
+  const n = batch.reduce((s, c) => s + c.messages.length, 0);
+  console.log(`%c${TAG} TikTok → เตรียมส่ง ${batch.length} แชท / ${n} ข้อความ`,
+              "background:#25F4EE;color:#000;font-weight:bold;padding:2px 6px");
+  queue.push(...batch);
+  if (!timer) timer = setTimeout(flush, 3000);
+}
+
+if (IS_TIKTOK) setInterval(ttScan, 5000);
+
+function collectTikTok(d) {
+  const raw = String(d.url || "");
+  const body = String(d.body || "");
+  if (body.length < 40 || d.req) return;
+  if (/\/im\/user\/profile|\/im\/spotlight\/relation/i.test(raw)) ttLearnUsers(body);
 }
 
 // ── ส่งขึ้น Chat Hub (รวบยอด ไม่ยิงถี่) ────────────────────
@@ -447,7 +555,9 @@ function flush() {
   if (!cfg.secret) { console.warn(TAG, "ยังไม่ได้ใส่รหัสลับ — ข้ามการส่ง"); queue = []; return; }
   const batch = queue; queue = [];
 
-  const platform = /line\.biz/i.test(location.hostname) ? "line" : "shopee";
+  const platform = /line\.biz/i.test(location.hostname) ? "line"
+                 : /tiktok\.com$/i.test(location.hostname) ? "tiktok"
+                 : "shopee";
   fetch(ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-ingest-secret": cfg.secret },

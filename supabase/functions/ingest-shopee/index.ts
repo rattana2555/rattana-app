@@ -45,7 +45,7 @@ type InConv = {
 
 // รับได้ทั้ง shopee และ line (ส่วนขยายอ่านจากหน้าเว็บที่พนักงานเปิดอยู่)
 // กรณี line: ถ้า convId ตรงกับ userId ที่ webhook เคยสร้างไว้ จะรวมเป็นบทสนทนาเดียวกันเอง
-const ALLOWED = new Set(["shopee", "line"]);
+const ALLOWED = new Set(["shopee", "line", "tiktok", "tiktokshop"]);
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -74,9 +74,13 @@ serve(async (req: Request) => {
   let convCount = 0, msgCount = 0;
 
   for (const c of convs.slice(0, 100)) {
-    if (!c?.convId || !Array.isArray(c.messages) || !c.messages.length) continue;
+    if (!c?.convId) continue;
+    // TikTok ส่งแชทจาก "รายการฝั่งซ้าย" มาด้วย ซึ่งมีแค่ข้อความล่าสุด ไม่มีเนื้อหาเต็ม
+    // (ยังไม่มีใครคลิกเปิด) — อัพเดตแค่บรรทัดล่าสุดให้เห็นว่ามีความเคลื่อนไหว
+    const inMsgs = Array.isArray(c.messages) ? c.messages : [];
+    if (!inMsgs.length && !c.preview) continue;
 
-    const norm = c.messages
+    const norm = inMsgs
       .filter((m) => m && m.id && (m.text || m.imageUrl))
       .map((m) => ({
         id: String(m.id),
@@ -87,15 +91,18 @@ serve(async (req: Request) => {
       }))
       .sort((a, b) => a.sent_at.localeCompare(b.sent_at));
 
-    if (!norm.length) continue;
-    const last = norm[norm.length - 1];
+    if (!norm.length && !c.preview) continue;
+    const last = norm.length
+      ? norm[norm.length - 1]
+      : { message_type: "text", content: String(c.preview),
+          sent_at: new Date(Number(c.previewAt) || Date.now()).toISOString() };
 
     // ── หาบทสนทนาเดิม ─────────────────────────────────────
     // LINE ใช้ id คนละชุดระหว่าง Messaging API (webhook) กับ OA Manager (ส่วนขยาย)
     // ถ้าจับคู่ด้วย id อย่างเดียวจะได้แชทซ้ำคนละ 2 แถว จึงต้องจับคู่ด้วย "ชื่อ" เสริม
     let { data: prev } = await db
       .from("conversations")
-      .select("id, platform_conv_id, customer_name, avatar_url")
+      .select("id, platform_conv_id, customer_name, avatar_url, last_message_at")
       .eq("platform", platform)
       .eq("platform_conv_id", String(c.convId))
       .maybeSingle();
@@ -111,17 +118,20 @@ serve(async (req: Request) => {
       if (byName) prev = byName;   // เจอคนเดียวกันที่ webhook สร้างไว้ → ใช้แถวนั้น
     }
 
-    const row: Record<string, unknown> = {
-      last_message: last.message_type === "image" ? "[รูปภาพ]" : last.content,
-      last_message_at: last.sent_at,
-    };
+    const row: Record<string, unknown> = {};
+    // อย่าให้ "ข้อความล่าสุด" ถอยหลัง — รายการฝั่งซ้ายบอกเวลาแค่ระดับวัน อาจเก่ากว่าของจริง
+    if (!prev?.last_message_at || last.sent_at >= prev.last_message_at) {
+      row.last_message = last.message_type === "image" ? "[รูปภาพ]" : last.content;
+      row.last_message_at = last.sent_at;
+    }
     const hasName = prev?.customer_name && prev.customer_name !== "ลูกค้า";
     if (c.name && !hasName) row.customer_name = c.name;
     if (c.avatar && !prev?.avatar_url) row.avatar_url = c.avatar;
 
     let conv: { id: string } | null = null;
 
-    if (prev) {
+    if (prev && !Object.keys(row).length) { conv = { id: prev.id }; }
+    else if (prev) {
       // มีอยู่แล้ว — อัพเดตแถวเดิม ห้ามสร้างใหม่ ไม่งั้นจะได้แชทซ้ำ
       // (อย่าแตะ platform_conv_id เพราะ webhook ยังใช้ค่าเดิมส่งข้อมูลเข้ามา)
       const { error } = await db.from("conversations").update(row).eq("id", prev.id);
@@ -142,6 +152,8 @@ serve(async (req: Request) => {
       conv = data;
     }
     convCount++;
+
+    if (!norm.length) continue;   // มีแค่ข้อความล่าสุด ไม่มีเนื้อหาให้บันทึก
 
     // ── เทียบกับของเดิมก่อนบันทึก ─────────────────────────
     // แยกเป็น 2 กอง:
