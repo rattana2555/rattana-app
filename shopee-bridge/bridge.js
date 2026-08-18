@@ -598,7 +598,14 @@ function flush() {
     body: JSON.stringify({ platform, conversations: batch }),
   })
     .then((r) => r.json())
-    .then((j) => console.log(TAG, "ส่งแล้ว:", j))
+    .then((j) => {
+      // รวมไว้บรรทัดเดียวว่าส่งอะไรไปและได้อะไรกลับ จะได้ไม่ต้องไล่จับคู่บรรทัดเอง
+      const sent = batch.reduce((n, c) => n + (c.messages?.length || 0), 0);
+      const okAll = j.newMessages > 0 || sent === 0;
+      console.log(`%c${TAG} ส่ง ${platform}: ${batch.length} แชท / ${sent} ข้อความ → บันทึกใหม่ ${j.newMessages}`,
+                  `background:${okAll ? "#2ecc71" : "#e74c3c"};color:#fff;font-weight:bold;padding:2px 6px`);
+      if (j.problems?.length) console.warn(TAG, "สาเหตุที่บันทึกไม่ได้:", j.problems);
+    })
     .catch((e) => console.warn(TAG, "ส่งไม่สำเร็จ:", e.message));
 }
 
