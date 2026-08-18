@@ -345,7 +345,10 @@ function parseLineSend(url, body) {
 //   --PNickname / --PUniqueId / --PText                   = แชทที่เปิดอยู่
 //
 // ส่วน user_id + รูปโปรไฟล์ ได้จาก /tiktok/v1/im/user/profile/ ที่ดักมาจากเน็ตเวิร์ก
-const IS_TIKTOK = /(^|\.)tiktok\.com$/i.test(location.hostname);
+// ต้องเป็นหน้าหลักเท่านั้น — TikTok มี iframe ซ่อนอยู่หลายอัน ซึ่งก็โหลดสคริปต์นี้ด้วย
+// เฟรมพวกนั้นมองไม่เห็นรายการแชท ถ้าปล่อยให้ทำงานมันจะไปคว้าข้อความในคิวมาแล้วส่งไม่ได้
+// สุดท้ายตีตราว่าล้มเหลวทิ้ง ตัวจริงเลยไม่เคยได้จับ
+const IS_TIKTOK = /(^|\.)tiktok\.com$/i.test(location.hostname) && window.top === window;
 
 const ttByName   = new Map();   // ชื่อที่แสดง → ข้อมูลผู้ใช้
 const ttByUnique = new Map();   // @username  → ข้อมูลผู้ใช้
