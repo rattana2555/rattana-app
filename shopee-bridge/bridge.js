@@ -689,6 +689,7 @@ async function ttSendOne(item) {
 }
 
 let ttSending = false;
+let ttOutTick = 0;
 async function ttOutbox() {
   if (ttSending || !cfg.secret || cfg.discovery) return;
   ttSending = true;
@@ -699,11 +700,26 @@ async function ttOutbox() {
       body: JSON.stringify({ action: "outbox", platform: "tiktok" }),
     });
     const j = await r.json();
-    for (const item of j.items || []) {
+
+    if (j.items === undefined) {
+      // ฟังก์ชันฝั่งเซิร์ฟเวอร์ยังเป็นตัวเก่า ไม่รู้จักคำสั่ง outbox
+      if (++ttOutTick % 8 === 1)
+        console.error(`${TAG} TikTok: ingest-shopee ยังเป็นเวอร์ชันเก่า — ยังวางโค้ดใหม่ไม่ครบ`, j);
+      return;
+    }
+    if (!j.items.length) {
+      if (++ttOutTick % 20 === 1) console.log(TAG, "TikTok: ไม่มีข้อความรอส่ง");
+      return;
+    }
+
+    console.log(`%c${TAG} TikTok มีข้อความรอส่ง ${j.items.length} ข้อความ`,
+                "background:#c9a84c;color:#0d1b3e;font-weight:bold;padding:2px 6px");
+    for (const item of j.items) {
+      console.log(TAG, "กำลังส่งถึง", item.name, ":", item.text.slice(0, 40));
       await ttSendOne(item);
       await wait(1200);
     }
-  } catch (e) { console.warn(TAG, "อ่านคิวข้อความไม่สำเร็จ:", e.message); }
+  } catch (e) { console.error(TAG, "อ่านคิวข้อความไม่สำเร็จ:", e.message); }
   finally { ttSending = false; }
 }
 

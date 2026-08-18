@@ -80,22 +80,32 @@ serve(async (req: Request) => {
   // TikTok ไม่มี API ส่งข้อความ พนักงานกดส่งใน Chat Hub แล้วข้อความจะค้างเป็น queued
   // ส่วนขยายที่เปิดหน้า TikTok อยู่จะมาถามคิวนี้ แล้วพิมพ์ส่งให้บนหน้าเว็บจริง
   if (payload.action === "outbox") {
-    const { data, error } = await db0
+    // ทำสองจังหวะ ตรงไปตรงมากว่าการ join ข้ามตาราง และไม่พึ่งการตั้งค่าความสัมพันธ์
+    const { data: convRows, error: cErr } = await db0
+      .from("conversations")
+      .select("id, platform_conv_id, customer_name")
+      .eq("platform", platform);
+    if (cErr) return json({ ok: false, error: cErr.message, items: [] });
+    if (!convRows?.length) return json({ ok: true, items: [] });
+
+    const meta = new Map(convRows.map((c: any) => [c.id, c]));
+    const { data: msgs, error: mErr } = await db0
       .from("messages")
-      .select("id, content, conversations!inner(platform, platform_conv_id, customer_name)")
+      .select("id, content, conversation_id")
       .eq("direction", "out")
       .eq("status", "queued")
-      .eq("conversations.platform", platform)
+      .in("conversation_id", [...meta.keys()])
       .order("sent_at", { ascending: true })
       .limit(10);
-    if (error) return json({ ok: false, error: error.message });
+    if (mErr) return json({ ok: false, error: mErr.message, items: [] });
+
     return json({
       ok: true,
-      items: (data ?? []).map((m: any) => ({
+      items: (msgs ?? []).map((m: any) => ({
         id: m.id,
         text: m.content,
-        convId: m.conversations.platform_conv_id,
-        name: m.conversations.customer_name,
+        convId: meta.get(m.conversation_id)?.platform_conv_id,
+        name: meta.get(m.conversation_id)?.customer_name,
       })),
     });
   }
