@@ -432,24 +432,34 @@ function h32(s) {
 const q = (sel, root) => [...(root || document).querySelectorAll(sel)];
 
 // ── อ่านแชทที่เปิดอยู่ ─────────────────────────────────────
+let ttWhy = "";
 function ttReadOpenChat() {
-  const uidEl = q('[class*="--PUniqueId"]')[0];
-  if (!uidEl) return null;
-  const unique = (uidEl.textContent || "").trim().replace(/^@/, "");
-  if (!unique) return null;
-
-  const bubbles = q('[class*="--PText"]');
-  if (!bubbles.length) return null;
-
+  const uidEl  = q('[class*="--PUniqueId"]')[0];
   const nameEl = q('[class*="--PNickname"]')[0];
-  const user = ttByUnique.get(unique) || {};
-  const convId = user.uid || unique;
-  const name = user.name || (nameEl && nameEl.textContent.trim()) || unique;
+  const bubbles = q('[class*="--PText"]');
+
+  ttWhy = `PUniqueId=${uidEl ? 1 : 0} PNickname=${nameEl ? 1 : 0} PText=${bubbles.length} รู้จักผู้ใช้=${ttByUnique.size}`;
+
+  const unique = (uidEl?.textContent || "").trim().replace(/^@/, "");
+  const shown  = (nameEl?.textContent || "").trim();
+  if (!unique && !shown) { ttWhy += " → ยังไม่ได้เปิดแชท"; return null; }
+  if (!bubbles.length)   { ttWhy += " → เปิดแชทแล้วแต่ยังไม่เห็นฟองข้อความ"; return null; }
+
+  const user = ttByUnique.get(unique) || ttByName.get(shown) || {};
+  const convId = user.uid || unique || shown;
+  const name = user.name || shown || unique;
 
   // กล่องข้อความ = บรรพบุรุษร่วมของทุกฟอง ใช้ขอบซ้าย/ขวาตัดสินว่าใครส่ง
+  // ต้องเดินขึ้นจนกล่องกว้างกว่าฟองพอสมควร ไม่งั้นตอนมีข้อความเดียวจะได้กล่องรัดรูป
+  // ซึ่งวัดซ้าย/ขวาไม่ได้ และหาบรรทัดวันที่ไม่เจอ
   let box = bubbles[0].parentElement;
-  while (box && box.parentElement && !bubbles.every((el) => box.contains(el))) box = box.parentElement;
-  if (!box) return null;
+  for (let i = 0; i < 12 && box && box.parentElement; i++) {
+    const covers = bubbles.every((el) => box.contains(el));
+    const wide   = box.getBoundingClientRect().width > 320;
+    if (covers && wide) break;
+    box = box.parentElement;
+  }
+  if (!box) { ttWhy += " → หากล่องข้อความไม่เจอ"; return null; }
   const br = box.getBoundingClientRect();
 
   const messages = [];
@@ -477,7 +487,8 @@ function ttReadOpenChat() {
     });
   }
 
-  if (!messages.length) return null;
+  if (!messages.length) { ttWhy += " → อ่านฟองข้อความไม่ออก"; return null; }
+  ttWhy += ` → อ่านได้ ${messages.length} ข้อความ`;
   return { convId: String(convId), name, avatar: user.avatar || "", messages };
 }
 
@@ -515,13 +526,29 @@ function ttReadList() {
 // ── ตรวจหน้าจอเป็นระยะ ส่งเฉพาะตอนมีอะไรเปลี่ยน ──────────
 let ttLastSig = "";
 
+let ttTick = 0;
 function ttScan() {
-  if (!cfg.enabled || cfg.discovery) return;
-  const batch = [];
+  if (!cfg.enabled) return;
+  if (cfg.discovery) {
+    if (++ttTick % 6 === 1) console.warn(TAG, "TikTok: 'โหมดสำรวจ' ยังเปิดอยู่ — ปิดก่อนถึงจะส่งข้อมูล");
+    return;
+  }
+  if (!cfg.secret) {
+    if (++ttTick % 6 === 1) console.warn(TAG, "TikTok: ยังไม่ได้ใส่รหัสลับในหน้าตั้งค่า");
+    return;
+  }
 
+  const batch = [];
   const open = ttReadOpenChat();
   if (open) batch.push(open);
-  batch.push(...ttReadList());
+  const list = ttReadList();
+  batch.push(...list);
+
+  // บอกสถานะทุก ~30 วินาที เพื่อให้รู้ว่าติดตรงไหนโดยไม่ต้องเดา
+  if (++ttTick % 6 === 1)
+    console.log(`%c${TAG} TikTok สถานะ — แชทที่เปิดอยู่: ${ttWhy} | รายการซ้าย: ${list.length} แชท`,
+                "background:#25F4EE;color:#000;padding:2px 6px");
+
   if (!batch.length) return;
 
   const sig = JSON.stringify(batch.map((c) =>
