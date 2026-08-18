@@ -75,6 +75,9 @@ serve(async (req: Request) => {
 
   const db = createClient(SUPABASE_URL, SERVICE_KEY);
   let convCount = 0, msgCount = 0;
+  // เก็บสาเหตุที่บันทึกไม่ได้ ส่งกลับไปให้เห็นใน Console ของเบราว์เซอร์
+  // ไม่งั้นต้องไล่หาใน log ของ Supabase ทุกครั้งซึ่งช้ามาก
+  const problems: string[] = [];
 
   for (const c of convs.slice(0, 100)) {
     if (!c?.convId) continue;
@@ -151,7 +154,11 @@ serve(async (req: Request) => {
         })
         .select("id")
         .single();
-      if (error || !data) { console.error("conv insert:", error); continue; }
+      if (error || !data) {
+        console.error("conv insert:", error);
+        problems.push(`สร้างแชท ${c.name || c.convId}: ${error?.message}`);
+        continue;
+      }
       conv = data;
     }
     convCount++;
@@ -230,10 +237,18 @@ serve(async (req: Request) => {
 
     if (rows.length) {
       const { error: insErr } = await db.from("messages").insert(rows);
-      if (insErr) console.error("msg insert:", insErr);
-      else msgCount += rows.length;
+      if (!insErr) { msgCount += rows.length; continue; }
+
+      // ทั้งชุดล้มเพราะแถวเดียวก็ได้ (เช่นรหัสข้อความชนกันเอง)
+      // ลองทีละแถว เพื่อไม่ให้เสียทั้งชุด แล้วรายงานเฉพาะแถวที่มีปัญหาจริง
+      console.error("msg insert:", insErr);
+      for (const r of rows) {
+        const { error } = await db.from("messages").insert(r);
+        if (error) problems.push(`${String(r.content).slice(0, 20)}… : ${error.message}`);
+        else msgCount++;
+      }
     }
   }
 
-  return json({ ok: true, conversations: convCount, newMessages: msgCount });
+  return json({ ok: true, conversations: convCount, newMessages: msgCount, problems: problems.slice(0, 8) });
 });

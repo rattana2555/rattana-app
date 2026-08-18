@@ -463,6 +463,7 @@ function ttReadOpenChat() {
   const br = box.getBoundingClientRect();
 
   const messages = [];
+  const usedIds = new Set();
   let ts = 0;
 
   for (const el of q("span,p,div", box)) {
@@ -478,8 +479,14 @@ function ttReadOpenChat() {
     const fromShop = (br.right - r.right) < (r.left - br.left);
     const when = ts || Date.now();
 
+    // ข้อความใต้บรรทัดวันที่เดียวกันได้เวลาเท่ากันหมด ถ้าเนื้อความซ้ำด้วยรหัสจะชนกัน
+    // แล้วฐานข้อมูลจะปฏิเสธทั้งชุด — เติมลำดับต่อท้ายให้ไม่ซ้ำ
+    let mid = `tt:${convId}:${when}:${h32(txt)}`;
+    for (let k = 2; usedIds.has(mid); k++) mid = `tt:${convId}:${when}:${h32(txt)}:${k}`;
+    usedIds.add(mid);
+
     messages.push({
-      id: `tt:${convId}:${when}:${h32(txt)}`,
+      id: mid,
       from: fromShop ? "seller" : "buyer",
       text: txt,
       imageUrl: "",
