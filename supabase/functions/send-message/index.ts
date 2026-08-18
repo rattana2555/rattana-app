@@ -41,6 +41,28 @@ async function sendLine(to: string, text: string): Promise<string | null> {
   try { return JSON.parse(body)?.sentMessages?.[0]?.id ?? null; } catch { return null; }
 }
 
+// Facebook คืน error เป็นก้อน JSON ยาวมาก พนักงานอ่านไม่รู้เรื่อง
+// แปลเป็นประโยคเดียวที่บอกได้ว่า "ต้องทำอะไรต่อ"
+function fbReason(status: number, body: string): string {
+  let e: Record<string, unknown> = {};
+  try { e = (JSON.parse(body) as any)?.error ?? {}; } catch { /* ไม่ใช่ JSON ก็ช่างมัน */ }
+  const sub  = Number(e.error_subcode ?? 0);
+  const code = Number(e.code ?? 0);
+  const msg  = String(e.message ?? "");
+
+  if (sub === 2018278 || /outside of allowed window/i.test(msg))
+    return "เกินกำหนด 24 ชั่วโมงที่ Facebook ให้ตอบ — ต้องรอลูกค้าทักมาใหม่ก่อน";
+  if (/controlling this thread/i.test(msg))
+    return "บทสนทนานี้มีแอปอื่นของเพจควบคุมอยู่ (เช่นแชทบอท AI) — ต้องเปิดสิทธิ์ควบคุมการสนทนาให้แอปนี้ก่อน";
+  if (code === 551 || sub === 1545041)
+    return "ลูกค้าปิดรับข้อความจากเพจนี้";
+  if (code === 200 || /permission/i.test(msg))
+    return "โทเคนเพจไม่มีสิทธิ์ส่งข้อความ — ออก Page Token ใหม่พร้อมสิทธิ์ pages_messaging";
+  if (code === 100)
+    return "Facebook ไม่รู้จักลูกค้ารายนี้";
+  return `Facebook ${status}: ${msg || body}`.slice(0, 200);
+}
+
 // ── ส่ง Facebook ─────────────────────────────────────────────
 // messaging_type: RESPONSE = ตอบกลับข้อความลูกค้าภายใน 24 ชม. (ไม่ต้องขอสิทธิ์เพิ่ม)
 // recipientId คือ PSID จาก sender.id ของ webhook — ใช้ได้เฉพาะกับเพจนี้เท่านั้น
@@ -58,7 +80,7 @@ async function sendFacebook(recipientId: string, text: string): Promise<string |
     }
   );
   const body = await res.text();
-  if (!res.ok) throw new Error(`Facebook ${res.status}: ${body}`);
+  if (!res.ok) throw new Error(fbReason(res.status, body));
   try { return JSON.parse(body)?.message_id ?? null; } catch { return null; }
 }
 
