@@ -8,21 +8,38 @@ chrome.storage.local.get(["secret", "discovery", "enabled", "shopUser"], (v) => 
   $("enabled").checked   = v.enabled !== false;     // ค่าเริ่มต้น = เปิด
 });
 
-// แสดงตัวอย่างที่ดักได้ — เก็บ 2 ชุด: รายการแชท กับ ข้อความในแชท
-// เก็บอันที่ใหญ่ที่สุดของแต่ละชุด เพราะอันเล็กมักไม่มีข้อมูลจริง
-chrome.storage.local.get(["sampleChatList", "sampleChatMsgs", "ttSamples", "ttDom"], (v) => {
+// ── แสดงทุกอย่างที่ดักได้ ──────────────────────────────────
+// LINE/Shopee : เก็บเป็น 2 ชุด (รายการแชท / ข้อความในแชท)
+// TikTok      : เก็บตาม path เพราะยังไม่รู้ว่าอันไหนคืออะไร + โครงหน้าจอที่สำรวจได้
+const KEYS = ["sampleChatList", "sampleChatMsgs", "ttSamples", "ttDom"];
+
+chrome.storage.local.get(KEYS, (v) => {
   const parts = [];
-  if (v.sampleChatList) parts.push(`===== รายการแชท (${v.sampleChatList.size} ตัวอักษร) =====\n${v.sampleChatList.path}\n${v.sampleChatList.body}`);
-  if (v.sampleChatMsgs) parts.push(`===== ข้อความในแชท (${v.sampleChatMsgs.size} ตัวอักษร) =====\n${v.sampleChatMsgs.path}\n${v.sampleChatMsgs.body}`);
-  $("sample").value = parts.join("\n\n");
+
+  if (v.sampleChatList)
+    parts.push(`===== รายการแชท (${v.sampleChatList.size} ตัวอักษร) =====\n${v.sampleChatList.path}\n${v.sampleChatList.body}`);
+  if (v.sampleChatMsgs)
+    parts.push(`===== ข้อความในแชท (${v.sampleChatMsgs.size} ตัวอักษร) =====\n${v.sampleChatMsgs.path}\n${v.sampleChatMsgs.body}`);
+
+  const tt = v.ttSamples || {};
+  for (const path of Object.keys(tt))
+    parts.push(`===== TikTok เน็ตเวิร์ก${tt[path].req ? " (ขาออก)" : ""} · ${tt[path].size} ตัวอักษร =====\n${path}\n${tt[path].body}`);
+
+  if (v.ttDom && v.ttDom.rows)
+    parts.push(`===== TikTok หน้าจอ · ${v.ttDom.url} · กว้าง ${v.ttDom.w}px =====\n` +
+      v.ttDom.rows.map((r) => `[${r.side}] x=${r.x} y=${r.y} <${r.tag}> ${r.cls}\n   ${r.text}`).join("\n"));
+
+  $("sample").value = parts.length ? parts.join("\n\n") : "";
+  $("ok").style.color = "#8a98b8";
+  $("ok").textContent = parts.length ? `มีข้อมูล ${parts.length} ชุด` : "";
 });
 
 // ล้างตัวอย่างเก่า เพื่อเริ่มเก็บใหม่
 $("clear").addEventListener("click", () => {
-  chrome.storage.local.remove(["sampleChatList", "sampleChatMsgs", "lastChatSample", "ttSamples", "ttDom"], () => {
+  chrome.storage.local.remove([...KEYS, "lastChatSample"], () => {
     $("sample").value = "";
     $("ok").style.color = "#2ecc71";
-    $("ok").textContent = "ล้างแล้ว — รีเฟรชหน้า LINE เพื่อเก็บใหม่";
+    $("ok").textContent = "ล้างแล้ว — รีเฟรชหน้าเว็บเพื่อเก็บใหม่";
     setTimeout(() => ($("ok").textContent = ""), 3000);
   });
 });
@@ -52,7 +69,7 @@ $("save").addEventListener("click", () => {
     enabled:   $("enabled").checked,
   }, () => {
     $("ok").style.color = "#2ecc71";
-    $("ok").textContent = "บันทึกแล้ว ✓ รีเฟรชหน้า Shopee ด้วย";
+    $("ok").textContent = "บันทึกแล้ว ✓ รีเฟรชหน้าเว็บด้วย";
     setTimeout(() => ($("ok").textContent = ""), 3000);
   });
 });

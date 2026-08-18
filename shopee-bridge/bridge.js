@@ -361,30 +361,46 @@ if (IS_TIKTOK) {
 // รอบนี้ยังเป็นการ "สำรวจ" — ดูว่าโครงหน้าเว็บใช้ป้ายชื่ออะไรบ้าง จะได้เขียนตัวอ่านให้ตรง
 let domRuns = 0;
 function surveyTikTokDom() {
-  if (++domRuns > 12) return;                       // สำรวจ 1 นาทีพอ ไม่กวนเครื่อง
+  if (++domRuns > 8) return;
 
-  const tags = new Map();
-  document.querySelectorAll("[data-e2e]").forEach((el) => {
-    const k = el.getAttribute("data-e2e");
-    const c = tags.get(k) || { n: 0, ตัวอย่าง: "" };
-    c.n++;
-    if (!c.ตัวอย่าง) {
-      const t = (el.innerText || "").trim().replace(/\s+/g, " ");
-      if (t) c.ตัวอย่าง = t.slice(0, 50);
-    }
-    tags.set(k, c);
-  });
-  if (!tags.size) return;
+  // ไม่พึ่งชื่อคลาสหรือ data-e2e เพราะ TikTok สุ่มชื่อใหม่ทุกครั้งที่ deploy
+  // ใช้สิ่งที่เปลี่ยนยากแทน: "ก้อนข้อความสั้นๆ ที่มองเห็นบนจอ" + ตำแหน่งซ้าย/ขวา
+  // (ฟองแชทของเราชิดขวา ของลูกค้าชิดซ้าย — จริงเสมอไม่ว่าหน้าตาจะเปลี่ยนยังไง)
+  const leaves = [];
+  const all = document.querySelectorAll("div,span,p");
+  const cap = Math.min(all.length, 6000);
+  for (let i = 0; i < cap; i++) {
+    const el = all[i];
+    if (el.children.length) continue;                       // เอาเฉพาะใบสุดท้าย
+    const t = (el.textContent || "").trim().replace(/\s+/g, " ");
+    if (!t || t.length > 300) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < 20 || r.height < 10 || r.bottom < 0 || r.top > innerHeight) continue;
+    leaves.push({ el, t, r });
+  }
+  if (leaves.length < 3) return;
 
-  const rows = [...tags].map(([tag, v]) => ({ tag, จำนวน: v.n, ตัวอย่าง: v.ตัวอย่าง }));
-  console.log(`%c${TAG} TikTok หน้าจอ — เจอป้าย data-e2e ${rows.length} แบบ (ส่งตารางนี้ให้ผู้พัฒนา)`,
+  // แบ่งซ้าย/ขวาด้วยกึ่งกลางของบริเวณที่มีข้อความจริง ไม่ใช่กึ่งกลางจอ
+  const cs = leaves.map((l) => l.r.left + l.r.width / 2);
+  const mid = (Math.min.apply(null, cs) + Math.max.apply(null, cs)) / 2;
+
+  const rows = leaves.slice(-45).map((l) => ({
+    side: (l.r.left + l.r.width / 2) > mid ? "ขวา" : "ซ้าย",
+    x: Math.round(l.r.left),
+    y: Math.round(l.r.top),
+    tag: l.el.tagName.toLowerCase(),
+    cls: String(l.el.className || "").split(/\s+/).slice(0, 2).join(" ").slice(0, 45),
+    text: l.t.slice(0, 70),
+  }));
+
+  console.log(`%c${TAG} TikTok หน้าจอ — อ่านได้ ${rows.length} ก้อนข้อความ (กดไอคอนส่วนขยาย > คัดลอกตัวอย่าง)`,
               "background:#25F4EE;color:#000;font-weight:bold;padding:2px 6px");
   console.table(rows);
 
-  chrome.storage.local.set({ ttDom: { url: location.pathname, rows } });
+  chrome.storage.local.set({ ttDom: { url: location.pathname, w: innerWidth, rows } });
 }
 
-if (IS_TIKTOK) setInterval(surveyTikTokDom, 5000);
+if (IS_TIKTOK) setInterval(surveyTikTokDom, 6000);
 
 let ttSeen = 0;
 function collectTikTok(d) {
