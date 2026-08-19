@@ -702,41 +702,87 @@ async function ttAck(id, ok, why) {
   }).catch(() => {});
 }
 
+// เทียบชื่อแบบผ่อนปรน — อีโมจิกับช่องว่างมักไม่ตรงกันเป๊ะระหว่างที่เก็บไว้กับที่แสดงบนจอ
+const looseName = (x) => String(x || "").replace(/\s+/g, "").trim();
+
+function ttPickEditor() {
+  // เอาช่องพิมพ์ที่มองเห็นจริงและอยู่ล่างสุดของจอ = ช่องพิมพ์ข้อความของแชท
+  const eds = q('[contenteditable="true"]').filter((el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 80 && r.height > 10;
+  });
+  return eds.sort((x, y) => y.getBoundingClientRect().top - x.getBoundingClientRect().top)[0] || null;
+}
+
+// วางเคอร์เซอร์ในช่องก่อน — ถ้าไม่วาง execCommand จะไม่ทำอะไรเลย
+// (นี่คือสาเหตุที่พิมพ์ไม่ลงมาตลอด: focus() อย่างเดียวไม่ได้สร้างจุดพิมพ์)
+function ttPutCaret(ed) {
+  ed.focus();
+  const range = document.createRange();
+  range.selectNodeContents(ed);
+  range.collapse(false);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+function ttType(ed, text) {
+  ttPutCaret(ed);
+  // ทางหลัก — ตัวแก้ไขข้อความของ TikTok (DraftJS) รับรู้ผ่านทางนี้
+  document.execCommand("insertText", false, text);
+  if ((ed.textContent || "").includes(text)) return true;
+
+  // ทางสำรอง — ยิงเหตุการณ์พิมพ์เองแบบที่เบราว์เซอร์ทำจริง
+  ttPutCaret(ed);
+  for (const type of ["beforeinput", "input"]) {
+    ed.dispatchEvent(new InputEvent(type, {
+      inputType: "insertText", data: text, bubbles: true, cancelable: true, composed: true,
+    }));
+  }
+  return (ed.textContent || "").includes(text);
+}
+
+function ttPressEnter(ed) {
+  for (const type of ["keydown", "keypress", "keyup"]) {
+    ed.dispatchEvent(new KeyboardEvent(type, {
+      key: "Enter", code: "Enter", keyCode: 13, which: 13,
+      bubbles: true, cancelable: true, composed: true,
+    }));
+  }
+}
+
 async function ttSendOne(item) {
-  const row = await ttFindRow(item.name);
+  const want = looseName(item.name);
+  let row = await ttFindRow(item.name);
+  if (!row) row = ttListRows().find((r) => looseName(r.name) === want);
   if (!row) {
-    await ttAck(item.id, false, `หาแชท "${item.name}" ในรายการไม่เจอ`);
+    await ttAck(item.id, false, `หาแชท "${item.name}" ในรายการไม่เจอ — อาจอยู่ในกล่อง "คำขอส่งข้อความ"`);
     return false;
   }
 
   ttClick(row.row);
-  await wait(1600);
+  await wait(1800);
 
-  // กันส่งผิดคน — ตรวจว่าหัวแชทเป็นคนเดียวกับที่ตั้งใจจริงๆ
-  const head = (q('[class*="--PNickname"]')[0]?.textContent || "").trim();
-  if (head && head !== item.name) {
-    await ttAck(item.id, false, `เปิดผิดแชท (ได้ ${head})`);
+  // กันส่งผิดคน
+  const head = looseName(q('[class*="--PNickname"]')[0]?.textContent);
+  if (head && want && head !== want) {
+    await ttAck(item.id, false, `เปิดผิดแชท (ตั้งใจ ${item.name} แต่ได้ ${head})`);
     return false;
   }
 
-  const ed = q('[contenteditable="true"]').pop();
-  if (!ed) { await ttAck(item.id, false, "ไม่พบช่องพิมพ์ข้อความ"); return false; }
+  const ed = ttPickEditor();
+  if (!ed) { await ttAck(item.id, false, "ไม่พบช่องพิมพ์ข้อความบนหน้าเว็บ"); return false; }
 
-  ed.focus();
-  await wait(200);
-  // execCommand เป็นวิธีเดียวที่ตัวแก้ไขข้อความของ TikTok (DraftJS) รับรู้
-  // ถ้าไปยัด textContent ตรงๆ ตัวแก้ไขจะไม่รู้ว่ามีข้อความ แล้วปุ่มส่งจะไม่ทำงาน
-  document.execCommand("insertText", false, item.text);
-  await wait(400);
+  if (!ttType(ed, item.text)) {
+    await ttAck(item.id, false, "พิมพ์ข้อความลงช่องไม่ได้ — TikTok อาจเปลี่ยนหน้าเว็บ");
+    return false;
+  }
+  await wait(500);
 
-  for (const type of ["keydown", "keypress", "keyup"])
-    ed.dispatchEvent(new KeyboardEvent(type, {
-      key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true,
-    }));
+  ttPressEnter(ed);
+  await wait(1800);
 
-  await wait(1600);
-
-  // ยืนยันผล: ช่องพิมพ์ต้องว่าง และต้องมีฟองข้อความนั้นโผล่ขึ้นมา
+  // ยืนยันผล: ช่องพิมพ์ต้องว่าง และต้องมีฟองข้อความนั้นโผล่ขึ้นมาจริง
   const cleared = !(ed.textContent || "").trim();
   const shown = q('[class*="--PText"]').some((el) =>
     (el.textContent || "").trim() === item.text.trim());
@@ -747,7 +793,10 @@ async function ttSendOne(item) {
     await ttAck(item.id, true);
     return true;
   }
-  await ttAck(item.id, false, "กดส่งแล้วแต่ข้อความไม่ขึ้น");
+
+  await ttAck(item.id, false,
+    cleared ? "กดส่งแล้วช่องว่างลง แต่ข้อความไม่ขึ้นในแชท"
+            : "พิมพ์ลงช่องได้ แต่กด Enter แล้วไม่ส่ง");
   return false;
 }
 
