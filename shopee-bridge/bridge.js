@@ -350,6 +350,11 @@ function parseLineSend(url, body) {
 // สุดท้ายตีตราว่าล้มเหลวทิ้ง ตัวจริงเลยไม่เคยได้จับ
 const IS_TIKTOK = /(^|\.)tiktok\.com$/i.test(location.hostname) && window.top === window;
 
+// เฉพาะ "หน้าแชท" เท่านั้นที่มีสิทธิ์รับข้อความไปส่ง
+// แท็บ TikTok อื่น (หน้าฟีด, Business Suite, โปรไฟล์) ไม่มีรายการแชทให้คลิก
+// ถ้าปล่อยให้แย่งคิวไปมันจะส่งไม่ได้แล้วตีตราทิ้ง ตัวจริงเลยไม่เคยได้จับ
+const IS_TT_CHAT = IS_TIKTOK && /^\/messages/i.test(location.pathname);
+
 const ttByName   = new Map();   // ชื่อที่แสดง → ข้อมูลผู้ใช้
 const ttByUnique = new Map();   // @username  → ข้อมูลผู้ใช้
 
@@ -753,6 +758,14 @@ function ttPressEnter(ed) {
 
 async function ttSendOne(item) {
   const want = looseName(item.name);
+
+  // ยังไม่เห็นรายการแชทเลย = หน้ายังโหลดไม่เสร็จ — อย่าเพิ่งตีตราว่าล้มเหลว
+  // ปล่อยให้ค้างในคิวไว้ เดี๋ยวรอบหน้าค่อยลองใหม่ ดีกว่าทิ้งข้อความของลูกค้า
+  if (!ttListRows().length) {
+    console.warn(TAG, "TikTok: ยังไม่เห็นรายการแชท — พักข้อความไว้ในคิวก่อน");
+    return false;
+  }
+
   let row = await ttFindRow(item.name);
   if (!row) row = ttListRows().find((r) => looseName(r.name) === want);
   if (!row) {
@@ -834,7 +847,9 @@ async function ttOutbox() {
   finally { ttSending = false; }
 }
 
-if (IS_TIKTOK) {
+if (IS_TT_CHAT) {
+  console.log(`%c${TAG} TikTok หน้าแชท — พร้อมอ่านและส่งข้อความ`,
+              "background:#25F4EE;color:#000;font-weight:bold;padding:2px 6px");
   setInterval(ttScan, 5000);
 
   // ส่งข้อความที่รออยู่ทุก 8 วินาที — คนกดส่งใน Hub แล้วต้องไปถึงเร็ว
@@ -851,6 +866,8 @@ if (IS_TIKTOK) {
   chrome.storage.onChanged.addListener((ch) => {
     if (ch.ttSweepNow) ttSweep(true);
   });
+} else if (IS_TIKTOK) {
+  console.log(TAG, "TikTok แท็บนี้ไม่ใช่หน้าแชท — ไม่ยุ่งกับคิวข้อความ (เปิด tiktok.com/messages)");
 }
 
 function collectTikTok(d) {
