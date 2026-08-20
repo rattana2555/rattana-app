@@ -949,7 +949,7 @@ window.addEventListener("message", (ev) => {
     if (d.req === true) {
       const s = parseLineSend(String(d.url), d.body);
       if (s) {
-        console.log(`%c${TAG} LINE → ทีมงานตอบ: ${s.messages[0].text.slice(0, 40)}`,
+        console.log(`%c${TAG} LINE → ทีมงานตอบ: ${(s.messages[0].text || "[รูป/สติกเกอร์]").slice(0, 40)}`,
                     "background:#c9a84c;color:#0d1b3e;font-weight:bold;padding:2px 6px");
         queue.push(s);
         if (!timer) timer = setTimeout(flush, 3000);
