@@ -214,6 +214,42 @@ serve(async (req: Request) => {
     return new Response(JSON.stringify({ ok }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
+  // ── ส่งรูป ─────────────────────────────────────────────────
+  // อัปโหลดขึ้น Storage (bucket สาธารณะ) ให้ได้ URL ก่อน แล้วส่ง URL นั้นเข้าแพลตฟอร์ม
+  // รองรับเฉพาะ LINE / Facebook — Shopee/TikTok ไม่มี API ส่งรูป
+  if (imageBase64) {
+    if (conv.platform !== "line" && conv.platform !== "facebook") {
+      return new Response(JSON.stringify({ sent: false, error: `ส่งรูปทาง ${conv.platform} ไม่ได้ — ส่งในแอปของช่องทางนั้น` }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    let url = "";
+    try {
+      const mime = String(imageMime || "image/jpeg");
+      const ext  = mime.split("/")[1]?.split(";")[0] || "jpg";
+      const bytes = Uint8Array.from(atob(imageBase64), (ch) => ch.charCodeAt(0));
+      const path = `staff/${conversationId}/${Date.now()}.${ext}`;
+      const up = await db.storage.from("chat-media").upload(path, bytes, { contentType: mime, upsert: true });
+      if (up.error) throw new Error("อัปโหลดรูปไม่สำเร็จ: " + up.error.message);
+      url = db.storage.from("chat-media").getPublicUrl(path).data.publicUrl;
+    } catch (e) {
+      return new Response(JSON.stringify({ sent: false, error: String(e).replace(/^Error:\s*/, "") }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    let sentImg = false, errImg = "", pid: string | null = null;
+    try {
+      if (conv.platform === "line") pid = await sendLineImage(conv.customer_id || conv.platform_conv_id, url);
+      else                          pid = await sendFacebookImage(conv.platform_conv_id, url);
+      sentImg = true;
+    } catch (e) {
+      errImg = String(e).replace(/^Error:\s*/, "");
+      console.error("send image error:", errImg);
+    }
+    return new Response(JSON.stringify({ sent: sentImg, url, platformMsgId: pid, error: errImg || null }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+
   if (!content) {
     return new Response(JSON.stringify({ error: "missing content" }), { status: 400, headers: corsHeaders });
   }
