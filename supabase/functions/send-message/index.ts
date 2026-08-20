@@ -41,6 +41,26 @@ async function sendLine(to: string, text: string): Promise<string | null> {
   try { return JSON.parse(body)?.sentMessages?.[0]?.id ?? null; } catch { return null; }
 }
 
+// ── ส่งรูปทาง LINE ───────────────────────────────────────────
+// LINE ต้องการ URL รูปแบบ HTTPS สาธารณะ 2 อัน (ตัวเต็ม + ตัวพรีวิว) ใช้ URL เดียวกันได้
+async function sendLineImage(to: string, url: string): Promise<string | null> {
+  const res = await fetch("https://api.line.me/v2/bot/message/push", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${LINE_TOKEN}` },
+    body: JSON.stringify({ to, messages: [{ type: "image", originalContentUrl: url, previewImageUrl: url }] }),
+  });
+  const body = await res.text();
+  if (!res.ok) {
+    const why =
+      res.status === 429 ? "โควตาข้อความ LINE ของเดือนนี้หมดแล้ว"
+    : res.status === 401 ? "โทเคน LINE ไม่ถูกต้องหรือหมดอายุ"
+    : res.status === 400 ? "LINE ไม่รู้จักลูกค้ารายนี้ — ตอบใน LINE OA Manager แทน"
+    : `LINE ${res.status}: ${body}`;
+    throw new Error(why);
+  }
+  try { return JSON.parse(body)?.sentMessages?.[0]?.id ?? null; } catch { return null; }
+}
+
 // Facebook คืน error เป็นก้อน JSON ยาวมาก พนักงานอ่านไม่รู้เรื่อง
 // แปลเป็นประโยคเดียวที่บอกได้ว่า "ต้องทำอะไรต่อ"
 function fbReason(status: number, body: string): string {
