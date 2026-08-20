@@ -104,6 +104,25 @@ async function sendFacebook(recipientId: string, text: string): Promise<string |
   try { return JSON.parse(body)?.message_id ?? null; } catch { return null; }
 }
 
+// ── ส่งรูปทาง Facebook ───────────────────────────────────────
+async function sendFacebookImage(recipientId: string, url: string): Promise<string | null> {
+  const res = await fetch(
+    `https://graph.facebook.com/v25.0/me/messages?access_token=${encodeURIComponent(FB_TOKEN)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recipient: { id: recipientId },
+        messaging_type: "RESPONSE",
+        message: { attachment: { type: "image", payload: { url, is_reusable: true } } },
+      }),
+    }
+  );
+  const body = await res.text();
+  if (!res.ok) throw new Error(fbReason(res.status, body));
+  try { return JSON.parse(body)?.message_id ?? null; } catch { return null; }
+}
+
 // ── ส่ง TikTok DM ────────────────────────────────────────────
 async function sendTikTok(userId: string, text: string) {
   // TikTok Direct Message API (ต้องขอ permission จาก TikTok ก่อน)
