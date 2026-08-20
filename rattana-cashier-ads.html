@@ -252,6 +252,15 @@ const imgUrl = id => `https://lh3.googleusercontent.com/d/${id}=w1920`;
 const mediaUrl = id => `https://www.googleapis.com/drive/v3/files/${id}?alt=media&key=${encodeURIComponent(cfg.apiKey)}`;
 
 async function fetchList(folderId, apiKey) {
+  // เช็คก่อนว่า key มองเห็นตัวโฟลเดอร์ไหม — แยกเคส "ยังไม่ได้แชร์" ออกจาก "โฟลเดอร์ว่าง"
+  const metaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${folderId}?fields=id,name&key=${encodeURIComponent(apiKey)}`);
+  if (metaRes.status === 404) throw new Error('FOLDER_PRIVATE');
+  if (!metaRes.ok) {
+    let msg = 'HTTP ' + metaRes.status;
+    try { msg = (await metaRes.json()).error?.message || msg; } catch {}
+    throw new Error(msg);
+  }
+  const meta = await metaRes.json();
   const q = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
   const fields = encodeURIComponent('nextPageToken,files(id,name,mimeType)');
   let files = [], pageToken = '';
