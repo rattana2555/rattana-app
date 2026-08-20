@@ -228,8 +228,22 @@ try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(CFG_KEY) || '{}') 
 function saveCfg() { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); }
 function parseFolderId(v) {
   v = String(v || '').trim();
-  const m = v.match(/folders\/([A-Za-z0-9_-]+)/);
-  return m ? m[1] : v.replace(/[?#].*$/, '');
+  let m = v.match(/folders\/([A-Za-z0-9_-]+)/);
+  if (m) return m[1];
+  m = v.match(/[?&]id=([A-Za-z0-9_-]+)/);
+  if (m) return m[1];
+  v = v.replace(/[?#].*$/, '');
+  const tokens = v.match(/[A-Za-z0-9_-]{15,}/g);
+  return tokens ? tokens.sort((a, b) => b.length - a.length)[0] : v;
+}
+function thaiErr(msg) {
+  msg = String(msg || '');
+  if (/File not found/i.test(msg)) return 'ไม่พบโฟลเดอร์ — เช็คว่าวางลิงก์โฟลเดอร์ถูกต้อง และแชร์เป็น "ทุกคนที่มีลิงก์"';
+  if (/API key not valid/i.test(msg)) return 'API Key ไม่ถูกต้อง — เช็คว่า copy มาครบทั้งบรรทัด';
+  if (/has not been used|is disabled/i.test(msg)) return 'ยังไม่ได้เปิดใช้ Google Drive API ในโปรเจกต์ — ไปที่ Library → Google Drive API → Enable';
+  if (/quota|rate/i.test(msg)) return 'เรียกใช้บ่อยเกินไป (quota) — รอสักครู่จะกลับมาเอง';
+  if (/Failed to fetch|NetworkError/i.test(msg)) return 'ต่ออินเทอร์เน็ตไม่ได้ — เช็คสายแลน/ไวไฟ';
+  return msg;
 }
 
 /* ══════════ Drive API ══════════ */
