@@ -311,14 +311,34 @@ function parseLineSend(url, body) {
   try { b = JSON.parse(body); } catch { return null; }
   if (!b || typeof b !== "object") return null;
 
+  // ต้องเป็นคำขอ "ส่งข้อความ" จริงๆ (มี /messages) ไม่งั้นจะไปจับพวก read/typing
+  if (!/\/messages(\?|$|\/)/i.test(url) && !b.text && !b.message && !Array.isArray(b.messages)) return null;
+
   const inPath = url.match(/\/chats\/([^/?#]+)/i);
   const chatId = inPath?.[1] || b.chatId || b.to
               || (Array.isArray(b.chatIds) ? b.chatIds[0] : "");
   if (!chatId) return null;
 
-  const text = b.text ?? b.message?.text
-            ?? (Array.isArray(b.messages) ? b.messages[0]?.text : "");
-  if (!text || typeof text !== "string") return null;   // ไม่ใช่คำขอส่งข้อความ
+  // ข้อความจริงอาจอยู่หลายที่: ตรงๆ / ใน message / ใน messages[0]
+  const first = (Array.isArray(b.messages) ? b.messages[0] : null) || b.message || b;
+  const type  = String(first.type || (b.text ? "text" : "")).toLowerCase();
+
+  let text = "", imageUrl = "";
+  if (first.text || b.text) {
+    text = String(first.text || b.text);
+  } else if (type === "sticker" || first.stickerId || b.stickerId) {
+    const sid = first.stickerId || b.stickerId;
+    imageUrl = sid ? `https://stickershop.line-scdn.net/stickershop/v1/sticker/${sid}/android/sticker.png` : "";
+    if (!imageUrl) text = "[สติกเกอร์]";
+  } else if (type === "image" || first.originalContentUrl || first.previewImageUrl) {
+    // รูปที่แอดมินอัปโหลดเอง LINE ไม่ให้ URL สาธารณะ — โชว์เป็นป้ายบอกไว้ก่อน
+    text = "[รูปภาพ]";
+  } else if (type === "video")    { text = "[วิดีโอ]"; }
+  else if (type === "audio")      { text = "[ข้อความเสียง]"; }
+  else if (type === "file")       { text = `[ไฟล์] ${first.fileName ?? ""}`.trim(); }
+  else return null;                 // ไม่รู้ว่าเป็นข้อความชนิดไหน ไม่จับ
+
+  if (!text && !imageUrl) return null;
 
   const meta = convMeta.get(String(chatId)) ?? {};
   return {
@@ -329,7 +349,7 @@ function parseLineSend(url, body) {
       id: `local:${chatId}:${Date.now()}`,
       from: "seller",
       text,
-      imageUrl: "",
+      imageUrl,
       sentAt: Date.now(),
     }],
   };
