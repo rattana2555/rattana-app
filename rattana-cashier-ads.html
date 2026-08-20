@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Rattana Cashier Ads v1.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0d1b3e;--navy-mid:#1a2f5e;--navy-light:#243b73;
+  --gold:#c9a84c;--gold-light:#e8c86a;
+  --success:#2ecc71;--danger:#e74c3c;--warning:#f39c12;--info:#3498db;
+  --bg:#f4f6fb;--text:#0d1b3e;--card-bg:#ffffff;--border:#dde3f0;--muted:#6b7896;
+  --radius-sm:6px;--radius-md:12px;--radius-lg:16px;
+  --shadow-lg:0 8px 24px rgba(13,27,62,.12);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'Sarabun',sans-serif;background:#000;color:#fff;overflow:hidden;-webkit-tap-highlight-color:transparent}
+body.hide-cursor{cursor:none}
+button{font-family:inherit;cursor:pointer;border:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+input,select{font-family:inherit;font-size:16px}
+
+/* ── Stage ── */
+#stage{position:fixed;inset:0;background:#000}
+.layer{position:absolute;inset:0;opacity:0;transition:opacity .6s ease;display:flex;align-items:center;justify-content:center;background:#000}
+.layer.on{opacity:1}
+.layer img,.layer video{width:100%;height:100%;object-fit:contain;background:#000}
+
+/* ── Center message (loading / empty / error) ── */
+#centerMsg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;z-index:5}
+#centerMsg.hidden{display:none}
+#centerMsg .big{font-size:26px;font-weight:700}
+#centerMsg .sub{font-size:15px;color:#9aa7c7;max-width:520px;line-height:1.6}
+.spin-ring{width:52px;height:52px;border:5px solid rgba(255,255,255,.15);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Overlays ── */
+#logoOverlay{position:absolute;top:18px;left:20px;z-index:10;display:none;align-items:center;gap:10px;background:rgba(0,0,0,.35);padding:8px 14px;border-radius:12px;backdrop-filter:blur(4px)}
+#logoOverlay img{height:44px;object-fit:contain;border-radius:6px}
+#clockOverlay{position:absolute;bottom:18px;right:20px;z-index:10;display:none;flex-direction:column;align-items:flex-end;background:rgba(0,0,0,.35);padding:8px 16px;border-radius:12px;backdrop-filter:blur(4px)}
+#clockTime{font-size:30px;font-weight:700;letter-spacing:1px;line-height:1.1;font-variant-numeric:tabular-nums}
+#clockDate{font-size:13px;color:#cdd6ea}
+
+/* ── Control buttons (appear on mouse move) ── */
+#ctrlBar{position:absolute;bottom:18px;left:20px;z-index:20;display:flex;gap:10px;opacity:0;transition:opacity .3s;pointer-events:none}
+body.show-ui #ctrlBar{opacity:1;pointer-events:auto}
+.ctrl-btn{width:48px;height:48px;border-radius:50%;background:rgba(13,27,62,.75);color:#fff;border:1.5px solid rgba(201,168,76,.6);font-size:20px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.ctrl-btn:hover{background:var(--gold);color:var(--navy)}
+#statusDot{position:absolute;top:14px;right:16px;z-index:10;width:10px;height:10px;border-radius:50%;background:transparent}
+#statusDot.err{background:var(--danger);box-shadow:0 0 8px var(--danger)}
+
+/* ── Settings modal ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.72);z-index:9000;align-items:flex-start;justify-content:center;padding:20px;backdrop-filter:blur(5px);overflow-y:auto}
+.modal-overlay.open{display:flex}
+.modal{background:var(--card-bg);color:var(--text);border-radius:var(--radius-lg);max-width:560px;width:100%;border-top:4px solid var(--gold);box-shadow:var(--shadow-lg);animation:slideUp .22s ease;margin:auto 0}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+.modal-head h3{font-size:17px;font-weight:700;display:flex;align-items:center;gap:10px}
+.modal-head img{height:34px}
+.modal-close{background:transparent;font-size:26px;color:var(--muted);padding:2px 10px;border-radius:6px;line-height:1}
+.modal-close:hover{color:var(--text);background:rgba(0,0,0,.06)}
+.modal-body{padding:20px}
+.modal-foot{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+.field label{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.3px}
+.input{height:44px;padding:0 14px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:#fff;color:var(--text);font-size:15px;outline:none;width:100%;transition:border-color .15s}
+.input:focus{border-color:var(--gold)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:480px){.row2{grid-template-columns:1fr}}
+.chk{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:500;padding:6px 0;cursor:pointer;user-select:none}
+.chk input{width:20px;height:20px;accent-color:var(--gold)}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:10px 18px;border-radius:var(--radius-sm);font-size:14px;font-weight:600;border:1px solid transparent;min-height:44px;transition:opacity .15s,transform .1s}
+.btn:hover{opacity:.88}
+.btn:active{transform:scale(.97)}
+.btn-gold{background:var(--gold);color:var(--navy)}
+.btn-outline{background:transparent;color:var(--text);border-color:var(--border)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+#testResult{font-size:13px;padding:10px 14px;border-radius:8px;margin-bottom:6px;display:none;line-height:1.6}
+#testResult.ok{display:block;background:#e8f7ee;color:#1e8449}
+#testResult.bad{display:block;background:#ffd5d0;color:#c0392b}
+
+details.guide{border:1.5px solid var(--border);border-radius:var(--radius-md);margin-top:6px;overflow:hidden}
+details.guide summary{padding:12px 16px;font-weight:700;font-size:14px;cursor:pointer;background:linear-gradient(to right,rgba(201,168,76,.1),transparent);user-select:none}
+details.guide .g-body{padding:4px 18px 16px;font-size:13.5px;line-height:1.8;color:#34405e}
+details.guide ol{padding-left:20px;display:flex;flex-direction:column;gap:6px}
+details.guide code{background:#eef1f8;padding:2px 6px;border-radius:4px;font-size:12px;word-break:break-all}
+details.guide b{color:var(--navy)}
+
+.toast{position:fixed;bottom:24px;right:16px;padding:12px 20px;border-radius:var(--radius-md);color:#fff;z-index:9999;animation:slideIn .3s ease;font-weight:500;box-shadow:var(--shadow-lg);max-width:90vw;font-size:13px}
+.toast-success{background:var(--success)}
+.toast-error{background:var(--danger)}
+.toast-info{background:var(--navy-mid);border-left:3px solid var(--gold)}
+@keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="layer" id="layerA"></div>
+  <div class="layer" id="layerB"></div>
+
+  <div id="centerMsg">
+    <div class="spin-ring" id="msgSpin"></div>
+    <div class="big" id="msgBig">กำลังโหลด...</div>
+    <div class="sub" id="msgSub"></div>
+  </div>
+
+  <div id="logoOverlay"><img id="logoImg" src="" alt=""></div>
+  <div id="clockOverlay">
+    <div id="clockTime">--.--</div>
+    <div id="clockDate">-</div>
+  </div>
+  <div id="statusDot"></div>
+
+  <div id="ctrlBar">
+    <button class="ctrl-btn" id="btnFull" title="เต็มจอ (F)">⛶</button>
+    <button class="ctrl-btn" id="btnGear" title="ตั้งค่า (S)">⚙</button>
+  </div>
+</div>
+
+<!-- ══ Settings ══ -->
+<div class="modal-overlay" id="settingsOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h3><img id="hdrLogo" alt="">จอโฆษณาแคชเชียร์ <span style="color:var(--gold);font-size:12px">v1.0</span></h3>
+      <button class="modal-close" id="btnCloseModal">×</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="field">
+        <label>ลิงก์โฟลเดอร์ Google Drive (หรือ Folder ID)</label>
+        <input class="input" id="inFolder" placeholder="https://drive.google.com/drive/folders/xxxx" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Google Drive API Key</label>
+        <input class="input" id="inApiKey" placeholder="AIzaSy..." autocomplete="off">
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label>เวลาแสดงรูป (วินาที)</label>
+          <input class="input" id="inImgSec" type="number" min="2" max="120" value="8">
+        </div>
+        <div class="field">
+          <label>เช็คไฟล์ใหม่ทุกๆ (นาที)</label>
+          <input class="input" id="inRefreshMin" type="number" min="1" max="120" value="5">
+        </div>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label>โลโก้มุมจอ</label>
+          <select class="input" id="inLogo">
+            <option value="off">ไม่แสดง</option>
+            <option value="rp">รัตนไพบูลย์</option>
+            <option value="mart">รัตนมาร์ท</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>ตัวเลือก</label>
+          <label class="chk"><input type="checkbox" id="inClock" checked> แสดงนาฬิกา</label>
+          <label class="chk"><input type="checkbox" id="inShuffle"> สลับลำดับสุ่ม</label>
+          <label class="chk"><input type="checkbox" id="inSound"> เปิดเสียงวีดีโอ</label>
+        </div>
+      </div>
+
+      <div id="testResult"></div>
+
+      <details class="guide">
+        <summary>📖 วิธีตั้งค่าครั้งแรก (API Key + แชร์โฟลเดอร์)</summary>
+        <div class="g-body">
+          <b>1) แชร์โฟลเดอร์โฆษณา</b>
+          <ol>
+            <li>สร้างโฟลเดอร์ใน Google Drive → ใส่รูป (JPG/PNG) และวีดีโอ (MP4)</li>
+            <li>คลิกขวาโฟลเดอร์ → แชร์ → เปลี่ยนเป็น <b>"ทุกคนที่มีลิงก์" (ผู้มีสิทธิ์อ่าน)</b></li>
+            <li>คัดลอกลิงก์โฟลเดอร์มาวางในช่องด้านบน</li>
+          </ol>
+          <b>2) สร้าง API Key (ทำครั้งเดียว)</b>
+          <ol>
+            <li>เปิด <code>console.cloud.google.com</code> (ล็อกอินบัญชีบริษัท)</li>
+            <li>เลือกโปรเจกต์เดิมของ Rattana (หรือสร้างใหม่)</li>
+            <li>เมนู <b>APIs &amp; Services → Library</b> → ค้นหา <b>Google Drive API</b> → กด <b>Enable</b></li>
+            <li>เมนู <b>APIs &amp; Services → Credentials</b> → <b>+ Create Credentials → API key</b></li>
+            <li>คัดลอก key มาวางในช่อง API Key (แนะนำ: กด Edit key → API restrictions → เลือกเฉพาะ Google Drive API)</li>
+          </ol>
+          <b>3) เคล็ดลับ</b>
+          <ol>
+            <li>ไฟล์เรียงตามชื่อ — ตั้งชื่อ <code>01-โปรเบียร์.jpg</code>, <code>02-นมผง.mp4</code> เพื่อกำหนดลำดับ</li>
+            <li>ตั้งเวลารูปเฉพาะไฟล์ได้ โดยใส่ <code>_15s</code> ท้ายชื่อ เช่น <code>โปรใหญ่_15s.jpg</code> = แสดง 15 วินาที</li>
+            <li>วีดีโอเล่นจนจบเสมอ แนะนำ MP4 (H.264) ขนาดไม่เกิน ~90MB ต่อไฟล์</li>
+            <li>เพิ่ม/ลบไฟล์ใน Drive ได้เลย จอจะอัพเดทเองภายในไม่กี่นาที</li>
+          </ol>
+          <b>4) ตั้งจอแคชเชียร์ให้เปิดเองตอนบูทเครื่อง</b>
+          <ol>
+            <li>คลิกขวาที่ Desktop → New → Shortcut แล้ววาง:<br>
+              <code>"C:\Program Files\Google\Chrome\Application\chrome.exe" --kiosk --autoplay-policy=no-user-gesture-required "https://rattana2555.github.io/rattana-app/rattana-cashier-ads.html"</code></li>
+            <li>ลาก shortcut ไปไว้ในโฟลเดอร์ Startup (กด <b>Win+R</b> พิมพ์ <code>shell:startup</code>)</li>
+            <li>ปิด Sleep ของจอ: Settings → System → Power → Screen timeout = Never</li>
+          </ol>
+        </div>
+      </details>
+
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" id="btnTest">🔌 ทดสอบการเชื่อมต่อ</button>
+      <button class="btn btn-gold" id="btnSave">💾 บันทึก &amp; เริ่มเล่น</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ══════════ Logos (base64) ══════════ */
+const LOGO_RP = "data:image/png;base64,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";
+const LOGO_MART = "data:image/jpeg;base64,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LLCZKoPlAB2JpX8ftuPx1pRSjymOn6aXDDzRPc+ruUVcKn1BpoY3jx4677+e1vr4d1dMqcaceLVVX1fr+Ua5sus7XDtPmnd+xGURFYTkhERAEREAREQGyMTxvC7tg1N77dKWivtRM4GSSrLTCwVMTPUc0nhwbE6Rxb+edAt7AquWUWA2q3V9ZZ6Sjusb62kfQf2rMXinkZKZY3tHEksfEGci0HTwdd2la1VVH0O+5J6nHY3BUYn05nuFSyK6UFKW3xgp6cXYu526OoZDIS9wI5vDnyA8gQ2Ls0h215R4b03mqGviyimjoquhe2kfUVvGSOrlqJmwiVrWnXpRxt570122u5AOC1GqrHpv5M+ovgmeEWXF7hQRSX+5Nop4rm0Ts9cD1KUNbza35P5OGneNB3yV7TY/iMUdE+putHJJFHUOr4/e3EAuifJBriASGlrWuDCSSR4PZa/ReaepklJtZWr/AK/L/mvgljsRikuhcEszOmxukonxWanYZW3GeATe+OkLoWNjLXhu9acXu0fk0fHaiaIvRhxPFDpbb+7IcuTrldUERFMRhERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREB//9k=";
+
+/* ══════════ Config ══════════ */
+const CFG_KEY = 'rattanaCashierAds';
+const DEFAULTS = { folderId:'', apiKey:'', imgSec:8, refreshMin:5, shuffle:false, sound:false, clock:true, logo:'off' };
+let cfg = { ...DEFAULTS };
+try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(CFG_KEY) || '{}') }; } catch {}
+
+function saveCfg() { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); }
+function parseFolderId(v) {
+  v = String(v || '').trim();
+  const m = v.match(/folders\/([A-Za-z0-9_-]+)/);
+  return m ? m[1] : v.replace(/[?#].*$/, '');
+}
+
+/* ══════════ Drive API ══════════ */
+const imgUrl = id => `https://lh3.googleusercontent.com/d/${id}=w1920`;
+const mediaUrl = id => `https://www.googleapis.com/drive/v3/files/${id}?alt=media&key=${encodeURIComponent(cfg.apiKey)}`;
+
+async function fetchList(folderId, apiKey) {
+  const q = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
+  const fields = encodeURIComponent('nextPageToken,files(id,name,mimeType)');
+  let files = [], pageToken = '';
+  do {
+    const url = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=${fields}&pageSize=1000&key=${encodeURIComponent(apiKey)}${pageToken ? '&pageToken=' + pageToken : ''}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      let msg = 'HTTP ' + res.status;
+      try { msg = (await res.json()).error?.message || msg; } catch {}
+      throw new Error(msg);
+    }
+    const data = await res.json();
+    files = files.concat(data.files || []);
+    pageToken = data.nextPageToken || '';
+  } while (pageToken);
+  return files
+    .filter(f => /^(image|video)\//.test(f.mimeType))
+    .map(f => ({ id: f.id, name: f.name, type: f.mimeType.startsWith('video') ? 'video' : 'image' }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'th', { numeric: true }));
+}
+
+/* ══════════ Slideshow engine ══════════ */
+const layers = [document.getElementById('layerA'), document.getElementById('layerB')];
+let activeLayer = 0;
+let items = [], idx = -1;
+let badIds = new Set();
+let imgTimer = null, loadWatch = null, stallWatch = null, cleanupTimer = null;
+let refreshTimer = null;
+let running = false;
+
+function itemDuration(item) {
+  const m = item.name.match(/_(\d{1,3})s\.[^.]+$/);
+  return m ? Math.max(2, +m[1]) : cfg.imgSec;
+}
+
+function clearTimers() {
+  clearTimeout(imgTimer); clearTimeout(loadWatch); clearTimeout(stallWatch);
+  imgTimer = loadWatch = stallWatch = null;
+}
+
+function stopLayer(layer) {
+  const v = layer.querySelector('video');
+  if (v) { try { v.pause(); v.removeAttribute('src'); v.load(); } catch {} }
+  layer.innerHTML = '';
+}
+
+function swapTo(layer) {
+  const old = layers[activeLayer];
+  activeLayer = 1 - activeLayer;
+  layer.classList.add('on');
+  old.classList.remove('on');
+  clearTimeout(cleanupTimer);
+  cleanupTimer = setTimeout(() => stopLayer(old), 700);
+}
+
+function shuffleArr(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+}
+
+function showMsg(big, sub, spin) {
+  document.getElementById('centerMsg').classList.remove('hidden');
+  document.getElementById('msgBig').textContent = big;
+  document.getElementById('msgSub').textContent = sub || '';
+  document.getElementById('msgSpin').style.display = spin ? '' : 'none';
+}
+function hideMsg() { document.getElementById('centerMsg').classList.add('hidden'); }
+
+function nextItem() {
+  if (!running) return;
+  clearTimers();
+  if (!items.length) { showEmpty(); return; }
+  for (let n = 0; n < items.length; n++) {
+    idx = (idx + 1) % items.length;
+    if (idx === 0 && cfg.shuffle && n === 0) shuffleArr(items);
+    if (!badIds.has(items[idx].id)) { playItem(items[idx]); return; }
+  }
+  showEmpty('เล่นไฟล์ไม่ได้ทุกไฟล์ — จะลองใหม่อัตโนมัติ');
+  setTimeout(() => { badIds.clear(); if (running) nextItem(); }, 60000);
+}
+
+function skipBad(item) {
+  badIds.add(item.id);
+  clearTimers();
+  if (running) nextItem();
+}
+
+function playItem(item) {
+  hideMsg();
+  const layer = layers[1 - activeLayer];
+  stopLayer(layer);
+  loadWatch = setTimeout(() => skipBad(item), 25000);
+
+  if (item.type === 'image') {
+    const img = new Image();
+    let tries = 0;
+    img.onload = () => {
+      clearTimeout(loadWatch);
+      swapTo(layer);
+      imgTimer = setTimeout(nextItem, itemDuration(item) * 1000);
+      preloadNext();
+    };
+    img.onerror = () => {
+      tries++;
+      if (tries === 1) setTimeout(() => { img.src = imgUrl(item.id) + '&r=' + Date.now(); }, 600);
+      else if (tries === 2) setTimeout(() => { img.src = mediaUrl(item.id); }, 600);
+      else { clearTimeout(loadWatch); skipBad(item); }
+    };
+    img.src = imgUrl(item.id);
+    layer.appendChild(img);
+  } else {
+    const v = document.createElement('video');
+    v.muted = !cfg.sound;
+    v.playsInline = true;
+    v.preload = 'auto';
+    v.onloadeddata = () => {
+      clearTimeout(loadWatch);
+      swapTo(layer);
+      v.play().catch(() => { v.muted = true; v.play().catch(() => skipBad(item)); });
+    };
+    v.ontimeupdate = () => {
+      clearTimeout(stallWatch);
+      stallWatch = setTimeout(() => { if (running) nextItem(); }, 30000);
+    };
+    v.onended = () => { clearTimeout(stallWatch); if (running) nextItem(); };
+    v.onerror = () => skipBad(item);
+    v.src = mediaUrl(item.id);
+    layer.appendChild(v);
+  }
+}
+
+function preloadNext() {
+  for (let n = 1; n <= items.length; n++) {
+    const it = items[(idx + n) % items.length];
+    if (badIds.has(it.id)) continue;
+    if (it.type === 'image') { const p = new Image(); p.src = imgUrl(it.id); }
+    return;
+  }
+}
+
+function showEmpty(sub) {
+  clearTimers();
+  layers.forEach(l => { l.classList.remove('on'); stopLayer(l); });
+  showMsg('ไม่มีโฆษณาให้แสดง', sub || 'เพิ่มรูปหรือวีดีโอในโฟลเดอร์ Google Drive แล้วจอจะอัพเดทเอง', false);
+}
+
+/* ══════════ List refresh ══════════ */
+let listSig = '';
+async function refreshList(first) {
+  try {
+    const list = await fetchList(cfg.folderId, cfg.apiKey);
+    document.getElementById('statusDot').className = '';
+    const sig = list.map(f => f.id + f.name).join('|');
+    if (sig !== listSig) {
+      listSig = sig;
+      items = list;
+      if (cfg.shuffle) shuffleArr(items);
+      badIds.clear();
+      if (idx >= items.length) idx = -1;
+      if (first || !document.querySelector('.layer.on')) { idx = -1; nextItem(); }
+      if (!items.length) showEmpty();
+    } else if (first) {
+      idx = -1; nextItem();
+    }
+  } catch (e) {
+    document.getElementById('statusDot').className = 'err';
+    if (first) showMsg('เชื่อมต่อ Google Drive ไม่ได้', e.message + ' — จะลองใหม่ใน 30 วินาที', false);
+    if (first) setTimeout(() => { if (running && !items.length) refreshList(true); }, 30000);
+  }
+}
+
+function startShow() {
+  running = true;
+  idx = -1; listSig = ''; badIds.clear();
+  clearTimers();
+  layers.forEach(l => { l.classList.remove('on'); stopLayer(l); });
+  showMsg('กำลังโหลดโฆษณา...', '', true);
+  applyOverlays();
+  refreshList(true);
+  clearInterval(refreshTimer);
+  refreshTimer = setInterval(() => refreshList(false), Math.max(1, cfg.refreshMin) * 60000);
+}
+
+window.addEventListener('online', () => { if (running) refreshList(false); });
+
+/* ══════════ Overlays ══════════ */
+function applyOverlays() {
+  const lo = document.getElementById('logoOverlay');
+  if (cfg.logo === 'off') lo.style.display = 'none';
+  else {
+    document.getElementById('logoImg').src = cfg.logo === 'mart' ? LOGO_MART : LOGO_RP;
+    lo.style.display = 'flex';
+  }
+  document.getElementById('clockOverlay').style.display = cfg.clock ? 'flex' : 'none';
+}
+
+const THAI_DAYS = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+const THAI_MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+function tickClock() {
+  const d = new Date();
+  document.getElementById('clockTime').textContent =
+    String(d.getHours()).padStart(2,'0') + '.' + String(d.getMinutes()).padStart(2,'0');
+  document.getElementById('clockDate').textContent =
+    `วัน${THAI_DAYS[d.getDay()]} ${d.getDate()} ${THAI_MONTHS[d.getMonth()]} ${d.getFullYear() + 543}`;
+}
+setInterval(tickClock, 1000); tickClock();
+
+/* ══════════ Wake lock ══════════ */
+let wakeLock = null;
+async function requestWakeLock() {
+  try { wakeLock = await navigator.wakeLock.request('screen'); } catch {}
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') requestWakeLock();
+});
+
+/* ══════════ UI: cursor / controls / fullscreen ══════════ */
+let uiTimer = null;
+function pokeUI() {
+  document.body.classList.add('show-ui');
+  document.body.classList.remove('hide-cursor');
+  clearTimeout(uiTimer);
+  uiTimer = setTimeout(() => {
+    document.body.classList.remove('show-ui');
+    if (running && !document.getElementById('settingsOverlay').classList.contains('open'))
+      document.body.classList.add('hide-cursor');
+  }, 3000);
+}
+document.addEventListener('mousemove', pokeUI);
+document.addEventListener('touchstart', pokeUI, { passive: true });
+
+function toggleFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  else document.documentElement.requestFullscreen().catch(() => {});
+}
+document.getElementById('btnFull').addEventListener('click', () => { toggleFullscreen(); requestWakeLock(); });
+document.getElementById('stage').addEventListener('dblclick', toggleFullscreen);
+document.addEventListener('keydown', e => {
+  if (document.getElementById('settingsOverlay').classList.contains('open')) {
+    if (e.key === 'Escape' && cfg.folderId && cfg.apiKey) closeSettings();
+    return;
+  }
+  if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+  if (e.key === 's' || e.key === 'S') openSettings();
+  if (e.key === 'ArrowRight' && running) nextItem();
+});
+
+/* ══════════ Settings ══════════ */
+const overlay = document.getElementById('settingsOverlay');
+document.getElementById('hdrLogo').src = LOGO_RP;
+
+function openSettings() {
+  document.getElementById('inFolder').value = cfg.folderId;
+  document.getElementById('inApiKey').value = cfg.apiKey;
+  document.getElementById('inImgSec').value = cfg.imgSec;
+  document.getElementById('inRefreshMin').value = cfg.refreshMin;
+  document.getElementById('inLogo').value = cfg.logo;
+  document.getElementById('inClock').checked = cfg.clock;
+  document.getElementById('inShuffle').checked = cfg.shuffle;
+  document.getElementById('inSound').checked = cfg.sound;
+  document.getElementById('testResult').className = '';
+  document.getElementById('btnCloseModal').style.display = (cfg.folderId && cfg.apiKey) ? '' : 'none';
+  overlay.classList.add('open');
+  document.body.classList.remove('hide-cursor');
+}
+function closeSettings() { overlay.classList.remove('open'); }
+document.getElementById('btnGear').addEventListener('click', openSettings);
+document.getElementById('btnCloseModal').addEventListener('click', closeSettings);
+
+function readForm() {
+  return {
+    folderId: parseFolderId(document.getElementById('inFolder').value),
+    apiKey: document.getElementById('inApiKey').value.trim(),
+    imgSec: Math.min(120, Math.max(2, +document.getElementById('inImgSec').value || 8)),
+    refreshMin: Math.min(120, Math.max(1, +document.getElementById('inRefreshMin').value || 5)),
+    logo: document.getElementById('inLogo').value,
+    clock: document.getElementById('inClock').checked,
+    shuffle: document.getElementById('inShuffle').checked,
+    sound: document.getElementById('inSound').checked,
+  };
+}
+
+document.getElementById('btnTest').addEventListener('click', async () => {
+  const f = readForm();
+  const box = document.getElementById('testResult');
+  if (!f.folderId || !f.apiKey) { box.className = 'bad'; box.textContent = 'กรุณาใส่ลิงก์โฟลเดอร์และ API Key ก่อน'; return; }
+  box.className = 'ok'; box.textContent = '⏳ กำลังทดสอบ...';
+  const btn = document.getElementById('btnTest'); btn.disabled = true;
+  try {
+    const list = await fetchList(f.folderId, f.apiKey);
+    const ni = list.filter(x => x.type === 'image').length;
+    const nv = list.filter(x => x.type === 'video').length;
+    box.className = 'ok';
+    box.textContent = `✅ เชื่อมต่อสำเร็จ — พบรูป ${ni} ไฟล์, วีดีโอ ${nv} ไฟล์`;
+    if (!list.length) box.textContent = '✅ เชื่อมต่อสำเร็จ แต่ยังไม่มีรูป/วีดีโอในโฟลเดอร์';
+  } catch (e) {
+    box.className = 'bad';
+    box.textContent = '❌ เชื่อมต่อไม่ได้: ' + e.message + ' — เช็คว่าแชร์โฟลเดอร์เป็น "ทุกคนที่มีลิงก์" และเปิดใช้ Drive API แล้ว';
+  }
+  btn.disabled = false;
+});
+
+document.getElementById('btnSave').addEventListener('click', () => {
+  const f = readForm();
+  if (!f.folderId || !f.apiKey) {
+    const box = document.getElementById('testResult');
+    box.className = 'bad'; box.textContent = 'กรุณาใส่ลิงก์โฟลเดอร์และ API Key ก่อนบันทึก';
+    return;
+  }
+  cfg = { ...cfg, ...f };
+  saveCfg();
+  closeSettings();
+  showToast('บันทึกแล้ว ✓', 'success');
+  startShow();
+});
+
+function showToast(msg, type = 'info') {
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+/* ══════════ Boot ══════════ */
+window.addEventListener('load', () => {
+  requestWakeLock();
+  pokeUI();
+  if (cfg.folderId && cfg.apiKey) startShow();
+  else {
+    showMsg('ยังไม่ได้ตั้งค่า', 'ใส่โฟลเดอร์ Google Drive และ API Key เพื่อเริ่มใช้งาน', false);
+    openSettings();
+  }
+});
+</script>
+</body>
+</html>
