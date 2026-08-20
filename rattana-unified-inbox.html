@@ -1148,6 +1148,28 @@ function readAsDataURL(file){
   });
 }
 
+// ย่อรูปก่อนส่ง — LINE จำกัดพรีวิวไม่เกิน 1MB และช่วยให้อัปโหลดเร็วขึ้น
+// กว้าง/สูงไม่เกิน 1600px, JPEG คุณภาพ .85 (โปร่งใสจะถูกแทนด้วยพื้นขาว)
+function downscaleImage(file){
+  return new Promise((resolve)=>{
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = ()=>{
+      const MAX = 1600;
+      let { width:w, height:h } = img;
+      if(w > MAX || h > MAX){ const r = Math.min(MAX/w, MAX/h); w = Math.round(w*r); h = Math.round(h*r); }
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      const ctx = cv.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0,0,w,h);
+      ctx.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      cv.toBlob((blob)=> resolve(blob || file), 'image/jpeg', 0.85);
+    };
+    img.onerror = ()=>{ URL.revokeObjectURL(url); resolve(file); };  // ย่อไม่ได้ก็ส่งต้นฉบับ
+    img.src = url;
+  });
+}
+
 async function sendImage(file){
   if(activeId===null) return;
   const convId = activeId;
