@@ -161,7 +161,7 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
-  const { conversationId, content, action, messageId, lineUserId } = await req.json();
+  const { conversationId, content, action, messageId, lineUserId, imageBase64, imageMime } = await req.json();
 
   // ── ตรวจสภาพช่องทาง LINE (ใช้ตอนส่งไม่ผ่านแล้วอยากรู้ว่าเพราะอะไร) ──
   // ลบทิ้งได้เมื่อแก้ปัญหาเสร็จ — ไม่ใช่ส่วนที่ใช้งานประจำ
