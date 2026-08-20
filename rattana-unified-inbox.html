@@ -1195,10 +1195,11 @@ async function sendImage(file){
   c.lastTime = new Date(nowISO);
   renderList();
 
-  // 2) แปลงเป็น base64 แล้วส่งให้ Edge Function (อัปโหลด + ยิงเข้าแพลตฟอร์ม)
+  // 2) ย่อรูป → base64 → ส่งให้ Edge Function (อัปโหลด + ยิงเข้าแพลตฟอร์ม)
   let url = '', ok = false, why = '', platformMsgId = null;
   try {
-    const dataUrl = await readAsDataURL(file);
+    const small = await downscaleImage(file);
+    const dataUrl = await readAsDataURL(small);
     const b64 = dataUrl.split(',')[1] || '';
     const { data:{ session } } = await sb.auth.getSession();
     const res = await fetch(`${SUPABASE_URL}/functions/v1/${FN_SEND}`, {
@@ -1207,7 +1208,7 @@ async function sendImage(file){
         'Content-Type':'application/json',
         'Authorization': `Bearer ${session?.access_token ?? SUPABASE_ANON}`,
       },
-      body: JSON.stringify({ conversationId: convId, imageBase64: b64, imageMime: file.type }),
+      body: JSON.stringify({ conversationId: convId, imageBase64: b64, imageMime: 'image/jpeg' }),
     });
     const json = await res.json().catch(()=>({}));
     url = json.url || '';
