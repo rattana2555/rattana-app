@@ -945,6 +945,11 @@ window.addEventListener("message", (ev) => {
 
   // ── LINE OA Manager ──────────────────────────────────────
   if (/line\.biz/i.test(location.hostname)) {
+    // เก็บ botId + โดเมนไว้ให้ตัวดึงอัตโนมัติเบื้องหลังใช้ (background.js)
+    // เพื่อให้ดึงข้อความที่ทีมตอบมาได้เองแม้ไม่เปิดหน้า OA ค้างไว้
+    const botM = String(d.url).match(RE_LINE_BOT);
+    if (botM) chrome.storage.local.set({ lineBotId: botM[1], lineHost: location.origin });
+
     // คำขาออก = ทีมงานเพิ่งกดส่งข้อความ
     if (d.req === true) {
       const s = parseLineSend(String(d.url), d.body);
