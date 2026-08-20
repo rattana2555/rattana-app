@@ -244,7 +244,7 @@ input[type=number] { -moz-appearance: textfield; }
     <h1>Sales Input</h1>
     <div class="sub" id="dateDisplay"></div>
   </div>
-  <span class="ver-badge">v1.2.0</span>
+  <span class="ver-badge">v1.3.0</span>
   <button class="btn btn-ghost" onclick="clearAll()">ล้าง</button>
   <button class="btn btn-primary" onclick="saveAll()">บันทึก</button>
 </header>
@@ -412,55 +412,35 @@ function onInput(el) {
 }
 function onPctInput(el) { /* manual override placeholder */ }
 
-// ── FETCH FROM GOOGLE SHEETS (JSONP) ──
+// ── FETCH FROM GOOGLE SHEETS (CSV via fetch — works on GitHub Pages) ──
 const SHEET_ID = '1NxFkxiQev0xxGir93-qt0flNfzHz848-KuE7jDRSxQE';
 
-function gvizJSONP(sheetName, tq) {
-  return new Promise((resolve, reject) => {
-    const cb = 'gvcb_' + Date.now();
-    const timer = setTimeout(() => {
-      delete window[cb];
-      reject(new Error('timeout'));
-    }, 20000);
-    window[cb] = (data) => {
-      clearTimeout(timer);
-      delete window[cb];
-      if (data && data.table) resolve(data.table);
-      else reject(new Error('no table'));
-    };
-    const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID
-      + '/gviz/tq?tqx=reqId:0;out:json;responseHandler:' + cb
-      + '&sheet=' + encodeURIComponent(sheetName)
-      + '&tq=' + encodeURIComponent(tq);
-    const s = Object.assign(document.createElement('script'), { src: url });
-    s.onerror = () => { clearTimeout(timer); delete window[cb]; reject(new Error('load failed')); };
-    document.head.appendChild(s);
-  });
-}
-
-function tableSum(table, filters, sumLabel) {
-  const idx = label => table.cols.findIndex(c => (c.label||c.id) === label);
-  const sumI = idx(sumLabel);
-  const filterI = Object.entries(filters).map(([k,v]) => ({ i: idx(k), v }));
-  let total = 0;
-  for (const row of table.rows) {
-    if (!row.c) continue;
-    const match = filterI.every(({i, v}) => {
-      const cell = row.c[i];
-      return cell && String(cell.v || '').trim() === v;
-    });
-    if (match) total += Number((row.c[sumI] || {}).v) || 0;
+function parseCSVRow(line) {
+  const cols = []; let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { inQ = !inQ; }
+    else if (ch === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
+    else { cur += ch; }
   }
-  return total;
+  cols.push(cur.trim());
+  return cols;
 }
 
 async function fetchSheetData() {
   setFetchStatus('beer', 'loading');
   try {
-    // ดึง sum(Sales_CSxValue) group by Cat_3 สำหรับ WS=W1 — ข้อมูลน้อย ไม่ timeout
-    const tq = "select T,sum(L) where Q='W1' group by T";
-    const table = await gvizJSONP('BP', tq);
-    const sold = tableSum(table, { Cat_3: 'เบียร์' }, 'sum Sales_CSxValue');
+    const tq = encodeURIComponent("select T,sum(L) where Q='W1' group by T");
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=BP&tq=${tq}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    const lines = text.trim().split('\n').slice(1); // skip header
+    let sold = 0;
+    for (const line of lines) {
+      const [cat, val] = parseCSVRow(line);
+      if (cat === 'เบียร์') { sold = parseFloat(val) || 0; break; }
+    }
     state['beer'].sold = sold;
     const inp = document.querySelector('[data-cat="beer"][data-key="sold"]');
     if (inp) inp.value = sold;
