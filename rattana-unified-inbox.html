@@ -1126,6 +1126,100 @@ async function sendMsg(){
   else   showToast('บันทึกแล้ว แต่ยังไม่ถึงลูกค้า: '+why,'warning');
 }
 
+// ─────────────────────────────────────────────────────────
+//  SEND IMAGE
+// ─────────────────────────────────────────────────────────
+// ส่งรูปหาลูกค้า (LINE / Facebook เท่านั้น) — อัปโหลดผ่าน Edge Function
+// ซึ่งเก็บลง Storage แล้วส่งเข้าแพลตฟอร์ม คืน URL สาธารณะกลับมาให้แอปบันทึก
+function onPickImage(inp){
+  const file = inp.files && inp.files[0];
+  inp.value = '';                       // เคลียร์ไว้ให้เลือกไฟล์เดิมซ้ำได้
+  if(file) sendImage(file);
+}
+
+function readAsDataURL(file){
+  return new Promise((res,rej)=>{
+    const r = new FileReader();
+    r.onload = ()=>res(String(r.result));
+    r.onerror = ()=>rej(new Error('อ่านไฟล์ไม่ได้'));
+    r.readAsDataURL(file);
+  });
+}
+
+async function sendImage(file){
+  if(activeId===null) return;
+  const convId = activeId;
+  const c = convs.find(x=>x.id===convId);
+  if(!c) return;
+
+  if(!/^image\//.test(file.type)){ showToast('เลือกได้เฉพาะไฟล์รูปภาพ','warning'); return; }
+  if(file.size > 5*1024*1024){ showToast('รูปใหญ่เกิน 5MB — ย่อก่อนส่ง','warning'); return; }
+
+  const blocked = forceReply.has(convId) ? '' : replyBlockReason(c, msgCache[convId]);
+  if(blocked){ showToast(blocked.replace(/<[^>]+>/g,''),'warning'); return; }
+
+  const nowISO = new Date().toISOString();
+  const blobUrl = URL.createObjectURL(file);
+
+  // 1) แสดงรูปบนจอทันที (สถานะกำลังส่ง)
+  if(!msgCache[convId]) msgCache[convId]=[];
+  const local = { direction:'out', content:blobUrl, message_type:'image', sent_at:nowISO, status:'sending' };
+  msgCache[convId].push(local);
+  if(activeId===convId){ renderMsgs(msgCache[convId]); scrollBottom(); }
+
+  c.lastMsg = '[รูปภาพ]';
+  c.lastTime = new Date(nowISO);
+  renderList();
+
+  // 2) แปลงเป็น base64 แล้วส่งให้ Edge Function (อัปโหลด + ยิงเข้าแพลตฟอร์ม)
+  let url = '', ok = false, why = '', platformMsgId = null;
+  try {
+    const dataUrl = await readAsDataURL(file);
+    const b64 = dataUrl.split(',')[1] || '';
+    const { data:{ session } } = await sb.auth.getSession();
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/${FN_SEND}`, {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'Authorization': `Bearer ${session?.access_token ?? SUPABASE_ANON}`,
+      },
+      body: JSON.stringify({ conversationId: convId, imageBase64: b64, imageMime: file.type }),
+    });
+    const json = await res.json().catch(()=>({}));
+    url = json.url || '';
+    ok = !!json.sent;
+    platformMsgId = json.platformMsgId || null;
+    why = String(json.error || ('HTTP '+res.status)).replace(/^Error:\s*/,'');
+  } catch(e){ why = e.message; }
+
+  // 3) บันทึกแถวข้อความ (ใช้ URL สาธารณะถ้าอัปโหลดได้ ไม่งั้นเก็บ label ไว้)
+  const content = url || '[รูปภาพ]';
+  const mtype = url ? 'image' : 'text';
+  const { data: saved } = await sb.from('messages').insert({
+    conversation_id: convId,
+    direction: 'out',
+    content,
+    message_type: mtype,
+    platform_msg_id: platformMsgId,
+    status: ok ? 'sent' : 'failed',
+    sent_at: nowISO,
+  }).select('id').single();
+
+  await sb.from('conversations')
+    .update({ last_message:'[รูปภาพ]', last_message_at:nowISO }).eq('id', convId);
+
+  // อัปเดตฟองบนจอ: ใช้ URL จริงแทน blob ชั่วคราว
+  local.content = content;
+  local.message_type = mtype;
+  local.status = ok ? 'sent' : 'failed';
+  if(saved){ local.id = saved.id; if(!ok) sendErr[saved.id] = why; }
+  URL.revokeObjectURL(blobUrl);
+  if(activeId===convId) renderMsgs(msgCache[convId]);
+
+  if(ok) showToast('ส่งรูปแล้ว ✓','success');
+  else   showToast('ส่งรูปไม่สำเร็จ: '+why,'warning');
+}
+
 function onKey(e){ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendMsg(); } }
 function grow(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,110)+'px'; }
 function syncSend(){ const v=document.getElementById('replyInp').value.trim(); document.getElementById('sendBtn').classList.toggle('lit',v.length>0); }
