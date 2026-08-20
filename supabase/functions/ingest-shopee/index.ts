@@ -291,6 +291,18 @@ serve(async (req: Request) => {
         continue;
       }
 
+      // 3) ข้อความ local: (ยังไม่มีรหัส) ที่ตรงกับข้อความ "มีรหัสจริง" ที่เก็บไว้แล้ว
+      //    เกิดเมื่อตัวดึงเบื้องหลังบันทึกด้วยรหัสจริงไปก่อน แล้วตัวดักจากแท็บส่ง local: ตามมา
+      //    ตัวมีรหัสจริงครอบคลุมแล้ว — ข้าม ไม่ต้องสร้างแถว null ซ้ำ
+      if (!realId) {
+        let dup = false;
+        for (const o of byId.values()) {
+          if (o.direction === m.direction && o.content === m.content &&
+              Math.abs(Date.parse(o.sent_at) - t) < NEAR) { dup = true; break; }
+        }
+        if (dup) continue;
+      }
+
       rows.push({
         conversation_id: conv.id,
         direction: m.direction,
