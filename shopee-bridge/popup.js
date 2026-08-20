@@ -8,6 +8,15 @@ chrome.storage.local.get(["secret", "discovery", "enabled", "shopUser"], (v) => 
   $("enabled").checked   = v.enabled !== false;     // ค่าเริ่มต้น = เปิด
 });
 
+// สถานะตัวดึง LINE อัตโนมัติเบื้องหลัง — ให้ทีมเห็นว่าทำงานไหมโดยไม่ต้องเปิด Console
+chrome.storage.local.get(["lineBgStatus"], (v) => {
+  const s = v.lineBgStatus;
+  if (!s) { $("lineBgTxt").textContent = "ยังไม่เริ่มดึง — รอสักครู่ (ดึงทุก 1 นาที)"; return; }
+  const mins = Math.max(0, Math.round((Date.now() - s.at) / 60000));
+  const when = mins === 0 ? "เมื่อครู่นี้" : `${mins} นาทีที่แล้ว`;
+  $("lineBgTxt").innerHTML = `${s.note}<br><span style="color:#6b7896">อัปเดต ${when}</span>`;
+});
+
 // ── แสดงทุกอย่างที่ดักได้ ──────────────────────────────────
 // LINE/Shopee : เก็บเป็น 2 ชุด (รายการแชท / ข้อความในแชท)
 // TikTok      : เก็บตาม path เพราะยังไม่รู้ว่าอันไหนคืออะไร + โครงหน้าจอที่สำรวจได้
