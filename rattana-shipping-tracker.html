@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Shipping Tracker v1.2</title>
+<title>Rattana Shipping Tracker v1.3</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -221,7 +221,7 @@ body.dark .pay-cn{background:#3a1a1a;color:#ff9d92}
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with" data-locale="th"></div>
     <p id="loginError" style="color:var(--danger);font-size:12px;margin-top:12px;display:none"></p>
     <button class="btn btn-outline btn-block mt-16" onclick="closeLoginModal()">ยกเลิก</button>
-    <p style="font-size:11px;color:var(--muted);margin-top:16px">v1.2 · 20/08/2569</p>
+    <p style="font-size:11px;color:var(--muted);margin-top:16px">v1.3 · 21/08/2569</p>
   </div>
 </div>
 
@@ -380,9 +380,11 @@ body.dark .pay-cn{background:#3a1a1a;color:#ff9d92}
 /* ════════════════════════════════
    CONFIG
 ════════════════════════════════ */
-const SHEET_ID        = '1HoyuILDm8aOrUaLjo1YFbfZOoEiejaxRhh1ahR79Oeo';
-const SHEET_BILL      = 'บันทึกบิลและการชำระ';
-const SHEET_TICKET    = 'ใบคุม';
+const SHEET_ID = '1HoyuILDm8aOrUaLjo1YFbfZOoEiejaxRhh1ahR79Oeo';
+// ใช้ gid — ระบุ sheet= เป็นชื่อไทยแล้ว gviz ตกกลับไปชีทแรก
+const GID_ORDER  = '1833308111';   // ใบคุม (บิลทั้งหมดที่จัดเข้าเที่ยวแล้ว)
+const GID_BILL   = '2124504832';   // บันทึกบิลและการชำระ (เฉพาะที่บันทึกเงินแล้ว)
+const GID_TICKET = '993727140';    // ทะเบียนใบคุม (คนขับ / ทะเบียนรถ / วันเวลาปิดงาน)
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -414,22 +416,38 @@ window.onload = () => {
 /* ════════════════════════════════
    DATA
 ════════════════════════════════ */
-function gvizUrl(sheetName) {
-  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent(sheetName)}`;
+function gvizUrl(gid) {
+  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=1&gid=${gid}`;
 }
 
 async function loadData() {
   showSpinner('กำลังโหลดข้อมูล...');
   try {
-    const [billRes, ticketRes] = await Promise.all([
-      fetch(gvizUrl(SHEET_BILL)),
-      fetch(gvizUrl(SHEET_TICKET)),
+    const [orderRes, billRes, ticketRes] = await Promise.all([
+      fetch(gvizUrl(GID_ORDER)),
+      fetch(gvizUrl(GID_BILL)),
+      fetch(gvizUrl(GID_TICKET)),
     ]);
-    if(!billRes.ok) throw new Error('โหลดชีทบิลไม่สำเร็จ');
-    if(!ticketRes.ok) throw new Error('โหลดชีทใบคุมไม่สำเร็จ');
+    if(!orderRes.ok)  throw new Error('โหลดชีทใบคุมไม่สำเร็จ');
+    if(!billRes.ok)   throw new Error('โหลดชีทบิลไม่สำเร็จ');
+    if(!ticketRes.ok) throw new Error('โหลดชีททะเบียนใบคุมไม่สำเร็จ');
 
-    const billRows   = parseCsv(await billRes.text());
+    const orderRows  = parseCsv(await orderRes.text());
+    const payRows    = parseCsv(await billRes.text());
     const ticketRows = parseCsv(await ticketRes.text());
+
+    // บิลที่บันทึกเงินแล้ว → map ด้วย Doc_No
+    const payMap = {};
+    payRows.forEach(p => { if(p['Doc_No']) payMap[p['Doc_No']] = p; });
+
+    // ฐาน = ทุกบิลในชีทใบคุม แล้วทับด้วยข้อมูลการชำระถ้ามี
+    const billRows = orderRows.map(o => {
+      const pay = payMap[o['Doc_No']];
+      return pay ? { ...o, ...pay, Doc_No:o['Doc_No'] } : o;
+    });
+    // บิลที่มีในชีทชำระเงินแต่ไม่มีในชีทใบคุม (เช่นส่งซ้ำ) → เพิ่มเข้าไปด้วย
+    const seen = new Set(orderRows.map(o=>o['Doc_No']));
+    payRows.forEach(p => { if(p['Doc_No'] && !seen.has(p['Doc_No'])) billRows.push(p); });
 
     // Build ticket map: Trans_Code → trip info
     const ticketMap = {};
@@ -442,7 +460,7 @@ async function loadData() {
         helpers : [t['ผู้ช่วย1'],t['ผู้ช่วย2'],t['ผู้ช่วย3'],t['ผู้ช่วย4']].filter(Boolean),
       };
       // ผูกได้ทั้ง Row ID และ รหัสใบคุม
-      [t['Row ID'], t['รหัสใบคุม'], t['เลขใบคุม'], t['Trans_Code']].filter(Boolean)
+      [t['🔒 Row ID'], t['Row ID'], t['รหัสใบคุม'], t['เลขใบคุม'], t['Trans_Code']].filter(Boolean)
         .forEach(k => { ticketMap[k] = info; });
     });
 
@@ -483,8 +501,12 @@ async function loadData() {
 
 function parseThaiDate(dateStr) {
   if(!dateStr) return null;
-  // Extract leading DD/MM/YYYY (ignore time part)
-  const m = String(dateStr).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  const s = String(dateStr);
+  // YYYY-MM-DD (ชีทบันทึกบิล)
+  const iso = s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(iso){ let y=+iso[1]; if(y>2500)y-=543; return new Date(y,+iso[2]-1,+iso[3]); }
+  // DD/MM/YYYY (ชีทใบคุม)
+  const m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if(!m) return null;
   let [,d,mo,y] = m.map(Number);
   if(y > 2500) y -= 543; // Buddhist → CE
