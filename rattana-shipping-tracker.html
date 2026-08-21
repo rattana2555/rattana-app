@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Shipping Tracker v1.1</title>
+<title>Rattana Shipping Tracker v1.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -133,6 +133,16 @@ body.dark .s-chip.delivered{background:#1a3a25;color:#7be0a3}
 .cod-amount{font-size:24px;font-weight:700;color:var(--navy)}
 body.dark .cod-amount{color:var(--gold-light)}
 
+/* Payment chips */
+.pay-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.pay-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600}
+.pay-cash{background:#e8f7ee;color:#1e8449}
+.pay-transfer{background:#e3f0fd;color:#1a6fb8}
+.pay-cn{background:#fdecea;color:#c0392b}
+body.dark .pay-cash{background:#1a3a25;color:#7be0a3}
+body.dark .pay-transfer{background:#0d2040;color:#5ab4ff}
+body.dark .pay-cn{background:#3a1a1a;color:#ff9d92}
+
 /* Stat cards */
 .stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
 @media(min-width:640px){.stat-grid{grid-template-columns:repeat(4,1fr)}}
@@ -211,7 +221,7 @@ body.dark .cod-amount{color:var(--gold-light)}
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with" data-locale="th"></div>
     <p id="loginError" style="color:var(--danger);font-size:12px;margin-top:12px;display:none"></p>
     <button class="btn btn-outline btn-block mt-16" onclick="closeLoginModal()">ยกเลิก</button>
-    <p style="font-size:11px;color:var(--muted);margin-top:16px">v1.1 · 21/07/2569</p>
+    <p style="font-size:11px;color:var(--muted);margin-top:16px">v1.2 · 20/08/2569</p>
   </div>
 </div>
 
@@ -247,7 +257,7 @@ body.dark .cod-amount{color:var(--gold-light)}
 <!-- ═══ TAB: TRACK ═══ -->
 <div id="tab-track" class="tab-pane active">
   <div class="search-bar">
-    <input class="search-input" id="trackInput" type="text" placeholder="🔍  พิมพ์เลขเอกสาร เช่น DSI16907/01003" oninput="liveSearch()" onkeydown="if(event.key==='Enter')doTrack()">
+    <input class="search-input" id="trackInput" type="text" placeholder="🔍  พิมพ์เลขเอกสาร เช่น DC566907/00439" oninput="liveSearch()" onkeydown="if(event.key==='Enter')doTrack()">
     <button class="search-btn" onclick="doTrack()">ค้นหา</button>
   </div>
 
@@ -259,7 +269,7 @@ body.dark .cod-amount{color:var(--gold-light)}
     <div class="icon">📦</div>
     <h3>ติดตามสถานะการจัดส่ง</h3>
     <p>พิมพ์เลขเอกสาร (Doc No) เพื่อดูสถานะ</p>
-    <p class="mt-8 txt-sm">เช่น <strong style="color:var(--gold)">DSI16907/01003</strong></p>
+    <p class="mt-8 txt-sm">เช่น <strong style="color:var(--gold)">DC566907/00439</strong></p>
   </div>
 
   <!-- Result -->
@@ -282,12 +292,18 @@ body.dark .cod-amount{color:var(--gold-light)}
       <!-- COD -->
       <div class="mt-12" id="resCod"></div>
 
+      <!-- Driver info -->
+      <div class="card mt-12" id="resDriver" style="display:none">
+        <div class="section-title">🚛 ข้อมูลคนขับ</div>
+        <div id="resDriverBody"></div>
+      </div>
+
       <!-- Info -->
       <div class="card mt-12" id="resInfo"></div>
 
       <!-- Trip info (admin only) -->
       <div class="card mt-12" id="resTripInfo" style="display:none">
-        <div class="section-title">🚛 ข้อมูลทริป</div>
+        <div class="section-title">📦 รายการในทริปเดียวกัน</div>
         <div id="resTripBody"></div>
       </div>
 
@@ -312,8 +328,8 @@ body.dark .cod-amount{color:var(--gold-light)}
           </select>
         </div>
         <div>
-          <label style="font-size:11px;color:var(--muted);font-weight:600;display:block;margin-bottom:4px">เซลส์</label>
-          <select class="input" id="fSalesman" onchange="renderAdmin()" style="height:40px;font-size:13px">
+          <label style="font-size:11px;color:var(--muted);font-weight:600;display:block;margin-bottom:4px">คนขับ</label>
+          <select class="input" id="fDriver" onchange="renderAdmin()" style="height:40px;font-size:13px">
             <option value="">ทั้งหมด</option>
           </select>
         </div>
@@ -345,7 +361,9 @@ body.dark .cod-amount{color:var(--gold-light)}
           <th data-key="Doc_No" data-type="str">Doc No <span class="sort-ind"></span></th>
           <th data-key="Customer_Name" data-type="str">ลูกค้า <span class="sort-ind"></span></th>
           <th data-key="TotalBaht" data-type="num">ยอด (บาท) <span class="sort-ind"></span></th>
-          <th data-key="Salesman_Name" data-type="str">เซลส์ <span class="sort-ind"></span></th>
+          <th data-key="_cut" data-type="num">CN/หักยอด <span class="sort-ind"></span></th>
+          <th data-key="_driver" data-type="str">คนขับ <span class="sort-ind"></span></th>
+          <th data-key="_plate" data-type="str">ทะเบียน <span class="sort-ind"></span></th>
           <th data-key="วันที่ส่งสินค้า" data-type="date">วันที่ส่ง <span class="sort-ind"></span></th>
           <th data-key="_status" data-type="str">สถานะ <span class="sort-ind"></span></th>
         </tr></thead>
@@ -362,22 +380,22 @@ body.dark .cod-amount{color:var(--gold-light)}
 /* ════════════════════════════════
    CONFIG
 ════════════════════════════════ */
-const SHEET_ID   = '1HoyuILDm8aOrUaLjo1YFbfZOoEiejaxRhh1ahR79Oeo';
-const SHEET_NAME = 'Sheet1';   // เปลี่ยนถ้าชีทชื่อต่าง
+const SHEET_ID        = '1HoyuILDm8aOrUaLjo1YFbfZOoEiejaxRhh1ahR79Oeo';
+const SHEET_BILL      = 'บันทึกบิลและการชำระ';
+const SHEET_TICKET    = 'ใบคุม';
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
   usersSheetName: 'Rattana Users for apps',
 };
-const TODAY_STR = (() => { const d=new Date(); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; })();
 
 /* ════════════════════════════════
    STATE
 ════════════════════════════════ */
-let allRows     = [];   // raw rows from sheet
+let allRows     = [];
 let currentUser = null;
 let currentDocNo= null;
-let adminView   = 'trip';  // 'trip' | 'table'
+let adminView   = 'trip';
 const sortState = { key:'วันที่ส่งสินค้า', dir:'desc' };
 
 /* ════════════════════════════════
@@ -396,17 +414,66 @@ window.onload = () => {
 /* ════════════════════════════════
    DATA
 ════════════════════════════════ */
+function gvizUrl(sheetName) {
+  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent(sheetName)}`;
+}
+
 async function loadData() {
   showSpinner('กำลังโหลดข้อมูล...');
   try {
-    const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent(SHEET_NAME)}`;
-    const res=await fetch(url);
-    if(!res.ok) throw new Error('fetch failed');
-    allRows = parseCsv(await res.text());
-    allRows.forEach(r=>{ r._status=computeStatus(r['วันที่ส่งสินค้า']); r._amount=parseAmount(r['TotalBaht']); });
-    populateSalesmanFilter();
+    const [billRes, ticketRes] = await Promise.all([
+      fetch(gvizUrl(SHEET_BILL)),
+      fetch(gvizUrl(SHEET_TICKET)),
+    ]);
+    if(!billRes.ok) throw new Error('โหลดชีทบิลไม่สำเร็จ');
+    if(!ticketRes.ok) throw new Error('โหลดชีทใบคุมไม่สำเร็จ');
+
+    const billRows   = parseCsv(await billRes.text());
+    const ticketRows = parseCsv(await ticketRes.text());
+
+    // Build ticket map: Trans_Code → trip info
+    const ticketMap = {};
+    ticketRows.forEach(t => {
+      // Try common column names for the trip code
+      const info = {
+        driver  : t['ชื่อคนขับ'] || '',
+        plate   : t['ทะเบียน'] || '',
+        closed  : t['วันเวลาปิดงาน'] || '',   // ว่าง = กำลังส่ง · มีค่า = ส่งเสร็จแล้ว
+        helpers : [t['ผู้ช่วย1'],t['ผู้ช่วย2'],t['ผู้ช่วย3'],t['ผู้ช่วย4']].filter(Boolean),
+      };
+      // ผูกได้ทั้ง Row ID และ รหัสใบคุม
+      [t['Row ID'], t['รหัสใบคุม'], t['เลขใบคุม'], t['Trans_Code']].filter(Boolean)
+        .forEach(k => { ticketMap[k] = info; });
+    });
+
+    // Merge bill rows with trip info
+    allRows = billRows.map(r => {
+      const transCode = r['เลขใบคุม'] || r['Trans_Code'] || '';
+      const trip = ticketMap[transCode] || null;
+      const delivStr = r['วัน+เวลา ที่ส่งสินค้า'] || r['วันที่ส่งสินค้า'] || '';
+      const uAdd     = r['U_ADD'] || '';
+      const tripClosed = trip?.closed || '';
+      return {
+        ...r,
+        Trans_Code       : transCode,
+        'วันที่ส่งสินค้า': delivStr,
+        _driver  : trip?.driver  || r['ผู้ส่งสินค้า'] || '',
+        _plate   : trip?.plate   || r['ทะเบียนรถ'] || '',
+        _helpers : trip?.helpers || [],
+        _cn      : parseAmount(r['ใบลดหนี้']),
+        _deduct  : parseAmount(r['ลดหนี้']),
+        _deductWhy: r['เหตุผลลดหนี้'] || '',
+        _paid    : parseAmount(r['รวมยอดชำระ']),
+        _tripClosed: tripClosed,
+        _uAdd    : uAdd,
+        _status  : computeStatus(delivStr, uAdd, tripClosed, !!trip),
+        _amount  : parseAmount(r['TotalBaht']),
+        _cut     : parseAmount(r['ใบลดหนี้']) + parseAmount(r['ลดหนี้']),
+      };
+    });
+
+    populateDriverFilter();
     renderAdmin();
-    // auto-track if URL param
     const p=new URLSearchParams(location.search);
     if(p.get('doc')) doTrack();
   } catch(e) {
@@ -414,14 +481,26 @@ async function loadData() {
   } finally { hideSpinner(); }
 }
 
-function computeStatus(dateStr) {
-  if(!dateStr) return 'pending';
-  // dateStr format: DD/MM/YYYY
-  const parts=dateStr.split('/');
-  if(parts.length<3) return 'pending';
-  const d=new Date(parseInt(parts[2]),parseInt(parts[1])-1,parseInt(parts[0]));
-  const today=new Date(); today.setHours(0,0,0,0);
-  if(d<today) return 'delivered';
+function parseThaiDate(dateStr) {
+  if(!dateStr) return null;
+  // Extract leading DD/MM/YYYY (ignore time part)
+  const m = String(dateStr).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if(!m) return null;
+  let [,d,mo,y] = m.map(Number);
+  if(y > 2500) y -= 543; // Buddhist → CE
+  return new Date(y, mo-1, d);
+}
+
+function computeStatus(delivStr, uAdd, tripClosed, hasTicket) {
+  // ตัวชี้ขาด: "วันเวลาปิดงาน" ในใบคุม — มีค่า = ส่งเสร็จแล้ว, ว่าง = กำลังส่ง
+  if(tripClosed) return 'delivered';
+  if(hasTicket)  return uAdd ? 'delivered' : 'transit';  // มีใบคุมแล้ว = ออกวิ่งแล้ว
+  // ยังไม่มีใบคุม → ดูจากวันที่ส่ง
+  if(uAdd) return 'delivered';
+  const d = parseThaiDate(delivStr);
+  if(!d) return 'pending';
+  const today = new Date(); today.setHours(0,0,0,0);
+  if(d < today) return 'delivered';
   if(d.getTime()===today.getTime()) return 'transit';
   return 'pending';
 }
@@ -441,7 +520,7 @@ function parseCsv(text) {
   }
   if(cell.length||row.length){row.push(cell);rows.push(row);}
   if(!rows.length)return[];
-  const clean=s=>String(s||'').replace(/[​‌‍﻿]/g,'').replace(/ /g,' ').trim();
+  const clean=s=>String(s||'').replace(/[​‌‍﻿]/g,'').replace(/ /g,' ').trim();
   const headers=rows[0].map(clean);
   return rows.slice(1).filter(r=>r.some(c=>clean(c))).map(r=>Object.fromEntries(headers.map((k,i)=>[k,clean(r[i])])));
 }
@@ -456,7 +535,7 @@ function liveSearch() {
   if(!matches.length){closeSuggest();return;}
   const sug=document.getElementById('trackSuggest');
   sug.innerHTML=matches.map(r=>`
-    <div onclick="pickSuggest('${r['Doc_No']}')" style="padding:10px 16px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px" onmouseover="this.style.background='rgba(201,168,76,.08)'" onmouseout="this.style.background=''">
+    <div onclick="pickSuggest('${esc(r['Doc_No'])}')" style="padding:10px 16px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px" onmouseover="this.style.background='rgba(201,168,76,.08)'" onmouseout="this.style.background=''">
       <span style="font-size:16px">📄</span>
       <div><div style="font-size:13px;font-weight:600;font-family:'Courier New',monospace">${r['Doc_No']}</div><div style="font-size:12px;color:var(--muted)">${r['Customer_Name']} · ฿${r['TotalBaht']}</div></div>
       <div style="margin-left:auto">${statusChip(r['_status'])}</div>
@@ -486,7 +565,6 @@ function showTrackResult(row) {
   document.getElementById('trackEmpty').classList.add('hidden');
   document.getElementById('trackResult').classList.remove('hidden');
 
-  // Doc No + chip
   document.getElementById('resDocNo').textContent=row['Doc_No'];
   document.getElementById('resChip').innerHTML=statusChip(row['_status']);
 
@@ -504,28 +582,67 @@ function showTrackResult(row) {
     return `<div class="step ${cls}"><div class="step-dot">${cls==='done'?'✓':s.icon}</div><div class="step-label">${s.label}</div></div>`;
   }).join('');
 
-  // COD
+  // Payment
+  const cash = parseAmount(row['ธนบัตร']) + parseAmount(row['เหรียญ']);
+  const transfer = parseAmount(row['โอนครั้งที่1']);
+  let payChips = '';
+  if(cash>0) payChips += `<span class="pay-chip pay-cash">💵 เงินสด ฿${cash.toLocaleString('th-TH',{minimumFractionDigits:0})}</span>`;
+  if(transfer>0) payChips += `<span class="pay-chip pay-transfer">🏦 โอน ฿${transfer.toLocaleString('th-TH',{minimumFractionDigits:0})}${row['แบงค์1']?' ('+row['แบงค์1']+')':''}</span>`;
+  if(row['_cn']>0) payChips += `<span class="pay-chip pay-cn">📦 ใบลดหนี้ (CN) −฿${row['_cn'].toLocaleString('th-TH',{minimumFractionDigits:0})}</span>`;
+  if(row['_deduct']>0) payChips += `<span class="pay-chip pay-cn">✂️ หักยอด −฿${row['_deduct'].toLocaleString('th-TH',{minimumFractionDigits:0})}${row['_deductWhy']?' · '+row['_deductWhy']:''}</span>`;
+  if(!payChips) payChips = `<span class="pay-chip" style="background:#eef0f6;color:var(--muted)">ยังไม่ชำระ</span>`;
+
+  const totalAmt = parseAmount(row['TotalBaht']);
+  const cutAmt   = (row['_cn']||0) + (row['_deduct']||0);
+  const netHtml  = cutAmt>0
+    ? `<div style="font-size:12px;color:var(--muted);margin-top:6px">ยอดเรียกเก็บสุทธิ <strong style="color:var(--success);font-size:15px">฿${(totalAmt-cutAmt).toLocaleString('th-TH',{minimumFractionDigits:2})}</strong> <span style="font-size:11px">(หัก ฿${cutAmt.toLocaleString('th-TH',{minimumFractionDigits:2})})</span></div>`
+    : '';
+
+  const delivDisplay = row['วันที่ส่งสินค้า'] ? row['วันที่ส่งสินค้า'] : '-';
+  const confirmDisplay = row['_uAdd'] ? row['_uAdd'] : '';
+
   document.getElementById('resCod').innerHTML=`
     <div class="cod-box">
-      <div>
+      <div style="flex:1">
         <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-bottom:4px">💰 ยอดรวม</div>
-        <div class="cod-amount">฿${row['TotalBaht']}</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px">เอกสาร ${row['Doc_Date']} · ส่ง ${row['วันที่ส่งสินค้า']}</div>
+        <div class="cod-amount">฿${totalAmt.toLocaleString('th-TH',{minimumFractionDigits:2})}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">เอกสาร ${row['Doc_Date']||'-'} · ส่ง ${delivDisplay}${confirmDisplay?' · ยืนยัน '+confirmDisplay:''}</div>
+        <div class="pay-chips">${payChips}</div>
+        ${netHtml}
       </div>
-      <div style="font-size:42px">💵</div>
+      <div style="font-size:42px;flex-shrink:0">💵</div>
     </div>`;
+
+  // Driver info
+  const driverDiv=document.getElementById('resDriver');
+  if(row['_driver']||row['_plate']) {
+    driverDiv.style.display='block';
+    const helpersHtml = row['_helpers'].length
+      ? `<div class="info-row"><div class="info-icon">👥</div><div class="info-body"><div class="info-label">ผู้ช่วย</div><div class="info-value">${row['_helpers'].join(', ')}</div></div></div>`
+      : '';
+    const closedHtml = row['_tripClosed']
+      ? `<div class="info-row"><div class="info-icon">✅</div><div class="info-body"><div class="info-label">ปิดงานเมื่อ</div><div class="info-value">${row['_tripClosed']}</div></div></div>`
+      : '';
+    document.getElementById('resDriverBody').innerHTML=`
+      ${row['_driver']?`<div class="info-row"><div class="info-icon">🧑‍✈️</div><div class="info-body"><div class="info-label">คนขับ</div><div class="info-value">${row['_driver']}</div></div></div>`:''}
+      ${row['_plate']?`<div class="info-row"><div class="info-icon">🚛</div><div class="info-body"><div class="info-label">ทะเบียนรถ</div><div class="info-value" style="font-family:'Courier New',monospace;font-size:16px">${row['_plate']}</div></div></div>`:''}
+      ${helpersHtml}
+      ${closedHtml}`;
+  } else {
+    driverDiv.style.display='none';
+  }
 
   // Info
   document.getElementById('resInfo').innerHTML=`
     <div class="section-title">ℹ️ รายละเอียดการจัดส่ง</div>
     <div class="info-row"><div class="info-icon">👤</div><div class="info-body"><div class="info-label">ลูกค้า</div><div class="info-value">${row['Customer_Name']}</div><div style="font-size:12px;color:var(--muted)">รหัส ${row['Customer_Code']}</div></div></div>
     <div class="info-row"><div class="info-icon">📄</div><div class="info-body"><div class="info-label">เลขเอกสาร</div><div class="info-value" style="font-family:'Courier New',monospace">${row['Doc_No']}</div></div></div>
-    <div class="info-row"><div class="info-icon">🚛</div><div class="info-body"><div class="info-label">เลขทริป</div><div class="info-value" style="font-family:'Courier New',monospace">${row['Trans_Code']}</div></div></div>
-    <div class="info-row"><div class="info-icon">👨‍💼</div><div class="info-body"><div class="info-label">เซลส์ที่รับผิดชอบ</div><div class="info-value">${row['Salesman_Name']} (${row['Salesman_Code']})</div></div></div>
-    <div class="info-row"><div class="info-icon">📅</div><div class="info-body"><div class="info-label">วันที่ส่งสินค้า</div><div class="info-value">${row['วันที่ส่งสินค้า']}${row['_status']==='transit'?' <span style="color:var(--warning);font-size:12px">● วันนี้</span>':''}</div></div></div>
+    <div class="info-row"><div class="info-icon">🗂️</div><div class="info-body"><div class="info-label">เลขทริป</div><div class="info-value" style="font-family:'Courier New',monospace">${row['Trans_Code']}</div></div></div>
+    ${row['Warehouse']?`<div class="info-row"><div class="info-icon">🏭</div><div class="info-body"><div class="info-label">คลัง</div><div class="info-value">${row['Warehouse']}</div></div></div>`:''}
+    <div class="info-row"><div class="info-icon">📅</div><div class="info-body"><div class="info-label">วันที่ส่งสินค้า</div><div class="info-value">${delivDisplay}${row['_status']==='transit'?' <span style="color:var(--warning);font-size:12px">● วันนี้</span>':''}</div></div></div>
   `;
 
-  // Trip info (show only if admin logged in)
+  // Trip info (admin only)
   const tripDiv=document.getElementById('resTripInfo');
   if(currentUser) {
     const tripRows=allRows.filter(r=>r['Trans_Code']===row['Trans_Code']);
@@ -542,6 +659,7 @@ function showTrackResult(row) {
           </div>
           <div style="text-align:right">
             <div style="font-size:13px;font-weight:600" class="num">฿${r['TotalBaht']}</div>
+            ${statusChip(r['_status'])}
             ${r['Doc_No']===row['Doc_No']?'<div style="font-size:10px;color:var(--gold);font-weight:700">◀ รายการนี้</div>':''}
           </div>
         </div>`).join('')}
@@ -563,39 +681,41 @@ function statusChip(status) {
   return `<span class="s-chip ${c.cls}">${c.icon} ${c.txt}</span>`;
 }
 
+function esc(s){return String(s||'').replace(/'/g,"\\'");}
+
 /* ════════════════════════════════
    ADMIN
 ════════════════════════════════ */
-function populateSalesmanFilter() {
-  const names=[...new Set(allRows.map(r=>r['Salesman_Name']).filter(Boolean))].sort();
-  const sel=document.getElementById('fSalesman');
+function populateDriverFilter() {
+  const names=[...new Set(allRows.map(r=>r['_driver']).filter(Boolean))].sort();
+  const sel=document.getElementById('fDriver');
+  sel.innerHTML='<option value="">ทั้งหมด</option>';
   names.forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
 }
 
 function filteredRows() {
   const fs=document.getElementById('fStatus')?.value||'';
-  const fsal=document.getElementById('fSalesman')?.value||'';
+  const fdrv=document.getElementById('fDriver')?.value||'';
   const fsrch=(document.getElementById('fSearch')?.value||'').toLowerCase();
   return allRows.filter(r=>{
     if(fs && r['_status']!==fs) return false;
-    if(fsal && r['Salesman_Name']!==fsal) return false;
-    if(fsrch && !r['Trans_Code'].toLowerCase().includes(fsrch)&&!r['Customer_Name'].toLowerCase().includes(fsrch)&&!r['Doc_No'].toLowerCase().includes(fsrch)) return false;
+    if(fdrv && r['_driver']!==fdrv) return false;
+    if(fsrch && !r['Trans_Code'].toLowerCase().includes(fsrch)&&!(r['Customer_Name']||'').toLowerCase().includes(fsrch)&&!(r['Doc_No']||'').toLowerCase().includes(fsrch)&&!(r['_plate']||'').toLowerCase().includes(fsrch)) return false;
     return true;
   });
 }
 
 function renderAdmin() {
   const rows=filteredRows();
-  // stats
-  const stats={total:rows.length, pending:0, transit:0, delivered:0, baht:0};
-  rows.forEach(r=>{ stats[r._status]=(stats[r._status]||0)+1; stats.baht+=r._amount; });
+  const stats={total:rows.length, pending:0, transit:0, delivered:0, baht:0, cut:0};
+  rows.forEach(r=>{ stats[r._status]=(stats[r._status]||0)+1; stats.baht+=r._amount; stats.cut+=(r._cut||0); });
   document.getElementById('adminStats').innerHTML=[
     {lbl:'เอกสารทั้งหมด', val:stats.total, color:'var(--gold)'},
     {lbl:'รอส่ง', val:stats.pending||0, color:'var(--warning)'},
     {lbl:'กำลังส่ง', val:stats.transit||0, color:'var(--info)'},
     {lbl:'ส่งแล้ว', val:stats.delivered||0, color:'var(--success)'},
   ].map(s=>`<div class="stat-card" style="border-top-color:${s.color}"><div class="s-val" style="color:${s.color}">${s.val}</div><div class="s-lbl">${s.lbl}</div></div>`).join('');
-  document.getElementById('adminCount').textContent=`${rows.length} รายการ · ฿${stats.baht.toLocaleString('th-TH',{minimumFractionDigits:2})}`;
+  document.getElementById('adminCount').textContent=`${rows.length} รายการ · ฿${stats.baht.toLocaleString('th-TH',{minimumFractionDigits:2})}`+(stats.cut>0?` · หัก CN ฿${stats.cut.toLocaleString('th-TH',{minimumFractionDigits:2})}`:'');
 
   if(adminView==='trip') renderTripView(rows);
   else renderTableView(rows);
@@ -619,27 +739,29 @@ function renderTripView(rows) {
     const total=rrows.reduce((s,r)=>s+r._amount,0);
     const statuses=[...new Set(rrows.map(r=>r._status))];
     const mainStatus=statuses.includes('transit')?'transit':statuses.includes('pending')?'pending':'delivered';
-    const delivDate=rrows[0]['วันที่ส่งสินค้า'];
-    const salesman=rrows[0]['Salesman_Name'];
+    const delivDate=rrows[0]['วันที่ส่งสินค้า']?.split(' ')[0]||'-';
+    const driver=rrows[0]['_driver']||'-';
+    const plate=rrows[0]['_plate']||'';
     return `<div class="trip-card">
-      <div class="trip-head" onclick="toggleTrip('${code}')">
+      <div class="trip-head" onclick="toggleTrip('${code.replace(/'/g,"\\'")}')">
         <div style="flex:1;min-width:0">
           <div class="trip-code">${code}</div>
-          <div class="trip-meta">${salesman} · ${rrows.length} ร้าน · วันส่ง ${delivDate}</div>
+          <div class="trip-meta">🧑‍✈️ ${driver}${plate?' · 🚛 '+plate:''} · ${rrows.length} ร้าน · วันส่ง ${delivDate}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
           ${statusChip(mainStatus)}
           <div style="font-size:13px;font-weight:700;color:var(--gold-light)" class="num">฿${total.toLocaleString('th-TH',{minimumFractionDigits:0})}</div>
-          <button class="trip-toggle" id="tog-${code}">▼</button>
+          <button class="trip-toggle" id="tog-${encodeURIComponent(code)}">▼</button>
         </div>
       </div>
-      <div class="trip-body" id="body-${code}">
+      <div class="trip-body" id="body-${encodeURIComponent(code)}">
         <table style="width:100%;border-collapse:collapse">
           <thead style="background:var(--row-alt)">
             <tr>
               <th style="padding:8px 12px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border)">Doc No</th>
               <th style="padding:8px 12px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border)">ลูกค้า</th>
               <th style="padding:8px 12px;text-align:right;font-size:11px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border)">ยอด (บาท)</th>
+              <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border)">สถานะ</th>
               <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border)">ลิงก์</th>
             </tr>
           </thead>
@@ -647,13 +769,14 @@ function renderTripView(rows) {
             ${rrows.map(r=>`<tr style="border-bottom:1px solid var(--border)" onmouseover="this.style.background='rgba(201,168,76,.06)'" onmouseout="this.style.background=''">
               <td style="padding:9px 12px;font-size:12px;font-family:'Courier New',monospace;font-weight:600">${r['Doc_No']}</td>
               <td style="padding:9px 12px;font-size:13px">${r['Customer_Name']}</td>
-              <td style="padding:9px 12px;font-size:13px;text-align:right;font-weight:600" class="num">฿${r['TotalBaht']}</td>
-              <td style="padding:9px 12px;text-align:center"><button class="btn btn-outline btn-sm" onclick="shareDocLink('${r['Doc_No']}')">🔗</button></td>
+              <td style="padding:9px 12px;font-size:13px;text-align:right;font-weight:600" class="num">฿${r['TotalBaht']}${r['_cut']>0?`<div style="font-size:11px;color:var(--danger);font-weight:600">−฿${r['_cut'].toLocaleString('th-TH',{minimumFractionDigits:2})} CN</div>`:''}</td>
+              <td style="padding:9px 12px;text-align:center">${statusChip(r['_status'])}</td>
+              <td style="padding:9px 12px;text-align:center"><button class="btn btn-outline btn-sm" onclick="shareDocLink('${esc(r['Doc_No'])}')">🔗</button></td>
             </tr>`).join('')}
             <tr style="background:rgba(201,168,76,.06)">
               <td colspan="2" style="padding:8px 12px;font-size:12px;color:var(--muted)">รวม ${rrows.length} รายการ</td>
               <td style="padding:8px 12px;text-align:right;font-weight:700;font-size:14px;color:var(--navy)" class="num">฿${total.toLocaleString('th-TH',{minimumFractionDigits:2})}</td>
-              <td></td>
+              <td colspan="2"></td>
             </tr>
           </tbody>
         </table>
@@ -663,32 +786,34 @@ function renderTripView(rows) {
 }
 
 function toggleTrip(code) {
-  const body=document.getElementById('body-'+code);
-  const tog=document.getElementById('tog-'+code);
+  const eid=encodeURIComponent(code);
+  const body=document.getElementById('body-'+eid);
+  const tog=document.getElementById('tog-'+eid);
+  if(!body)return;
   const open=body.classList.toggle('open');
   tog.textContent=open?'▲':'▼';
 }
 
 function renderTableView(rows) {
   const m=sortState.dir==='asc'?1:-1;
-  const type=sortState.key==='TotalBaht'||sortState.key==='_amount'?'num':sortState.key==='วันที่ส่งสินค้า'||sortState.key==='Doc_Date'?'date':'str';
+  const type=sortState.key==='TotalBaht'||sortState.key==='_amount'||sortState.key==='_cut'?'num':sortState.key==='วันที่ส่งสินค้า'||sortState.key==='Doc_Date'?'date':'str';
   const sorted=[...rows].sort((a,b)=>{
     const va=a[sortState.key],vb=b[sortState.key];
-    if(type==='num')return ((parseAmount(va))-(parseAmount(vb)))*m;
-    if(type==='date'){const pa=va?.split('/'),pb=vb?.split('/');
-      if(pa?.length===3&&pb?.length===3){const da=new Date(+pa[2],+pa[1]-1,+pa[0]),db=new Date(+pb[2],+pb[1]-1,+pb[0]);return(da-db)*m;}
-    }
+    if(type==='num')return((parseAmount(va))-(parseAmount(vb)))*m;
+    if(type==='date'){const da=parseThaiDate(va),db=parseThaiDate(vb);if(da&&db)return(da-db)*m;}
     return String(va||'').localeCompare(String(vb||''),'th')*m;
   });
   const tbody=document.getElementById('adminTbody');
-  if(!sorted.length){tbody.innerHTML='<tr class="empty-row"><td colspan="7">ไม่พบข้อมูล</td></tr>';return;}
-  tbody.innerHTML=sorted.map(r=>`<tr onclick="trackFromAdmin('${r['Doc_No']}')">
+  if(!sorted.length){tbody.innerHTML='<tr class="empty-row"><td colspan="9">ไม่พบข้อมูล</td></tr>';return;}
+  tbody.innerHTML=sorted.map(r=>`<tr onclick="trackFromAdmin('${esc(r['Doc_No'])}')">
     <td style="font-family:'Courier New',monospace;font-size:12px;font-weight:600">${r['Trans_Code']}</td>
     <td style="font-family:'Courier New',monospace;font-size:12px">${r['Doc_No']}</td>
     <td>${r['Customer_Name']}</td>
     <td style="text-align:right" class="num">฿${r['TotalBaht']}</td>
-    <td>${r['Salesman_Name']}</td>
-    <td>${r['วันที่ส่งสินค้า']}</td>
+    <td style="text-align:right" class="num">${r['_cut']>0?`<span style="color:var(--danger)">−฿${r['_cut'].toLocaleString('th-TH',{minimumFractionDigits:2})}</span>`:'-'}</td>
+    <td>${r['_driver']||'-'}</td>
+    <td style="font-family:'Courier New',monospace">${r['_plate']||'-'}</td>
+    <td>${(r['วันที่ส่งสินค้า']||'').split(' ')[0]||'-'}</td>
     <td>${statusChip(r['_status'])}</td>
   </tr>`).join('');
   updateSortIndicators();
