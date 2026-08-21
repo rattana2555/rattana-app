@@ -7,7 +7,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL  = Deno.env.get("SUPABASE_URL") ?? "";
-const SERVICE_KEY   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const SERVICE_KEY   = Deno.env.get("SB_SECRET_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 // Platform tokens
 const LINE_TOKEN    = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ?? "";
@@ -41,6 +41,48 @@ async function sendLine(to: string, text: string): Promise<string | null> {
   try { return JSON.parse(body)?.sentMessages?.[0]?.id ?? null; } catch { return null; }
 }
 
+// ── ส่งรูปทาง LINE ───────────────────────────────────────────
+// LINE ต้องการ URL รูปแบบ HTTPS สาธารณะ 2 อัน (ตัวเต็ม + ตัวพรีวิว) ใช้ URL เดียวกันได้
+async function sendLineImage(to: string, url: string): Promise<string | null> {
+  const res = await fetch("https://api.line.me/v2/bot/message/push", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${LINE_TOKEN}` },
+    body: JSON.stringify({ to, messages: [{ type: "image", originalContentUrl: url, previewImageUrl: url }] }),
+  });
+  const body = await res.text();
+  if (!res.ok) {
+    const why =
+      res.status === 429 ? "โควตาข้อความ LINE ของเดือนนี้หมดแล้ว"
+    : res.status === 401 ? "โทเคน LINE ไม่ถูกต้องหรือหมดอายุ"
+    : res.status === 400 ? "LINE ไม่รู้จักลูกค้ารายนี้ — ตอบใน LINE OA Manager แทน"
+    : `LINE ${res.status}: ${body}`;
+    throw new Error(why);
+  }
+  try { return JSON.parse(body)?.sentMessages?.[0]?.id ?? null; } catch { return null; }
+}
+
+// Facebook คืน error เป็นก้อน JSON ยาวมาก พนักงานอ่านไม่รู้เรื่อง
+// แปลเป็นประโยคเดียวที่บอกได้ว่า "ต้องทำอะไรต่อ"
+function fbReason(status: number, body: string): string {
+  let e: Record<string, unknown> = {};
+  try { e = (JSON.parse(body) as any)?.error ?? {}; } catch { /* ไม่ใช่ JSON ก็ช่างมัน */ }
+  const sub  = Number(e.error_subcode ?? 0);
+  const code = Number(e.code ?? 0);
+  const msg  = String(e.message ?? "");
+
+  if (sub === 2018278 || /outside of allowed window/i.test(msg))
+    return "เกินกำหนด 24 ชั่วโมงที่ Facebook ให้ตอบ — ต้องรอลูกค้าทักมาใหม่ก่อน";
+  if (/controlling this thread/i.test(msg))
+    return "บทสนทนานี้มีแอปอื่นของเพจควบคุมอยู่ (เช่นแชทบอท AI) — ต้องเปิดสิทธิ์ควบคุมการสนทนาให้แอปนี้ก่อน";
+  if (code === 551 || sub === 1545041)
+    return "ลูกค้าปิดรับข้อความจากเพจนี้";
+  if (code === 200 || /permission/i.test(msg))
+    return "โทเคนเพจไม่มีสิทธิ์ส่งข้อความ — ออก Page Token ใหม่พร้อมสิทธิ์ pages_messaging";
+  if (code === 100)
+    return "Facebook ไม่รู้จักลูกค้ารายนี้";
+  return `Facebook ${status}: ${msg || body}`.slice(0, 200);
+}
+
 // ── ส่ง Facebook ─────────────────────────────────────────────
 // messaging_type: RESPONSE = ตอบกลับข้อความลูกค้าภายใน 24 ชม. (ไม่ต้องขอสิทธิ์เพิ่ม)
 // recipientId คือ PSID จาก sender.id ของ webhook — ใช้ได้เฉพาะกับเพจนี้เท่านั้น
@@ -58,7 +100,26 @@ async function sendFacebook(recipientId: string, text: string): Promise<string |
     }
   );
   const body = await res.text();
-  if (!res.ok) throw new Error(`Facebook ${res.status}: ${body}`);
+  if (!res.ok) throw new Error(fbReason(res.status, body));
+  try { return JSON.parse(body)?.message_id ?? null; } catch { return null; }
+}
+
+// ── ส่งรูปทาง Facebook ───────────────────────────────────────
+async function sendFacebookImage(recipientId: string, url: string): Promise<string | null> {
+  const res = await fetch(
+    `https://graph.facebook.com/v25.0/me/messages?access_token=${encodeURIComponent(FB_TOKEN)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recipient: { id: recipientId },
+        messaging_type: "RESPONSE",
+        message: { attachment: { type: "image", payload: { url, is_reusable: true } } },
+      }),
+    }
+  );
+  const body = await res.text();
+  if (!res.ok) throw new Error(fbReason(res.status, body));
   try { return JSON.parse(body)?.message_id ?? null; } catch { return null; }
 }
 
@@ -100,7 +161,7 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
-  const { conversationId, content, action, messageId, lineUserId } = await req.json();
+  const { conversationId, content, action, messageId, lineUserId, imageBase64, imageMime } = await req.json();
 
   // ── ตรวจสภาพช่องทาง LINE (ใช้ตอนส่งไม่ผ่านแล้วอยากรู้ว่าเพราะอะไร) ──
   // ลบทิ้งได้เมื่อแก้ปัญหาเสร็จ — ไม่ใช่ส่วนที่ใช้งานประจำ
@@ -151,6 +212,42 @@ serve(async (req: Request) => {
     const ok = r.ok;
     if (!ok) console.error("markAsRead:", r.status, await r.text());
     return new Response(JSON.stringify({ ok }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+
+  // ── ส่งรูป ─────────────────────────────────────────────────
+  // อัปโหลดขึ้น Storage (bucket สาธารณะ) ให้ได้ URL ก่อน แล้วส่ง URL นั้นเข้าแพลตฟอร์ม
+  // รองรับเฉพาะ LINE / Facebook — Shopee/TikTok ไม่มี API ส่งรูป
+  if (imageBase64) {
+    if (conv.platform !== "line" && conv.platform !== "facebook") {
+      return new Response(JSON.stringify({ sent: false, error: `ส่งรูปทาง ${conv.platform} ไม่ได้ — ส่งในแอปของช่องทางนั้น` }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    let url = "";
+    try {
+      const mime = String(imageMime || "image/jpeg");
+      const ext  = mime.split("/")[1]?.split(";")[0] || "jpg";
+      const bytes = Uint8Array.from(atob(imageBase64), (ch) => ch.charCodeAt(0));
+      const path = `staff/${conversationId}/${Date.now()}.${ext}`;
+      const up = await db.storage.from("chat-media").upload(path, bytes, { contentType: mime, upsert: true });
+      if (up.error) throw new Error("อัปโหลดรูปไม่สำเร็จ: " + up.error.message);
+      url = db.storage.from("chat-media").getPublicUrl(path).data.publicUrl;
+    } catch (e) {
+      return new Response(JSON.stringify({ sent: false, error: String(e).replace(/^Error:\s*/, "") }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    let sentImg = false, errImg = "", pid: string | null = null;
+    try {
+      if (conv.platform === "line") pid = await sendLineImage(conv.customer_id || conv.platform_conv_id, url);
+      else                          pid = await sendFacebookImage(conv.platform_conv_id, url);
+      sentImg = true;
+    } catch (e) {
+      errImg = String(e).replace(/^Error:\s*/, "");
+      console.error("send image error:", errImg);
+    }
+    return new Response(JSON.stringify({ sent: sentImg, url, platformMsgId: pid, error: errImg || null }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
   if (!content) {

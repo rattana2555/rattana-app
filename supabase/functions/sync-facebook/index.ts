@@ -16,7 +16,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const PAGE_TOKEN   = Deno.env.get("FACEBOOK_PAGE_TOKEN") ?? "";
 const PAGE_ID      = Deno.env.get("FACEBOOK_PAGE_ID") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
-const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const SERVICE_KEY  = Deno.env.get("SB_SECRET_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 const GRAPH = "https://graph.facebook.com/v25.0";
 

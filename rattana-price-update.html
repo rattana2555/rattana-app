@@ -1,0 +1,1445 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Rattana Price Update v1.1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --navy:#0d1b3e; --navy-mid:#1a2f5e; --navy-light:#243b73;
+  --gold:#c9a84c; --gold-light:#e8c86a;
+  --success:#2ecc71; --danger:#e74c3c; --warning:#f39c12; --info:#3498db;
+  --bg:#f4f6fb; --text:#0d1b3e; --card-bg:#ffffff; --border:#dde3f0; --muted:#6b7896; --row-alt:#fafbfd;
+  --space-xs:4px; --space-sm:8px; --space-md:16px; --space-lg:24px; --space-xl:32px;
+  --radius-sm:6px; --radius-md:12px; --radius-lg:16px; --radius-xl:20px;
+  --shadow-sm:0 1px 4px rgba(0,0,0,.06); --shadow-md:0 2px 8px rgba(0,0,0,.08);
+  --shadow-lg:0 8px 24px rgba(13,27,62,.12); --shadow-gold:0 4px 12px rgba(201,168,76,.35);
+}
+body.dark{ --bg:#0a1020; --text:#e8eaf0; --card-bg:#111c35; --border:#243b73; --muted:#8a98b8; --row-alt:#0f1830; }
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;font-size:14px;line-height:1.5;min-height:100dvh;overflow-x:hidden;background:var(--bg);color:var(--text);transition:background .25s,color .25s}
+button{font-family:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+input,select,textarea{font-family:inherit;font-size:16px}
+
+/* ── Header ── */
+header{background:var(--navy);color:#fff;padding:10px 14px;position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:10px;border-bottom:3px solid var(--gold);padding-top:max(10px,env(safe-area-inset-top))}
+header img.logo{height:36px;object-fit:contain;flex-shrink:0}
+header .brand-box{min-width:0;overflow:hidden}
+.logo-text{font-weight:700;letter-spacing:1.2px;font-size:16px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.logo-text span{color:var(--gold)}
+.logo-text .brand-long{color:#fff}
+/* จอมือถือ — ตัดคำว่า RATTANA ออกกันหัวล้นจอ (375px) */
+@media(max-width:560px){
+  header{gap:7px;padding-left:10px;padding-right:10px}
+  header img.logo{height:30px}
+  .logo-text{font-size:14px;letter-spacing:.6px}
+  .logo-text .brand-long{display:none}
+  .icon-btn{width:36px;height:36px;font-size:16px}
+  .ver{padding:1px 5px;font-size:9px}
+}
+.ver{font-size:10px;background:rgba(201,168,76,.22);color:var(--gold-light);border:1px solid rgba(201,168,76,.45);padding:1px 7px;border-radius:10px;font-weight:700;letter-spacing:.5px}
+.hspace{flex:1}
+.icon-btn{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.2);width:38px;height:38px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:17px;transition:background .15s;flex-shrink:0}
+.icon-btn:hover{background:rgba(255,255,255,.12)}
+
+/* ── Tabs ── */
+.tab-nav{display:flex;background:var(--navy);border-bottom:3px solid var(--gold);padding:0 8px;gap:4px;overflow-x:auto;position:sticky;top:59px;z-index:99;scrollbar-width:none}
+.tab-nav::-webkit-scrollbar{display:none}
+.tab-btn{background:transparent;color:rgba(255,255,255,.6);padding:11px 16px;font-size:13px;font-weight:600;border-bottom:3px solid transparent;white-space:nowrap;flex-shrink:0;transition:all .18s;margin-bottom:-3px;border-radius:var(--radius-sm) var(--radius-sm) 0 0}
+.tab-btn:hover{color:#fff;background:rgba(255,255,255,.06)}
+.tab-btn.active{color:var(--navy);background:var(--gold);font-weight:700}
+.tab-btn .cnt{background:rgba(0,0,0,.16);border-radius:9px;padding:0 6px;font-size:11px;margin-left:5px}
+.tabpane{display:none}
+.tabpane.active{display:block;animation:fadeIn .2s ease}
+
+/* ── Layout ── */
+.content{padding:12px;max-width:1500px;margin:0 auto;width:100%;padding-bottom:90px}
+@media(min-width:640px){.content{padding:16px}}
+.card{background:var(--card-bg);border-radius:var(--radius-md);border:1px solid var(--border);box-shadow:var(--shadow-md)}
+.card-gold{border-top:3px solid var(--gold)}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border);background:linear-gradient(to right,rgba(201,168,76,.07),transparent);flex-wrap:wrap}
+.card-head h3{font-size:14px;font-weight:700}
+.card-body{padding:14px}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 15px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;border:1px solid transparent;min-height:40px;transition:opacity .15s,transform .1s}
+.btn:hover{opacity:.88}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--navy);color:#fff}
+.btn-gold{background:var(--gold);color:var(--navy)}
+.btn-gold:hover{background:var(--gold-light)}
+.btn-outline{background:transparent;color:var(--text);border-color:var(--border)}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-success{background:var(--success);color:#fff}
+.btn-sm{padding:5px 10px;font-size:12px;min-height:32px}
+.btn-block{width:100%}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+
+/* ── Inputs ── */
+.input{height:42px;padding:0 13px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:16px;outline:none;width:100%;transition:border-color .15s}
+.input:focus{border-color:var(--gold)}
+.input-sm{height:34px;font-size:13px;padding:0 9px}
+select.input{padding-right:8px}
+textarea.input{height:auto;padding:10px 13px;resize:vertical;font-size:15px}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.4px;text-transform:uppercase}
+.chk{display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;user-select:none}
+.chk input{width:17px;height:17px;accent-color:var(--gold);cursor:pointer}
+
+/* ── Searchable dropdown ── */
+.dd-wrap{position:relative;width:100%}
+.dd-trigger{width:100%;min-height:42px;padding:9px 13px;background:var(--card-bg);border:1.5px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:inherit;font-size:15px;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.dd-trigger:hover{border-color:var(--gold)}
+.dd-panel{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--card-bg);border:1.5px solid var(--border);border-radius:var(--radius-sm);z-index:500;box-shadow:var(--shadow-lg);max-height:280px;display:none;flex-direction:column}
+.dd-panel.open{display:flex}
+.dd-search{padding:10px 13px;font-size:16px;border:none;border-bottom:1px solid var(--border);background:transparent;color:var(--text);outline:none}
+.dd-list{overflow-y:auto;flex:1;list-style:none;padding:4px 0;margin:0}
+.dd-list li{padding:9px 13px;cursor:pointer;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;justify-content:space-between;gap:8px}
+.dd-list li:hover{background:var(--navy-light);color:#fff}
+.dd-list li.sel{background:rgba(201,168,76,.16);font-weight:700}
+.dd-list li .c{opacity:.6;font-size:12px}
+
+/* ── Filter bar ── */
+.filter-bar{display:grid;grid-template-columns:1fr;gap:9px;padding:12px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);margin-bottom:12px;box-shadow:var(--shadow-sm)}
+@media(min-width:820px){.filter-bar{grid-template-columns:2fr 1.3fr auto}}
+
+/* ── Stats ── */
+.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px}
+@media(min-width:760px){.stat-grid{grid-template-columns:repeat(4,1fr);gap:12px}}
+.stat-card{background:var(--card-bg);border-radius:var(--radius-md);padding:13px;border:1px solid var(--border);border-top:3px solid var(--gold)}
+.stat-card .s-label{font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.4px;text-transform:uppercase;margin-bottom:5px}
+.stat-card .s-value{font-size:21px;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums}
+.stat-card .s-sub{font-size:11px;color:var(--muted);margin-top:3px}
+.stat-card.up{border-top-color:var(--danger)}.stat-card.up .s-value{color:var(--danger)}
+.stat-card.down{border-top-color:var(--success)}.stat-card.down .s-value{color:var(--success)}
+.stat-card.info{border-top-color:var(--info)}
+
+/* ── Product list (เลือกสินค้า) ── */
+.plist{display:grid;grid-template-columns:1fr;gap:8px}
+@media(min-width:700px){.plist{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:1150px){.plist{grid-template-columns:repeat(3,1fr)}}
+.pitem{display:flex;gap:10px;padding:10px 11px;border:1.5px solid var(--border);border-radius:var(--radius-md);background:var(--card-bg);cursor:pointer;transition:border-color .15s,background .15s;align-items:flex-start}
+.pitem:hover{border-color:var(--gold)}
+.pitem.on{border-color:var(--gold);background:rgba(201,168,76,.09)}
+.pitem .box{width:19px;height:19px;border-radius:5px;border:2px solid var(--border);flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;font-weight:700}
+.pitem.on .box{background:var(--gold);border-color:var(--gold);color:var(--navy)}
+.pitem .pn{font-size:13px;font-weight:600;line-height:1.35;word-break:break-word}
+.pitem .pm{font-size:11px;color:var(--muted);margin-top:3px;display:flex;flex-wrap:wrap;gap:4px 8px}
+.pitem .pp{font-size:11px;margin-top:4px;display:flex;flex-wrap:wrap;gap:4px}
+.tag{display:inline-block;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:700;background:rgba(13,27,62,.07);color:var(--muted);white-space:nowrap}
+body.dark .tag{background:rgba(255,255,255,.08)}
+.tag-gold{background:rgba(201,168,76,.2);color:#8a6d17}
+body.dark .tag-gold{color:var(--gold-light)}
+.code{font-family:'Courier New',monospace;font-weight:700;letter-spacing:.2px}
+
+/* ── Table ── */
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--card-bg)}
+.tbl{width:100%;border-collapse:separate;border-spacing:0;min-width:720px}
+.tbl thead th{background:var(--navy);color:#fff;padding:8px 9px;text-align:left;font-size:11.5px;font-weight:600;white-space:nowrap;border-bottom:2px solid var(--gold);position:sticky;top:0;z-index:6}
+.tbl thead tr:nth-child(2) th{top:31px;font-size:10.5px;background:var(--navy-mid);border-bottom:2px solid var(--gold)}
+.tbl thead th.sortable{cursor:pointer;user-select:none}
+.tbl thead th.sortable:hover{background:var(--navy-mid)}
+.tbl thead th .sort-ind{font-size:9px;color:var(--gold);margin-left:3px;font-weight:700}
+.tbl tbody tr{border-bottom:1px solid var(--border)}
+.tbl tbody td{padding:6px 9px;font-size:12.5px;vertical-align:middle;border-bottom:1px solid var(--border);background:var(--card-bg)}
+.tbl tbody tr:nth-child(even) td{background:var(--row-alt)}
+.tbl tbody tr.changed td{background:rgba(201,168,76,.11)}
+.tbl td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:600}
+.tbl td.sticky,.tbl th.sticky{position:sticky;left:0;z-index:4;min-width:190px;max-width:260px}
+.tbl thead th.sticky{z-index:7}
+.tbl td.sticky{box-shadow:1px 0 0 var(--border)}
+.tbl .empty-row td{text-align:center;padding:44px 18px;color:var(--muted);font-size:14px;background:var(--card-bg)}
+.tier-head{text-align:center!important;border-left:2px solid rgba(201,168,76,.5)!important}
+.tcell-first{border-left:2px solid rgba(201,168,76,.35)}
+.pname{font-weight:600;line-height:1.3;font-size:12.5px;display:block;word-break:break-word}
+.psub{font-size:10.5px;color:var(--muted)}
+.in-price{width:86px;height:32px;padding:0 7px;border-radius:5px;border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:13px;text-align:right;font-weight:700;outline:none;font-variant-numeric:tabular-nums}
+.in-price:focus{border-color:var(--gold);background:rgba(201,168,76,.08)}
+.in-price.set{border-color:var(--gold);background:rgba(201,168,76,.13)}
+.in-pct{width:64px;height:32px;padding:0 5px;border-radius:5px;border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:12.5px;text-align:right;outline:none;font-variant-numeric:tabular-nums}
+.in-pct:focus{border-color:var(--gold)}
+.in-pct.up{color:var(--danger);font-weight:700}
+.in-pct.down{color:var(--success);font-weight:700}
+.pct-up{color:var(--danger);font-weight:700}
+.pct-down{color:var(--success);font-weight:700}
+
+/* ── Bulk panel ── */
+.bulk{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
+@media(min-width:760px){.bulk{grid-template-columns:repeat(4,1fr)}}
+.pill-row{display:flex;flex-wrap:wrap;gap:6px}
+.pill{padding:6px 12px;border-radius:20px;border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:12px;font-weight:600;transition:all .15s}
+.pill.on{background:var(--gold);border-color:var(--gold);color:var(--navy)}
+.pill:hover{border-color:var(--gold)}
+
+
+/* ── Modal ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.65);z-index:9000;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px);overflow-y:auto}
+.modal-overlay.open{display:flex}
+.modal{background:var(--card-bg);border-radius:var(--radius-lg);max-width:520px;width:100%;max-height:92dvh;overflow-y:auto;border-top:4px solid var(--gold);animation:slideUp .22s ease}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
+.modal-head h3{font-size:15px;font-weight:700}
+.modal-close{background:transparent;font-size:23px;color:var(--muted);padding:2px 7px;border-radius:var(--radius-sm);line-height:1}
+.modal-body{padding:18px}
+.modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+
+/* ── Misc ── */
+.toast{position:fixed;bottom:max(24px,env(safe-area-inset-bottom));right:16px;padding:12px 18px;border-radius:var(--radius-md);color:#fff;z-index:9999;animation:slideIn .3s ease;font-weight:500;box-shadow:var(--shadow-lg);max-width:90vw;font-size:13px}
+.toast-success{background:var(--success)}.toast-error{background:var(--danger)}
+.toast-warning{background:var(--warning);color:var(--navy)}.toast-info{background:var(--navy-mid);border-left:3px solid var(--gold)}
+.spinner-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.58);align-items:center;justify-content:center;z-index:99999;backdrop-filter:blur(3px)}
+.spinner-overlay.show{display:flex}
+.spinner-box{background:#fff;border-radius:var(--radius-lg);padding:30px 38px;text-align:center;border-top:4px solid var(--gold);min-width:250px}
+.spinner-ring{width:46px;height:46px;border:5px solid #dde3f0;border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 13px}
+body.dark .spinner-box{background:var(--card-bg)}
+#loadingBar{position:fixed;top:0;left:0;height:3px;background:var(--gold);width:0;transition:width .4s;z-index:10000}
+#backToTop{position:fixed;bottom:max(22px,calc(14px + env(safe-area-inset-bottom)));right:max(14px,calc(12px + env(safe-area-inset-right)));background:var(--gold);color:var(--navy);border-radius:50%;width:46px;height:46px;display:none;align-items:center;justify-content:center;box-shadow:var(--shadow-gold);z-index:90;font-size:18px;font-weight:700}
+#backToTop.show{display:flex}
+.empty{padding:44px 18px;text-align:center;color:var(--muted);font-size:14px}
+.hint{font-size:11.5px;color:var(--muted);line-height:1.6}
+.sec-title{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;margin-bottom:8px}
+.divider{height:1px;background:var(--border);margin:14px 0}
+.hidden{display:none!important}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes slideUp{from{transform:translateY(18px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── Print ── */
+#printArea{display:none}
+@media print{
+  body{background:#fff;color:#000}
+  header,.tab-nav,.filter-bar,.card,#backToTop,.toast,#loadingBar,.content{display:none!important}
+  #printArea{display:block!important;padding:0}
+  #printArea h2{font-size:16px;margin-bottom:2px}
+  #printArea .pmeta{font-size:11px;margin-bottom:8px;color:#333}
+  #printArea table{width:100%;border-collapse:collapse;font-size:10px}
+  #printArea th,#printArea td{border:1px solid #999;padding:3px 4px}
+  #printArea thead th{background:#e9edf6}
+  #printArea td.n{text-align:right}
+  @page{size:A4 landscape;margin:10mm}
+}
+</style>
+</head>
+<body>
+
+<div id="loadingBar"></div>
+
+<!-- ══════════ APP ══════════ -->
+<div id="appScreen">
+<header>
+  <img class="logo" src="data:image/png;base64,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" alt="Rattana">
+  <div class="brand-box">
+    <div class="logo-text"><span class="brand-long">RATTANA </span><span>PRICE UPDATE</span></div>
+  </div>
+  <span class="ver" id="verChip">v1.1</span>
+  <div class="hspace"></div>
+  <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="โหลดข้อมูลใหม่จากชีท">🔄</button>
+  <button class="icon-btn" onclick="toggleDark()" title="สลับโหมดมืด">🌙</button>
+</header>
+
+<nav class="tab-nav">
+  <button class="tab-btn active" data-tab="select" onclick="switchTab('select')">1 · เลือกสินค้า<span class="cnt" id="cntSel">0</span></button>
+  <button class="tab-btn" data-tab="adjust" onclick="switchTab('adjust')">2 · ปรับราคา<span class="cnt" id="cntChg">0</span></button>
+  <button class="tab-btn" data-tab="export" onclick="switchTab('export')">3 · สรุป &amp; ส่งออก</button>
+</nav>
+
+<div class="content">
+
+  <!-- ─────── TAB 1 : เลือกสินค้า ─────── -->
+  <div class="tabpane active" id="tab-select">
+    <div class="filter-bar">
+      <div class="field">
+        <label>ค้นหา ชื่อสินค้า / บาร์โค้ด</label>
+        <input class="input" id="qSearch" type="search" placeholder="🔍 พิมพ์ชื่อสินค้า หรือบาร์โค้ด..." autocomplete="off">
+      </div>
+      <div class="field">
+        <label>หมวดสินค้า</label>
+        <div class="dd-wrap" id="ddCat">
+          <button class="dd-trigger" type="button" onclick="toggleDD('ddCat')"><span id="ddCatLabel">ทุกหมวด</span><span>▾</span></button>
+          <div class="dd-panel">
+            <input class="dd-search" type="text" placeholder="🔍 ค้นหาหมวด..." oninput="filterDD(this,'ddCatList')" autocomplete="off">
+            <ul class="dd-list" id="ddCatList"></ul>
+          </div>
+        </div>
+      </div>
+      <div class="field" style="justify-content:flex-end">
+        <label>&nbsp;</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-gold btn-sm" onclick="openPasteModal()">📋 วางบาร์โค้ด</button>
+          <button class="btn btn-outline btn-sm" onclick="selectAllFiltered()">เลือกทั้งหมด</button>
+          <button class="btn btn-outline btn-sm" onclick="clearSelection()">ล้าง</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card info"><div class="s-label">สินค้าทั้งหมด</div><div class="s-value" id="stTotal">0</div><div class="s-sub">จากชีท PDDT</div></div>
+      <div class="stat-card"><div class="s-label">ผลการค้นหา</div><div class="s-value" id="stFound">0</div><div class="s-sub" id="stFoundSub">รายการ</div></div>
+      <div class="stat-card"><div class="s-label">เลือกไว้</div><div class="s-value" id="stSel">0</div><div class="s-sub">รายการ</div></div>
+      <div class="stat-card"><div class="s-label">อัพเดทล่าสุด</div><div class="s-value" id="stTime" style="font-size:15px">-</div><div class="s-sub" id="stTimeSub">&nbsp;</div></div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:9px">
+      <label class="chk"><input type="checkbox" id="chkOnlySel" onchange="applyFilter()"> แสดงเฉพาะที่เลือกไว้</label>
+      <div class="hspace"></div>
+      <button class="btn btn-gold btn-sm" onclick="switchTab('adjust')">ไปหน้าปรับราคา →</button>
+    </div>
+
+    <div class="plist" id="plist"></div>
+    <div style="text-align:center;margin-top:14px">
+      <button class="btn btn-outline" id="btnMore" onclick="showMore()" style="display:none">แสดงเพิ่ม 100 รายการ</button>
+    </div>
+  </div>
+
+  <!-- ─────── TAB 2 : ปรับราคา ─────── -->
+  <div class="tabpane" id="tab-adjust">
+    <div class="card card-gold" style="margin-bottom:12px">
+      <div class="card-head">
+        <h3>⚙️ ระดับราคา &amp; หน่วยที่ต้องการปรับ</h3>
+        <span class="hint" id="tierHint"></span>
+      </div>
+      <div class="card-body">
+        <div class="sec-title">ระดับราคา (คอลัมน์ที่จะแสดงในตาราง)</div>
+        <div class="pill-row" id="tierPills"></div>
+        <div class="divider"></div>
+        <div class="sec-title">หน่วยนับที่แสดง</div>
+        <div class="pill-row" id="unitPills"></div>
+        <div class="divider"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <label class="chk"><input type="checkbox" id="chkHidePriceless" checked onchange="renderAdjust()"> ซ่อนแถวที่ไม่มีราคาเดิมเลย</label>
+          <label class="chk"><input type="checkbox" id="chkOnlyChanged" onchange="renderAdjust()"> แสดงเฉพาะแถวที่ปรับแล้ว</label>
+          <div class="hspace"></div>
+          <button class="btn btn-danger btn-sm" onclick="clearAllEdits()">🗑️ ล้างราคาที่ปรับทั้งหมด</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-gold" style="margin-bottom:12px">
+      <div class="card-head"><h3>⚡ ปรับหลายรายการพร้อมกัน</h3></div>
+      <div class="card-body">
+        <div class="bulk">
+          <div class="field">
+            <label>วิธีปรับ</label>
+            <select class="input input-sm" id="bulkMode">
+              <option value="pct">ปรับเป็นเปอร์เซ็นต์ (%)</option>
+              <option value="amt">บวก/ลบ เป็นบาท</option>
+              <option value="set">ตั้งราคาใหม่คงที่</option>
+              <option value="clear">ล้างราคาที่ปรับ</option>
+            </select>
+          </div>
+          <div class="field">
+            <label id="bulkValLabel">ค่า (%) — ใส่ลบเพื่อลดราคา</label>
+            <input class="input input-sm" id="bulkVal" type="number" step="0.01" placeholder="เช่น 3 หรือ -2.5" inputmode="decimal">
+          </div>
+          <div class="field">
+            <label>ปัดเศษราคาใหม่</label>
+            <select class="input input-sm" id="bulkRound">
+              <option value="d2">ทศนิยม 2 ตำแหน่ง</option>
+              <option value="int">จำนวนเต็ม (ปัดใกล้สุด)</option>
+              <option value="up">จำนวนเต็ม (ปัดขึ้น)</option>
+              <option value="h">ปัดลงท้าย .50</option>
+              <option value="q">ปัดลงท้าย .25</option>
+              <option value="f5">ปัดเป็นทวีคูณของ 5</option>
+              <option value="e9">ลงท้ายเลข 9</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>ใช้กับ</label>
+            <select class="input input-sm" id="bulkScope">
+              <option value="all">ทุกแถวที่แสดงอยู่</option>
+              <option value="checked">เฉพาะแถวที่ติ๊กไว้</option>
+              <option value="empty">เฉพาะแถวที่ยังไม่ได้ปรับ</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:11px;flex-wrap:wrap;align-items:center">
+          <button class="btn btn-gold" onclick="applyBulk()">▶ ปรับเลย</button>
+          <span class="hint" id="bulkHint">ใช้กับทุกระดับราคา &amp; หน่วยที่เปิดแสดงอยู่ — “ปัดเศษ” ใช้กับการพิมพ์ % ในตารางด้วย</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <label class="chk"><input type="checkbox" id="chkAllRows" onchange="toggleAllRows(this.checked)"> ติ๊กทุกแถว</label>
+      <span class="hint" id="rowCntHint">0 แถว</span>
+      <div class="hspace"></div>
+      <button class="btn btn-gold btn-sm" onclick="switchTab('export')">ไปหน้าสรุป →</button>
+    </div>
+
+    <div class="tbl-wrap">
+      <table class="tbl" id="adjTbl">
+        <thead id="adjHead"></thead>
+        <tbody id="adjBody"></tbody>
+      </table>
+    </div>
+    <div style="text-align:center;margin-top:14px">
+      <button class="btn btn-outline" id="btnMoreRows" onclick="showMoreRows()" style="display:none">แสดงเพิ่ม 100 แถว</button>
+    </div>
+  </div>
+
+  <!-- ─────── TAB 3 : สรุป & ส่งออก ─────── -->
+  <div class="tabpane" id="tab-export">
+    <div class="stat-grid">
+      <div class="stat-card"><div class="s-label">รายการที่ปรับ</div><div class="s-value" id="exCount">0</div><div class="s-sub" id="exCountSub">ราคา</div></div>
+      <div class="stat-card up"><div class="s-label">ขึ้นราคา</div><div class="s-value" id="exUp">0</div><div class="s-sub" id="exUpAvg">เฉลี่ย 0%</div></div>
+      <div class="stat-card down"><div class="s-label">ลดราคา</div><div class="s-value" id="exDown">0</div><div class="s-sub" id="exDownAvg">เฉลี่ย 0%</div></div>
+      <div class="stat-card info"><div class="s-label">% ปรับเฉลี่ย</div><div class="s-value" id="exAvg">0%</div><div class="s-sub">ทุกรายการ</div></div>
+    </div>
+
+    <div class="card card-gold" style="margin-bottom:12px">
+      <div class="card-head"><h3>📄 ข้อมูลเอกสาร</h3></div>
+      <div class="card-body">
+        <div class="bulk">
+          <div class="field"><label>เลขที่เอกสาร</label><input class="input input-sm" id="docNo" type="text"></div>
+          <div class="field"><label>วันที่มีผล</label><input class="input input-sm" id="docDate" type="date"></div>
+          <div class="field"><label>ผู้จัดทำ</label><input class="input input-sm" id="docBy" type="text" placeholder="ชื่อผู้จัดทำ"></div>
+          <div class="field"><label>เหตุผล / หมายเหตุ</label><input class="input input-sm" id="docNote" type="text" placeholder="เช่น ต้นทุนปรับขึ้น"></div>
+        </div>
+        <div class="divider"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-success" onclick="exportExcel()">📊 Excel (.xlsx)</button>
+          <button class="btn btn-primary" onclick="exportCsv()">📄 CSV</button>
+          <button class="btn btn-outline" onclick="copyTable()">📋 คัดลอก (วางลง Sheet)</button>
+          <button class="btn btn-outline" onclick="printDoc()">🖨️ พิมพ์ / PDF</button>
+        </div>
+        <div class="hint" style="margin-top:9px">ไฟล์ที่ได้จะมี 1 บรรทัดต่อ 1 ราคา (สินค้า × หน่วยนับ × ระดับราคา) พร้อมราคาเดิม ราคาใหม่ ส่วนต่าง และ % การปรับ</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>👁️ ตรวจทานก่อนส่งออก</h3><span class="hint" id="exPreviewHint"></span></div>
+      <div class="tbl-wrap" style="border:none;border-radius:0">
+        <table class="tbl" id="exTbl">
+          <thead>
+            <tr>
+              <th class="sticky sortable" data-key="name" data-type="str">ชื่อสินค้า <span class="sort-ind"></span></th>
+              <th class="sortable" data-key="code" data-type="str">บาร์โค้ด <span class="sort-ind"></span></th>
+              <th class="sortable" data-key="unit" data-type="str">หน่วยนับ <span class="sort-ind"></span></th>
+              <th class="sortable" data-key="tier" data-type="str">ระดับราคา <span class="sort-ind"></span></th>
+              <th class="sortable" data-key="old" data-type="num" style="text-align:right">ราคาเดิม <span class="sort-ind"></span></th>
+              <th class="sortable" data-key="new" data-type="num" style="text-align:right">ราคาใหม่ <span class="sort-ind"></span></th>
+              <th class="sortable" data-key="diff" data-type="num" style="text-align:right">ส่วนต่าง <span class="sort-ind"></span></th>
+              <th class="sortable" data-key="pct" data-type="num" style="text-align:right">% ปรับ <span class="sort-ind"></span></th>
+            </tr>
+          </thead>
+          <tbody id="exBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+<button id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+</div><!-- /appScreen -->
+
+<!-- ══════════ MODALS ══════════ -->
+<div class="modal-overlay" id="pasteModal">
+  <div class="modal">
+    <div class="modal-head"><h3>📋 วางรายการบาร์โค้ด / ชื่อสินค้า</h3><button class="modal-close" onclick="closeModal('pasteModal')">×</button></div>
+    <div class="modal-body">
+      <p class="hint" style="margin-bottom:9px">วางได้ทีละหลายบรรทัด (1 บรรทัด = 1 รายการ) รองรับทั้งบาร์โค้ดชิ้น / แพ็ค / บิ๊กแพ็ค / ลัง และชื่อสินค้าเต็ม</p>
+      <textarea class="input" id="pasteBox" rows="10" placeholder="8858669900047&#10;28858669900041&#10;กาแฟไทย คลาสสิค 500ก."></textarea>
+      <div id="pasteResult" style="margin-top:10px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeModal('pasteModal')">ปิด</button>
+      <button class="btn btn-gold" onclick="runPaste()">ค้นหา &amp; เลือก</button>
+    </div>
+  </div>
+</div>
+
+<div class="spinner-overlay" id="spinner">
+  <div class="spinner-box"><div class="spinner-ring"></div><p id="spinnerMsg">กำลังโหลด...</p></div>
+</div>
+
+<div id="printArea"></div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   Rattana Price Update v1.1 — ระบบปรับราคาสินค้า
+   v1.1 — ยกเลิกการล็อกอิน Google (เปิดใช้ได้เลย ไม่ต้องเช็คสิทธิ์)
+          ช่อง "ผู้จัดทำ" เปลี่ยนเป็นพิมพ์เองและจำค่าไว้ให้
+   ข้อมูล: Google Sheet "Stocksync" ชีท PDDT
+     A  = PRODUCT NAME                     → ชื่อสินค้า
+     B/D/F/H = CODE EA/PA/BP/CS            → บาร์โค้ด ชิ้น/แพ็ค/บิ๊กแพ็ค/ลัง
+     J–M = UNIT EA/PA/BP/CS                → หน่วยนับ (เช่น "ลังx16(CS)")
+     U–X  = PRICE CC00 EA/PA/BP/CS         → ราคาควบคุม
+     Y–AB = PRICE CC01 …                   → ราคาเลท
+     AC–AF= PRICE CC02 …                   → ราคา 10 ลัง
+     AG–AJ= PRICE CC03 …                   → ราคาปลีก
+     BC = CAT GROUP                        → หมวดสินค้า (ใช้กรอง)
+   คอลัมน์ถูกค้นหาจาก "ชื่อหัวคอลัมน์" ก่อนเสมอ ถ้ามีคนแทรกคอลัมน์ในชีท
+   ตัวอักษรจะเลื่อน แต่แอพยังหาเจอ (ตัวอักษรด้านล่างเป็นแค่ค่าสำรอง)
+   ══════════════════════════════════════════════════════════════ */
+const APP_VERSION = 'v1.1';
+
+const SHEET = { id:'16mYDqAqqJma-_0vCIAajy6bcjdOZ7F6VagxkdkqAB2I', name:'PDDT' };
+
+const UNITS = [
+  { k:'EA', th:'ชิ้น' },
+  { k:'PA', th:'แพ็ค' },
+  { k:'BP', th:'บิ๊กแพ็ค' },
+  { k:'CS', th:'ลัง' },
+];
+const TIERS = [
+  { k:'CC00', th:'ราคาควบคุม' },
+  { k:'CC01', th:'ราคาเลท' },
+  { k:'CC02', th:'ราคา 10 ลัง' },
+  { k:'CC03', th:'ราคาปลีก' },
+];
+
+/* หัวคอลัมน์ที่ต้องหา → ชื่อจริงในชีท */
+const HEAD = { name:'PRODUCT NAME', cat:'CAT GROUP' };
+UNITS.forEach(u => { HEAD['code_'+u.k] = 'CODE ' + u.k; HEAD['unit_'+u.k] = 'UNIT ' + u.k; });
+TIERS.forEach(t => UNITS.forEach(u => { HEAD['p_'+t.k+'_'+u.k] = 'PRICE ' + t.k + ' ' + u.k; }));
+
+/* ค่าสำรองเมื่อหาหัวคอลัมน์ไม่เจอ */
+const FALLBACK_COLS = (() => {
+  const f = { name:'A', cat:'BC', code_EA:'B', code_PA:'D', code_BP:'F', code_CS:'H',
+              unit_EA:'J', unit_PA:'K', unit_BP:'L', unit_CS:'M' };
+  const price0 = 20;                                  // U = index 20 (0-based)
+  TIERS.forEach((t, ti) => UNITS.forEach((u, ui) => {
+    f['p_'+t.k+'_'+u.k] = colLetter(price0 + ti*4 + ui);
+  }));
+  return f;
+})();
+
+const NO_CAT = /^(ไม่(กำหนด|ระบุ|มี)|[-–—]+|n\/?a)$/i;
+
+const STORAGE = {
+  cache : 'rattanaPriceUpd_cache',
+  sel   : 'rattanaPriceUpd_sel',
+  edits : 'rattanaPriceUpd_edits',
+  cfg   : 'rattanaPriceUpd_cfg',
+  doc   : 'rattanaPriceUpd_doc',
+  dark  : 'rattanaPriceUpd_dark',
+};
+const CACHE_TTL = 6 * 60 * 60 * 1000;   // 6 ชม.
+/* ⚠️ บวกเลขนี้ทุกครั้งที่เปลี่ยนคอลัมน์ที่ดึง / โครงสร้าง product */
+const CACHE_VER = 1;
+
+/* ── state ── */
+let products    = [];        // [{n, g, c:{EA..}, u:{EA..}, p:{CC00:{EA..}, ...}, key}]
+let byKey       = new Map();
+let byCode      = new Map();
+let filtered    = [];
+let selKeys     = [];        // ลำดับที่เลือก
+let selSet      = new Set();
+let edits       = {};        // "key|unit|tier" → ราคาใหม่ (number)
+let checkedRows = new Set(); // "key|unit" ที่ติ๊กไว้ในตารางปรับราคา
+let showTiers   = new Set(TIERS.map(t => t.k));
+let showUnits   = new Set(UNITS.map(u => u.k));
+let catFilter   = '';
+let catOptions  = [];
+let renderLimit = 100;
+let rowLimit    = 100;
+let adjRows     = [];
+let lastLoaded  = 0;
+let sortSel     = { key:'name', dir:'asc' };
+let exSort      = { key:'pct', dir:'desc' };
+let saveTimer   = null;
+
+/* ══════════ helpers ══════════ */
+const $  = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const showSpinner = m => { $('#spinnerMsg').textContent = m || 'กำลังโหลด...'; $('#spinner').classList.add('show'); };
+const hideSpinner = () => $('#spinner').classList.remove('show');
+const setLoading  = on => $('#loadingBar').style.width = on ? '85%' : '0';
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function showToast(msg, type='info'){
+  const t = document.createElement('div');
+  t.className = 'toast toast-' + type; t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
+}
+function safeSet(key, val){
+  try { localStorage.setItem(key, val); return true; }
+  catch(e){
+    try { if (key !== STORAGE.cache) localStorage.removeItem(STORAGE.cache); localStorage.setItem(key, val); return true; }
+    catch(e2){ console.warn('เก็บลง localStorage ไม่ได้:', key); return false; }
+  }
+}
+function colLetter(i){ let n = i + 1, s = ''; while (n > 0){ const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); } return s; }
+
+/* ตัวเลข → ราคา (ตัด , และช่องว่างออกก่อน) */
+function toPrice(v){
+  const n = parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,''));
+  return (isFinite(n) && n > 0) ? Math.round(n * 10000) / 10000 : 0;
+}
+function fmtPrice(v){
+  if (!v && v !== 0) return '-';
+  const n = Math.round(v * 100) / 100;
+  return n.toLocaleString('th-TH', { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 });
+}
+const fmtInt = n => Number(n||0).toLocaleString('th-TH');
+function fmtPct(v){
+  if (v === null || !isFinite(v)) return '-';
+  const s = (v > 0 ? '+' : '') + (Math.round(v * 100) / 100).toLocaleString('th-TH', { maximumFractionDigits:2 });
+  return s + '%';
+}
+/* วันที่ไทย พ.ศ. DD/MM/YYYY + เวลา HH.MM */
+function formatThaiDate(input){
+  const d = input instanceof Date ? input : new Date(input);
+  if (isNaN(d)) return '-';
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()+543}`;
+}
+function formatThaiTime(input){
+  const d = input instanceof Date ? input : new Date(input);
+  if (isNaN(d)) return '-';
+  return `${String(d.getHours()).padStart(2,'0')}.${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+/* RFC-4180 CSV parser → array ของ array */
+function parseCsv(text){
+  if (!text) return [];
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const rows = []; let row = [], cell = '', inQ = false;
+  for (let i = 0; i < text.length; i++){
+    const ch = text[i];
+    if (inQ){
+      if (ch === '"'){ if (text[i+1] === '"'){ cell += '"'; i++; } else inQ = false; }
+      else cell += ch;
+    } else {
+      if (ch === '"') inQ = true;
+      else if (ch === ',') { row.push(cell); cell = ''; }
+      else if (ch === '\r') { /* skip */ }
+      else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += ch;
+    }
+  }
+  if (cell.length || row.length){ row.push(cell); rows.push(row); }
+  return rows;
+}
+const cleanCell = s => String(s==null?'':s).replace(/[\u200B\u200C\u200D\uFEFF]/g,'').replace(/\u00A0/g,' ').trim();
+
+/* ══════════ โหลดข้อมูลจากชีท PDDT ══════════ */
+const gvizUrl = tq => `https://docs.google.com/spreadsheets/d/${SHEET.id}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET.name)}&tq=${encodeURIComponent(tq)}`;
+
+/* ขั้นที่ 1 — ดึงแค่แถวหัวคอลัมน์ เพื่อหาว่าคอลัมน์ที่ต้องใช้อยู่ตัวอักษรไหน */
+async function discoverColumns(){
+  try {
+    const res = await fetch(gvizUrl('select * limit 1'));
+    if (!res.ok) throw new Error('probe ' + res.status);
+    const head = (parseCsv(await res.text())[0] || []).map(h => cleanCell(h).toUpperCase());
+    if (!head.length) throw new Error('ไม่พบหัวคอลัมน์');
+    const out = {};
+    for (const key in HEAD){
+      const idx = head.indexOf(HEAD[key].toUpperCase());
+      out[key] = idx >= 0 ? colLetter(idx) : FALLBACK_COLS[key];
+    }
+    return out;
+  } catch(e){
+    console.warn('หาคอลัมน์อัตโนมัติไม่สำเร็จ ใช้ค่าเริ่มต้น A/B-H/J-M/U-AJ/BC:', e.message);
+    return { ...FALLBACK_COLS };
+  }
+}
+
+const FETCH_ORDER = (() => {
+  const o = ['name'];
+  UNITS.forEach(u => o.push('code_'+u.k));
+  UNITS.forEach(u => o.push('unit_'+u.k));
+  TIERS.forEach(t => UNITS.forEach(u => o.push('p_'+t.k+'_'+u.k)));
+  o.push('cat');
+  return o;
+})();
+
+async function fetchProducts(){
+  const col = await discoverColumns();
+  const res = await fetch(gvizUrl('select ' + FETCH_ORDER.map(k => col[k]).join(',')));
+  if (!res.ok) throw new Error('โหลดชีทไม่สำเร็จ (' + res.status + ')');
+  const rows = parseCsv(await res.text());
+  if (rows.length < 2) throw new Error('ชีทว่างเปล่า');
+
+  /* หา index จากหัวคอลัมน์ของผลลัพธ์อีกชั้น เผื่อ gviz จัดลำดับไม่ตรง */
+  const head = rows[0].map(c => cleanCell(c).toUpperCase());
+  const at = key => {
+    const i = head.indexOf(HEAD[key].toUpperCase());
+    return i >= 0 ? i : FETCH_ORDER.indexOf(key);
+  };
+  const iName = at('name'), iCat = at('cat');
+  const iCode = {}, iUnit = {}, iPrice = {};
+  UNITS.forEach(u => { iCode[u.k] = at('code_'+u.k); iUnit[u.k] = at('unit_'+u.k); });
+  TIERS.forEach(t => { iPrice[t.k] = {}; UNITS.forEach(u => { iPrice[t.k][u.k] = at('p_'+t.k+'_'+u.k); }); });
+
+  const list = [];
+  for (let r = 1; r < rows.length; r++){
+    const row = rows[r];
+    if (!row || !row.length) continue;
+    const name = cleanCell(row[iName]).replace(/^\w+@/, '');   // ตัดรหัสภายในนำหน้า เช่น 12345@
+    if (!name) continue;
+
+    const c = {}, u = {}, p = {};
+    let hasCode = false, hasPrice = false;
+    for (const un of UNITS){
+      /* บาร์โค้ดต้องเป็น string เสมอ (เลข 0 นำหน้าห้ามหาย) */
+      const code = cleanCell(row[iCode[un.k]]);
+      if (code){ c[un.k] = code; hasCode = true; }
+      const ut = cleanCell(row[iUnit[un.k]]);
+      if (ut) u[un.k] = ut;
+    }
+    for (const t of TIERS){
+      const tp = {};
+      for (const un of UNITS){
+        const v = toPrice(row[iPrice[t.k][un.k]]);
+        if (v){ tp[un.k] = v; hasPrice = true; }
+      }
+      if (Object.keys(tp).length) p[t.k] = tp;
+    }
+    if (!hasCode && !hasPrice) continue;                       // ไม่มีทั้งบาร์โค้ดและราคา → ข้าม
+
+    let g = cleanCell(row[iCat]);
+    if (NO_CAT.test(g)) g = '';
+    list.push({ n:name, g, c, u, p, key: c.EA || c.PA || c.BP || c.CS || ('N:' + name) });
+  }
+  return list;
+}
+
+function indexProducts(){
+  byKey = new Map(); byCode = new Map();
+  const seen = new Set();
+  for (const p of products){
+    for (const un of UNITS){
+      const code = p.c[un.k];
+      if (code && !byCode.has(code)) byCode.set(code, p);
+    }
+    /* key ต้องไม่ซ้ำ — ในชีทมีสินค้าคนละตัวที่ใช้บาร์โค้ดเดียวกันอยู่บ้าง */
+    let k = p.key, i = 2;
+    while (seen.has(k)) k = p.key + '#' + (i++);
+    p.key = k; seen.add(k); byKey.set(k, p);
+  }
+}
+
+async function loadData(force){
+  setLoading(true);
+  if (!force){
+    try {
+      const raw = localStorage.getItem(STORAGE.cache);
+      if (raw){
+        const c = JSON.parse(raw);
+        if (c && c.v === CACHE_VER && c.ts && Date.now() - c.ts < CACHE_TTL && Array.isArray(c.d) && c.d.length){
+          products = c.d; lastLoaded = c.ts;
+          indexProducts(); afterLoad();
+          setLoading(false);
+          refreshInBackground();
+          return;
+        }
+      }
+    } catch(e){ /* cache เสีย → โหลดใหม่ */ }
+  }
+  showSpinner('กำลังโหลดสินค้าและราคาจากชีท PDDT...');
+  try {
+    products = await fetchProducts();
+    lastLoaded = Date.now();
+    indexProducts();
+    safeSet(STORAGE.cache, JSON.stringify({ v: CACHE_VER, ts: lastLoaded, d: products }));
+    afterLoad();
+    showToast(`โหลดสินค้า ${fmtInt(products.length)} รายการแล้ว ✓`, 'success');
+  } catch(e){
+    console.error(e);
+    showToast('โหลดข้อมูลไม่สำเร็จ: ' + (e.message || ''), 'error');
+    $('#plist').innerHTML = '<div class="empty">โหลดข้อมูลไม่สำเร็จ — ตรวจสอบว่าชีทเปิดให้ "ผู้ที่มีลิงก์" ดูได้ แล้วกด 🔄 อีกครั้ง</div>';
+  } finally { hideSpinner(); setLoading(false); }
+}
+async function refreshInBackground(){
+  try {
+    const fresh = await fetchProducts();
+    if (fresh.length){
+      products = fresh; lastLoaded = Date.now();
+      indexProducts();
+      safeSet(STORAGE.cache, JSON.stringify({ v: CACHE_VER, ts: lastLoaded, d: products }));
+      afterLoad();
+    }
+  } catch(e){ /* เงียบ */ }
+}
+async function refreshData(){
+  const b = $('#btnRefresh');
+  b.disabled = true; b.style.transition = 'transform .6s'; b.style.transform = 'rotate(360deg)';
+  await loadData(true);
+  b.disabled = false; setTimeout(() => { b.style.transform = ''; b.style.transition = ''; }, 600);
+}
+function afterLoad(){
+  pruneSelection();
+  buildCatOptions();
+  applyFilter();
+  renderTime();
+  renderAdjust();
+}
+function renderTime(){
+  $('#stTotal').textContent = fmtInt(products.length);
+  $('#stTime').textContent  = lastLoaded ? formatThaiTime(lastLoaded) + ' น.' : '-';
+  $('#stTimeSub').textContent = lastLoaded ? formatThaiDate(lastLoaded) : '';
+}
+/* สินค้าที่เคยเลือกไว้แต่หายไปจากชีท → เอาออก */
+function pruneSelection(){
+  const keep = selKeys.filter(k => byKey.has(k));
+  if (keep.length !== selKeys.length){ selKeys = keep; selSet = new Set(keep); saveSelection(); }
+}
+
+/* ══════════ TAB 1 : เลือกสินค้า ══════════ */
+function buildCatOptions(){
+  const m = new Map();
+  for (const p of products) if (p.g) m.set(p.g, (m.get(p.g) || 0) + 1);
+  catOptions = Array.from(m, ([name, count]) => ({ name, count }))
+                    .sort((a,b) => b.count - a.count || a.name.localeCompare(b.name,'th'));
+  if (catFilter && !m.has(catFilter)) catFilter = '';
+  renderCatList();
+}
+function renderCatList(){
+  const ul = $('#ddCatList');
+  ul.innerHTML = `<li class="${catFilter===''?'sel':''}" onclick="pickCat('')"><span>ทุกหมวด</span><span class="c">${fmtInt(products.length)}</span></li>`
+    + catOptions.map(c => `<li class="${catFilter===c.name?'sel':''}" onclick="pickCat(${JSON.stringify(c.name).replace(/"/g,'&quot;')})">
+         <span>${esc(c.name)}</span><span class="c">${fmtInt(c.count)}</span></li>`).join('');
+  $('#ddCatLabel').textContent = catFilter || 'ทุกหมวด';
+}
+function pickCat(name){
+  catFilter = name;
+  $('#ddCat').querySelector('.dd-panel').classList.remove('open');
+  renderCatList(); applyFilter();
+}
+function toggleDD(wrapId){
+  const p = document.querySelector('#' + wrapId + ' .dd-panel');
+  const open = p.classList.contains('open');
+  $$('.dd-panel').forEach(x => x.classList.remove('open'));
+  if (!open){ p.classList.add('open'); const s = p.querySelector('.dd-search'); if (s){ s.value=''; filterDD(s,'ddCatList'); s.focus(); } }
+}
+function filterDD(inp, listId){
+  const q = inp.value.toLowerCase();
+  $$('#' + listId + ' li').forEach(li => { li.style.display = li.textContent.toLowerCase().includes(q) ? '' : 'none'; });
+}
+document.addEventListener('click', e => { if (!e.target.closest('.dd-wrap')) $$('.dd-panel').forEach(x => x.classList.remove('open')); });
+
+function applyFilter(){
+  const q = ($('#qSearch').value || '').trim().toLowerCase();
+  const onlySel = $('#chkOnlySel').checked;
+  filtered = products.filter(p => {
+    if (onlySel && !selSet.has(p.key)) return false;
+    if (catFilter && p.g !== catFilter) return false;
+    if (!q) return true;
+    if (p.n.toLowerCase().includes(q)) return true;
+    for (const un of UNITS){ const c = p.c[un.k]; if (c && c.toLowerCase().includes(q)) return true; }
+    return false;
+  });
+  filtered.sort((a,b) => a.n.localeCompare(b.n,'th'));
+  renderLimit = 100;
+  renderList();
+  $('#stFound').textContent = fmtInt(filtered.length);
+  $('#stFoundSub').textContent = (catFilter ? catFilter : 'ทุกหมวด');
+  renderCounts();
+}
+/* หน่วยนับจากชีท เช่น "แพ็คx12(CS)" → "ลัง (แพ็ค×12)" , "ชิ้นx1(EA)" → "ชิ้น" */
+function unitLabel(p, uk){
+  const raw = p.u[uk] || '';
+  const base = UNITS.find(u => u.k === uk).th;
+  const m = raw.match(/^(.+?)x(\d+(?:\.\d+)?)\((EA|PA|BP|CS)\)$/i);
+  if (m){
+    const inner = m[1].trim(), per = parseFloat(m[2]);
+    if (per > 1) return `${base} (${inner}×${fmtInt(per)})`;
+    return inner === base ? base : `${base} (${inner})`;
+  }
+  return raw ? `${base} (${raw})` : base;
+}
+function renderList(){
+  const box = $('#plist');
+  if (!filtered.length){
+    box.innerHTML = '<div class="empty" style="grid-column:1/-1">ไม่พบสินค้าที่ตรงกับเงื่อนไข</div>';
+    $('#btnMore').style.display = 'none';
+    return;
+  }
+  const show = filtered.slice(0, renderLimit);
+  box.innerHTML = show.map(p => {
+    const codes = UNITS.filter(u => p.c[u.k]).map(u => `<span class="tag"><b>${u.th}</b> <span class="code">${esc(p.c[u.k])}</span></span>`).join('');
+    const prices = UNITS.filter(u => (p.p.CC00||{})[u.k] || (p.p.CC03||{})[u.k]).map(u =>
+      `<span class="tag tag-gold">${u.th} ${fmtPrice((p.p.CC00||{})[u.k] || (p.p.CC03||{})[u.k])}฿</span>`).join('');
+    return `<div class="pitem ${selSet.has(p.key)?'on':''}" onclick="toggleSel(${JSON.stringify(p.key).replace(/"/g,'&quot;')})">
+      <div class="box">${selSet.has(p.key)?'✓':''}</div>
+      <div style="flex:1;min-width:0">
+        <div class="pn">${esc(p.n)}</div>
+        <div class="pm">${codes || '<span class="tag">ไม่มีบาร์โค้ด</span>'}</div>
+        <div class="pp">${prices}${p.g ? `<span class="tag">${esc(p.g)}</span>` : ''}</div>
+      </div>
+    </div>`;
+  }).join('');
+  $('#btnMore').style.display = filtered.length > renderLimit ? 'inline-flex' : 'none';
+}
+function showMore(){ renderLimit += 100; renderList(); }
+function toggleSel(key){
+  if (selSet.has(key)){ selSet.delete(key); selKeys = selKeys.filter(k => k !== key); }
+  else { selSet.add(key); selKeys.push(key); }
+  saveSelection(); renderList(); renderCounts(); renderAdjust();
+}
+function selectAllFiltered(){
+  let added = 0;
+  for (const p of filtered) if (!selSet.has(p.key)){ selSet.add(p.key); selKeys.push(p.key); added++; }
+  saveSelection(); renderList(); renderCounts(); renderAdjust();
+  showToast(`เลือกเพิ่ม ${fmtInt(added)} รายการ`, 'success');
+}
+function clearSelection(){
+  if (!selKeys.length) return;
+  if (!confirm('ล้างรายการที่เลือกทั้งหมด? (ราคาที่ปรับไว้จะยังอยู่)')) return;
+  selKeys = []; selSet = new Set();
+  saveSelection(); renderList(); renderCounts(); renderAdjust();
+}
+function saveSelection(){ safeSet(STORAGE.sel, JSON.stringify(selKeys)); }
+function renderCounts(){
+  $('#stSel').textContent  = fmtInt(selKeys.length);
+  $('#cntSel').textContent = fmtInt(selKeys.length);
+  $('#cntChg').textContent = fmtInt(Object.keys(edits).length);
+}
+
+/* ── วางบาร์โค้ดหลายรายการ ── */
+function openPasteModal(){ $('#pasteResult').innerHTML=''; $('#pasteModal').classList.add('open'); setTimeout(()=>$('#pasteBox').focus(),100); }
+function closeModal(id){ $('#'+id).classList.remove('open'); }
+function runPaste(){
+  const lines = ($('#pasteBox').value || '').split(/[\n\r\t;]+/).map(s => cleanCell(s)).filter(Boolean);
+  if (!lines.length){ showToast('ยังไม่ได้วางรายการ', 'warning'); return; }
+  const nameMap = new Map(products.map(p => [p.n.toLowerCase(), p]));
+  let added = 0, dup = 0; const miss = [];
+  for (const line of lines){
+    const p = byCode.get(line) || nameMap.get(line.toLowerCase());
+    if (!p){ miss.push(line); continue; }
+    if (selSet.has(p.key)){ dup++; continue; }
+    selSet.add(p.key); selKeys.push(p.key); added++;
+  }
+  saveSelection(); applyFilter(); renderAdjust();
+  $('#pasteResult').innerHTML = `
+    <div class="tag tag-gold" style="font-size:12px;padding:4px 10px">เลือกเพิ่ม ${fmtInt(added)}</div>
+    <div class="tag" style="font-size:12px;padding:4px 10px">เลือกไว้อยู่แล้ว ${fmtInt(dup)}</div>
+    <div class="tag" style="font-size:12px;padding:4px 10px;${miss.length?'background:#ffd5d0;color:#c0392b':''}">ไม่พบ ${fmtInt(miss.length)}</div>
+    ${miss.length ? `<div class="hint" style="margin-top:8px"><b>ไม่พบในชีท:</b><br>${miss.slice(0,40).map(esc).join('<br>')}${miss.length>40?`<br>… และอีก ${miss.length-40} รายการ`:''}</div>` : ''}`;
+  if (added) showToast(`เลือกเพิ่ม ${fmtInt(added)} รายการ ✓`, 'success');
+}
+
+/* ══════════ TAB 2 : ปรับราคา ══════════ */
+function renderPills(){
+  $('#tierPills').innerHTML = TIERS.map(t =>
+    `<button class="pill ${showTiers.has(t.k)?'on':''}" onclick="toggleTier('${t.k}')">${t.th} <span style="opacity:.6">${t.k}</span></button>`).join('');
+  $('#unitPills').innerHTML = UNITS.map(u =>
+    `<button class="pill ${showUnits.has(u.k)?'on':''}" onclick="toggleUnit('${u.k}')">${u.th} <span style="opacity:.6">${u.k}</span></button>`).join('');
+  $('#tierHint').textContent = `แสดง ${showTiers.size} ระดับราคา × ${showUnits.size} หน่วย`;
+}
+function toggleTier(k){
+  if (showTiers.has(k)){ if (showTiers.size === 1){ showToast('ต้องเลือกอย่างน้อย 1 ระดับราคา','warning'); return; } showTiers.delete(k); }
+  else showTiers.add(k);
+  saveCfg(); renderPills(); renderAdjust();
+}
+function toggleUnit(k){
+  if (showUnits.has(k)){ if (showUnits.size === 1){ showToast('ต้องเลือกอย่างน้อย 1 หน่วย','warning'); return; } showUnits.delete(k); }
+  else showUnits.add(k);
+  saveCfg(); renderPills(); renderAdjust();
+}
+function saveCfg(){
+  safeSet(STORAGE.cfg, JSON.stringify({ tiers:[...showTiers], units:[...showUnits] }));
+}
+const editKey = (key, u, t) => key + '|' + u + '|' + t;
+const rowKey  = (key, u)    => key + '|' + u;
+
+/* สร้างรายการแถว = สินค้าที่เลือก × หน่วยที่แสดง */
+function buildRows(){
+  const hidePriceless = $('#chkHidePriceless').checked;
+  const onlyChanged   = $('#chkOnlyChanged').checked;
+  const rows = [];
+  for (const key of selKeys){
+    const p = byKey.get(key);
+    if (!p) continue;
+    for (const un of UNITS){
+      if (!showUnits.has(un.k)) continue;
+      const hasAnyOld = TIERS.some(t => showTiers.has(t.k) && (p.p[t.k]||{})[un.k]);
+      const hasCode   = !!p.c[un.k];
+      const hasUnit   = !!p.u[un.k];
+      if (!hasAnyOld && !hasCode && !hasUnit) continue;         // หน่วยนี้ไม่มีอยู่จริง
+      if (hidePriceless && !hasAnyOld) continue;
+      const changed = TIERS.some(t => showTiers.has(t.k) && edits[editKey(key, un.k, t.k)] !== undefined);
+      if (onlyChanged && !changed) continue;
+      rows.push({ p, u: un.k, key, changed });
+    }
+  }
+  return rows;
+}
+function renderAdjust(){
+  renderPills();
+  adjRows = buildRows();
+  const tiers = TIERS.filter(t => showTiers.has(t.k));
+
+  /* หัวตาราง 2 ชั้น */
+  $('#adjHead').innerHTML = `
+    <tr>
+      <th rowspan="2" style="width:34px"></th>
+      <th rowspan="2" class="sticky sortable" data-key="name" data-type="str">สินค้า <span class="sort-ind"></span></th>
+      <th rowspan="2" class="sortable" data-key="code" data-type="str">บาร์โค้ด <span class="sort-ind"></span></th>
+      <th rowspan="2" class="sortable" data-key="unit" data-type="str">หน่วยนับ <span class="sort-ind"></span></th>
+      ${tiers.map(t => `<th colspan="3" class="tier-head">${t.th} <span style="opacity:.6">${t.k}</span></th>`).join('')}
+    </tr>
+    <tr>
+      ${tiers.map(t => `
+        <th class="tcell-first" style="text-align:right">เดิม</th>
+        <th style="text-align:right">ใหม่</th>
+        <th class="sortable" data-key="pct:${t.k}" data-type="num" style="text-align:right">% <span class="sort-ind"></span></th>`).join('')}
+    </tr>`;
+
+  sortRows();
+  const body = $('#adjBody');
+  if (!adjRows.length){
+    body.innerHTML = `<tr class="empty-row"><td colspan="${4 + tiers.length*3}">
+      ${selKeys.length ? 'ไม่มีแถวที่ตรงเงื่อนไข — ลองปิด "ซ่อนแถวที่ไม่มีราคาเดิม" หรือเปิดหน่วยเพิ่ม' : 'ยังไม่ได้เลือกสินค้า — ไปที่แท็บ "1 · เลือกสินค้า" ก่อน'}
+    </td></tr>`;
+    $('#btnMoreRows').style.display = 'none';
+    $('#rowCntHint').textContent = '0 แถว';
+    updateSortIndicators('adjTbl', sortSel);
+    return;
+  }
+  const show = adjRows.slice(0, rowLimit);
+  body.innerHTML = show.map(r => rowHtml(r, tiers)).join('');
+  $('#btnMoreRows').style.display = adjRows.length > rowLimit ? 'inline-flex' : 'none';
+  $('#rowCntHint').textContent = `${fmtInt(adjRows.length)} แถว · ติ๊กไว้ ${fmtInt(checkedRows.size)}`;
+  updateSortIndicators('adjTbl', sortSel);
+  bindHeaderSort('adjTbl', sortSel, () => { rowLimit = 100; renderAdjust(); });
+  renderCounts();
+}
+function rowHtml(r, tiers){
+  const p = r.p, k = r.key, u = r.u;
+  const rk = rowKey(k, u);
+  const cells = tiers.map((t, i) => {
+    const old = (p.p[t.k]||{})[u] || 0;
+    const ek  = editKey(k, u, t.k);
+    const nw  = edits[ek];
+    const has = nw !== undefined;
+    const pct = (has && old) ? (nw - old) / old * 100 : null;
+    return `
+      <td class="num ${i===0?'tcell-first':''}">${old ? fmtPrice(old) : '<span class="psub">–</span>'}</td>
+      <td class="num"><input class="in-price ${has?'set':''}" type="number" step="0.01" inputmode="decimal"
+            data-k="${esc(k)}" data-u="${u}" data-t="${t.k}" value="${has ? nw : ''}"
+            placeholder="${old ? fmtPrice(old) : '-'}" oninput="onPriceInput(this)"></td>
+      <td class="num"><input class="in-pct ${pct>0?'up':pct<0?'down':''}" type="number" step="0.01" inputmode="decimal"
+            data-k="${esc(k)}" data-u="${u}" data-t="${t.k}" value="${pct===null?'':Math.round(pct*100)/100}"
+            placeholder="%" ${old?'':'disabled'} oninput="onPctInput(this)"></td>`;
+  }).join('');
+  return `<tr class="${r.changed?'changed':''}" data-rk="${esc(rk)}">
+    <td style="text-align:center"><input type="checkbox" class="rowchk" style="width:16px;height:16px;accent-color:var(--gold)"
+        data-rk="${esc(rk)}" ${checkedRows.has(rk)?'checked':''} onchange="onRowCheck(this)"></td>
+    <td class="sticky"><span class="pname">${esc(p.n)}</span>${p.g?`<span class="psub">${esc(p.g)}</span>`:''}</td>
+    <td class="code">${p.c[u] ? esc(p.c[u]) : '<span class="psub">–</span>'}</td>
+    <td><span class="psub">${esc(unitLabel(p, u))}</span></td>
+    ${cells}</tr>`;
+}
+function showMoreRows(){ rowLimit += 100; renderAdjust(); }
+function onRowCheck(el){
+  const rk = el.dataset.rk;
+  if (el.checked) checkedRows.add(rk); else checkedRows.delete(rk);
+  $('#rowCntHint').textContent = `${fmtInt(adjRows.length)} แถว · ติ๊กไว้ ${fmtInt(checkedRows.size)}`;
+}
+function toggleAllRows(on){
+  checkedRows = new Set();
+  if (on) for (const r of adjRows) checkedRows.add(rowKey(r.key, r.u));
+  $$('#adjBody .rowchk').forEach(c => c.checked = on);
+  $('#rowCntHint').textContent = `${fmtInt(adjRows.length)} แถว · ติ๊กไว้ ${fmtInt(checkedRows.size)}`;
+}
+
+/* ── แก้ราคาทีละช่อง ── */
+function setEdit(key, u, t, val){
+  const ek = editKey(key, u, t);
+  if (val === null || val === undefined || val === '' || !isFinite(val)) delete edits[ek];
+  else edits[ek] = Math.round(Number(val) * 10000) / 10000;
+  scheduleSaveEdits();
+}
+function onPriceInput(el){
+  const { k, u, t } = el.dataset;
+  const p = byKey.get(k); if (!p) return;
+  const old = (p.p[t]||{})[u] || 0;
+  const raw = el.value.trim();
+  if (raw === ''){ setEdit(k, u, t, null); el.classList.remove('set'); syncPctCell(k, u, t, null); markRow(k, u); return; }
+  const nw = Number(raw);
+  if (!isFinite(nw)) return;
+  setEdit(k, u, t, nw);
+  el.classList.add('set');
+  syncPctCell(k, u, t, old ? (nw - old) / old * 100 : null);
+  markRow(k, u);
+  renderCounts();
+}
+function onPctInput(el){
+  const { k, u, t } = el.dataset;
+  const p = byKey.get(k); if (!p) return;
+  const old = (p.p[t]||{})[u] || 0;
+  const raw = el.value.trim();
+  const priceEl = document.querySelector(`.in-price[data-k="${cssEsc(k)}"][data-u="${u}"][data-t="${t}"]`);
+  if (raw === '' || !old){ setEdit(k, u, t, null); if (priceEl){ priceEl.value = ''; priceEl.classList.remove('set'); } markRow(k, u); renderCounts(); return; }
+  const pct = Number(raw);
+  if (!isFinite(pct)) return;
+  const nw = roundBy(old * (1 + pct/100), $('#bulkRound').value);
+  setEdit(k, u, t, nw);
+  if (priceEl){ priceEl.value = nw; priceEl.classList.add('set'); }
+  el.classList.toggle('up', pct > 0); el.classList.toggle('down', pct < 0);
+  markRow(k, u);
+  renderCounts();
+}
+const cssEsc = s => String(s).replace(/["\\]/g, '\\$&');
+function syncPctCell(k, u, t, pct){
+  const el = document.querySelector(`.in-pct[data-k="${cssEsc(k)}"][data-u="${u}"][data-t="${t}"]`);
+  if (!el) return;
+  el.value = (pct === null || !isFinite(pct)) ? '' : Math.round(pct * 100) / 100;
+  el.classList.toggle('up', pct > 0); el.classList.toggle('down', pct < 0);
+}
+function markRow(k, u){
+  const tr = document.querySelector(`#adjBody tr[data-rk="${cssEsc(rowKey(k,u))}"]`);
+  if (!tr) return;
+  const changed = TIERS.some(t => showTiers.has(t.k) && edits[editKey(k, u, t.k)] !== undefined);
+  tr.classList.toggle('changed', changed);
+}
+function scheduleSaveEdits(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => safeSet(STORAGE.edits, JSON.stringify(edits)), 400);
+}
+function clearAllEdits(){
+  if (!Object.keys(edits).length){ showToast('ยังไม่มีราคาที่ปรับ', 'info'); return; }
+  if (!confirm(`ล้างราคาที่ปรับทั้งหมด ${fmtInt(Object.keys(edits).length)} รายการ?`)) return;
+  edits = {}; safeSet(STORAGE.edits, JSON.stringify(edits));
+  renderAdjust(); renderExport();
+  showToast('ล้างราคาที่ปรับแล้ว', 'success');
+}
+
+/* ── ปัดเศษ ── */
+function roundBy(v, mode){
+  if (!isFinite(v)) return 0;
+  if (v < 0) v = 0;
+  switch(mode){
+    case 'int': return Math.round(v);
+    case 'up' : return Math.ceil(v);
+    case 'h'  : return Math.round(v * 2) / 2;
+    case 'q'  : return Math.round(v * 4) / 4;
+    case 'f5' : return Math.round(v / 5) * 5;
+    case 'e9' : { const t = Math.round(v / 10) * 10; return Math.max(9, t - 1); }
+    default   : return Math.round(v * 100) / 100;
+  }
+}
+
+/* ── ปรับหลายรายการพร้อมกัน ── */
+$('#bulkMode') && $('#bulkMode').addEventListener('change', function(){
+  const L = { pct:'ค่า (%) — ใส่ลบเพื่อลดราคา', amt:'จำนวนเงิน (บาท) — ใส่ลบเพื่อลด', set:'ราคาใหม่ (บาท)', clear:'ไม่ต้องใส่ค่า' };
+  $('#bulkValLabel').textContent = L[this.value];
+  $('#bulkVal').disabled = this.value === 'clear';
+});
+function applyBulk(){
+  const mode  = $('#bulkMode').value;
+  const scope = $('#bulkScope').value;
+  const round = $('#bulkRound').value;
+  const val   = Number($('#bulkVal').value);
+  if (mode !== 'clear' && !isFinite(val)){ showToast('ใส่ค่าที่ต้องการปรับก่อน', 'warning'); return; }
+  if (mode === 'set' && val <= 0){ showToast('ราคาใหม่ต้องมากกว่า 0', 'warning'); return; }
+
+  const tiers = TIERS.filter(t => showTiers.has(t.k)).map(t => t.k);
+  let target = adjRows;
+  if (scope === 'checked'){
+    target = adjRows.filter(r => checkedRows.has(rowKey(r.key, r.u)));
+    if (!target.length){ showToast('ยังไม่ได้ติ๊กแถวไหนเลย', 'warning'); return; }
+  }
+  let n = 0;
+  for (const r of target){
+    for (const tk of tiers){
+      const ek  = editKey(r.key, r.u, tk);
+      const old = (r.p.p[tk]||{})[r.u] || 0;
+      if (scope === 'empty' && edits[ek] !== undefined) continue;
+      if (mode === 'clear'){ if (edits[ek] !== undefined){ delete edits[ek]; n++; } continue; }
+      let nw;
+      if (mode === 'set') nw = val;
+      else {
+        if (!old) continue;                                  // ไม่มีราคาเดิม → คำนวณ % / บวกลบไม่ได้
+        nw = mode === 'pct' ? old * (1 + val/100) : old + val;
+      }
+      nw = roundBy(nw, round);
+      if (nw <= 0) continue;
+      edits[ek] = nw; n++;
+    }
+  }
+  safeSet(STORAGE.edits, JSON.stringify(edits));
+  rowLimit = Math.max(rowLimit, 100);
+  renderAdjust(); renderExport();
+  showToast(mode === 'clear' ? `ล้าง ${fmtInt(n)} ราคา` : `ปรับราคา ${fmtInt(n)} รายการแล้ว ✓`, 'success');
+}
+
+/* ══════════ SORT (ใช้ร่วมกัน 2 ตาราง) ══════════ */
+function sortRows(){
+  const { key, dir } = sortSel;
+  const m = dir === 'asc' ? 1 : -1;
+  const pctOf = (r, tk) => {
+    const old = (r.p.p[tk]||{})[r.u] || 0;
+    const nw  = edits[editKey(r.key, r.u, tk)];
+    return (nw === undefined || !old) ? null : (nw - old) / old * 100;
+  };
+  adjRows.sort((a,b) => {
+    if (key.startsWith('pct:')){
+      const tk = key.slice(4);
+      const va = pctOf(a, tk), vb = pctOf(b, tk);
+      if (va === null && vb === null) return a.p.n.localeCompare(b.p.n,'th');
+      if (va === null) return 1;
+      if (vb === null) return -1;
+      return (va - vb) * m;
+    }
+    if (key === 'code') return String(a.p.c[a.u]||'').localeCompare(String(b.p.c[b.u]||'')) * m;
+    if (key === 'unit') return (UNITS.findIndex(u=>u.k===a.u) - UNITS.findIndex(u=>u.k===b.u)) * m
+                            || a.p.n.localeCompare(b.p.n,'th');
+    return a.p.n.localeCompare(b.p.n,'th') * m;
+  });
+}
+function updateSortIndicators(tableId, state){
+  $$('#' + tableId + ' thead th').forEach(th => {
+    const ind = th.querySelector('.sort-ind');
+    if (!ind) return;
+    ind.textContent = th.dataset.key === state.key ? (state.dir === 'asc' ? '▲' : '▼') : '';
+  });
+}
+function bindHeaderSort(tableId, state, rerender){
+  $$('#' + tableId + ' thead th.sortable').forEach(th => {
+    if (th._bound) return;
+    th._bound = true;
+    th.addEventListener('click', () => {
+      const key = th.dataset.key, type = th.dataset.type || 'str';
+      if (state.key === key) state.dir = state.dir === 'asc' ? 'desc' : 'asc';
+      else { state.key = key; state.dir = (type === 'num') ? 'desc' : 'asc'; }
+      rerender();
+    });
+  });
+}
+
+/* ══════════ TAB 3 : สรุป & ส่งออก ══════════ */
+/* รวมรายการที่ปรับแล้วทั้งหมด (ไม่สนตัวกรองในแท็บ 2 — ส่งออกครบเสมอ) */
+function buildExportRows(){
+  const out = [];
+  for (const ek in edits){
+    const i1 = ek.lastIndexOf('|'), i2 = ek.lastIndexOf('|', i1 - 1);
+    const key = ek.slice(0, i2), u = ek.slice(i2 + 1, i1), tk = ek.slice(i1 + 1);
+    const p = byKey.get(key);
+    if (!p) continue;
+    const tier = TIERS.find(t => t.k === tk); if (!tier) continue;
+    const old = (p.p[tk]||{})[u] || 0;
+    const nw  = edits[ek];
+    if (nw === undefined || nw === null) continue;
+    if (old && Math.abs(nw - old) < 0.0001) continue;              // ราคาไม่เปลี่ยน → ไม่ต้องส่งออก
+    out.push({
+      name: p.n, cat: p.g || '', code: p.c[u] || '', unitK: u,
+      unit: unitLabel(p, u), unitRaw: p.u[u] || '',
+      tierK: tk, tier: tier.th, old, new: nw,
+      diff: old ? Math.round((nw - old) * 10000)/10000 : null,
+      pct : old ? (nw - old) / old * 100 : null,
+    });
+  }
+  const m = exSort.dir === 'asc' ? 1 : -1;
+  const K = exSort.key;
+  out.sort((a,b) => {
+    if (['old','new','diff','pct'].includes(K)){
+      const va = a[K], vb = b[K];
+      if (va === null && vb === null) return 0;
+      if (va === null) return 1;
+      if (vb === null) return -1;
+      return (va - vb) * m;
+    }
+    if (K === 'unit') return (UNITS.findIndex(u=>u.k===a.unitK) - UNITS.findIndex(u=>u.k===b.unitK)) * m;
+    if (K === 'tier') return (TIERS.findIndex(t=>t.k===a.tierK) - TIERS.findIndex(t=>t.k===b.tierK)) * m;
+    return String(a[K]||'').localeCompare(String(b[K]||''),'th') * m;
+  });
+  return out;
+}
+function renderExport(){
+  const rows = buildExportRows();
+  const ups   = rows.filter(r => r.pct !== null && r.pct > 0);
+  const downs = rows.filter(r => r.pct !== null && r.pct < 0);
+  const withPct = rows.filter(r => r.pct !== null);
+  const avg = arr => arr.length ? arr.reduce((s,r) => s + r.pct, 0) / arr.length : 0;
+
+  $('#exCount').textContent = fmtInt(rows.length);
+  $('#exCountSub').textContent = `${fmtInt(new Set(rows.map(r=>r.name)).size)} สินค้า`;
+  $('#exUp').textContent   = fmtInt(ups.length);
+  $('#exUpAvg').textContent = 'เฉลี่ย ' + fmtPct(avg(ups));
+  $('#exDown').textContent = fmtInt(downs.length);
+  $('#exDownAvg').textContent = 'เฉลี่ย ' + fmtPct(avg(downs));
+  $('#exAvg').textContent  = fmtPct(avg(withPct));
+  $('#exPreviewHint').textContent = `${fmtInt(rows.length)} บรรทัด`;
+
+  const body = $('#exBody');
+  if (!rows.length){
+    body.innerHTML = '<tr class="empty-row"><td colspan="8">ยังไม่มีราคาที่ปรับ — กลับไปที่แท็บ "2 · ปรับราคา"</td></tr>';
+  } else {
+    body.innerHTML = rows.slice(0, 400).map(r => `<tr>
+      <td class="sticky"><span class="pname">${esc(r.name)}</span>${r.cat?`<span class="psub">${esc(r.cat)}</span>`:''}</td>
+      <td class="code">${r.code ? esc(r.code) : '<span class="psub">–</span>'}</td>
+      <td><span class="psub">${esc(r.unit)}</span></td>
+      <td>${esc(r.tier)} <span class="psub">${r.tierK}</span></td>
+      <td class="num">${r.old ? fmtPrice(r.old) : '<span class="psub">ใหม่</span>'}</td>
+      <td class="num">${fmtPrice(r.new)}</td>
+      <td class="num ${r.diff>0?'pct-up':r.diff<0?'pct-down':''}">${r.diff===null?'-':(r.diff>0?'+':'')+fmtPrice(r.diff)}</td>
+      <td class="num ${r.pct>0?'pct-up':r.pct<0?'pct-down':''}">${fmtPct(r.pct)}</td>
+    </tr>`).join('')
+    + (rows.length > 400 ? `<tr><td colspan="8" class="hint" style="text-align:center;padding:10px">แสดง 400 บรรทัดแรก — ไฟล์ที่ส่งออกจะมีครบ ${fmtInt(rows.length)} บรรทัด</td></tr>` : '');
+  }
+  updateSortIndicators('exTbl', exSort);
+  bindHeaderSort('exTbl', exSort, renderExport);
+}
+
+/* ── ข้อมูลเอกสาร ── */
+function docInfo(){
+  return {
+    no  : $('#docNo').value.trim(),
+    date: $('#docDate').value,
+    by  : $('#docBy').value,
+    note: $('#docNote').value.trim(),
+  };
+}
+function saveDoc(){ safeSet(STORAGE.doc, JSON.stringify({ no:$('#docNo').value, date:$('#docDate').value, by:$('#docBy').value, note:$('#docNote').value })); }
+function initDoc(){
+  const d = new Date();
+  const ymd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(STORAGE.doc) || '{}'); } catch(e){}
+  $('#docNo').value   = saved.no   || 'PU-' + ymd.replace(/-/g,'');
+  $('#docDate').value = saved.date || ymd;
+  $('#docBy').value   = saved.by   || '';
+  $('#docNote').value = saved.note || '';
+  ['docNo','docDate','docBy','docNote'].forEach(id => $('#'+id).addEventListener('change', saveDoc));
+}
+
+/* ── ตารางสำหรับส่งออก (array of array) ── */
+const EX_HEADERS = ['ลำดับ','ชื่อสินค้า','หมวดสินค้า','บาร์โค้ด','หน่วยนับ','หน่วยในชีท','ระดับราคา','รหัสระดับ','ราคาเดิม','ราคาใหม่','ส่วนต่าง','% ปรับ'];
+const HEAD_ROW = 5;                                     // แถวหัวตาราง (0-based) ใน aoa
+
+/* บาร์โค้ดมีเลข 0 นำหน้าจริง (เช่น 005012000082) — ถ้าปล่อยเป็นตัวเลข Excel/Sheet จะกิน 0 ทิ้ง
+   xlsx เก็บเป็น cell ชนิด string ได้เลย แต่ CSV / คลิปบอร์ดต้องใช้รูปแบบ ="..." บังคับเป็นข้อความ */
+const codeCell = (code, mode) => !code ? '' : (mode === 'xlsx' ? code : '="' + code + '"');
+
+function buildAoa(mode){
+  const rows = buildExportRows();
+  const d = docInfo();
+  const meta = [
+    ['ใบปรับราคาสินค้า — Rattana Price Update ' + APP_VERSION],
+    ['เลขที่เอกสาร', d.no, '', 'วันที่มีผล', d.date ? formatThaiDate(d.date) : '-'],
+    ['ผู้จัดทำ', d.by, '', 'พิมพ์เมื่อ', formatThaiDate(new Date()) + ' ' + formatThaiTime(new Date()) + ' น.'],
+    ['หมายเหตุ', d.note || '-'],
+    [],
+  ];
+  const body = rows.map((r,i) => [
+    i+1, r.name, r.cat, codeCell(r.code, mode), r.unit, r.unitRaw, r.tier, r.tierK,
+    r.old || '', r.new, r.diff === null ? '' : r.diff,
+    r.pct === null ? '' : Math.round(r.pct*100)/100,
+  ]);
+  return { aoa: meta.concat([EX_HEADERS], body), rows };
+}
+function exportExcel(){
+  const { aoa, rows } = buildAoa('xlsx');
+  if (!rows.length){ showToast('ยังไม่มีราคาที่ปรับ', 'warning'); return; }
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  for (let i = 0; i < rows.length; i++){          // บังคับคอลัมน์บาร์โค้ดเป็นข้อความ
+    const addr = XLSX.utils.encode_cell({ r: HEAD_ROW + 1 + i, c: 3 });
+    if (ws[addr]){ ws[addr].t = 's'; ws[addr].z = '@'; }
+  }
+  ws['!cols'] = [{wch:6},{wch:42},{wch:18},{wch:16},{wch:18},{wch:14},{wch:14},{wch:9},{wch:11},{wch:11},{wch:10},{wch:9}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'ปรับราคา');
+  XLSX.writeFile(wb, `Rattana-Price-Update-${docInfo().no || 'doc'}.xlsx`);
+  showToast(`ส่งออก Excel ${fmtInt(rows.length)} บรรทัดแล้ว ✓`, 'success');
+}
+function exportCsv(){
+  const { aoa, rows } = buildAoa('csv');
+  if (!rows.length){ showToast('ยังไม่มีราคาที่ปรับ', 'warning'); return; }
+  const q = v => { const s = String(v==null?'':v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s; };
+  const csv = '\uFEFF' + aoa.map(r => r.map(q).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `Rattana-Price-Update-${docInfo().no || 'doc'}.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
+  showToast('ส่งออก CSV แล้ว ✓', 'success');
+}
+async function copyTable(){
+  const rows = buildExportRows();
+  if (!rows.length){ showToast('ยังไม่มีราคาที่ปรับ', 'warning'); return; }
+  const tsv = [EX_HEADERS.join('\t')].concat(rows.map((r,i) => [
+    i+1, r.name, r.cat, codeCell(r.code, 'copy'), r.unit, r.unitRaw, r.tier, r.tierK,
+    r.old || '', r.new, r.diff === null ? '' : r.diff, r.pct === null ? '' : Math.round(r.pct*100)/100,
+  ].join('\t'))).join('\n');
+  try {
+    await navigator.clipboard.writeText(tsv);
+    showToast(`คัดลอก ${fmtInt(rows.length)} บรรทัดแล้ว — วางลง Google Sheet ได้เลย ✓`, 'success');
+  } catch(e){
+    const ta = document.createElement('textarea');
+    ta.value = tsv; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove();
+    showToast('คัดลอกแล้ว ✓', 'success');
+  }
+}
+function printDoc(){
+  const rows = buildExportRows();
+  if (!rows.length){ showToast('ยังไม่มีราคาที่ปรับ', 'warning'); return; }
+  const d = docInfo();
+  $('#printArea').innerHTML = `
+    <h2>ใบปรับราคาสินค้า — บริษัท รัตนไพบูลย์</h2>
+    <div class="pmeta">
+      เลขที่ <b>${esc(d.no||'-')}</b> · วันที่มีผล <b>${d.date ? formatThaiDate(d.date) : '-'}</b> ·
+      ผู้จัดทำ <b>${esc(d.by||'-')}</b> · พิมพ์ ${formatThaiDate(new Date())} ${formatThaiTime(new Date())} น.
+      ${d.note ? '<br>หมายเหตุ: ' + esc(d.note) : ''}
+      <br>รวม <b>${fmtInt(rows.length)}</b> รายการราคา (${fmtInt(new Set(rows.map(r=>r.name)).size)} สินค้า)
+    </div>
+    <table><thead><tr>
+      <th>#</th><th>ชื่อสินค้า</th><th>บาร์โค้ด</th><th>หน่วยนับ</th><th>ระดับราคา</th>
+      <th>ราคาเดิม</th><th>ราคาใหม่</th><th>ส่วนต่าง</th><th>% ปรับ</th>
+    </tr></thead><tbody>
+      ${rows.map((r,i) => `<tr>
+        <td class="n">${i+1}</td><td>${esc(r.name)}</td><td>${esc(r.code||'-')}</td>
+        <td>${esc(r.unit)}</td><td>${esc(r.tier)} (${r.tierK})</td>
+        <td class="n">${r.old?fmtPrice(r.old):'-'}</td><td class="n">${fmtPrice(r.new)}</td>
+        <td class="n">${r.diff===null?'-':(r.diff>0?'+':'')+fmtPrice(r.diff)}</td>
+        <td class="n">${fmtPct(r.pct)}</td></tr>`).join('')}
+    </tbody></table>`;
+  window.print();
+}
+
+/* ══════════ TABS / UI ══════════ */
+function switchTab(name){
+  $$('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  $$('.tabpane').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
+  if (name === 'adjust') renderAdjust();
+  if (name === 'export') renderExport();
+  window.scrollTo({ top:0, behavior:'smooth' });
+}
+function toggleDark(){
+  document.body.classList.toggle('dark');
+  safeSet(STORAGE.dark, document.body.classList.contains('dark') ? '1' : '0');
+}
+window.addEventListener('scroll', () => {
+  const b = $('#backToTop'); if (b) b.classList.toggle('show', window.scrollY > 300);
+});
+$$('.modal-overlay').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); }));
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $$('.modal-overlay').forEach(m => m.classList.remove('open')); });
+
+/* ══════════ BOOT ══════════ */
+function restoreState(){
+  try { const s = JSON.parse(localStorage.getItem(STORAGE.sel) || '[]'); if (Array.isArray(s)){ selKeys = s; selSet = new Set(s); } } catch(e){}
+  try { const e2 = JSON.parse(localStorage.getItem(STORAGE.edits) || '{}'); if (e2 && typeof e2 === 'object') edits = e2; } catch(e){}
+  try {
+    const c = JSON.parse(localStorage.getItem(STORAGE.cfg) || 'null');
+    if (c){
+      if (Array.isArray(c.tiers) && c.tiers.length) showTiers = new Set(c.tiers.filter(k => TIERS.some(t => t.k === k)));
+      if (Array.isArray(c.units) && c.units.length) showUnits = new Set(c.units.filter(k => UNITS.some(u => u.k === k)));
+    }
+  } catch(e){}
+  if (localStorage.getItem(STORAGE.dark) === '1') document.body.classList.add('dark');
+}
+async function initApp(){
+  $('#verChip').textContent = APP_VERSION;
+  document.title = 'Rattana Price Update ' + APP_VERSION;
+  restoreState();
+  initDoc();
+  renderPills();
+  renderCounts();
+  $('#qSearch').addEventListener('input', debounce(applyFilter, 220));
+  await loadData(false);
+  renderExport();
+}
+function debounce(fn, ms){ let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+
+window.onload = initApp;
+</script>
+</body>
+</html>

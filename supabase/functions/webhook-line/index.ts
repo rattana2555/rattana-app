@@ -9,7 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const CHANNEL_SECRET = Deno.env.get("LINE_CHANNEL_SECRET") ?? "";
 const ACCESS_TOKEN   = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ?? "";
 const SUPABASE_URL   = Deno.env.get("SUPABASE_URL") ?? "";
-const SERVICE_KEY    = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const SERVICE_KEY    = Deno.env.get("SB_SECRET_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 // ── ดึงชื่อ + รูปโปรไฟล์ลูกค้าจาก LINE ────────────────────
 // เรียกเฉพาะตอนที่ยังไม่มีชื่อ เพื่อไม่ให้ยิง API ทุกข้อความ

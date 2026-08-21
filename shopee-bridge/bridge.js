@@ -311,14 +311,34 @@ function parseLineSend(url, body) {
   try { b = JSON.parse(body); } catch { return null; }
   if (!b || typeof b !== "object") return null;
 
+  // ต้องเป็นคำขอ "ส่งข้อความ" จริงๆ (มี /messages) ไม่งั้นจะไปจับพวก read/typing
+  if (!/\/messages(\?|$|\/)/i.test(url) && !b.text && !b.message && !Array.isArray(b.messages)) return null;
+
   const inPath = url.match(/\/chats\/([^/?#]+)/i);
   const chatId = inPath?.[1] || b.chatId || b.to
               || (Array.isArray(b.chatIds) ? b.chatIds[0] : "");
   if (!chatId) return null;
 
-  const text = b.text ?? b.message?.text
-            ?? (Array.isArray(b.messages) ? b.messages[0]?.text : "");
-  if (!text || typeof text !== "string") return null;   // ไม่ใช่คำขอส่งข้อความ
+  // ข้อความจริงอาจอยู่หลายที่: ตรงๆ / ใน message / ใน messages[0]
+  const first = (Array.isArray(b.messages) ? b.messages[0] : null) || b.message || b;
+  const type  = String(first.type || (b.text ? "text" : "")).toLowerCase();
+
+  let text = "", imageUrl = "";
+  if (first.text || b.text) {
+    text = String(first.text || b.text);
+  } else if (type === "sticker" || first.stickerId || b.stickerId) {
+    const sid = first.stickerId || b.stickerId;
+    imageUrl = sid ? `https://stickershop.line-scdn.net/stickershop/v1/sticker/${sid}/android/sticker.png` : "";
+    if (!imageUrl) text = "[สติกเกอร์]";
+  } else if (type === "image" || first.originalContentUrl || first.previewImageUrl) {
+    // รูปที่แอดมินอัปโหลดเอง LINE ไม่ให้ URL สาธารณะ — โชว์เป็นป้ายบอกไว้ก่อน
+    text = "[รูปภาพ]";
+  } else if (type === "video")    { text = "[วิดีโอ]"; }
+  else if (type === "audio")      { text = "[ข้อความเสียง]"; }
+  else if (type === "file")       { text = `[ไฟล์] ${first.fileName ?? ""}`.trim(); }
+  else return null;                 // ไม่รู้ว่าเป็นข้อความชนิดไหน ไม่จับ
+
+  if (!text && !imageUrl) return null;
 
   const meta = convMeta.get(String(chatId)) ?? {};
   return {
@@ -329,10 +349,555 @@ function parseLineSend(url, body) {
       id: `local:${chatId}:${Date.now()}`,
       from: "seller",
       text,
-      imageUrl: "",
+      imageUrl,
       sentAt: Date.now(),
     }],
   };
+}
+
+// ── TikTok ────────────────────────────────────────────────
+// TikTok ส่งแชทเป็น protobuf ทาง WebSocket ถอดไม่ได้ จึงอ่านจากหน้าจอแทน
+//
+// ชื่อคลาสของ TikTok เป็นแบบ "css-1k81tbu-7937d88b--PText e1jltgo015"
+// ส่วน css-xxxx เปลี่ยนทุกครั้งที่เขา deploy แต่ท้าย --PText คือชื่อคอมโพเนนต์
+// ซึ่งอยู่ยาวกว่ามาก จึงจับด้วย [class*="--PText"]
+//   --PInfoNickname / --SpanInfoExtract / --SpanInfoTime  = รายการแชทฝั่งซ้าย
+//   --PNickname / --PUniqueId / --PText                   = แชทที่เปิดอยู่
+//
+// ส่วน user_id + รูปโปรไฟล์ ได้จาก /tiktok/v1/im/user/profile/ ที่ดักมาจากเน็ตเวิร์ก
+// ต้องเป็นหน้าหลักเท่านั้น — TikTok มี iframe ซ่อนอยู่หลายอัน ซึ่งก็โหลดสคริปต์นี้ด้วย
+// เฟรมพวกนั้นมองไม่เห็นรายการแชท ถ้าปล่อยให้ทำงานมันจะไปคว้าข้อความในคิวมาแล้วส่งไม่ได้
+// สุดท้ายตีตราว่าล้มเหลวทิ้ง ตัวจริงเลยไม่เคยได้จับ
+const IS_TIKTOK = /(^|\.)tiktok\.com$/i.test(location.hostname) && window.top === window;
+
+// เฉพาะ "หน้าแชท" เท่านั้นที่มีสิทธิ์รับข้อความไปส่ง
+// แท็บ TikTok อื่น (หน้าฟีด, Business Suite, โปรไฟล์) ไม่มีรายการแชทให้คลิก
+// ถ้าปล่อยให้แย่งคิวไปมันจะส่งไม่ได้แล้วตีตราทิ้ง ตัวจริงเลยไม่เคยได้จับ
+const IS_TT_CHAT = IS_TIKTOK && /^\/messages/i.test(location.pathname);
+
+const ttByName   = new Map();   // ชื่อที่แสดง → ข้อมูลผู้ใช้
+const ttByUnique = new Map();   // @username  → ข้อมูลผู้ใช้
+
+chrome.storage.local.get(["ttUsers"], (v) => {
+  for (const u of v.ttUsers || []) {
+    if (u.name)   ttByName.set(u.name, u);
+    if (u.unique) ttByUnique.set(u.unique, u);
+  }
+});
+
+function ttSaveUsers() {
+  chrome.storage.local.set({ ttUsers: [...ttByUnique.values()].slice(-400) });
+}
+
+function ttNote(u) {
+  if (!u || !u.uid) return;
+  if (u.name)   ttByName.set(u.name, u);
+  if (u.unique) ttByUnique.set(u.unique, u);
+}
+
+// อ่านข้อมูลผู้ใช้จาก 2 endpoint ที่ TikTok เรียกเองอยู่แล้ว
+function ttLearnUsers(body) {
+  let j; try { j = JSON.parse(body); } catch { return; }
+  let n = 0;
+
+  for (const w of j.users || []) {                      // /tiktok/v1/im/user/profile/
+    const p = w.im_user_profile; if (!p) continue;
+    ttNote({
+      uid: String(p.user_id_str || p.user_id || ""),
+      name: String(p.nick_name || ""),
+      unique: String(p.unique_id || ""),
+      avatar: p.avatars?.avatar_small?.url_list?.[0] || p.avatars?.avatar_medium?.url_list?.[0] || "",
+    }); n++;
+  }
+  for (const f of j.followings || []) {                 // /api/im/spotlight/relation
+    ttNote({
+      uid: String(f.uid || ""),
+      name: String(f.nickname || ""),
+      unique: String(f.unique_id || ""),
+      avatar: f.avatar_thumb?.url_list?.[0] || "",
+    }); n++;
+  }
+  if (n) { ttSaveUsers(); console.log(TAG, "TikTok รู้จักผู้ใช้แล้ว", ttByUnique.size, "คน"); }
+}
+
+// ── แปลงวันเวลาแบบไทยเป็นเวลาเครื่อง ──────────────────────
+const TH_MONTH = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน",
+                  "กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
+
+function ttTime(txt) {
+  const t = String(txt || "").trim();
+
+  // "1 สิงหาคม 2026 10:29"
+  let m = t.match(/^(\d{1,2})\s+(\S+)\s+(\d{4})(?:\s+(\d{1,2}):(\d{2}))?$/);
+  if (m) {
+    const mi = TH_MONTH.indexOf(m[2]);
+    if (mi >= 0) return new Date(+m[3], mi, +m[1], +(m[4] || 0), +(m[5] || 0)).getTime();
+  }
+  // "13/8/2026"
+  m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return new Date(+m[3], +m[2] - 1, +m[1]).getTime();
+
+  // "วันนี้ 10:29" / "เมื่อวาน 22:42" / "10:29"
+  m = t.match(/^(วันนี้|เมื่อวาน)?\s*(\d{1,2}):(\d{2})$/);
+  if (m) {
+    const d = new Date();
+    if (m[1] === "เมื่อวาน") d.setDate(d.getDate() - 1);
+    d.setHours(+m[2], +m[3], 0, 0);
+    return d.getTime();
+  }
+  return 0;
+}
+
+const isTtDate = (t) => ttTime(t) > 0;
+
+// รหัสข้อความ — TikTok ไม่ให้มา จึงสร้างจากเนื้อหา+เวลาให้ได้ค่าเดิมทุกครั้ง
+function h32(s) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+const q = (sel, root) => [...(root || document).querySelectorAll(sel)];
+
+// ── อ่านแชทที่เปิดอยู่ ─────────────────────────────────────
+let ttWhy = "";
+function ttReadOpenChat() {
+  const uidEl  = q('[class*="--PUniqueId"]')[0];
+  const nameEl = q('[class*="--PNickname"]')[0];
+  const bubbles = q('[class*="--PText"]');
+
+  ttWhy = `PUniqueId=${uidEl ? 1 : 0} PNickname=${nameEl ? 1 : 0} PText=${bubbles.length} รู้จักผู้ใช้=${ttByUnique.size}`;
+
+  const unique = (uidEl?.textContent || "").trim().replace(/^@/, "");
+  const shown  = (nameEl?.textContent || "").trim();
+  if (!unique && !shown) { ttWhy += " → ยังไม่ได้เปิดแชท"; return null; }
+  if (!bubbles.length)   { ttWhy += " → เปิดแชทแล้วแต่ยังไม่เห็นฟองข้อความ"; return null; }
+
+  const user = ttByUnique.get(unique) || ttByName.get(shown) || {};
+  const convId = user.uid || unique || shown;
+  const name = user.name || shown || unique;
+
+  // กล่องข้อความ = บรรพบุรุษร่วมของทุกฟอง ใช้ขอบซ้าย/ขวาตัดสินว่าใครส่ง
+  // ต้องเดินขึ้นจนกล่องกว้างกว่าฟองพอสมควร ไม่งั้นตอนมีข้อความเดียวจะได้กล่องรัดรูป
+  // ซึ่งวัดซ้าย/ขวาไม่ได้ และหาบรรทัดวันที่ไม่เจอ
+  let box = bubbles[0].parentElement;
+  for (let i = 0; i < 12 && box && box.parentElement; i++) {
+    const covers = bubbles.every((el) => box.contains(el));
+    const wide   = box.getBoundingClientRect().width > 320;
+    if (covers && wide) break;
+    box = box.parentElement;
+  }
+  if (!box) { ttWhy += " → หากล่องข้อความไม่เจอ"; return null; }
+  const br = box.getBoundingClientRect();
+
+  const messages = [];
+  const usedIds = new Set();
+  let ts = 0;
+
+  for (const el of q("span,p,div", box)) {
+    const cls = String(el.className || "");
+    const txt = (el.textContent || "").trim().replace(/\s+/g, " ");
+    if (!txt) continue;
+
+    if (!el.children.length && isTtDate(txt)) { ts = ttTime(txt); continue; }
+    if (!cls.includes("--PText")) continue;
+
+    const r = el.getBoundingClientRect();
+    if (r.width < 5 || r.height < 5) continue;              // ก้อนที่ไม่ได้แสดงจริง
+
+    // หน้าเว็บบางจังหวะวาดฟองเดียวซ้อนกันสองชั้น — ฟองจริงคนละอันจะอยู่คนละบรรทัด
+    const key = `${Math.round(r.top)}|${txt}`;
+    if (usedIds.has(key)) continue;
+    usedIds.add(key);
+    // ฟองของเราชิดขอบขวา ฟองลูกค้าชิดขอบซ้าย — จริงเสมอไม่ว่าหน้าตาจะเปลี่ยนยังไง
+    const fromShop = (br.right - r.right) < (r.left - br.left);
+    const when = ts || Date.now();
+
+    // ข้อความใต้บรรทัดวันที่เดียวกันได้เวลาเท่ากันหมด ถ้าเนื้อความซ้ำด้วยรหัสจะชนกัน
+    // แล้วฐานข้อมูลจะปฏิเสธทั้งชุด — เติมลำดับต่อท้ายให้ไม่ซ้ำ
+    let mid = `tt:${convId}:${when}:${h32(txt)}`;
+    for (let k = 2; usedIds.has(mid); k++) mid = `tt:${convId}:${when}:${h32(txt)}:${k}`;
+    usedIds.add(mid);
+
+    messages.push({
+      id: mid,
+      from: fromShop ? "seller" : "buyer",
+      text: txt,
+      imageUrl: "",
+      sentAt: when,
+    });
+  }
+
+  if (!messages.length) { ttWhy += " → อ่านฟองข้อความไม่ออก"; return null; }
+  ttWhy += ` → อ่านได้ ${messages.length} ข้อความ`;
+  return { convId: String(convId), name, avatar: user.avatar || "", messages };
+}
+
+// ── รายการแชทฝั่งซ้าย ─────────────────────────────────────
+// คืนทั้ง element ด้วย เพราะต้องเอาไปคลิกตอนดึงอัตโนมัติและตอนส่งข้อความ
+function ttListRows() {
+  const out = [];
+  for (const el of q('[class*="--PInfoNickname"]')) {
+    const name = (el.textContent || "").trim();
+    if (!name || name === "คำขอส่งข้อความ") continue;
+
+    let row = el, ex = null, tm = null;
+    for (let i = 0; i < 6 && row; i++) {
+      ex = q('[class*="--SpanInfoExtract"]', row)[0];
+      tm = q('[class*="--SpanInfoTime"]', row)[0];
+      if (ex && tm) break;
+      row = row.parentElement;
+    }
+    if (!ex || !tm || !row) continue;
+
+    const badge = q('[class*="--SpanNewMessage"]', row)[0];
+    out.push({
+      name, row,
+      preview: (ex.textContent || "").trim(),
+      at: ttTime((tm.textContent || "").trim()) || Date.now(),
+      unread: Math.max(0, parseInt((badge?.textContent || "0").trim(), 10) || 0),
+    });
+  }
+  return out;
+}
+
+function ttReadList() {
+  const out = [];
+  for (const r of ttListRows()) {
+    const user = ttByName.get(r.name);
+    if (!user || !user.uid) continue;        // ยังไม่รู้รหัส รอ TikTok โหลดโปรไฟล์ก่อน
+    out.push({
+      convId: String(user.uid),
+      name: r.name,
+      avatar: user.avatar || "",
+      messages: [],
+      preview: r.preview,
+      previewAt: r.at,
+      unread: r.unread,
+    });
+  }
+  return out;
+}
+
+// ── ตัวช่วยสำหรับงานอัตโนมัติ ─────────────────────────────
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// นับเวลาที่ "คนจริง" แตะเครื่องล่าสุด — เหตุการณ์ที่โค้ดสร้างเองจะมี isTrusted=false
+// ใช้กันไม่ให้ระบบไปคลิกแย่งขณะพนักงานกำลังใช้งานอยู่
+let ttLastHuman = Date.now();
+if (IS_TIKTOK) {
+  ["mousemove", "mousedown", "keydown", "wheel", "touchstart"].forEach((t) =>
+    window.addEventListener(t, (e) => { if (e.isTrusted) ttLastHuman = Date.now(); }, true));
+}
+const ttIdle = () => Date.now() - ttLastHuman;
+
+function ttClick(el) {
+  el.scrollIntoView({ block: "center" });
+  for (const t of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"])
+    el.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window }));
+}
+
+// รายการแชทของ TikTok วาดเฉพาะที่มองเห็น (~8 แถว) ที่เหลือยังไม่มีใน DOM
+// จะคลิกหาใครต้องเลื่อนลงไปให้เขาโผล่ก่อน
+function ttListScroller() {
+  const rows = ttListRows();
+  if (!rows.length) return null;
+  let el = rows[0].row;
+  for (let i = 0; i < 10 && el; i++) {
+    if (el.scrollHeight > el.clientHeight + 40) return el;
+    el = el.parentElement;
+  }
+  return null;
+}
+
+async function ttFindRow(name) {
+  let hit = ttListRows().find((r) => r.name === name);
+  if (hit) return hit;
+
+  const sc = ttListScroller();
+  if (!sc) return null;
+  const back = sc.scrollTop;
+  sc.scrollTop = 0;
+
+  for (let i = 0; i < 30; i++) {
+    await wait(320);
+    hit = ttListRows().find((r) => r.name === name);
+    if (hit) return hit;
+    if (sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 5) break;
+    sc.scrollTop += Math.floor(sc.clientHeight * 0.8);
+  }
+  sc.scrollTop = back;
+  return null;
+}
+
+// ── ดึงแชททั้งหมดเอง ──────────────────────────────────────
+// TikTok โหลดเนื้อหาแชทเมื่อถูกเปิดเท่านั้น จึงต้องเปิดทีละอันแล้วอ่าน
+// ทำเฉพาะตอนไม่มีคนแตะเครื่อง จะได้ไม่ไปแย่งเมาส์พนักงานกลางคัน
+let ttSweeping = false;
+let ttSweptAt = 0;
+
+async function ttSweep(manual) {
+  if (ttSweeping || !cfg.secret || cfg.discovery) return;
+  ttSweeping = true;
+  try {
+    const sc = ttListScroller();
+    if (sc) sc.scrollTop = 0;
+    await wait(400);
+
+    console.log(`%c${TAG} TikTok เริ่มดึงทั้งหมด`,
+                "background:#25F4EE;color:#000;font-weight:bold;padding:2px 6px");
+
+    const done = new Set();
+    let got = 0, guard = 0;
+
+    while (guard++ < 60) {
+      const rows = ttListRows().filter((r) => !done.has(r.name));
+
+      if (!rows.length) {                          // หมดที่มองเห็น เลื่อนหาต่อ
+        if (!sc || sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 5) break;
+        sc.scrollTop += Math.floor(sc.clientHeight * 0.8);
+        await wait(500);
+        continue;
+      }
+
+      for (const r of rows) {
+        if (!manual && ttIdle() < 20000) { guard = 999; break; }   // มีคนกลับมาใช้ หยุดทันที
+        done.add(r.name);
+        ttClick(r.row);
+        await wait(1400 + Math.floor(Math.random() * 600));        // เว้นจังหวะแบบคนอ่าน
+        const conv = ttReadOpenChat();
+        if (conv && conv.messages.length) { queue.push(conv); got += conv.messages.length; }
+      }
+    }
+    console.log(`${TAG} TikTok เปิดอ่านไปแล้ว ${done.size} แชท`);
+    ttSweptAt = Date.now();
+    console.log(`${TAG} TikTok ดึงครบแล้ว — ได้ ${got} ข้อความ`);
+    if (queue.length && !timer) timer = setTimeout(flush, 1500);
+  } finally { ttSweeping = false; }
+}
+
+// ── ตรวจหน้าจอเป็นระยะ ส่งเฉพาะตอนมีอะไรเปลี่ยน ──────────
+let ttLastSig = "";
+
+let ttTick = 0;
+function ttScan() {
+  if (!cfg.enabled) return;
+  if (cfg.discovery) {
+    if (++ttTick % 6 === 1) console.warn(TAG, "TikTok: 'โหมดสำรวจ' ยังเปิดอยู่ — ปิดก่อนถึงจะส่งข้อมูล");
+    return;
+  }
+  if (!cfg.secret) {
+    if (++ttTick % 6 === 1) console.warn(TAG, "TikTok: ยังไม่ได้ใส่รหัสลับในหน้าตั้งค่า");
+    return;
+  }
+
+  const batch = [];
+  const open = ttReadOpenChat();
+  if (open) batch.push(open);
+  const list = ttReadList();
+  batch.push(...list);
+
+  // บอกสถานะทุก ~30 วินาที เพื่อให้รู้ว่าติดตรงไหนโดยไม่ต้องเดา
+  if (++ttTick % 6 === 1)
+    console.log(`%c${TAG} TikTok สถานะ — แชทที่เปิดอยู่: ${ttWhy} | รายการซ้าย: ${list.length} แชท`,
+                "background:#25F4EE;color:#000;padding:2px 6px");
+
+  if (!batch.length) return;
+
+  const sig = JSON.stringify(batch.map((c) =>
+    [c.convId, c.preview || "", c.messages.length, c.messages.at(-1)?.id || ""]));
+  if (sig === ttLastSig) return;               // ไม่มีอะไรเปลี่ยน ไม่ต้องยิงซ้ำ
+  ttLastSig = sig;
+
+  const n = batch.reduce((s, c) => s + c.messages.length, 0);
+  console.log(`%c${TAG} TikTok → เตรียมส่ง ${batch.length} แชท / ${n} ข้อความ`,
+              "background:#25F4EE;color:#000;font-weight:bold;padding:2px 6px");
+  queue.push(...batch);
+  if (!timer) timer = setTimeout(flush, 3000);
+}
+
+// ── ตอบกลับจาก Chat Hub ───────────────────────────────────
+// TikTok ไม่มี API ส่งข้อความ ทางเดียวคือพิมพ์ลงกล่องบนหน้าเว็บแล้วกดส่ง
+// Chat Hub เก็บข้อความไว้ในคิว (status = queued) ตัวนี้มารับไปส่งให้
+async function ttAck(id, ok, why) {
+  await fetch(ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-ingest-secret": cfg.secret },
+    body: JSON.stringify({ action: "ack", ids: [id], ok, note: why || "" }),
+  }).catch(() => {});
+}
+
+// เทียบชื่อแบบผ่อนปรน — อีโมจิกับช่องว่างมักไม่ตรงกันเป๊ะระหว่างที่เก็บไว้กับที่แสดงบนจอ
+const looseName = (x) => String(x || "").replace(/\s+/g, "").trim();
+
+function ttPickEditor() {
+  // เอาช่องพิมพ์ที่มองเห็นจริงและอยู่ล่างสุดของจอ = ช่องพิมพ์ข้อความของแชท
+  const eds = q('[contenteditable="true"]').filter((el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 80 && r.height > 10;
+  });
+  return eds.sort((x, y) => y.getBoundingClientRect().top - x.getBoundingClientRect().top)[0] || null;
+}
+
+// วางเคอร์เซอร์ในช่องก่อน — ถ้าไม่วาง execCommand จะไม่ทำอะไรเลย
+// (นี่คือสาเหตุที่พิมพ์ไม่ลงมาตลอด: focus() อย่างเดียวไม่ได้สร้างจุดพิมพ์)
+function ttPutCaret(ed) {
+  ed.focus();
+  const range = document.createRange();
+  range.selectNodeContents(ed);
+  range.collapse(false);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+function ttType(ed, text) {
+  ttPutCaret(ed);
+  // ทางหลัก — ตัวแก้ไขข้อความของ TikTok (DraftJS) รับรู้ผ่านทางนี้
+  document.execCommand("insertText", false, text);
+  if ((ed.textContent || "").includes(text)) return true;
+
+  // ทางสำรอง — ยิงเหตุการณ์พิมพ์เองแบบที่เบราว์เซอร์ทำจริง
+  ttPutCaret(ed);
+  for (const type of ["beforeinput", "input"]) {
+    ed.dispatchEvent(new InputEvent(type, {
+      inputType: "insertText", data: text, bubbles: true, cancelable: true, composed: true,
+    }));
+  }
+  return (ed.textContent || "").includes(text);
+}
+
+function ttPressEnter(ed) {
+  for (const type of ["keydown", "keypress", "keyup"]) {
+    ed.dispatchEvent(new KeyboardEvent(type, {
+      key: "Enter", code: "Enter", keyCode: 13, which: 13,
+      bubbles: true, cancelable: true, composed: true,
+    }));
+  }
+}
+
+async function ttSendOne(item) {
+  const want = looseName(item.name);
+
+  // ยังไม่เห็นรายการแชทเลย = หน้ายังโหลดไม่เสร็จ — อย่าเพิ่งตีตราว่าล้มเหลว
+  // ปล่อยให้ค้างในคิวไว้ เดี๋ยวรอบหน้าค่อยลองใหม่ ดีกว่าทิ้งข้อความของลูกค้า
+  if (!ttListRows().length) {
+    console.warn(TAG, "TikTok: ยังไม่เห็นรายการแชท — พักข้อความไว้ในคิวก่อน");
+    return false;
+  }
+
+  let row = await ttFindRow(item.name);
+  if (!row) row = ttListRows().find((r) => looseName(r.name) === want);
+  if (!row) {
+    await ttAck(item.id, false, `หาแชท "${item.name}" ในรายการไม่เจอ — อาจอยู่ในกล่อง "คำขอส่งข้อความ"`);
+    return false;
+  }
+
+  ttClick(row.row);
+  await wait(1800);
+
+  // กันส่งผิดคน
+  const head = looseName(q('[class*="--PNickname"]')[0]?.textContent);
+  if (head && want && head !== want) {
+    await ttAck(item.id, false, `เปิดผิดแชท (ตั้งใจ ${item.name} แต่ได้ ${head})`);
+    return false;
+  }
+
+  const ed = ttPickEditor();
+  if (!ed) { await ttAck(item.id, false, "ไม่พบช่องพิมพ์ข้อความบนหน้าเว็บ"); return false; }
+
+  if (!ttType(ed, item.text)) {
+    await ttAck(item.id, false, "พิมพ์ข้อความลงช่องไม่ได้ — TikTok อาจเปลี่ยนหน้าเว็บ");
+    return false;
+  }
+  await wait(500);
+
+  ttPressEnter(ed);
+  await wait(1800);
+
+  // ยืนยันผล: ช่องพิมพ์ต้องว่าง และต้องมีฟองข้อความนั้นโผล่ขึ้นมาจริง
+  const cleared = !(ed.textContent || "").trim();
+  const shown = q('[class*="--PText"]').some((el) =>
+    (el.textContent || "").trim() === item.text.trim());
+
+  if (cleared && shown) {
+    console.log(`%c${TAG} TikTok ส่งถึง ${item.name} แล้ว`,
+                "background:#2ecc71;color:#fff;font-weight:bold;padding:2px 6px");
+    await ttAck(item.id, true);
+    return true;
+  }
+
+  await ttAck(item.id, false,
+    cleared ? "กดส่งแล้วช่องว่างลง แต่ข้อความไม่ขึ้นในแชท"
+            : "พิมพ์ลงช่องได้ แต่กด Enter แล้วไม่ส่ง");
+  return false;
+}
+
+let ttSending = false;
+let ttOutTick = 0;
+async function ttOutbox() {
+  if (ttSending || !cfg.secret || cfg.discovery) return;
+  ttSending = true;
+  try {
+    const r = await fetch(ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-ingest-secret": cfg.secret },
+      body: JSON.stringify({ action: "outbox", platform: "tiktok" }),
+    });
+    const j = await r.json();
+
+    // พูดทุกครั้ง — เงียบแล้วหาสาเหตุไม่ได้
+    console.log(`%c${TAG} คิว TikTok: ${j.items?.length ?? "ไม่รู้จักคำสั่ง"} รายการ`,
+                "background:#c9a84c;color:#0d1b3e;font-weight:bold;padding:2px 6px", j);
+
+    if (j.items === undefined) {
+      console.error(`${TAG} ingest-shopee ยังเป็นเวอร์ชันเก่า — ยังวางโค้ดใหม่ไม่ครบ`);
+      return;
+    }
+    if (!j.items.length) return;
+
+    console.log(`%c${TAG} TikTok มีข้อความรอส่ง ${j.items.length} ข้อความ`,
+                "background:#c9a84c;color:#0d1b3e;font-weight:bold;padding:2px 6px");
+    for (const item of j.items) {
+      console.log(TAG, "กำลังส่งถึง", item.name, ":", item.text.slice(0, 40));
+      await ttSendOne(item);
+      await wait(1200);
+    }
+  } catch (e) { console.error(TAG, "อ่านคิวข้อความไม่สำเร็จ:", e.message); }
+  finally { ttSending = false; }
+}
+
+if (IS_TT_CHAT) {
+  console.log(`%c${TAG} TikTok หน้าแชท — พร้อมอ่านและส่งข้อความ`,
+              "background:#25F4EE;color:#000;font-weight:bold;padding:2px 6px");
+  setInterval(ttScan, 5000);
+
+  // ── ปิดการส่งข้อความแทนคนไว้ ──
+  // เคยให้ส่วนขยายพิมพ์ลงหน้าเว็บแทน แต่หน้าเว็บ TikTok เปลี่ยนสถานะระหว่างทางบ่อย
+  // จนไม่มั่นใจว่าข้อความจะถึงลูกค้าจริงทุกครั้ง ซึ่งรับไม่ได้สำหรับงานบริการลูกค้า
+  // ตัวอ่านยังทำงานเต็มที่ตามเดิม — เปิดบรรทัดล่างเมื่อไหร่ก็กลับมาใช้ได้
+  // setInterval(ttOutbox, 8000);
+
+  // ดึงแชททั้งหมดเอง: ครั้งแรกหลังโหลด 25 วินาที แล้วทุก 10 นาที
+  // ทำเฉพาะตอนไม่มีคนแตะเครื่องเกิน 45 วินาที จะได้ไม่ไปแย่งเมาส์
+  setTimeout(() => ttSweep(false), 25000);
+  setInterval(() => {
+    if (ttIdle() > 45000 && Date.now() - ttSweptAt > 10 * 60 * 1000) ttSweep(false);
+  }, 20000);
+
+  // ปุ่ม "ดึงเดี๋ยวนี้" ในหน้าตั้งค่าสั่งผ่านตรงนี้
+  chrome.storage.onChanged.addListener((ch) => {
+    if (ch.ttSweepNow) ttSweep(true);
+  });
+} else if (IS_TIKTOK) {
+  console.log(TAG, "TikTok แท็บนี้ไม่ใช่หน้าแชท — ไม่ยุ่งกับคิวข้อความ (เปิด tiktok.com/messages)");
+}
+
+function collectTikTok(d) {
+  const raw = String(d.url || "");
+  const body = String(d.body || "");
+  if (body.length < 40 || d.req) return;
+  if (/\/im\/user\/profile|\/im\/spotlight\/relation/i.test(raw)) ttLearnUsers(body);
 }
 
 // ── ส่งขึ้น Chat Hub (รวบยอด ไม่ยิงถี่) ────────────────────
@@ -345,14 +910,23 @@ function flush() {
   if (!cfg.secret) { console.warn(TAG, "ยังไม่ได้ใส่รหัสลับ — ข้ามการส่ง"); queue = []; return; }
   const batch = queue; queue = [];
 
-  const platform = /line\.biz/i.test(location.hostname) ? "line" : "shopee";
+  const platform = /line\.biz/i.test(location.hostname) ? "line"
+                 : /tiktok\.com$/i.test(location.hostname) ? "tiktok"
+                 : "shopee";
   fetch(ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-ingest-secret": cfg.secret },
     body: JSON.stringify({ platform, conversations: batch }),
   })
     .then((r) => r.json())
-    .then((j) => console.log(TAG, "ส่งแล้ว:", j))
+    .then((j) => {
+      // รวมไว้บรรทัดเดียวว่าส่งอะไรไปและได้อะไรกลับ จะได้ไม่ต้องไล่จับคู่บรรทัดเอง
+      const sent = batch.reduce((n, c) => n + (c.messages?.length || 0), 0);
+      const okAll = j.newMessages > 0 || sent === 0;
+      console.log(`%c${TAG} ส่ง ${platform}: ${batch.length} แชท / ${sent} ข้อความ → บันทึกใหม่ ${j.newMessages}`,
+                  `background:${okAll ? "#2ecc71" : "#e74c3c"};color:#fff;font-weight:bold;padding:2px 6px`);
+      if (j.problems?.length) console.warn(TAG, "สาเหตุที่บันทึกไม่ได้:", j.problems);
+    })
     .catch((e) => console.warn(TAG, "ส่งไม่สำเร็จ:", e.message));
 }
 
@@ -366,13 +940,21 @@ window.addEventListener("message", (ev) => {
   const d = ev.data;
   if (!d || d.__rch !== true || !cfg.enabled) return;
 
+  // ── TikTok / TikTok Shop ─────────────────────────────────
+  if (IS_TIKTOK) { collectTikTok(d); return; }
+
   // ── LINE OA Manager ──────────────────────────────────────
   if (/line\.biz/i.test(location.hostname)) {
+    // เก็บ botId + โดเมนไว้ให้ตัวดึงอัตโนมัติเบื้องหลังใช้ (background.js)
+    // เพื่อให้ดึงข้อความที่ทีมตอบมาได้เองแม้ไม่เปิดหน้า OA ค้างไว้
+    const botM = String(d.url).match(RE_LINE_BOT);
+    if (botM) chrome.storage.local.set({ lineBotId: botM[1], lineHost: location.origin });
+
     // คำขาออก = ทีมงานเพิ่งกดส่งข้อความ
     if (d.req === true) {
       const s = parseLineSend(String(d.url), d.body);
       if (s) {
-        console.log(`%c${TAG} LINE → ทีมงานตอบ: ${s.messages[0].text.slice(0, 40)}`,
+        console.log(`%c${TAG} LINE → ทีมงานตอบ: ${(s.messages[0].text || "[รูป/สติกเกอร์]").slice(0, 40)}`,
                     "background:#c9a84c;color:#0d1b3e;font-weight:bold;padding:2px 6px");
         queue.push(s);
         if (!timer) timer = setTimeout(flush, 3000);

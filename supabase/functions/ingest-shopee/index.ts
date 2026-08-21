@@ -15,7 +15,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const INGEST_SECRET = Deno.env.get("SHOPEE_INGEST_SECRET") ?? "";
 const SUPABASE_URL  = Deno.env.get("SUPABASE_URL") ?? "";
-const SERVICE_KEY   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const SERVICE_KEY   = Deno.env.get("SB_SECRET_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -41,11 +41,15 @@ type InConv = {
   name?: string;
   avatar?: string;
   messages: InMsg[];
+  // TikTok: อ่านจากรายการแชทฝั่งซ้ายได้แค่บรรทัดล่าสุด (ยังไม่มีใครคลิกเปิด)
+  preview?: string;
+  previewAt?: number;
+  unread?: number;      // เลขยังไม่อ่านที่เห็นบนหน้าเว็บ ก่อนส่วนขยายจะเปิดอ่านเอง
 };
 
 // รับได้ทั้ง shopee และ line (ส่วนขยายอ่านจากหน้าเว็บที่พนักงานเปิดอยู่)
 // กรณี line: ถ้า convId ตรงกับ userId ที่ webhook เคยสร้างไว้ จะรวมเป็นบทสนทนาเดียวกันเอง
-const ALLOWED = new Set(["shopee", "line"]);
+const ALLOWED = new Set(["shopee", "line", "tiktok", "tiktokshop"]);
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -60,23 +64,97 @@ serve(async (req: Request) => {
     return json({ error: "unauthorized" }, 401);
   }
 
-  let payload: { conversations?: InConv[]; platform?: string };
+  let payload: {
+    conversations?: InConv[]; platform?: string;
+    action?: string; ids?: string[]; ok?: boolean; note?: string;
+  };
   try { payload = await req.json(); }
   catch { return json({ error: "invalid json" }, 400); }
 
   const platform = String(payload.platform ?? "shopee");
   if (!ALLOWED.has(platform)) return json({ error: "unknown platform" }, 400);
 
+  const db0 = createClient(SUPABASE_URL, SERVICE_KEY);
+
+  // ── คิวข้อความที่รอส่ง ────────────────────────────────────
+  // TikTok ไม่มี API ส่งข้อความ พนักงานกดส่งใน Chat Hub แล้วข้อความจะค้างเป็น queued
+  // ส่วนขยายที่เปิดหน้า TikTok อยู่จะมาถามคิวนี้ แล้วพิมพ์ส่งให้บนหน้าเว็บจริง
+  if (payload.action === "outbox") {
+    // ทำสองจังหวะ ตรงไปตรงมากว่าการ join ข้ามตาราง และไม่พึ่งการตั้งค่าความสัมพันธ์
+    const { data: convRows, error: cErr } = await db0
+      .from("conversations")
+      .select("id, platform_conv_id, customer_name")
+      .eq("platform", platform);
+    if (cErr) return json({ ok: false, error: cErr.message, items: [] });
+    if (!convRows?.length) return json({ ok: true, items: [] });
+
+    const meta = new Map(convRows.map((c: any) => [c.id, c]));
+    const { data: msgs, error: mErr } = await db0
+      .from("messages")
+      .select("id, content, conversation_id")
+      .eq("direction", "out")
+      // failed = ข้อความเก่าที่เคยพยายามส่งผ่าน API (ซึ่ง TikTok ไม่มี) — เอามาส่งใหม่ให้
+      // ถ้าส่วนขยายส่งแล้วยังไม่สำเร็จจะกลายเป็น error แล้วหยุด ไม่วนซ้ำไม่จบ
+      .in("status", ["queued", "failed"])
+      .in("conversation_id", [...meta.keys()])
+      .order("sent_at", { ascending: true })
+      .limit(10);
+    if (mErr) return json({ ok: false, error: mErr.message, items: [] });
+
+    // นับข้อความขาออกทุกสถานะไว้ด้วย เพื่อให้เห็นทันทีว่าฝั่งเซิร์ฟเวอร์เห็นอะไรบ้าง
+    const { data: all } = await db0
+      .from("messages").select("status")
+      .eq("direction", "out").in("conversation_id", [...meta.keys()]);
+    const tally: Record<string, number> = {};
+    for (const r of all ?? []) tally[r.status ?? "null"] = (tally[r.status ?? "null"] ?? 0) + 1;
+
+    return json({
+      ok: true,
+      แชททั้งหมด: meta.size,
+      ข้อความขาออกแยกตามสถานะ: tally,
+      items: (msgs ?? []).map((m: any) => ({
+        id: m.id,
+        text: m.content,
+        convId: meta.get(m.conversation_id)?.platform_conv_id,
+        name: meta.get(m.conversation_id)?.customer_name,
+      })),
+    });
+  }
+
+  // ── รายงานผลการส่งกลับมา ──────────────────────────────────
+  if (payload.action === "ack") {
+    const ids = (payload.ids ?? []).filter(Boolean).slice(0, 50);
+    if (!ids.length) return json({ ok: true, updated: 0 });
+    const { error } = await db0
+      .from("messages")
+      .update({
+        status: payload.ok ? "sent" : "error",
+        // เก็บเหตุผลไว้ให้พนักงานเห็นในแอพเลย ไม่ต้องเปิด Console ดู
+        note: payload.ok ? null : String(payload.note ?? "").slice(0, 200),
+      })
+      .in("id", ids);
+    if (error) return json({ ok: false, error: error.message });
+    if (!payload.ok) console.error("ส่ง TikTok ไม่สำเร็จ:", payload.note, ids);
+    return json({ ok: true, updated: ids.length });
+  }
+
   const convs = payload.conversations ?? [];
   if (!Array.isArray(convs) || !convs.length) return json({ ok: true, conversations: 0, newMessages: 0 });
 
-  const db = createClient(SUPABASE_URL, SERVICE_KEY);
+  const db = db0;
   let convCount = 0, msgCount = 0;
+  // เก็บสาเหตุที่บันทึกไม่ได้ ส่งกลับไปให้เห็นใน Console ของเบราว์เซอร์
+  // ไม่งั้นต้องไล่หาใน log ของ Supabase ทุกครั้งซึ่งช้ามาก
+  const problems: string[] = [];
 
   for (const c of convs.slice(0, 100)) {
-    if (!c?.convId || !Array.isArray(c.messages) || !c.messages.length) continue;
+    if (!c?.convId) continue;
+    // TikTok ส่งแชทจาก "รายการฝั่งซ้าย" มาด้วย ซึ่งมีแค่ข้อความล่าสุด ไม่มีเนื้อหาเต็ม
+    // (ยังไม่มีใครคลิกเปิด) — อัพเดตแค่บรรทัดล่าสุดให้เห็นว่ามีความเคลื่อนไหว
+    const inMsgs = Array.isArray(c.messages) ? c.messages : [];
+    if (!inMsgs.length && !c.preview) continue;
 
-    const norm = c.messages
+    const norm = inMsgs
       .filter((m) => m && m.id && (m.text || m.imageUrl))
       .map((m) => ({
         id: String(m.id),
@@ -87,15 +165,18 @@ serve(async (req: Request) => {
       }))
       .sort((a, b) => a.sent_at.localeCompare(b.sent_at));
 
-    if (!norm.length) continue;
-    const last = norm[norm.length - 1];
+    if (!norm.length && !c.preview) continue;
+    const last = norm.length
+      ? norm[norm.length - 1]
+      : { message_type: "text", content: String(c.preview),
+          sent_at: new Date(Number(c.previewAt) || Date.now()).toISOString() };
 
     // ── หาบทสนทนาเดิม ─────────────────────────────────────
     // LINE ใช้ id คนละชุดระหว่าง Messaging API (webhook) กับ OA Manager (ส่วนขยาย)
     // ถ้าจับคู่ด้วย id อย่างเดียวจะได้แชทซ้ำคนละ 2 แถว จึงต้องจับคู่ด้วย "ชื่อ" เสริม
     let { data: prev } = await db
       .from("conversations")
-      .select("id, platform_conv_id, customer_name, avatar_url")
+      .select("id, platform_conv_id, customer_name, avatar_url, last_message_at")
       .eq("platform", platform)
       .eq("platform_conv_id", String(c.convId))
       .maybeSingle();
@@ -111,17 +192,23 @@ serve(async (req: Request) => {
       if (byName) prev = byName;   // เจอคนเดียวกันที่ webhook สร้างไว้ → ใช้แถวนั้น
     }
 
-    const row: Record<string, unknown> = {
-      last_message: last.message_type === "image" ? "[รูปภาพ]" : last.content,
-      last_message_at: last.sent_at,
-    };
+    const row: Record<string, unknown> = {};
+    // อย่าให้ "ข้อความล่าสุด" ถอยหลัง — รายการฝั่งซ้ายบอกเวลาแค่ระดับวัน อาจเก่ากว่าของจริง
+    if (!prev?.last_message_at || last.sent_at >= prev.last_message_at) {
+      row.last_message = last.message_type === "image" ? "[รูปภาพ]" : last.content;
+      row.last_message_at = last.sent_at;
+    }
+    const unread = Number((c as any).unread) || 0;
+    if (unread > 0) row.unread_count = unread;
+
     const hasName = prev?.customer_name && prev.customer_name !== "ลูกค้า";
     if (c.name && !hasName) row.customer_name = c.name;
     if (c.avatar && !prev?.avatar_url) row.avatar_url = c.avatar;
 
     let conv: { id: string } | null = null;
 
-    if (prev) {
+    if (prev && !Object.keys(row).length) { conv = { id: prev.id }; }
+    else if (prev) {
       // มีอยู่แล้ว — อัพเดตแถวเดิม ห้ามสร้างใหม่ ไม่งั้นจะได้แชทซ้ำ
       // (อย่าแตะ platform_conv_id เพราะ webhook ยังใช้ค่าเดิมส่งข้อมูลเข้ามา)
       const { error } = await db.from("conversations").update(row).eq("id", prev.id);
@@ -138,10 +225,16 @@ serve(async (req: Request) => {
         })
         .select("id")
         .single();
-      if (error || !data) { console.error("conv insert:", error); continue; }
+      if (error || !data) {
+        console.error("conv insert:", error);
+        problems.push(`สร้างแชท ${c.name || c.convId}: ${error?.message}`);
+        continue;
+      }
       conv = data;
     }
     convCount++;
+
+    if (!norm.length) continue;   // มีแค่ข้อความล่าสุด ไม่มีเนื้อหาให้บันทึก
 
     // ── เทียบกับของเดิมก่อนบันทึก ─────────────────────────
     // แยกเป็น 2 กอง:
@@ -198,6 +291,18 @@ serve(async (req: Request) => {
         continue;
       }
 
+      // 3) ข้อความ local: (ยังไม่มีรหัส) ที่ตรงกับข้อความ "มีรหัสจริง" ที่เก็บไว้แล้ว
+      //    เกิดเมื่อตัวดึงเบื้องหลังบันทึกด้วยรหัสจริงไปก่อน แล้วตัวดักจากแท็บส่ง local: ตามมา
+      //    ตัวมีรหัสจริงครอบคลุมแล้ว — ข้าม ไม่ต้องสร้างแถว null ซ้ำ
+      if (!realId) {
+        let dup = false;
+        for (const o of byId.values()) {
+          if (o.direction === m.direction && o.content === m.content &&
+              Math.abs(Date.parse(o.sent_at) - t) < NEAR) { dup = true; break; }
+        }
+        if (dup) continue;
+      }
+
       rows.push({
         conversation_id: conv.id,
         direction: m.direction,
@@ -215,10 +320,18 @@ serve(async (req: Request) => {
 
     if (rows.length) {
       const { error: insErr } = await db.from("messages").insert(rows);
-      if (insErr) console.error("msg insert:", insErr);
-      else msgCount += rows.length;
+      if (!insErr) { msgCount += rows.length; continue; }
+
+      // ทั้งชุดล้มเพราะแถวเดียวก็ได้ (เช่นรหัสข้อความชนกันเอง)
+      // ลองทีละแถว เพื่อไม่ให้เสียทั้งชุด แล้วรายงานเฉพาะแถวที่มีปัญหาจริง
+      console.error("msg insert:", insErr);
+      for (const r of rows) {
+        const { error } = await db.from("messages").insert(r);
+        if (error) problems.push(`${String(r.content).slice(0, 20)}… : ${error.message}`);
+        else msgCount++;
+      }
     }
   }
 
-  return json({ ok: true, conversations: convCount, newMessages: msgCount });
+  return json({ ok: true, conversations: convCount, newMessages: msgCount, problems: problems.slice(0, 8) });
 });
