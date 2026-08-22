@@ -5973,14 +5973,28 @@ function posterUpdateSizeUI(){
     : '👆 คลิกที่ รูป/ชื่อ/ราคา/การ์ด/หัวเรื่อง/โลโก้ ในภาพเพื่อลากย้าย·ย่อ-ขยาย';
 }
 function applyPosterSize(v){
-  if (!posterSelectedEl) return;
-  const key = posterSelectedEl.dataset.el;
-  const L = posterGetL(key);
-  L.s = Math.max(0.2, Math.min(5, (+v || 100) / 100));
-  posterLayout[key] = L;
-  applyPosterEl(posterSelectedEl); posterSyncHandle();
-  if ($('#posterSizeVal')) $('#posterSizeVal').textContent = Math.round(L.s * 100) + '%';
+  const s = Math.max(0.2, Math.min(5, (+v || 100) / 100));
+  if (posterSelectedEl){                       // individual element
+    const key = posterSelectedEl.dataset.el; const L = posterGetL(key); L.s = s; posterLayout[key] = L;
+    applyPosterEl(posterSelectedEl); posterSyncHandle();
+  } else if (posterSizeTarget){                 // v7.3 — bulk: resize EVERY element of this type
+    document.querySelectorAll('#pdfStage .poster-canvas [data-el]').forEach(el => {
+      if (String(el.dataset.el).split(':').pop() === posterSizeTarget){ const L = posterGetL(el.dataset.el); L.s = s; posterLayout[el.dataset.el] = L; applyPosterEl(el); }
+    });
+  } else { return; }
+  if ($('#posterSizeVal')) $('#posterSizeVal').textContent = Math.round(s * 100) + '%';
   posterSaveLayout();
+}
+// v7.3 — pick a bulk-resize target (like Flash): the slider then resizes every รูป/ชื่อ/ราคา at once
+function setPosterSizeTarget(t){
+  posterDeselect();
+  posterSizeTarget = t;
+  const first = document.querySelector('#pdfStage .poster-canvas [data-el$=":' + t + '"]');
+  const s = first ? Math.round((posterGetL(first.dataset.el).s || 1) * 100) : 100;
+  if ($('#posterSize')) $('#posterSize').value = s;
+  if ($('#posterSizeVal')) $('#posterSizeVal').textContent = s + '%';
+  if ($('#posterSizeSel')) $('#posterSizeSel').textContent = '📐 ปรับทุก' + ({ img:'รูป', name:'ชื่อ', price:'ราคา' }[t] || '') + ' — เลื่อนสไลเดอร์';
+  document.querySelectorAll('#posterSizeBar .fs-tbtn').forEach(b => b.classList.toggle('active', b.dataset.t === t));
 }
 function posterResetSelected(){
   if (!posterSelectedEl) return;
