@@ -5850,17 +5850,22 @@ function posterMoveIdx(i, dir){
   posterSaveOrder(); buildPosterPreview();
 }
 
-// v7.3 — which units the poster shows for a product: honours the EXACT settings/design selection
-// (SHEET_CONFIG.multiUnits + per-product multiUnitOverrides), not "all priced units". A single-unit
-// pick (e.g. just ชิ้น) shows only that unit. Falls back to all priced only if the pick matches nothing.
+// v7.4 — the poster mirrors each product's DESIGN (getTplType): a "หลายหน่วย" product shows its designed
+// units (per-product multiUnitOverrides, else the multiUnits default); every other template (ปกติ/ลดราคา/
+// ใหม่/1+1) shows the single preferred unit — exactly like its tag. "ออกแบบยังไง หน้าพิมพ์ก็แบบนั้น".
 function posterUnitsFor(p){
   const order = POSTER_UNIT_ORDER;
   const priced = order.filter(u => p.unitPrices && p.unitPrices[u]);
   if (!priced.length) return [];
-  const ovr = (typeof multiUnitOverrides !== 'undefined' && multiUnitOverrides[p.sku]) ? multiUnitOverrides[p.sku].filter(u => priced.includes(u)) : [];
-  if (ovr.length) return ovr.slice().sort((a,b) => order.indexOf(a) - order.indexOf(b));
-  const g = (SHEET_CONFIG.multiUnits || []).filter(u => priced.includes(u));
-  return (g.length ? g : priced).slice().sort((a,b) => order.indexOf(a) - order.indexOf(b));
+  const type = (typeof getTplType === 'function') ? getTplType(p) : 'regular';
+  if (type === 'multi'){   // designed as "หลายหน่วย" → the designed units
+    const ovr = (typeof multiUnitOverrides !== 'undefined' && multiUnitOverrides[p.sku]) ? multiUnitOverrides[p.sku].filter(u => priced.includes(u)) : [];
+    if (ovr.length) return ovr.slice().sort((a,b) => order.indexOf(a) - order.indexOf(b));
+    const g = (SHEET_CONFIG.multiUnits || []).filter(u => priced.includes(u));
+    return (g.length ? g : priced).slice().sort((a,b) => order.indexOf(a) - order.indexOf(b));
+  }
+  const one = (p.usedUnit && priced.includes(p.usedUnit)) ? p.usedUnit : priced[0];   // single designed unit
+  return one ? [one] : [];
 }
 function buildPosterPreview(){
   const stage = $('#pdfStage'); if (!stage) return;
