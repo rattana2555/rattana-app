@@ -5874,6 +5874,17 @@ function posterUnitsFor(p){
   const one = (p.usedUnit && priced.includes(p.usedUnit)) ? p.usedUnit : priced[0];   // single designed unit
   return one ? [one] : [];
 }
+// v7.5 — effective price for a poster unit: a manual "แก้ราคา" (priceOverrides, keyed to the product's
+// main unit p.usedUnit) wins; else the discounted price (salePriceTier); else the main sheet price.
+function posterUnitPrice(p, u){
+  if (typeof priceOverrides !== 'undefined' && priceOverrides[p.sku] && +priceOverrides[p.sku].price > 0
+      && (u === p.usedUnit || !p.usedUnit)) {
+    return +priceOverrides[p.sku].price;
+  }
+  const up = p.unitPrices && p.unitPrices[u];
+  if (!up) return 0;
+  return (up.sale && up.sale > 0) ? up.sale : up.price;
+}
 function buildPosterPreview(){
   const stage = $('#pdfStage'); if (!stage) return;
   const _selKey = posterSelectedEl && posterSelectedEl.dataset.el;   // v7.0-fix — the innerHTML swap below detaches the selected node; re-resolve it afterwards
