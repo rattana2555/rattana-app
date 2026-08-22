@@ -5849,6 +5849,18 @@ function posterMoveIdx(i, dir){
   posterSaveOrder(); buildPosterPreview();
 }
 
+// v7.3 — which units the poster shows for a product: honours the EXACT settings/design selection
+// (SHEET_CONFIG.multiUnits + per-product multiUnitOverrides), not "all priced units". A single-unit
+// pick (e.g. just ชิ้น) shows only that unit. Falls back to all priced only if the pick matches nothing.
+function posterUnitsFor(p){
+  const order = POSTER_UNIT_ORDER;
+  const priced = order.filter(u => p.unitPrices && p.unitPrices[u]);
+  if (!priced.length) return [];
+  const ovr = (typeof multiUnitOverrides !== 'undefined' && multiUnitOverrides[p.sku]) ? multiUnitOverrides[p.sku].filter(u => priced.includes(u)) : [];
+  if (ovr.length) return ovr.slice().sort((a,b) => order.indexOf(a) - order.indexOf(b));
+  const g = (SHEET_CONFIG.multiUnits || []).filter(u => priced.includes(u));
+  return (g.length ? g : priced).slice().sort((a,b) => order.indexOf(a) - order.indexOf(b));
+}
 function buildPosterPreview(){
   const stage = $('#pdfStage'); if (!stage) return;
   const _selKey = posterSelectedEl && posterSelectedEl.dataset.el;   // v7.0-fix — the innerHTML swap below detaches the selected node; re-resolve it afterwards
