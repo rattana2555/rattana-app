@@ -530,7 +530,33 @@ function applyOverlays() {
   }
   document.getElementById('clockOverlay').style.display = cfg.clock ? 'flex' : 'none';
   document.body.classList.toggle('fit-cover', cfg.fit === 'cover');
+  document.body.classList.toggle('pos-mode', cfg.mode === 'pos');
+  document.documentElement.style.setProperty('--posw', cfg.posw + '%');
+  if (cfg.mode !== 'pos') stopPosCapture();
 }
+
+/* ══════════ POS screen capture ══════════ */
+let posStream = null;
+async function startPosCapture() {
+  try {
+    const s = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: { ideal: 15, max: 24 } },
+      audio: false
+    });
+    stopPosCapture();
+    posStream = s;
+    document.getElementById('posVideo').srcObject = s;
+    document.getElementById('posPickWrap').classList.add('hidden');
+    s.getVideoTracks()[0].addEventListener('ended', stopPosCapture);
+  } catch {} // ผู้ใช้กดยกเลิก
+}
+function stopPosCapture() {
+  if (posStream) { posStream.getTracks().forEach(t => t.stop()); posStream = null; }
+  const v = document.getElementById('posVideo');
+  if (v.srcObject) v.srcObject = null;
+  document.getElementById('posPickWrap').classList.remove('hidden');
+}
+document.getElementById('btnPickPos').addEventListener('click', startPosCapture);
 
 const THAI_DAYS = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
 const THAI_MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
