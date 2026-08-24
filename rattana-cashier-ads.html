@@ -552,7 +552,25 @@ function applyOverlays() {
   document.body.classList.toggle('pos-mode', cfg.mode === 'pos');
   document.documentElement.style.setProperty('--posw', cfg.posw + '%');
   if (cfg.mode !== 'pos') stopPosCapture();
+  requestAnimationFrame(layoutPosVideo);
 }
+
+/* ครอบตัดภาพ POS: ขยาย/เลื่อน video ให้เหลือเฉพาะบริเวณที่ไม่ถูกตัด (คงสัดส่วนจริง) */
+function layoutPosVideo() {
+  const v = document.getElementById('posVideo');
+  const pane = document.getElementById('posPane');
+  const t = cfg.cropT, b = cfg.cropB, l = cfg.cropL, r = cfg.cropR;
+  if (!v.videoWidth || (!t && !b && !l && !r)) { v.style.cssText = ''; return; }
+  const vw = v.videoWidth, vh = v.videoHeight;
+  const regW = vw * (100 - l - r) / 100, regH = vh * (100 - t - b) / 100;
+  if (regW <= 0 || regH <= 0) { v.style.cssText = ''; return; }
+  const pw = pane.clientWidth, ph = pane.clientHeight;
+  const sc = Math.min(pw / regW, ph / regH);
+  const left = (pw - regW * sc) / 2 - vw * (l / 100) * sc;
+  const top = (ph - regH * sc) / 2 - vh * (t / 100) * sc;
+  v.style.cssText = `position:absolute;object-fit:fill;max-width:none;width:${vw * sc}px;height:${vh * sc}px;left:${left}px;top:${top}px`;
+}
+window.addEventListener('resize', () => requestAnimationFrame(layoutPosVideo));
 
 /* ══════════ POS screen capture ══════════ */
 let posStream = null;
