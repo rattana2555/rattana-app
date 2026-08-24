@@ -20,5 +20,5 @@ Start-Sleep 2
 $h = [IntPtr]$p.MainWindowHandle
 $r = New-Object WP+RECT
 [WP]::GetWindowRect($h, [ref]$r) | Out-Null
-[WP]::SetWindowRgn($h, [WP]::CreateRectRgn(0, $cut, ($r.R - $r.L), ($r.B - $r.T)), $true) | Out-Null
+if ($cut -gt 0) { [WP]::SetWindowRgn($h, [WP]::CreateRectRgn(0, $cut, ($r.R - $r.L), ($r.B - $r.T)), $true) | Out-Null }
 [WP]::SetWindowPos($h, [IntPtr](-1), 0, 0, 0, 0, 0x0063) | Out-Null
