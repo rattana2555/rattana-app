@@ -642,7 +642,17 @@ function applyPin() {
   const want = imgUrl(id);
   if (img.dataset.cur === want) return;
   img.dataset.cur = want;
-  img.onerror = () => { img.onerror = null; img.src = mediaUrl(id); };
+  // ลำดับลอง: lh3 → lh3 (cache-bust) → Drive API → พัก 60 วิแล้วเริ่มใหม่
+  img.onerror = () => {
+    img.onerror = () => {
+      img.onerror = () => {
+        img.onerror = null;
+        setTimeout(() => { delete img.dataset.cur; applyPin(); }, 60000);
+      };
+      img.src = mediaUrl(id);
+    };
+    img.src = want + '&r=' + Date.now();
+  };
   img.src = want;
 }
 
