@@ -1,8 +1,8 @@
 @echo off
 start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" --app="https://rattana2555.github.io/rattana-app/rattana-cashier-ads.html" --user-data-dir="C:\rattana-ads" --no-first-run --disable-features=Translate --autoplay-policy=no-user-gesture-required
-powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((Get-Content -LiteralPath '%~f0' -Encoding UTF8 | Select-Object -Skip 5) -join [char]10)"
+start "" /min powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "iex ((Get-Content -LiteralPath '%~f0' -Encoding UTF8 | Select-Object -Skip 5) -join [char]10)"
 exit /b
-REM ==== PowerShell: pin ad window always-on-top; $cut 0 = keep title bar (draggable), 33 = remove it (fixed) ====
+REM ==== PowerShell: keep ad window always-on-top (re-assert every 3s); $cut 0 = keep title bar, 33 = remove it ====
 $cut = 0
 Add-Type 'using System;using System.Runtime.InteropServices;public class WP{[DllImport("user32.dll")]public static extern bool SetWindowPos(IntPtr h,IntPtr a,int x,int y,int w,int c,uint f);[DllImport("user32.dll")]public static extern int SetWindowRgn(IntPtr h,IntPtr r,bool b);[DllImport("gdi32.dll")]public static extern IntPtr CreateRectRgn(int l,int t,int r,int b);[DllImport("user32.dll")]public static extern bool GetWindowRect(IntPtr h,out RECT rc);public struct RECT{public int L;public int T;public int R;public int B;}}'
 $p = $null
@@ -21,4 +21,10 @@ $h = [IntPtr]$p.MainWindowHandle
 $r = New-Object WP+RECT
 [WP]::GetWindowRect($h, [ref]$r) | Out-Null
 if ($cut -gt 0) { [WP]::SetWindowRgn($h, [WP]::CreateRectRgn(0, $cut, ($r.R - $r.L), ($r.B - $r.T)), $true) | Out-Null }
-[WP]::SetWindowPos($h, [IntPtr](-1), 0, 0, 0, 0, 0x0063) | Out-Null
+[WP]::SetWindowPos($h, [IntPtr](-1), 0, 0, 0, 0, 0x0073) | Out-Null
+while ($true) {
+  Start-Sleep 3
+  $r2 = New-Object WP+RECT
+  if (-not [WP]::GetWindowRect($h, [ref]$r2)) { break }
+  [WP]::SetWindowPos($h, [IntPtr](-1), 0, 0, 0, 0, 0x0013) | Out-Null
+}
