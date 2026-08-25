@@ -15,16 +15,19 @@ for ($i = 0; $i -lt 60; $i++) {
     if (($r.R - $r.L) -gt 120) { $p = $cand; break }
   }
 }
-if (-not $p) { exit }
-Start-Sleep 2
-$h = [IntPtr]$p.MainWindowHandle
-$r = New-Object WP+RECT
-[WP]::GetWindowRect($h, [ref]$r) | Out-Null
-if ($cut -gt 0) { [WP]::SetWindowRgn($h, [WP]::CreateRectRgn(0, $cut, ($r.R - $r.L), ($r.B - $r.T)), $true) | Out-Null }
-[WP]::SetWindowPos($h, [IntPtr](-1), 0, 0, 0, 0, 0x0073) | Out-Null
+if ($p -and $cut -gt 0) {
+  Start-Sleep 2
+  $h = [IntPtr]$p.MainWindowHandle
+  $r = New-Object WP+RECT
+  [WP]::GetWindowRect($h, [ref]$r) | Out-Null
+  [WP]::SetWindowRgn($h, [WP]::CreateRectRgn(0, $cut, ($r.R - $r.L), ($r.B - $r.T)), $true) | Out-Null
+}
 while ($true) {
+  $c = Get-Process chrome -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like 'Rattana Cashier Ads*' } | Select-Object -First 1
+  if ($c -and $c.MainWindowHandle -ne 0) {
+    $h = [IntPtr]$c.MainWindowHandle
+    [WP]::SetWindowPos($h, [IntPtr](-1), 0, 0, 0, 0, 0x0013) | Out-Null
+    [WP]::SetWindowPos($h, [IntPtr]::Zero, 0, 0, 0, 0, 0x0013) | Out-Null
+  }
   Start-Sleep 3
-  $r2 = New-Object WP+RECT
-  if (-not [WP]::GetWindowRect($h, [ref]$r2)) { break }
-  [WP]::SetWindowPos($h, [IntPtr](-1), 0, 0, 0, 0, 0x0013) | Out-Null
 }
