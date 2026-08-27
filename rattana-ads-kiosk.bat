@@ -18,6 +18,15 @@ for ($i = 0; $i -lt 60; $i++) {
     if (($r.R - $r.L) -gt 120) { $p = $cand; break }
   }
 }
+if ($p -and $mon2 -gt 0) {
+  Add-Type -AssemblyName System.Windows.Forms
+  $t = [System.Windows.Forms.Screen]::AllScreens | Where-Object { -not $_.Primary } | Select-Object -First 1
+  if ($t) {
+    $b = $t.Bounds
+    [WP]::SetWindowPos([IntPtr]$p.MainWindowHandle, [IntPtr]::Zero, $b.X, $b.Y, $b.Width, $b.Height, 0x0060) | Out-Null
+    Start-Sleep 1
+  }
+}
 if ($p -and $cut -gt 0) {
   Start-Sleep 2
   $h = [IntPtr]$p.MainWindowHandle
