@@ -3,6 +3,7 @@ start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" --app="https://
 start "" /min powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "iex ((Get-Content -LiteralPath '%~f0' -Encoding UTF8 | Select-Object -Skip 5) -join [char]10)"
 exit /b
 REM ==== PowerShell: keep ad window always-on-top (re-assert every 3s); $cut 0 = keep title bar, 33 = remove it ====
+# NOTE: เครื่องที่ใช้แบบเต็มจอถาวร ให้แก้บรรทัดที่ 2 จาก --app="URL" เป็น --kiosk "URL" (เต็มจอตลอด ไม่มีทางหลุด ไม่ต้องกด F)
 $cut = 0
 Add-Type 'using System;using System.Runtime.InteropServices;public class WP{[DllImport("user32.dll")]public static extern bool SetWindowPos(IntPtr h,IntPtr a,int x,int y,int w,int c,uint f);[DllImport("user32.dll")]public static extern int SetWindowRgn(IntPtr h,IntPtr r,bool b);[DllImport("gdi32.dll")]public static extern IntPtr CreateRectRgn(int l,int t,int r,int b);[DllImport("user32.dll")]public static extern bool GetWindowRect(IntPtr h,out RECT rc);public struct RECT{public int L;public int T;public int R;public int B;}}'
 $p = $null
