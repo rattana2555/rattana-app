@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════
-//  Rattana Member System — GAS v1.13
+//  Rattana Member System — GAS v1.18
 // ════════════════════════════════════════════════════════
 
 const SHEET_ID        = '1gbBrJtE36fX8TM7KC0RbXgPZI6AyNpbC3XhJ6uiLsOE';
@@ -52,10 +52,11 @@ function getSheet() {
     sheet.appendRow(HEADERS);
     sheet.getRange(1,1,1,HEADERS.length).setFontWeight('bold').setBackground('#0d1b3e').setFontColor('#ffffff');
   }
-  sheet.getRange('E:E').setNumberFormat('@STRING@');
-  sheet.getRange('F:F').setNumberFormat('@STRING@');
-  sheet.getRange('K:K').setNumberFormat('@STRING@');
-  sheet.getRange('Q:Q').setNumberFormat('@STRING@');
+  // บังคับเป็น text: E เบอร์โทร, F วันเกิด, G ที่อยู่ (กัน "1/1" กลายเป็นวันที่),
+  // H ตำบล, I อำเภอ, J จังหวัด, K ไปรษณีย์, Q เลขบัตร, T วันยินยอม
+  ['E:E','F:F','G:G','H:H','I:I','J:J','K:K','Q:Q','T:T'].forEach(function(r){
+    sheet.getRange(r).setNumberFormat('@STRING@');
+  });
   return sheet;
 }
 
@@ -99,8 +100,10 @@ function rowToObject(values) {
     firstName:   values[2], lastName: values[3],
     phone,
     dateOfBirth: dateToISO(values[5]),
-    address:     values[6], subDistrict: values[7],
-    district:    values[8], province:    values[9],
+    address:     values[6] instanceof Date ? '' : String(values[6] || ''),
+    subDistrict: String(values[7] || ''),
+    district:    String(values[8] || ''),
+    province:    String(values[9] || ''),
     postcode:    padZero(values[10], 5),
     source:      values[11],
     pictureUrl:  values[12],
@@ -177,7 +180,7 @@ function doGet(e) {
     }
 
     if (!p.userId && !p.phone) {
-      return ContentService.createTextOutput(JSON.stringify({status:'ok', msg:'GAS v1.13 running'})).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({status:'ok', msg:'GAS v1.18 running'})).setMimeType(ContentService.MimeType.JSON);
     }
 
     const sheet = getSheet();
@@ -232,7 +235,10 @@ function doPost(e) {
       data.firstName, data.lastName,
       "'" + String(data.phone || ''),
       "'" + String(data.dateOfBirth || ''),
-      data.address, data.subDistrict, data.district, data.province,
+      "'" + String(data.address || ''),
+      "'" + String(data.subDistrict || ''),
+      "'" + String(data.district || ''),
+      "'" + String(data.province || ''),
       "'" + String(data.postcode || ''),
       data.source,
       data.pictureUrl || '',
@@ -253,10 +259,9 @@ function doPost(e) {
       sheet.appendRow(rowValues);
       row = sheet.getLastRow();
     }
-    sheet.getRange(row, 5).setNumberFormat('@STRING@');
-    sheet.getRange(row, 6).setNumberFormat('@STRING@');
-    sheet.getRange(row, 11).setNumberFormat('@STRING@');
-    sheet.getRange(row, 17).setNumberFormat('@STRING@');
+    [5,6,7,8,9,10,11,17,20].forEach(function(c){
+      sheet.getRange(row, c).setNumberFormat('@STRING@');
+    });
 
     notifyDiscord(data, isNew);
 
