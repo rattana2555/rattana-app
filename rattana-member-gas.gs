@@ -62,6 +62,16 @@ function ensureHeaders_(sheet) {
   }
 }
 
+// v1.19: แปลงวัน/เวลาเป็นรูปแบบไทย dd/mm/พ.ศ. hh:mm (เหมือนคอลัมน์ "วันสมัคร (ไทย)")
+function toThaiDateTime_(v) {
+  if (!v) return '';
+  const d = (v instanceof Date) ? v : new Date(v);
+  if (isNaN(d.getTime())) return String(v);
+  const p = n => String(n).padStart(2, '0');
+  return p(d.getDate()) + '/' + p(d.getMonth()+1) + '/' + (d.getFullYear()+543) +
+         ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
 function getSheet() {
   const ss = SpreadsheetApp.openById(SHEET_ID);
   let sheet = ss.getSheetByName(SHEET_NAME);
@@ -261,7 +271,7 @@ function doPost(e) {
       "'" + String(data.nationalId || ''),
       data.consent === true ? 'TRUE' : (data.consent === false ? 'FALSE' : ''),
       String(data.consentVersion || ''),
-      data.consentDate || ''
+      toThaiDateTime_(data.consentDate)   // v1.19: วันยินยอม = รูปแบบไทยเหมือน "วันสมัคร (ไทย)"
     ];
 
     if (row > 0) {
