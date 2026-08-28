@@ -221,7 +221,7 @@
       <div class="brand-mark">R</div>
       <div>
         <div class="brand-text">RATTANA <span>MART</span></div>
-        <div class="version-tag">v1.13</div>
+        <div class="version-tag">v1.14</div>
       </div>
     </div>
     <div class="h-action" id="headerActions">
@@ -314,6 +314,7 @@
     <div class="dash-card">
       <div class="dash-head">
         <img class="dash-avatar" id="dashAvatar" src="" alt="">
+        <div class="dash-avatar" id="dashAvatarFallback" style="display:none;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--gold),var(--gold-2));color:var(--navy);font-size:22px;font-weight:800"></div>
         <div class="dash-greet">
           <div class="g-hi" data-i18n="dash.hi">สวัสดี</div>
           <div class="g-name" id="dashName">—</div>
@@ -716,6 +717,18 @@ async function refreshData() {
   btn.style.transition = 'transform .8s';
 
   try {
+    // ดึงโปรไฟล์ LINE ใหม่ทุกครั้ง เพื่อได้รูปล่าสุด
+    if (typeof liff !== 'undefined' && liff.isLoggedIn && liff.isLoggedIn()) {
+      try {
+        lineProfile = await liff.getProfile();
+        const strip = document.getElementById('profilePic');
+        if (strip) strip.src = lineProfile.pictureUrl || '';
+        const nameEl = document.getElementById('profileName');
+        if (nameEl) nameEl.textContent = lineProfile.displayName || '—';
+        if (currentMember) { currentMember.pictureUrl = lineProfile.pictureUrl; renderDashboard(currentMember); }
+        syncLineProfile();
+      } catch(e) { console.warn('refresh LINE profile failed:', e); }
+    }
     if (lineProfile && lineProfile.userId) {
       await checkLineMember(lineProfile.userId, true);
       showToast(t('toast.refreshed') || '✓ อัปเดตข้อมูลแล้ว', 'success');
@@ -1328,9 +1341,24 @@ function fillFormFromMember(d) {
 // ════════════════════════════════════════════════
 function renderDashboard(d) {
   if (!d) return;
-  // Avatar — always use latest LINE pic if available
+  // Avatar — ใช้รูป LINE ล่าสุดเสมอ, ถ้าไม่มีให้ fallback เป็นตัวอักษรแรก
+  const avatarEl  = document.getElementById('dashAvatar');
+  const fbEl      = document.getElementById('dashAvatarFallback');
   const avatarSrc = lineProfile?.pictureUrl || d.pictureUrl || '';
-  document.getElementById('dashAvatar').src = avatarSrc;
+  const initial   = (d.firstName || d.lastName || '?').trim().charAt(0).toUpperCase();
+  if (avatarSrc) {
+    // bust cache เพื่อให้ได้รูปล่าสุดจาก LINE เสมอ
+    avatarEl.src = avatarSrc + (avatarSrc.indexOf('?') > -1 ? '&' : '?') + 'v=' + Date.now();
+    avatarEl.style.display = 'block';
+    if (fbEl) fbEl.style.display = 'none';
+    avatarEl.onerror = () => {
+      avatarEl.style.display = 'none';
+      if (fbEl) { fbEl.textContent = initial; fbEl.style.display = 'flex'; }
+    };
+  } else {
+    avatarEl.style.display = 'none';
+    if (fbEl) { fbEl.textContent = initial; fbEl.style.display = 'flex'; }
+  }
   document.getElementById('dashName').textContent = `คุณ ${d.firstName} ${d.lastName}`;
 
   // ใช้ tier + แต้มจาก Member Point sheet โดยตรง ไม่คำนวณ threshold
