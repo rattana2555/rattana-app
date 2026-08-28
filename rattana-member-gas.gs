@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════
-//  Rattana Member System — GAS v1.18
+//  Rattana Member System — GAS v1.19
 // ════════════════════════════════════════════════════════
 
 const SHEET_ID        = '1gbBrJtE36fX8TM7KC0RbXgPZI6AyNpbC3XhJ6uiLsOE';
@@ -41,17 +41,32 @@ function dateToISO(d) {
   return s;
 }
 
+// v1.19: ขยายคอลัมน์ให้พอ + เขียนหัวคอลัมน์ทุกครั้ง (ซ่อมของเดิมที่หัวหาย/ไม่ครบ)
+function ensureHeaders_(sheet) {
+  // 1) ขยายจำนวนคอลัมน์ให้ครบ 20 ก่อน ไม่งั้น getRange(...,20) จะ error
+  const need = HEADERS.length;
+  const have = sheet.getMaxColumns();
+  if (have < need) sheet.insertColumnsAfter(have, need - have);
+
+  // 2) เขียนหัวคอลัมน์ทับเสมอ ถ้ามีช่องไหนว่าง/ไม่ตรง
+  const cur = sheet.getRange(1, 1, 1, need).getValues()[0];
+  let fix = false;
+  for (let i = 0; i < need; i++) {
+    if (String(cur[i] || '').trim() !== HEADERS[i]) { fix = true; break; }
+  }
+  if (fix) {
+    sheet.getRange(1, 1, 1, need).setValues([HEADERS]);
+    sheet.getRange(1, 1, 1, need)
+      .setFontWeight('bold').setBackground('#0d1b3e').setFontColor('#ffffff');
+    sheet.setFrozenRows(1);
+  }
+}
+
 function getSheet() {
   const ss = SpreadsheetApp.openById(SHEET_ID);
   let sheet = ss.getSheetByName(SHEET_NAME);
-  if (!sheet) {
-    sheet = ss.insertSheet(SHEET_NAME);
-    sheet.appendRow(HEADERS);
-    sheet.getRange(1,1,1,HEADERS.length).setFontWeight('bold').setBackground('#0d1b3e').setFontColor('#ffffff');
-  } else if (!sheet.getLastRow() || sheet.getRange(1,1).getValue()==='') {
-    sheet.appendRow(HEADERS);
-    sheet.getRange(1,1,1,HEADERS.length).setFontWeight('bold').setBackground('#0d1b3e').setFontColor('#ffffff');
-  }
+  if (!sheet) sheet = ss.insertSheet(SHEET_NAME);
+  ensureHeaders_(sheet);
   // บังคับเป็น text: E เบอร์โทร, F วันเกิด, G ที่อยู่ (กัน "1/1" กลายเป็นวันที่),
   // H ตำบล, I อำเภอ, J จังหวัด, K ไปรษณีย์, Q เลขบัตร, T วันยินยอม
   ['E:E','F:F','G:G','H:H','I:I','J:J','K:K','Q:Q','T:T'].forEach(function(r){
@@ -180,7 +195,7 @@ function doGet(e) {
     }
 
     if (!p.userId && !p.phone) {
-      return ContentService.createTextOutput(JSON.stringify({status:'ok', msg:'GAS v1.18 running'})).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({status:'ok', msg:'GAS v1.19 running'})).setMimeType(ContentService.MimeType.JSON);
     }
 
     const sheet = getSheet();
@@ -343,9 +358,20 @@ function checkMismatch() {
     SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
+// v1.19: ซ่อมหัวคอลัมน์ด้วยมือ (เผื่อหัวหาย/คอลัมน์ไม่ครบ 20)
+function repairHeaders() {
+  const sheet = getSheet();
+  SpreadsheetApp.getUi().alert('ซ่อมหัวคอลัมน์เรียบร้อย',
+    'ชีท "' + SHEET_NAME + '" มีคอลัมน์ ' + sheet.getMaxColumns() + ' คอลัมน์\n' +
+    'หัวคอลัมน์ครบ ' + HEADERS.length + ' ช่อง (A–T)\n\n' +
+    'R = ยินยอมเงื่อนไข\nS = Consent Version\nT = วันยินยอม',
+    SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('🛠 Rattana Admin')
     .addItem('🔍 ตรวจสอบข้อมูล Members vs Member Point', 'checkMismatch')
+    .addItem('🩹 ซ่อมหัวคอลัมน์ (A–T)', 'repairHeaders')
     .addToUi();
 }
