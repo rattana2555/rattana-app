@@ -221,7 +221,7 @@
       <div class="brand-mark">R</div>
       <div>
         <div class="brand-text">RATTANA <span>MART</span></div>
-        <div class="version-tag">v1.19</div>
+        <div class="version-tag">v1.20</div>
       </div>
     </div>
     <div class="h-action" id="headerActions">
@@ -596,7 +596,8 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbwvg90LtBuCOLo6eTlihFPP
 const CACHE_KEY = 'rattanaMember_';
 const CONSENT_VERSION = 'v1.1';   // v1.18: bump → ทุกคนต้องกดยินยอมใหม่
 let pendingAfterConsent = null;
-let isSubmitting = false;      // v1.19: กันกดปุ่มซ้ำหลายรอบ
+let isSubmitting = false;      // v1.19: กันกดปุ่ม "สมัคร/บันทึก" ซ้ำ
+let consentBusy  = false;      // v1.20: กันกดปุ่ม "ยอมรับ" ซ้ำ (แยกกัน)
 let consentReachedBottom = false;
 
 // ════════════════════════════════════════════════
@@ -1131,8 +1132,7 @@ function setSubmitLock(on) {
     b.style.opacity = on ? '.55' : '';
     b.style.cursor  = on ? 'not-allowed' : '';
   }
-  const c = document.getElementById('btnConsentAccept');
-  if (c && on) { c.disabled = true; c.style.opacity = '.55'; c.style.cursor = 'not-allowed'; }
+  // v1.20: ไม่แตะปุ่มยอมรับ — showConsent() คุมสถานะปุ่มนั้นเอง (consentBusy กันกดซ้ำ)
 }
 
 function showConsent(afterFn) {
@@ -1226,8 +1226,8 @@ function initConsentHandlers() {
 }
 
 async function handleConsentAccept() {
-  if (isSubmitting) return;         // v1.19: กันกดยอมรับซ้ำ
-  isSubmitting = true;
+  if (consentBusy) return;          // v1.20: กันกดยอมรับซ้ำ (แยกจาก isSubmitting ของปุ่มสมัคร)
+  consentBusy = true;
   const cbtn = document.getElementById('btnConsentAccept');
   if (cbtn) { cbtn.disabled = true; cbtn.style.opacity = '.55'; cbtn.style.cursor = 'not-allowed'; }
   showSpinner(t('spinner.save'));
@@ -1259,7 +1259,7 @@ async function handleConsentAccept() {
   }
   // Continue
   hideSpinner();
-  isSubmitting = false;             // v1.19: ปลดล็อกก่อนส่งต่อ (sendMemberPayload จะล็อกเอง)
+  consentBusy = false;
   const next = pendingAfterConsent;
   pendingAfterConsent = null;
   if (next) next();
