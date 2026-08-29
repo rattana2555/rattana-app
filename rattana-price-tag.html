@@ -6238,7 +6238,123 @@ async function exportPoster(format){   // 'png' | 'jpeg' | 'pdf'
 posterRestore();
 posterInitUI();
 
+/* ═══════════════ STICKERS (shared across ALL features — v7.6) ═══════════════
+   Ready-made promo stickers (stickers/sticker-NN.png, transparent, same-origin → export-safe).
+   Click a thumbnail to drop one on the current page; drag to move; slider resizes; 🗑️ deletes.
+   Rendered as %-positioned children of each page (.poster-canvas/.flash-page/.promo-page/.pdf-page),
+   so they scale with the page in both preview and export. Stored per mode. */
+const RT_STICKERS = [
+  { id:1,  label:'สินค้าใหม่ NEW' }, { id:2,  label:'ว้าว!!' }, { id:3,  label:'ด่วน! จำนวนจำกัด' }, { id:4,  label:'ราคาถูกมาก' },
+  { id:5,  label:'โปรแรง! ช็อกราคา' }, { id:6,  label:'เฉพาะสมาชิก' }, { id:7,  label:'ลดแรงเวอร์' }, { id:8,  label:'ของดี มีคุณภาพ' },
+  { id:9,  label:'ส่งไว ถึงมือคุณ' }, { id:10, label:'มีสิทธิพิเศษ' }, { id:11, label:'ช้อปเลย! (มาสคอต)' }, { id:12, label:'ติดตามโปรก่อนใคร' },
+];
+const stickerSrc = id => `stickers/sticker-${String(id).padStart(2,'0')}.png`;
+let stickerState = {};   // modeKey → [ {k, sid, page, x, y, w} ]  (x,y,w = fractions of the page)
+let stickerSel = null;
+let stickerUid = 1;
+function stickerModeKey(){ return String(SHEET_CONFIG.perPage); }
+function stickerList(){ const m = stickerModeKey(); return stickerState[m] || (stickerState[m] = []); }
+function stickerRestore(){
+  try { stickerState = JSON.parse(localStorage.getItem('rattanaPriceTag_stickers') || '{}') || {}; } catch { stickerState = {}; }
+  let mx = 0; Object.values(stickerState).forEach(arr => (arr || []).forEach(s => { if (s.k > mx) mx = s.k; }));
+  stickerUid = mx + 1;
+}
+function stickerSave(){ safeSetItem('rattanaPriceTag_stickers', JSON.stringify(stickerState)); }
+function stickerPages(){ return Array.from(document.querySelectorAll('#pdfStage .poster-canvas, #pdfStage .flash-page, #pdfStage .promo-page, #pdfStage .pdf-page')); }
+function renderStickers(){
+  document.querySelectorAll('#pdfStage .rt-sticker').forEach(n => n.remove());
+  const pages = stickerPages(); if (!pages.length) return;
+  stickerList().forEach(inst => {
+    const pg = pages[inst.page] || pages[0]; if (!pg) return;
+    if (getComputedStyle(pg).position === 'static') pg.style.position = 'relative';
+    const w = document.createElement('div');
+    w.className = 'rt-sticker' + (stickerSel === inst.k ? ' rt-sel' : '');
+    w.dataset.k = inst.k;
+    w.style.cssText = `left:${(inst.x*100).toFixed(2)}%;top:${(inst.y*100).toFixed(2)}%;width:${(inst.w*100).toFixed(2)}%`;
+    w.innerHTML = `<img src="${stickerSrc(inst.sid)}" crossorigin="anonymous" alt="">`;
+    pg.appendChild(w);
+  });
+}
+function stickerBuildTray(){
+  const t = $('#stickerTray'); if (!t || t.dataset.built) return; t.dataset.built = '1';
+  t.innerHTML = RT_STICKERS.map(s => `<button type="button" class="sticker-thumb" title="${escapeAttr(s.label)}" onclick="stickerAdd(${s.id})"><img src="${stickerSrc(s.id)}" loading="lazy" alt="${escapeAttr(s.label)}"></button>`).join('');
+}
+function stickerAdd(sid){
+  if (!stickerPages().length){ showToast('เปิดพรีวิวก่อนแล้วค่อยเพิ่มสติ๊กเกอร์', 'warning'); return; }
+  const inst = { k: stickerUid++, sid, page: 0, x: 0.36, y: 0.34, w: 0.28 };
+  stickerList().push(inst); stickerSel = inst.k; stickerSave();
+  renderStickers(); stickerSyncCtl();
+  showToast('เพิ่มสติ๊กเกอร์แล้ว — ลากเพื่อย้าย · สไลเดอร์ปรับขนาด', 'success');
+}
+function stickerSelect(k){
+  stickerSel = k;
+  document.querySelectorAll('#pdfStage .rt-sticker').forEach(n => n.classList.toggle('rt-sel', +n.dataset.k === k));
+  stickerSyncCtl();
+}
+function stickerDeselect(){
+  if (stickerSel == null) return;
+  stickerSel = null;
+  document.querySelectorAll('#pdfStage .rt-sticker.rt-sel').forEach(n => n.classList.remove('rt-sel'));
+  stickerSyncCtl();
+}
+function stickerResize(v){
+  if (stickerSel == null) return;
+  const inst = stickerList().find(s => s.k === stickerSel); if (!inst) return;
+  inst.w = Math.max(0.05, Math.min(0.9, (+v || 22) / 100));
+  const node = document.querySelector(`#pdfStage .rt-sticker[data-k="${stickerSel}"]`);
+  if (node) node.style.width = (inst.w*100).toFixed(2) + '%';
+  if ($('#stickerSizeVal')) $('#stickerSizeVal').textContent = Math.round(inst.w*100) + '%';
+  stickerSave();
+}
+function stickerDeleteSel(){
+  if (stickerSel == null) return;
+  const list = stickerList(); const i = list.findIndex(s => s.k === stickerSel);
+  if (i >= 0) list.splice(i, 1);
+  stickerSel = null; stickerSave(); renderStickers(); stickerSyncCtl();
+}
+function stickerClearAll(){
+  if (!stickerList().length) return;
+  if (!confirm('ลบสติ๊กเกอร์ทั้งหมดในโหมดนี้?')) return;
+  stickerState[stickerModeKey()] = []; stickerSel = null; stickerSave(); renderStickers(); stickerSyncCtl();
+}
+function stickerSyncCtl(){
+  const has = stickerSel != null && stickerList().some(s => s.k === stickerSel);
+  if ($('#stickerCtl')) $('#stickerCtl').style.display = has ? '' : 'none';
+  if (has){ const inst = stickerList().find(s => s.k === stickerSel);
+    if (inst && $('#stickerSize')){ $('#stickerSize').value = Math.round(inst.w*100); if ($('#stickerSizeVal')) $('#stickerSizeVal').textContent = Math.round(inst.w*100)+'%'; } }
+}
+(function initStickerCanvas(){
+  const stage = $('#pdfStage'); if (!stage) return;
+  let drag = null;
+  stage.addEventListener('pointerdown', e => {
+    const el = e.target.closest('.rt-sticker');
+    if (!el){ stickerDeselect(); return; }
+    e.stopPropagation();   // capture phase → the feature canvas handlers must NOT fire on a sticker
+    const k = +el.dataset.k;
+    stickerSelect(k);
+    const inst = stickerList().find(s => s.k === k); if (!inst) return;
+    const pg = el.parentElement; if (!pg) return;
+    const r = pg.getBoundingClientRect();
+    drag = { k, inst, pw: r.width || 1, ph: r.height || 1, sx: e.clientX, sy: e.clientY, x0: inst.x, y0: inst.y, pid: e.pointerId };
+    try { stage.setPointerCapture(e.pointerId); } catch {}
+    e.preventDefault();
+  }, true);
+  stage.addEventListener('pointermove', e => {
+    if (!drag || (drag.pid != null && e.pointerId !== drag.pid)) return;
+    drag.inst.x = Math.max(-0.25, Math.min(1, drag.x0 + (e.clientX - drag.sx) / drag.pw));
+    drag.inst.y = Math.max(-0.25, Math.min(1, drag.y0 + (e.clientY - drag.sy) / drag.ph));
+    const node = document.querySelector(`#pdfStage .rt-sticker[data-k="${drag.k}"]`);
+    if (node){ node.style.left = (drag.inst.x*100).toFixed(2)+'%'; node.style.top = (drag.inst.y*100).toFixed(2)+'%'; }
+  }, true);
+  const end = e => { if (!drag) return; if (drag.pid != null && e.pointerId !== drag.pid) return; drag = null; stickerSave(); };
+  stage.addEventListener('pointerup', end, true);
+  stage.addEventListener('pointercancel', end, true);
+})();
+stickerRestore();
+stickerBuildTray();
+
 function buildPdfPreview() {
+  setTimeout(renderStickers, 0);   // v7.6 — re-apply stickers after every preview (re)build (covers all modes)
   const stage = $('#pdfStage');
   const isFlash = isFlashMode();
   const isPromo = isPromoMode();
