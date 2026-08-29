@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Consent UI Preview</title>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --navy:#0d1b3e; --gold:#c8a02e; --line:#06C755; --danger:#ef4444;
+      --bg:#f4f6fb; --text:#0f172a; --text-2:#64748b; --card:#fff; --border:#e2e8f0;
+      --r-sm:8px; --r-md:14px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Kanit',sans-serif;background:var(--bg);color:var(--text);padding:20px 12px;min-height:100vh}
+    .head{max-width:900px;margin:0 auto 28px;text-align:center}
+    .head h1{font-size:22px;color:var(--navy);margin-bottom:6px}
+    .head p{color:var(--text-2);font-size:13px}
+    .grid{max-width:900px;margin:0 auto;display:grid;grid-template-columns:1fr;gap:24px}
+    @media(min-width:900px){.grid{grid-template-columns:1fr 1fr}}
+    .demo-wrap{background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.05);cursor:pointer;transition:transform .15s}
+    .demo-wrap:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.1)}
+    .demo-wrap.selected{outline:3px solid var(--gold);outline-offset:2px}
+    .demo-label{background:var(--navy);color:#fff;padding:10px 16px}
+    .demo-label .n{font-size:14px;font-weight:700}
+    .demo-label .d{font-size:11px;opacity:.7;margin-top:2px}
+    .demo-body{padding:16px;background:var(--bg)}
+
+    /* ── Shared form-card look ── */
+    .form-card{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+    .form-head{background:linear-gradient(135deg,var(--navy),#1a2f5e);color:#fff;padding:12px 16px}
+    .form-head .t{font-size:14px;font-weight:700}
+    .form-body{padding:14px}
+
+    /* ── Design 1: Simple checkbox + links ── */
+    .d1-check{display:flex;align-items:flex-start;gap:10px;padding:12px;background:rgba(6,199,85,.06);border:1.5px solid #e2e8f0;border-radius:10px}
+    .d1-check input{width:22px;height:22px;accent-color:var(--line);margin-top:2px;flex-shrink:0}
+    .d1-check .txt{font-size:13px;line-height:1.5}
+    .d1-check .txt a{color:var(--navy);font-weight:700;text-decoration:underline}
+    .d1-req{color:var(--danger)}
+
+    /* ── Design 2: Two separate checkboxes ── */
+    .d2-item{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:#fff;border:1.5px solid var(--border);border-radius:10px;margin-bottom:8px;cursor:pointer;transition:border-color .15s}
+    .d2-item:hover{border-color:var(--gold)}
+    .d2-item.checked{border-color:var(--line);background:rgba(6,199,85,.05)}
+    .d2-item input{width:20px;height:20px;accent-color:var(--line);margin-top:2px;flex-shrink:0}
+    .d2-item .body{flex:1;font-size:13px;line-height:1.4}
+    .d2-item .body strong{display:block;color:var(--navy);margin-bottom:2px}
+    .d2-item .body a{color:var(--gold);text-decoration:underline;font-size:12px}
+
+    /* ── Design 3: Scrollable T&C box ── */
+    .d3-box{border:1.5px solid var(--border);border-radius:10px;padding:12px;height:120px;overflow-y:auto;font-size:12px;line-height:1.6;color:var(--text-2);background:#fafbfc;margin-bottom:10px}
+    .d3-check{display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(6,199,85,.06);border-radius:8px}
+    .d3-check input{width:20px;height:20px;accent-color:var(--line)}
+
+    /* ── Design 4: Modal popup style ── */
+    .d4-preview{position:relative;height:280px;border-radius:12px;overflow:hidden;background:#fff;border:1px solid var(--border)}
+    .d4-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;padding:14px}
+    .d4-modal{background:#fff;border-radius:14px;width:100%;max-width:280px;padding:16px;box-shadow:0 20px 40px rgba(0,0,0,.3)}
+    .d4-modal h3{font-size:15px;color:var(--navy);margin-bottom:8px}
+    .d4-modal .body{font-size:11px;color:var(--text-2);line-height:1.5;max-height:100px;overflow-y:auto;padding-right:6px}
+    .d4-modal .foot{display:flex;gap:6px;margin-top:12px}
+    .d4-modal .foot button{flex:1;padding:8px;border:none;border-radius:8px;font-family:'Kanit',sans-serif;font-size:12px;font-weight:600;cursor:pointer}
+    .d4-modal .btn-agree{background:var(--line);color:#fff}
+    .d4-modal .btn-reject{background:#e2e8f0;color:var(--text-2)}
+
+    /* ── Design 5: Accordion / expandable ── */
+    .d5-item{border:1.5px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden;background:#fff}
+    .d5-header{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;background:#fafbfc}
+    .d5-header input{width:20px;height:20px;accent-color:var(--line)}
+    .d5-header .title{flex:1;font-size:13px;font-weight:600;color:var(--navy)}
+    .d5-header .arrow{color:var(--text-2);transition:transform .2s}
+    .d5-item.open .d5-header .arrow{transform:rotate(180deg)}
+    .d5-content{padding:0 14px;max-height:0;overflow:hidden;transition:max-height .3s,padding .3s}
+    .d5-item.open .d5-content{padding:12px 14px;max-height:200px}
+    .d5-content p{font-size:11px;color:var(--text-2);line-height:1.6}
+
+    /* ── Design 6: Compact one-liner ── */
+    .d6{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fff;border:1.5px dashed var(--border);border-radius:10px}
+    .d6 input{width:20px;height:20px;accent-color:var(--line)}
+    .d6 .t{font-size:12px;line-height:1.4}
+    .d6 .t a{color:var(--gold);text-decoration:underline;font-weight:600}
+
+    .sel-bar{position:fixed;bottom:0;left:0;right:0;background:var(--navy);color:#fff;padding:14px 16px;text-align:center;font-size:14px;display:none;z-index:100}
+    .sel-bar.show{display:block}
+    .sel-bar code{background:rgba(200,160,46,.25);padding:4px 12px;border-radius:6px;color:var(--gold);font-weight:700}
+
+    .disclaimer{max-width:900px;margin:20px auto 80px;padding:14px 16px;background:#fff8e1;border-left:3px solid var(--gold);border-radius:8px;font-size:12px;color:#78350f;line-height:1.5}
+  </style>
+</head>
+<body>
+
+<div class="head">
+  <h1>🔒 การยินยอมข้อกำหนดและเงื่อนไข</h1>
+  <p>เลือกรูปแบบที่ชอบ — บอกเลขในแชท</p>
+</div>
+
+<div class="grid">
+
+  <!-- Design 1 -->
+  <div class="demo-wrap" onclick="pick(1)">
+    <div class="demo-label">
+      <div class="n">1. Simple Checkbox + ลิงก์</div>
+      <div class="d">เรียบ ง่าย ใช้พื้นที่น้อยที่สุด</div>
+    </div>
+    <div class="demo-body">
+      <div class="form-card">
+        <div class="form-body">
+          <div class="d1-check">
+            <input type="checkbox" checked>
+            <div class="txt">
+              ข้าพเจ้ายอมรับ <a href="#">ข้อกำหนดและเงื่อนไข</a> และ
+              <a href="#">นโยบายความเป็นส่วนตัว</a>
+              ของสมาชิกร้านค้า Rattana Mart <span class="d1-req">*</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Design 2 -->
+  <div class="demo-wrap" onclick="pick(2)">
+    <div class="demo-label">
+      <div class="n">2. Two Separate Checkboxes</div>
+      <div class="d">แยกกันชัด — ลูกค้าเลือกยินยอมแต่ละอันได้</div>
+    </div>
+    <div class="demo-body">
+      <div class="form-card">
+        <div class="form-body">
+          <label class="d2-item checked">
+            <input type="checkbox" checked>
+            <div class="body">
+              <strong>ข้อกำหนดและเงื่อนไขสมาชิก</strong>
+              ยอมรับเงื่อนไขการเป็นสมาชิก · <a href="#">อ่านเพิ่ม</a>
+            </div>
+          </label>
+          <label class="d2-item checked">
+            <input type="checkbox" checked>
+            <div class="body">
+              <strong>นโยบายความเป็นส่วนตัว</strong>
+              ยินยอมให้เก็บ/ใช้ข้อมูลตามที่ระบุ · <a href="#">อ่านเพิ่ม</a>
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Design 3 -->
+  <div class="demo-wrap" onclick="pick(3)">
+    <div class="demo-label">
+      <div class="n">3. Scrollable Text Box</div>
+      <div class="d">โชว์เนื้อหาให้อ่านในหน้าเลย</div>
+    </div>
+    <div class="demo-body">
+      <div class="form-card">
+        <div class="form-body">
+          <div class="d3-box">
+            <strong>ข้อกำหนดและเงื่อนไขสมาชิก Rattana Mart</strong><br><br>
+            1. สมาชิกยินยอมให้บริษัทเก็บและใช้ข้อมูลส่วนบุคคลตามที่ระบุในนโยบายความเป็นส่วนตัว<br>
+            2. ข้อมูลจะถูกใช้เพื่อการให้บริการสมาชิก การสะสมแต้ม และการติดต่อสื่อสาร<br>
+            3. บริษัทจะไม่เปิดเผยข้อมูลของสมาชิกให้บุคคลที่สาม ยกเว้นได้รับความยินยอม<br>
+            4. สมาชิกสามารถขอเข้าถึง แก้ไข หรือลบข้อมูลของตนได้ตลอดเวลา<br>
+            5. บริษัทขอสงวนสิทธิ์ในการเปลี่ยนแปลงเงื่อนไขโดยจะแจ้งให้ทราบล่วงหน้า...
+          </div>
+          <label class="d3-check">
+            <input type="checkbox" checked>
+            <span style="font-size:13px">ข้าพเจ้าอ่านและยอมรับข้อกำหนดข้างต้น</span>
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Design 4 -->
+  <div class="demo-wrap" onclick="pick(4)">
+    <div class="demo-label">
+      <div class="n">4. Popup Modal (บังคับเห็นครั้งแรก)</div>
+      <div class="d">เด้งเต็มจอครั้งแรกก่อนกรอกฟอร์ม</div>
+    </div>
+    <div class="demo-body">
+      <div class="d4-preview">
+        <div class="d4-backdrop">
+          <div class="d4-modal">
+            <h3>🔒 ข้อกำหนดและนโยบาย</h3>
+            <div class="body">
+              กรุณาอ่านและยอมรับข้อกำหนดและเงื่อนไขสมาชิก และนโยบายความเป็นส่วนตัว ก่อนสมัคร<br><br>
+              บริษัทจะเก็บข้อมูลของท่านเพื่อใช้ในการให้บริการและการสะสมแต้มเท่านั้น...
+            </div>
+            <div class="foot">
+              <button class="btn-reject">ปฏิเสธ</button>
+              <button class="btn-agree">ยอมรับ</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Design 5 -->
+  <div class="demo-wrap" onclick="pick(5)">
+    <div class="demo-label">
+      <div class="n">5. Accordion (คลิกกางเนื้อหา)</div>
+      <div class="d">อยากอ่านค่อยกาง — ประหยัดพื้นที่</div>
+    </div>
+    <div class="demo-body">
+      <div class="form-card">
+        <div class="form-body">
+          <div class="d5-item open">
+            <div class="d5-header">
+              <input type="checkbox" checked>
+              <div class="title">ข้อกำหนดและเงื่อนไข</div>
+              <span class="arrow">▼</span>
+            </div>
+            <div class="d5-content">
+              <p>ยินยอมให้บริษัทเก็บข้อมูลเพื่อใช้ในการให้บริการสมาชิก การสะสมแต้ม การส่งข่าวสาร และกิจกรรมส่งเสริมการขาย...</p>
+            </div>
+          </div>
+          <div class="d5-item">
+            <div class="d5-header">
+              <input type="checkbox" checked>
+              <div class="title">นโยบายความเป็นส่วนตัว (PDPA)</div>
+              <span class="arrow">▼</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Design 6 -->
+  <div class="demo-wrap" onclick="pick(6)">
+    <div class="demo-label">
+      <div class="n">6. Compact Inline (ประหยัดที่สุด)</div>
+      <div class="d">แถบเดียว มีลิงก์เปิด modal ดู</div>
+    </div>
+    <div class="demo-body">
+      <div class="form-card">
+        <div class="form-body">
+          <div class="d6">
+            <input type="checkbox" checked>
+            <div class="t">
+              ยอมรับ <a href="#">ข้อกำหนด</a> + <a href="#">นโยบายความเป็นส่วนตัว</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="disclaimer">
+  💡 <strong>หมายเหตุ:</strong> ตอนนี้เป็นแค่ mockup — ยังไม่ได้แก้แอปจริง เลือกแบบที่ชอบก่อน แล้วผมจะเอาไปทำจริง พร้อมกำหนดเนื้อหาข้อกำหนด/นโยบายที่ต้องการด้วย
+</div>
+
+<div class="sel-bar" id="bar"></div>
+
+<script>
+function pick(n) {
+  document.querySelectorAll('.demo-wrap').forEach((w,i) => w.classList.toggle('selected', i+1 === n));
+  const bar = document.getElementById('bar');
+  bar.innerHTML = `✓ เลือกแบบ <code>#${n}</code> — บอกเลขนี้ในแชท`;
+  bar.classList.add('show');
+}
+</script>
+
+</body>
+</html>
