@@ -221,7 +221,7 @@
       <div class="brand-mark">R</div>
       <div>
         <div class="brand-text">RATTANA <span>MART</span></div>
-        <div class="version-tag">v1.18</div>
+        <div class="version-tag">v1.19</div>
       </div>
     </div>
     <div class="h-action" id="headerActions">
@@ -596,6 +596,7 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbwvg90LtBuCOLo6eTlihFPP
 const CACHE_KEY = 'rattanaMember_';
 const CONSENT_VERSION = 'v1.1';   // v1.18: bump → ทุกคนต้องกดยินยอมใหม่
 let pendingAfterConsent = null;
+let isSubmitting = false;      // v1.19: กันกดปุ่มซ้ำหลายรอบ
 let consentReachedBottom = false;
 
 // ════════════════════════════════════════════════
@@ -1121,6 +1122,19 @@ function hasValidConsent(m) {
   return m && m.consent === true && m.consentVersion === CONSENT_VERSION;
 }
 
+// v1.19: ล็อก/ปลดล็อกปุ่มบันทึก กันกดซ้ำหลายรอบ
+function setSubmitLock(on) {
+  isSubmitting = on;
+  const b = document.getElementById('btnSubmit');
+  if (b) {
+    b.disabled = on;
+    b.style.opacity = on ? '.55' : '';
+    b.style.cursor  = on ? 'not-allowed' : '';
+  }
+  const c = document.getElementById('btnConsentAccept');
+  if (c && on) { c.disabled = true; c.style.opacity = '.55'; c.style.cursor = 'not-allowed'; }
+}
+
 function showConsent(afterFn) {
   pendingAfterConsent = afterFn;
   consentReachedBottom = false;
@@ -1149,8 +1163,7 @@ function showConsent(afterFn) {
 // ยกเลิก consent — กลับไปหน้าที่มาจาก
 function cancelConsent() {
   pendingAfterConsent = null;
-  const btn = document.getElementById('btnSubmit');
-  if (btn) btn.disabled = false;
+  setSubmitLock(false);              // v1.19: ยกเลิก consent → ปลดล็อกให้กดใหม่ได้
   if (document.getElementById('firstName').value.trim()) {
     showScreen('registerScreen');   // กำลังกรอกฟอร์มอยู่ → กลับไปฟอร์ม
   } else if (currentMember) {
@@ -1213,6 +1226,11 @@ function initConsentHandlers() {
 }
 
 async function handleConsentAccept() {
+  if (isSubmitting) return;         // v1.19: กันกดยอมรับซ้ำ
+  isSubmitting = true;
+  const cbtn = document.getElementById('btnConsentAccept');
+  if (cbtn) { cbtn.disabled = true; cbtn.style.opacity = '.55'; cbtn.style.cursor = 'not-allowed'; }
+  showSpinner(t('spinner.save'));
   const consentInfo = {
     consent: true,
     consentVersion: CONSENT_VERSION,
@@ -1240,6 +1258,8 @@ async function handleConsentAccept() {
     window._pendingConsent = consentInfo;
   }
   // Continue
+  hideSpinner();
+  isSubmitting = false;             // v1.19: ปลดล็อกก่อนส่งต่อ (sendMemberPayload จะล็อกเอง)
   const next = pendingAfterConsent;
   pendingAfterConsent = null;
   if (next) next();
@@ -1590,6 +1610,7 @@ async function checkExistingPoint() {
 //  Submit
 // ════════════════════════════════════════════════
 async function submitForm() {
+  if (isSubmitting) return;          // v1.19: กำลังบันทึกอยู่ ห้ามยิงซ้ำ
   const firstName  = document.getElementById('firstName').value.trim();
   const lastName   = document.getElementById('lastName').value.trim();
   const phone      = document.getElementById('phone').value.trim();
@@ -1620,6 +1641,8 @@ async function submitForm() {
   if (!sourceRadio)                 { showError(t('err.source')); return; }
   if (sourceRadio.value === 'other' && !sourceOther) { showError(t('err.specify')); return; }
   if (sourceRadio.value.indexOf('พนักงานแนะนำ') > -1 && !sourceStaff) { showError(t('err.staffName')); return; }
+
+  setSubmitLock(true);               // v1.19: ล็อกทันทีที่ข้อมูลผ่าน validation
 
   // ─── Hybrid: ตัดสินใจว่าจะส่ง lineUserId ไหม ───
   // ถ้า LINE มีสมาชิกหลักอยู่แล้ว และเรากำลังแก้/สมัครสมาชิกคนอื่น → ไม่ส่ง LINE
@@ -1680,7 +1703,7 @@ async function submitForm() {
 
 async function sendMemberPayload(payload) {
   showSpinner(t('spinner.save'));
-  document.getElementById('btnSubmit').disabled = true;
+  setSubmitLock(true);
   try {
     const res = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload) });
     const result = await res.json();
@@ -1695,14 +1718,14 @@ async function sendMemberPayload(payload) {
       showToast(t(isEditMode ? 'success.titleUpdate' : 'success.title'), 'success');
     } else if (result.status === 'conflict') {
       showError(result.message || 'บัญชีนี้มีอยู่แล้ว');
-      document.getElementById('btnSubmit').disabled = false;
+      setSubmitLock(false);
     } else {
       showError(t('err.generic'));
-      document.getElementById('btnSubmit').disabled = false;
+      setSubmitLock(false);
     }
   } catch(e) {
     showError(t('err.connect'));
-    document.getElementById('btnSubmit').disabled = false;
+    setSubmitLock(false);
   } finally { hideSpinner(); }
 }
 function showError(msg) {

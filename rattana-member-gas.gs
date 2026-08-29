@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════
-//  Rattana Member System — GAS v1.19
+//  Rattana Member System — GAS v1.20
 // ════════════════════════════════════════════════════════
 
 const SHEET_ID        = '1gbBrJtE36fX8TM7KC0RbXgPZI6AyNpbC3XhJ6uiLsOE';
@@ -156,6 +156,12 @@ function findRowBy(sheet, predicate) {
 function notifyDiscord(data, isNew) {
   if (!DISCORD_WEBHOOK) return;
   try {
+    // v1.20: กันแจ้งซ้ำ — เบอร์เดิม + สถานะเดิม ภายใน 90 วินาที ส่งครั้งเดียว
+    var dupKey = 'dc_' + (isNew ? 'n_' : 'u_') + String(data.phone || '');
+    var cache  = CacheService.getScriptCache();
+    if (cache.get(dupKey)) { Logger.log('Discord skipped (duplicate): ' + dupKey); return; }
+    cache.put(dupKey, '1', 90);
+
     const title = isNew ? '🎉 สมาชิกใหม่!' : '✏️ แก้ไขข้อมูลสมาชิก';
     const fullName = (String(data.firstName || '') + ' ' + String(data.lastName || '')).trim();
     const text = title + '\n```\n' +
@@ -205,7 +211,7 @@ function doGet(e) {
     }
 
     if (!p.userId && !p.phone) {
-      return ContentService.createTextOutput(JSON.stringify({status:'ok', msg:'GAS v1.19 running'})).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({status:'ok', msg:'GAS v1.20 running'})).setMimeType(ContentService.MimeType.JSON);
     }
 
     const sheet = getSheet();
@@ -288,7 +294,8 @@ function doPost(e) {
       sheet.getRange(row, c).setNumberFormat('@STRING@');
     });
 
-    notifyDiscord(data, isNew);
+    // v1.20: consent-update (กดยอมรับย้อนหลัง) ไม่ต้องแจ้ง Discord
+    if (data.mode !== 'consent-update') notifyDiscord(data, isNew);
 
     return ContentService.createTextOutput(JSON.stringify({status:'ok'})).setMimeType(ContentService.MimeType.JSON);
   } catch(err) {
