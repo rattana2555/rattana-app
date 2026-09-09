@@ -4045,6 +4045,145 @@ function toggleInkSave() {
   if ($('#tab-print')?.classList.contains('active'))  buildPdfPreview();
 }
 
+/* ====================================================================
+   v7.16 — Floating Quick-Settings panel
+   Mirrors the ตั้งค่า tab into a side panel on the ออกแบบ/พิมพ์ pages,
+   driving the SAME setter functions (one source of truth). Settings
+   that only re-style apply live; those that need fresh sheet data
+   (ราคา/หน่วย/คลัง) queue a soft reload that KEEPS the selection + designs.
+   ==================================================================== */
+// Re-render whichever preview is on screen right now (design OR print)
+function rerenderActivePreview() {
+  if ($('#tab-design')?.classList.contains('active')) renderDesignStage();
+  else if ($('#tab-print')?.classList.contains('active')) buildPdfPreview();
+}
+// After a setter that already handled the print tab: also refresh the design tab
+function qsAfterLive() {
+  if ($('#tab-design')?.classList.contains('active')) renderDesignStage();
+}
+function toggleQuickSettings(open) {
+  const p = $('#quickSettings'), o = $('#qsOverlay'), fab = $('#qsFab');
+  if (!p) return;
+  const show = (open === undefined) ? !p.classList.contains('open') : !!open;
+  if (show) qsSync();
+  p.classList.toggle('open', show);
+  if (o) o.classList.toggle('open', show);
+  p.setAttribute('aria-hidden', show ? 'false' : 'true');
+  if (fab) fab.setAttribute('aria-expanded', show ? 'true' : 'false');
+}
+function qsShowSec(name) {
+  document.querySelectorAll('#qsChips .qs-chip').forEach(c => c.classList.toggle('active', c.dataset.sec === name));
+  document.querySelectorAll('#quickSettings .qs-sec').forEach(s => s.classList.toggle('active', s.dataset.sec === name));
+  const b = $('#qsBody'); if (b) b.scrollTop = 0;
+}
+// Fill the panel-only galleries once, reusing the same data + classes as the setup tab
+function qsFillGalleries() {
+  const once = (id, html) => { const el = document.getElementById(id); if (el && !el.dataset.filled) { el.innerHTML = html; el.dataset.filled = '1'; } };
+  if (typeof PROMO_GRADIENTS !== 'undefined')
+    once('qsPromoGradients', PROMO_GRADIENTS.map(([name, val]) =>
+      `<button type="button" title="${escapeAttr(name)}" onclick="applyPromoBg('${val}','${escapeAttr(name)}');qsAfterLive()" style="width:36px;height:26px;border-radius:6px;border:1.5px solid var(--border);cursor:pointer;background:${val || 'linear-gradient(135deg,#0a1428,#0d1b3e,#1e293b)'}"></button>`).join(''));
+  if (typeof PAPER_COLORS !== 'undefined')
+    once('qsPaperSwatches', PAPER_COLORS.map(c =>
+      `<button type="button" title="${c}" onclick="applyPaperBg('${c}');qsAfterLive()" style="width:26px;height:26px;border-radius:6px;border:1.5px solid var(--border);cursor:pointer;background:${c}"></button>`).join(''));
+  if (typeof AI_BG_GALLERY !== 'undefined')
+    once('qsAiBgGrid', AI_BG_GALLERY.map(item =>
+      `<div class="ai-bg-item" data-url="${escapeAttr(item.url)}" style="background-image:url('${escapeAttr(item.url)}')" onclick="applyPromoBg('${escapeAttr(item.url)}','${escapeAttr(item.label)}');qsAfterLive()"><div class="ai-bg-item-label">${escapeHtml(item.label)}</div></div>`).join(''));
+  if (typeof AI_TITLE_PRESETS !== 'undefined')
+    once('qsAiTitleChips', AI_TITLE_PRESETS.map(t =>
+      `<button class="ai-title-chip" onclick="applyPromoTitle('${escapeAttr(t)}');qsAfterLive()">${escapeHtml(t)}</button>`).join(''));
+}
+// Copy current config into the panel controls (called every time it opens)
+function qsSync() {
+  const g = id => document.getElementById(id);
+  qsFillGalleries();
+  if (g('qsPriceTier'))     g('qsPriceTier').value     = SHEET_CONFIG.priceTier;
+  if (g('qsSalePriceTier')) g('qsSalePriceTier').value = SHEET_CONFIG.salePriceTier || '';
+  if (g('qsUnitPref'))      g('qsUnitPref').value      = SHEET_CONFIG.unitPref;
+  document.querySelectorAll('#qsMultiUnits input').forEach(c => { c.checked = (SHEET_CONFIG.multiUnits || []).includes(c.value); });
+  if (g('qsPerPage'))       g('qsPerPage').value       = String(SHEET_CONFIG.perPage);
+  if (g('qsPromoTitle'))    g('qsPromoTitle').value    = SHEET_CONFIG.promoTitle || '';
+  if (g('qsPromoSubtitle')) g('qsPromoSubtitle').value = SHEET_CONFIG.promoSubtitle || '';
+  if (g('qsPromoStart'))    g('qsPromoStart').value    = SHEET_CONFIG.promoStart || '';
+  if (g('qsPromoEnd'))      g('qsPromoEnd').value      = SHEET_CONFIG.promoEnd || '';
+  if (g('qsPromoBg'))       g('qsPromoBg').value       = SHEET_CONFIG.promoBg || '';
+  if (g('qsPromoColor') && /^#[0-9a-fA-F]{6}$/.test(SHEET_CONFIG.promoBg || '')) g('qsPromoColor').value = SHEET_CONFIG.promoBg;
+  const sc = Math.round((SHEET_CONFIG.promoScale || 1) * 100);
+  if (g('qsPromoScale'))    g('qsPromoScale').value    = sc;
+  if (g('qsPromoScaleVal')) g('qsPromoScaleVal').textContent = sc + '%';
+  if (g('qsPaperBg') && /^#[0-9a-fA-F]{6}$/.test(SHEET_CONFIG.paperBg || '')) g('qsPaperBg').value = SHEET_CONFIG.paperBg;
+  if (g('qsFlashTemplate')) g('qsFlashTemplate').value = SHEET_CONFIG.flashTemplate || '';
+  if (typeof initFlashBgSwatches === 'function') initFlashBgSwatches();
+  if (g('qsWarehouse'))     g('qsWarehouse').value     = SHEET_CONFIG.warehouse;
+  const ns = g('qsNewSkuDays');
+  if (ns) { if (!ns.options.length && typeof NEWSKU_OPTIONS !== 'undefined') ns.innerHTML = NEWSKU_OPTIONS.map(o => `<option value="${o.d}">${escapeHtml(o.label)} (${o.d} วัน)</option>`).join(''); ns.value = String(newSkuDays()); }
+  if (g('qsInkSave'))       g('qsInkSave').checked      = document.body.classList.contains('ink-save');
+  qsSyncHints();
+}
+// Show which sections don't affect the current mode
+function qsSyncHints() {
+  const cur = String(SHEET_CONFIG.perPage);
+  const lbl = (typeof MODE_LABELS !== 'undefined' && MODE_LABELS[cur]) || cur;
+  if ($('#qsModeNow')) $('#qsModeNow').textContent = lbl;
+  const rel = (el, ok, msg) => { if (!el) return; el.hidden = ok; if (!ok) el.textContent = msg; };
+  rel($('#qsHeaderRel'), (cur === '12' || cur === '16' || cur === 'promo'), `ℹ️ หัวกระดาษโปรใช้กับโหมด 12/16 ป้าย · ตอนนี้: ${lbl}`);
+  rel($('#qsFlashRel'),  (cur === 'flash6' || cur === 'flash12'), `ℹ️ พื้นหลัง Flash ใช้กับโหมด Flash Sale · ตอนนี้: ${lbl}`);
+  rel($('#qsNewSkuRel'), (cur === 'newsku'), `ℹ️ ช่วงสินค้าใหม่ใช้กับโหมดสินค้าใหม่ · ตอนนี้: ${lbl}`);
+}
+// ---- live settings (mirror into the setup control, then call the shared setter) ----
+function qsMultiUnitToggle() {
+  document.querySelectorAll('#qsMultiUnits input').forEach(m => {
+    const c = document.querySelector(`#cfgMultiUnits input[value="${m.value}"]`);
+    if (c) c.checked = m.checked;
+  });
+  onMultiUnitToggle();   // reads #cfgMultiUnits, re-renders design + print
+}
+function qsPickMode(v) { pickMode(v); qsSyncHints(); }
+function qsPromoField(field, val) {
+  SHEET_CONFIG[field] = val;
+  const map = { promoTitle: '#cfgPromoTitle', promoSubtitle: '#cfgPromoSubtitle', promoStart: '#cfgPromoStart', promoEnd: '#cfgPromoEnd' };
+  const el = $(map[field]); if (el) el.value = val;
+  const cfg = JSON.parse(localStorage.getItem(STORAGE.config) || '{}'); cfg[field] = val; safeSetItem(STORAGE.config, JSON.stringify(cfg));
+  rerenderActivePreview();
+}
+function qsSetNewSkuDays(v) {
+  if ($('#cfgNewSkuDays')) { if (typeof initNewSkuOptions === 'function') initNewSkuOptions(); $('#cfgNewSkuDays').value = String(v); }
+  setNewSkuDays(v);
+  qsAfterLive();
+}
+function qsInkSave(on) {
+  if ($('#cfgInkSave')) $('#cfgInkSave').checked = on;
+  toggleInkSave();
+}
+// ---- reload-needed settings (queue, then soft reload keeping selection + designs) ----
+const qsPendingReload = new Set();
+function qsMarkReload(field, val) {
+  const map = { priceTier: '#cfgPriceTier', salePriceTier: '#cfgSalePriceTier', unitPref: '#cfgUnitPref', warehouse: '#cfgWarehouse' };
+  const el = $(map[field]); if (el) el.value = val;
+  qsPendingReload.add(field);
+  qsUpdateApplyBar();
+}
+function qsUpdateApplyBar() {
+  const bar = $('#qsApplyBar'), fab = $('#qsFab');
+  const names = { priceTier: 'ระดับราคาปกติ', salePriceTier: 'ระดับราคาลด', unitPref: 'ลำดับหน่วย', warehouse: 'คลังสินค้า' };
+  if (qsPendingReload.size) {
+    if ($('#qsPendingList')) $('#qsPendingList').textContent = [...qsPendingReload].map(f => names[f]).join(', ');
+    if (bar) bar.hidden = false;
+    if (fab) fab.classList.add('pending');
+  } else {
+    if (bar) bar.hidden = true;
+    if (fab) fab.classList.remove('pending');
+  }
+}
+async function qsReloadNow() {
+  qsPendingReload.clear();
+  qsUpdateApplyBar();
+  showSpinner('กำลังอัพเดตตามการตั้งค่า...');
+  try { await loadProducts({ keepSelection: true }); } catch (e) { console.error(e); }
+  hideSpinner();
+  rerenderActivePreview();
+  showToast('อัพเดตตามการตั้งค่าใหม่แล้ว ✓ (เก็บสินค้า + ดีไซน์เดิมไว้)', 'success');
+}
+
 /* ============== v4.0 — Image scaling: page-wide OR per-image (click to select) ============== */
 let imgScaleGlobal = 100;               // page-wide scale %
 let imgScaleOverrides = {};             // { sku: pct } per-image overrides
