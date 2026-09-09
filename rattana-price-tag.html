@@ -4533,24 +4533,42 @@ async function loadProducts(opts = {}) {
     // Cache slimmed products (drops allCodes etc.) — safe against quota limits
     const saved = safeSetItem(STORAGE.cache, JSON.stringify({ products: products.map(slimProduct), ts: Date.now() }));
     if (!saved) showToast('ℹ️ ข้อมูลเยอะเกินกว่าจะ cache — จะโหลดใหม่ทุกครั้ง (ใช้งานได้ปกติ)', 'info');
-    if (opts.keepSelection) {
-      // v7.16 — soft reload from the ปรับแต่งด่วน panel: keep the current selection + per-tag
-      // designs (tplOverrides); just drop any sku that no longer exists in the refreshed data.
+    if (opts.keepSelection && prevProducts) {
+      // v7.16 — soft reload from the ปรับแต่งด่วน panel: keep the current selection + per-tag designs.
+      // A product's p.sku is the barcode of its chosen unit, which changes when ระดับราคา/หน่วย changes,
+      // so we CAN'T match on sku alone. Re-map old sku → new sku via a unit-INDEPENDENT identity
+      // (name + image + brand), then keep only what still exists. No-barcode positional ids (__row*)
+      // can't be re-identified across a refetch, so they're dropped (same as a full reload would).
+      const idOf = p => `${p.name || ''}|${p.image || ''}|${p.brand || ''}`;
+      const newByIdentity = new Map();
+      products.forEach(p => { const k = idOf(p); if (!newByIdentity.has(k)) newByIdentity.set(k, p.sku); });
+      const remap = new Map();   // old sku → new sku
+      prevProducts.forEach(p => { if (p.sku && !String(p.sku).startsWith('__row')) { const n = newByIdentity.get(idOf(p)); if (n) remap.set(p.sku, n); } });
       const live = new Set(products.map(p => p.sku));
-      for (const s of [...selectedSkus]) if (!live.has(s)) selectedSkus.delete(s);
-      for (const s of Object.keys(tplOverrides)) if (!live.has(s)) delete tplOverrides[s];
+      const keep = s => !String(s).startsWith('__row') && live.has(s);
+      const nextSel = new Set();
+      selectedSkus.forEach(s => { const n = remap.get(s) || s; if (keep(n)) nextSel.add(n); });
+      const nextTpl = {};
+      Object.keys(tplOverrides).forEach(s => { const n = remap.get(s) || s; if (keep(n)) nextTpl[n] = tplOverrides[s]; });
+      selectedSkus.clear(); nextSel.forEach(s => selectedSkus.add(s));
+      tplOverrides = nextTpl;
     } else {
       selectedSkus.clear();
       tplOverrides = {};
     }
+    // v7.16 — any full/soft reload reads + persists the #cfg* values, so a queued panel change is now
+    // applied; clear the pending-reload indicator so the FAB dot / apply bar can't go stale.
+    if (typeof qsPendingReload !== 'undefined') { qsPendingReload.clear(); if (typeof qsUpdateApplyBar === 'function') qsUpdateApplyBar(); }
     updateStats();
     renderProducts();
     $('#heroSub').textContent = `อัพเดทล่าสุด ${formatThaiDate(Date.now())}`;
     if (!silent) showToast(`โหลดสินค้า ${products.length} รายการ`, 'success');
+    return true;   // v7.16 — data actually refreshed
   } catch (e) {
     console.error(e);
     $('#heroSub').textContent = '❌ ' + (e.message || 'โหลดข้อมูลไม่สำเร็จ');
     showToast(e.message || 'โหลดข้อมูลไม่สำเร็จ', 'error');
+    return false;   // v7.16 — signal failure
   }
 }
 async function refreshData() {
