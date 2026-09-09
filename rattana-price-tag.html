@@ -4523,8 +4523,16 @@ async function loadProducts(opts = {}) {
     // Cache slimmed products (drops allCodes etc.) — safe against quota limits
     const saved = safeSetItem(STORAGE.cache, JSON.stringify({ products: products.map(slimProduct), ts: Date.now() }));
     if (!saved) showToast('ℹ️ ข้อมูลเยอะเกินกว่าจะ cache — จะโหลดใหม่ทุกครั้ง (ใช้งานได้ปกติ)', 'info');
-    selectedSkus.clear();
-    tplOverrides = {};
+    if (opts.keepSelection) {
+      // v7.16 — soft reload from the ปรับแต่งด่วน panel: keep the current selection + per-tag
+      // designs (tplOverrides); just drop any sku that no longer exists in the refreshed data.
+      const live = new Set(products.map(p => p.sku));
+      for (const s of [...selectedSkus]) if (!live.has(s)) selectedSkus.delete(s);
+      for (const s of Object.keys(tplOverrides)) if (!live.has(s)) delete tplOverrides[s];
+    } else {
+      selectedSkus.clear();
+      tplOverrides = {};
+    }
     updateStats();
     renderProducts();
     $('#heroSub').textContent = `อัพเดทล่าสุด ${formatThaiDate(Date.now())}`;
