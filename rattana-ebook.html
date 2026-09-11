@@ -442,14 +442,15 @@ async function cdnReachable(url){ try{ const c=new AbortController(); const t=se
 async function openPdf(file){
   if(!file) return;
   if(!/pdf$/i.test(file.type||'') && !/\.pdf$/i.test(file.name||'')){ showToast('กรุณาเลือกไฟล์ PDF','warning'); return; }
-  try{ const buf=await file.arrayBuffer(); await renderPdf(buf, file.name, false, false); }
+  try{ const buf=await file.arrayBuffer(); await renderPdf(buf, file.name); }
   catch(e){ console.error(e); showToast('อ่านไฟล์ไม่สำเร็จ','error'); }
 }
-async function renderPdf(buf, name, fromStore, isHosted){
-  if(!window.pdfjsLib){ showToast('ไลบรารี PDF ยังโหลดไม่เสร็จ ลองอีกครั้ง','error'); return; }
-  ensurePdfWorker(); showSpinner('กำลังเปิด PDF...');
+/* เปิด PDF ของผู้ใช้เอง = ดูชั่วคราว ไม่บันทึกในเครื่อง (เปิดลิงก์ครั้งหน้าจะกลับมาเล่มที่แชร์เสมอ) */
+async function renderPdf(buf, name){
+  showSpinner('กำลังเตรียมตัวอ่าน PDF...');
+  try{ await loadPdfJs(); }catch(e){ hideSpinner(); showToast(e.message,'error'); return; }
+  showSpinner('กำลังเปิด PDF...');
   try{
-    if(!fromStore){ try{ await idbSet('pdfData', buf.slice(0)); await idbSet('pdfName', name||'PDF'); await idbSet('isOverride', true); }catch(e){ console.warn('idb store fail',e); } }
     let fontOpts={};
     if(await cdnReachable(PDF_STDFONT+'LiberationSans-Regular.ttf')) fontOpts={cMapUrl:PDF_CMAP, cMapPacked:true, standardFontDataUrl:PDF_STDFONT};
     else console.warn('font CDN ไม่พร้อม — render เฉพาะฟอนต์ที่ฝังใน PDF');
