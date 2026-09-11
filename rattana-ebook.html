@@ -428,6 +428,15 @@ function saveBook(){ if(BOOK_MODE!=='manual') return; try{ localStorage.setItem(
 
 /* ════════ PDF PIPELINE ════════ */
 function ensurePdfWorker(){ if(window.pdfjsLib && !pdfjsLib.GlobalWorkerOptions.workerSrc) pdfjsLib.GlobalWorkerOptions.workerSrc=PDF_WORKER; }
+let _pdfJsP=null;
+function loadPdfJs(){
+  if(window.pdfjsLib){ ensurePdfWorker(); return Promise.resolve(); }
+  if(_pdfJsP) return _pdfJsP;
+  _pdfJsP=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=PDF_LIB;
+    s.onload=()=>{ ensurePdfWorker(); res(); }; s.onerror=()=>{ _pdfJsP=null; s.remove(); rej(new Error('โหลดตัวอ่าน PDF ไม่สำเร็จ ลองใหม่อีกครั้ง')); };
+    document.head.appendChild(s); });
+  return _pdfJsP;
+}
 async function cdnReachable(url){ try{ const c=new AbortController(); const t=setTimeout(()=>c.abort(),5000); const r=await fetch(url,{signal:c.signal,cache:'force-cache'}); clearTimeout(t); return r.ok; }catch(e){ return false; } }
 
 async function openPdf(file){
