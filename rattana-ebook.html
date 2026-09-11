@@ -372,36 +372,53 @@ function enterApp(){
   startReader();
 }
 
-/* ════════ BOOT READER: override ส่วนตัว → หนังสือที่แชร์ → demo ════════ */
+/* ════════ BOOT READER: หนังสือที่แชร์ (ล่าสุดเสมอ) → demo ════════ */
 async function startReader(){
-  try{
-    const override=await idbGet('isOverride'); const buf=await idbGet('pdfData');
-    if(override && buf && buf.byteLength){ const nm=await idbGet('pdfName'); await renderPdf(buf, nm||'PDF', true, false); return; }
-  }catch(e){}
-  showSpinner('กำลังโหลดหนังสือ...');
-  const ok=await loadHostedBook();
-  hideSpinner();
-  if(ok) return;
+  const spinT=setTimeout(()=>showSpinner('กำลังโหลดหนังสือ...'),400);   // เน็ตเร็วจะไม่เห็น spinner เลย
+  const m=await fetchManifest();
+  clearTimeout(spinT); hideSpinner();
+  if(m && loadHostedBook(m)) return;
   BOOK_MODE='manual'; PDF_NAME=''; IS_HOSTED=false; HOSTED_LAZY=false; HIDE_PGNUM=false; PAGE_OFFSET=0; loadBook(); buildBook(); jumpTo(0,false);
 }
-/* หนังสือที่แชร์ = รูปทีละหน้า (โหลด lazy รอบ ๆ หน้าปัจจุบัน — มือถือไม่ต้องโหลดทั้งเล่ม) */
-async function loadHostedBook(){
+/* manifest เล็ก (~2KB) ดึงสดเสมอเพื่อให้เห็นเล่มล่าสุด — ถ้าเน็ตหลุด/ช้าเกิน ใช้ตัวที่สำรองไว้ */
+async function fetchManifest(){
   try{
-    const r=await fetch(BOOK_MANIFEST,{cache:'no-cache'}); if(!r.ok) return false;   // manifest เล็ก ดึงสดเสมอ เพื่อให้เห็นหนังสือ/สารบัญที่อัปเดต
-    const m=await r.json(); if(!m || !m.count) return false;
-    const dir=m.dir||'', ext=m.ext||'jpg', pad=m.pad||4, v=m.ver?('?v='+encodeURIComponent(m.ver)):'', pages=[];
-    for(let i=1;i<=m.count;i++) pages.push({type:'image', img:dir+String(i).padStart(pad,'0')+'.'+ext+v, lazy:true});
-    PAGES=pages; CHAPTERS=(m.chapters||[]).map(c=>({title:c.title, index:(c.page||1)-1}));
-    HIDE_PGNUM=!!m.hideNum; PAGE_OFFSET=parseInt(m.offset)||0;
-    BOOK_MODE='pdf'; IS_HOSTED=true; HOSTED_LAZY=true; PDF_NAME=m.title||'หนังสือ';
-    buildBook(); jumpTo(0,false); hydrateImages();
-    return true;
-  }catch(e){ console.warn('hosted book fail',e); return false; }
+    const c=new AbortController(); const t=setTimeout(()=>c.abort(),6000);
+    const r=await fetch(BOOK_MANIFEST,{cache:'no-cache',signal:c.signal}); clearTimeout(t);
+    if(!r.ok) throw new Error('manifest '+r.status);
+    const m=await r.json(); if(!m || !m.count) throw new Error('bad manifest');
+    try{ localStorage.setItem(MANIFEST_CACHE_KEY, JSON.stringify(m)); }catch(e){}
+    return m;
+  }catch(e){
+    console.warn('manifest fetch fail, using cached',e);
+    try{ return JSON.parse(localStorage.getItem(MANIFEST_CACHE_KEY)); }catch(_){ return null; }
+  }
+}
+/* หนังสือที่แชร์ = รูปทีละหน้า · ภาพย่อ (~13KB) ขึ้นทันที แล้วค่อยเปลี่ยนเป็นภาพคมชัดรอบ ๆ หน้าที่เปิด */
+function loadHostedBook(m){
+  const dir=m.dir||'', tdir=m.thumbDir||'', ext=m.ext||'jpg', pad=m.pad||4, v=m.ver?('?v='+encodeURIComponent(m.ver)):'', pages=[];
+  for(let i=1;i<=m.count;i++){ const f=String(i).padStart(pad,'0')+'.'+ext+v;
+    pages.push({type:'image', img:dir+f, thumb:tdir?tdir+f:'', lazy:true}); }
+  PAGES=pages; CHAPTERS=(m.chapters||[]).map(c=>({title:c.title, index:(c.page||1)-1}));
+  HIDE_PGNUM=!!m.hideNum; PAGE_OFFSET=parseInt(m.offset)||0;
+  BOOK_MODE='pdf'; IS_HOSTED=true; HOSTED_LAZY=true; PDF_NAME=m.title||'หนังสือ';
+  buildBook(); jumpTo(0,false);
+  return true;
 }
 function hydrateImages(){
   if(!HOSTED_LAZY) return;
-  const lo=Math.max(0,currentIndex-2), hi=Math.min(N-1,currentIndex+4);
-  for(let i=lo;i<=hi;i++){ const im=document.querySelector('#book img[data-page="'+i+'"]'); if(im && im.dataset.src){ im.src=im.dataset.src; im.removeAttribute('data-src'); } }
+  const tlo=Math.max(0,currentIndex-4), thi=Math.min(N-1,currentIndex+10);   // ภาพย่อ: โหลดกว้าง (เล็กมาก) พลิกแล้วเห็นทันที
+  const flo=Math.max(0,currentIndex-2), fhi=Math.min(N-1,currentIndex+4);    // ภาพคมชัด: เฉพาะรอบหน้าที่เปิด
+  for(let i=tlo;i<=thi;i++){
+    const im=document.querySelector('#book img[data-page="'+i+'"]'); if(!im) continue;
+    if(im.dataset.thumb && !im.getAttribute('src')){ im.src=im.dataset.thumb; im.removeAttribute('data-thumb'); }
+    if(i>=flo && i<=fhi && im.dataset.full){
+      const full=im.dataset.full; im.removeAttribute('data-full');
+      if(!im.getAttribute('src')){ im.src=full; continue; }            // ไม่มีภาพย่อ → โหลดภาพจริงตรง ๆ
+      const pre=new Image(); pre.decoding='async'; if(i===currentIndex) pre.fetchPriority='high';
+      pre.onload=()=>{ im.src=full; }; pre.src=full;                    // โหลดเสร็จค่อยสลับ ไม่กระพริบ
+    }
+  }
 }
 
 /* ════════ MANUAL BOOK ════════ */
