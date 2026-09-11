@@ -6006,12 +6006,28 @@ function promoAutoRefresh(){
   loadPromoSheet(true, true).then(() => { if (isPromoMode() && $('#tab-print')?.classList.contains('active') && !promoBusy()) { renderPromoBuilder(); buildPromoPreview(); } });
 }
 async function refreshPromoSheet(){ await loadPromoSheet(true); renderPromoBuilder(); buildPromoPreview(); }
+// v7.17 — canonical warehouse-SET key (dedupe + order W1<W2<W3<W4<C4) so "W3,W1" == "W1,W3"
+function promoCanonWhs(str){
+  const rank = w => { const i = WHS_RANK.indexOf(w); return i < 0 ? 99 : i; };
+  const t = [...new Set(String(str||'').toUpperCase().split(/[,\s]+/).map(s => s.trim()).filter(Boolean))];
+  t.sort((a,b) => (rank(a) - rank(b)) || (a < b ? -1 : a > b ? 1 : 0));
+  return t.join(',');
+}
+// v7.17 — filter chips are the DISTINCT warehouse SETS exactly as they appear in the sheet
+// (e.g. "W1", "W4", "W1,W2,W3", "W1,W3,W4"); singles first, then bigger sets.
 function promoWhOptions(){
   const set = new Set();
-  promoItems.forEach(it => String(it.whs||'').split(/[,\s]+/).forEach(w => { const t = w.trim().toUpperCase(); if (t) set.add(t); }));
-  return Array.from(set).sort();
+  promoItems.forEach(it => { const c = promoCanonWhs(it.whs); if (c) set.add(c); });
+  return Array.from(set).sort((a,b) => {
+    const na = a.split(',').length, nb = b.split(',').length;
+    if (na !== nb) return na - nb;                 // fewer branches first (W1 before W1,W3,W4)
+    const ta = a.split(','), tb = b.split(',');
+    for (let i = 0; i < ta.length; i++){ const d = WHS_RANK.indexOf(ta[i]) - WHS_RANK.indexOf(tb[i]); if (d) return d; }
+    return 0;
+  });
 }
-function promoWhMatch(it){ if (!promoWhSel.length) return true; const t = String(it.whs||'').toUpperCase().split(/[,\s]+/).map(s => s.trim()); return promoWhSel.some(w => t.includes(w)); }
+// v7.17 — match by EXACT set: a promo shows only if its whole warehouse set equals a selected chip
+function promoWhMatch(it){ if (!promoWhSel.length) return true; return promoWhSel.includes(promoCanonWhs(it.whs)); }
 // v6.42 — filter by "โปรยังจัดอยู่ในเดือนนั้น" (ช่วง เริ่ม..จบ ครอบเดือนที่เลือก) ไม่ใช่แค่เดือนที่จบ
 function promoActiveMonths(start, end){   // → [เดือน 1-12] ที่โปร active (เริ่ม..จบ)
   const p = s => { const m = String(s||'').match(/(\d{4})[\/\-](\d{1,2})/); return m ? parseInt(m[1])*12 + parseInt(m[2]) : 0; };
