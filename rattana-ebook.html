@@ -329,13 +329,9 @@ let currentUser=null;
 let PAGES=[], CHAPTERS=[], BOOK_MODE='manual', PDF_NAME='', IS_HOSTED=false;
 let pageEls=[], leafEls=[], SPREAD=false, currentIndex=0, N=0, addMode='url', HOSTED_LAZY=false, HIDE_PGNUM=false, PAGE_OFFSET=0;
 
-/* ════════ IndexedDB ════════ */
-function idbOpen(){ return new Promise((res,rej)=>{ const r=indexedDB.open('rattanaEbook',1);
-  r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains('kv')) r.result.createObjectStore('kv'); };
-  r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
-async function idbSet(k,v){ const db=await idbOpen(); return new Promise((res,rej)=>{ const tx=db.transaction('kv','readwrite'); tx.objectStore('kv').put(v,k); tx.oncomplete=()=>{db.close();res();}; tx.onerror=()=>{db.close();rej(tx.error);}; }); }
-async function idbGet(k){ const db=await idbOpen(); return new Promise((res,rej)=>{ const tx=db.transaction('kv','readonly'); const g=tx.objectStore('kv').get(k); g.onsuccess=()=>{db.close();res(g.result);}; g.onerror=()=>{db.close();rej(g.error);}; }); }
-async function idbDel(k){ const db=await idbOpen(); return new Promise((res,rej)=>{ const tx=db.transaction('kv','readwrite'); tx.objectStore('kv').delete(k); tx.oncomplete=()=>{db.close();res();}; tx.onerror=()=>{db.close();rej(tx.error);}; }); }
+/* v2.6: เลิกจำ PDF ส่วนตัวในเครื่องแล้ว (เคยทำให้เปิดลิงก์แล้วเจอเล่มเก่า + ต้องแปลง PDF ใหม่ทุกครั้ง)
+   ลบฐานข้อมูลเก่าที่ค้างในเครื่องทิ้ง เพื่อคืนพื้นที่ (บางเครื่องมี PDF 110MB ค้างอยู่) */
+function purgeOldPdfCache(){ try{ indexedDB.deleteDatabase('rattanaEbook'); }catch(e){} }
 
 /* ════════ AUTH (ปิดใช้ชั่วคราว — คงไว้เผื่อเปิดใหม่) ════════ */
 function decodeJwtPayload(token){ const parts=String(token||'').split('.'); if(parts.length<2) throw new Error('JWT invalid');
