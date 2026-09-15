@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0d1b3e">
-<title>Rattana Update Photo Shop v1.4</title>
+<title>Rattana Update Photo Shop v1.5</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
@@ -264,7 +264,7 @@ body.dark .alert-danger{background:#3a1a17;border-color:#5c2a25;color:#ff8a7e}
 .dd-sel{min-width:0}
 .dd-sel b{display:block;font-size:15px;line-height:1.35;word-break:break-word}
 .dd-sel small{display:block;font-size:12px;color:var(--muted)}
-.dd-panel{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--card-bg);border:1.5px solid var(--border);border-radius:10px;z-index:500;box-shadow:0 8px 24px rgba(0,0,0,.15);max-height:min(340px,55dvh);display:none;flex-direction:column}
+.dd-panel{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--card-bg);border:1.5px solid var(--border);border-radius:10px;z-index:500;box-shadow:0 8px 24px rgba(0,0,0,.15);max-height:min(420px,60dvh);display:none;flex-direction:column}
 .dd-wrap.open .dd-panel{display:flex}
 .dd-search{padding:12px 14px;font-size:16px;border:none;border-bottom:1px solid var(--border);background:transparent;color:var(--text);outline:none;border-radius:10px 10px 0 0;font-family:inherit}
 .dd-list{overflow-y:auto;flex:1;list-style:none;padding:4px 0;margin:0}
@@ -291,7 +291,7 @@ body.dark .alert-danger{background:#3a1a17;border-color:#5c2a25;color:#ff8a7e}
 
 <div class="topbar" id="topbar">
   <header>
-    <div class="logo-text">Rattana <span>Update Photo Shop</span> <span class="ver-badge">v1.4 · 2026-09-15</span></div>
+    <div class="logo-text">Rattana <span>Update Photo Shop</span> <span class="ver-badge">v1.5 · 2026-09-15</span></div>
     <div class="hdr-actions">
       <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรชประวัติ" aria-label="รีเฟรชประวัติ">⟳</button>
       <button class="icon-btn" onclick="openSettings()" title="ตั้งค่าการเชื่อมต่อ" aria-label="ตั้งค่า">⚙️</button>
@@ -411,7 +411,7 @@ body.dark .alert-danger{background:#3a1a17;border-color:#5c2a25;color:#ff8a7e}
   </section>
 </main>
 
-<footer class="app-footer">Rattana Update Photo Shop v1.4 · 2026-09-15</footer>
+<footer class="app-footer">Rattana Update Photo Shop v1.5 · 2026-09-15</footer>
 <button id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="กลับขึ้นด้านบน">↑</button>
 
 <!-- ═══ Settings modal ═══ -->
@@ -453,7 +453,7 @@ body.dark .alert-danger{background:#3a1a17;border-color:#5c2a25;color:#ff8a7e}
 // ═══ Config ═══
 const APP_CONFIG = {
   name: 'Rattana Update Photo Shop',
-  version: '1.4',
+  version: '1.5',
   build: '2026-09-15',
   gasUrl: 'https://script.google.com/macros/s/AKfycbwSREx-hFwY-bKUGWGcxGYAmxo6BCxcqlsiI3RnpGGe43bvJk-N4NCFIgWdW6as2ky47Q/exec',          // วาง Web App URL (…/exec) ตรงนี้ก่อนขึ้น GitHub Pages → ผู้ใช้ทุกคนใช้ได้ทันทีโดยไม่ต้องตั้งค่าเอง
   maxFileMB: 20,       // ต้องไม่เกิน CONFIG.MAX_BYTES ใน Apps Script
@@ -600,7 +600,8 @@ async function gasFetch({ params, body, timeout = 60000, base = getGasUrl() } = 
 let shops = [];
 let shopMatches = [];
 let selectedShop = null;
-const SHOP_LIMIT = 50;
+const SHOP_PAGE = 100;
+let shopRendered = 0;
 const SHOP_FIELDS = ['name', 'code', 'area', 'wh', 'sale'];
 const INVISIBLE = new RegExp('[' + String.fromCharCode(0x200b, 0x200c, 0x200d, 0xfeff) + ']', 'g');
 const NBSP = new RegExp(String.fromCharCode(0xa0), 'g');
@@ -707,25 +708,41 @@ function saveRecentShop(s) {
 
 const shopItem = (s, i) => `<li role="option" data-shop="${i}"><b>${esc(s.name)}</b><small>${esc([s.code && `รหัส ${s.code}`, s.area, s.wh, s.sale].filter(Boolean).join(' · '))}</small></li>`;
 
+// ไม่ได้พิมพ์ค้นหา = แสดงร้านที่เลือกล่าสุด + ร้านทั้งหมดเรียงตามชื่อ (เลื่อนลงเพื่อโหลดเพิ่มทีละ 100 ร้าน)
 function renderShopList() {
   const list = document.getElementById('shopList');
-  const terms = document.getElementById('shopSearch').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  list.scrollTop = 0;
   if (!shops.length) {
     shopMatches = [];
+    shopRendered = 0;
     list.innerHTML = `<li class="dd-note">${esc(document.getElementById('shopStatus').textContent)}</li>`;
     return;
   }
-  if (!terms.length) {
-    shopMatches = getRecentShops();
-    list.innerHTML = (shopMatches.length ? `<li class="dd-group">ร้านที่เลือกล่าสุด</li>${shopMatches.map(shopItem).join('')}` : '')
-      + `<li class="dd-note">พิมพ์ชื่อร้าน รหัส อำเภอ หรือชื่อเซลล์ เพื่อค้นหาจาก ${shops.length.toLocaleString('th-TH')} ร้าน</li>`;
-    return;
+  const terms = document.getElementById('shopSearch').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  let head;
+  if (terms.length) {
+    shopMatches = shops.filter(s => terms.every(t => s._t.includes(t)));
+    shopRendered = 0;
+    head = shopMatches.length
+      ? `<li class="dd-group">พบ ${shopMatches.length.toLocaleString('th-TH')} ร้าน</li>`
+      : '<li class="dd-note">ไม่พบร้านค้า</li>';
+  } else {
+    const recent = getRecentShops();
+    shopMatches = [...recent, ...shops];
+    shopRendered = recent.length;
+    head = (recent.length ? `<li class="dd-group">ร้านที่เลือกล่าสุด</li>${recent.map(shopItem).join('')}` : '')
+      + `<li class="dd-group">ร้านทั้งหมด ${shops.length.toLocaleString('th-TH')} ร้าน · พิมพ์ด้านบนเพื่อค้นหา</li>`;
   }
-  const found = shops.filter(s => terms.every(t => s._t.includes(t)));
-  shopMatches = found.slice(0, SHOP_LIMIT);
-  list.innerHTML = found.length
-    ? shopMatches.map(shopItem).join('') + (found.length > SHOP_LIMIT ? `<li class="dd-note">พบ ${found.length.toLocaleString('th-TH')} ร้าน — พิมพ์เพิ่มเพื่อให้แคบลง</li>` : '')
-    : '<li class="dd-note">ไม่พบร้านค้า</li>';
+  list.innerHTML = head;
+  appendShopPage();
+}
+
+function appendShopPage() {
+  if (shopRendered >= shopMatches.length) return;
+  const end = Math.min(shopRendered + SHOP_PAGE, shopMatches.length);
+  const html = shopMatches.slice(shopRendered, end).map((s, k) => shopItem(s, shopRendered + k)).join('');
+  document.getElementById('shopList').insertAdjacentHTML('beforeend', html);
+  shopRendered = end;
 }
 
 function toggleShopDD(open) {
@@ -738,7 +755,8 @@ function toggleShopDD(open) {
   const input = document.getElementById('shopSearch');
   input.value = '';
   renderShopList();
-  input.focus();
+  // มือถือไม่โฟกัสช่องค้นหาทันที แป้นพิมพ์จะได้ไม่บังรายชื่อร้าน
+  if (!matchMedia('(pointer: coarse)').matches) input.focus();
 }
 
 function selectShop(s) {
@@ -766,7 +784,11 @@ function shopSearchKey(e) {
 }
 
 function initShopPicker() {
-  document.getElementById('shopList').addEventListener('click', e => {
+  const list = document.getElementById('shopList');
+  list.addEventListener('scroll', () => {
+    if (list.scrollTop + list.clientHeight >= list.scrollHeight - 200) appendShopPage();
+  }, { passive: true });
+  list.addEventListener('click', e => {
     const li = e.target.closest('li[data-shop]');
     if (li) selectShop(shopMatches[Number(li.dataset.shop)]);
   });
