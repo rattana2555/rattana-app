@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d1b3e">
+<title>Rattana Update Photo Shop v1.4</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
+<style>
+:root {
+  /* ── Brand palette ── */
+  --navy:        #0d1b3e;
+  --navy-mid:    #1a2f5e;
+  --navy-light:  #243b73;
+  --gold:        #c9a84c;
+  --gold-light:  #e8c86a;
+
+  /* ── Semantic palette ── */
+  --success:  #2ecc71;
+  --danger:   #e74c3c;
+  --warning:  #f39c12;
+  --info:     #3498db;
+
+  /* ── Surface tokens ── */
+  --bg:       #f4f6fb;
+  --text:     #0d1b3e;
+  --card-bg:  #ffffff;
+  --border:   #dde3f0;
+  --muted:    #6b7896;
+  --row-alt:  #fafbfd;
+
+  /* ── Spacing ── */
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  16px;
+  --space-lg:  24px;
+  --space-xl:  32px;
+
+  /* ── Shape ── */
+  --radius-sm:  6px;
+  --radius-md:  12px;
+  --radius-lg:  16px;
+  --radius-xl:  20px;
+
+  /* ── Elevation ── */
+  --shadow-sm:  0 1px 4px rgba(0,0,0,.06);
+  --shadow-md:  0 2px 8px rgba(0,0,0,.08);
+  --shadow-lg:  0 8px 24px rgba(13,27,62,.12);
+  --shadow-gold: 0 4px 12px rgba(201,168,76,.35);
+
+  --top-h: 110px;
+}
+
+body.dark {
+  --bg:       #0a1020;
+  --text:     #e8eaf0;
+  --card-bg:  #111c35;
+  --border:   #243b73;
+  --muted:    #8a98b8;
+  --row-alt:  #0f1830;
+}
+
+/* ── Reset ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;font-size:14px;line-height:1.5;min-height:100dvh;overflow-x:hidden;background:var(--bg);color:var(--text);transition:background .25s,color .25s}
+button{font-family:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+input,select,textarea{font-family:inherit;font-size:16px}
+a{color:inherit}
+code{font-family:'Courier New',monospace;font-size:12px;background:var(--row-alt);border:1px solid var(--border);border-radius:4px;padding:0 4px}
+
+/* ── Header ── */
+.topbar{position:sticky;top:0;z-index:100}
+header{background:var(--navy);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:12px;padding-top:max(12px,env(safe-area-inset-top))}
+.logo-text{font-weight:700;letter-spacing:1.5px;font-size:18px;color:#fff;line-height:1.25;min-width:0}
+.logo-text span{color:var(--gold)}
+.logo-text .ver-badge{font-size:11px;background:rgba(255,255,255,.15);color:rgba(255,255,255,.7);padding:2px 6px;border-radius:4px;font-weight:400;white-space:nowrap;letter-spacing:0;vertical-align:middle}
+.hdr-actions{margin-left:auto;display:flex;gap:8px;flex-shrink:0}
+.icon-btn{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.2);width:38px;height:38px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:18px;transition:background .15s}
+.icon-btn:hover{background:rgba(255,255,255,.12)}
+@media(max-width:480px){.logo-text{font-size:16px;letter-spacing:.5px}.logo-text .ver-badge{display:none}.hdr-actions{gap:6px}}
+
+/* ── Tab nav ── */
+.tab-nav{display:flex;background:var(--navy);border-bottom:3px solid var(--gold);padding:0 8px;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.tab-nav::-webkit-scrollbar{display:none}
+.tab-btn{background:transparent;border:none;color:rgba(255,255,255,.6);padding:12px 18px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;flex-shrink:0;transition:all .18s;margin-bottom:-3px;border-radius:var(--radius-sm) var(--radius-sm) 0 0}
+.tab-btn:hover{color:#fff;background:rgba(255,255,255,.06)}
+.tab-btn.active{color:var(--navy);background:var(--gold);border-bottom-color:var(--gold);font-weight:700;box-shadow:0 -2px 8px rgba(201,168,76,.3)}
+.tab-count{display:inline-block;min-width:20px;padding:0 6px;margin-left:4px;border-radius:10px;background:rgba(255,255,255,.18);font-size:11px;text-align:center}
+.tab-btn.active .tab-count{background:rgba(13,27,62,.15)}
+.tab-panel{display:none}
+.tab-panel.active{display:block;animation:fadeIn .2s ease}
+
+/* ── Cards ── */
+.card{background:var(--card-bg);border-radius:var(--radius-md);border:1px solid var(--border);box-shadow:var(--shadow-md)}
+.card-gold{border-top:3px solid var(--gold)}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:14px 16px;border-bottom:1px solid var(--border);background:linear-gradient(to right,rgba(201,168,76,.07),transparent)}
+.card-body{padding:16px}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid transparent;min-height:44px;transition:opacity .15s,transform .1s;-webkit-tap-highlight-color:transparent;text-decoration:none;white-space:nowrap}
+.btn:hover{opacity:.88}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--navy);color:#fff;border-color:var(--navy)}
+.btn-gold{background:var(--gold);color:var(--navy);border-color:var(--gold)}
+.btn-gold:hover{background:var(--gold-light)}
+.btn-outline{background:transparent;color:var(--text);border-color:var(--border)}
+.btn-sm{padding:5px 10px;font-size:12px;min-height:34px}
+.btn-lg{padding:14px 24px;font-size:15px;min-height:52px;border-radius:var(--radius-md)}
+.btn-block{width:100%;justify-content:center}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+body.dark .btn-primary{background:var(--navy-light);border-color:var(--navy-light)}
+
+/* ── Badges ── */
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap}
+.badge-ok{background:#e8f7ee;color:#1e8449}
+.badge-warn{background:#fef3d7;color:#a87800}
+.badge-danger{background:#ffd5d0;color:#c0392b}
+.badge-info{background:#e3f0fd;color:#1a6fb8}
+.badge-gold{background:rgba(201,168,76,.18);color:var(--navy);border:1px solid rgba(201,168,76,.4)}
+body.dark .badge-ok{background:#1a3a25;color:#7be0a3}
+body.dark .badge-warn{background:#3a2e15;color:#e8c86a}
+body.dark .badge-danger{background:#3a1a17;color:#ff8a7e}
+body.dark .badge-info{background:#16304f;color:#8cc4f5}
+body.dark .badge-gold{color:var(--gold-light)}
+
+/* ── Table ── */
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tbl{width:100%;border-collapse:collapse;min-width:600px}
+.tbl thead{background:var(--navy);color:#fff;position:sticky;top:0;z-index:5}
+.tbl thead th{padding:10px 10px;text-align:left;font-size:12px;font-weight:600;letter-spacing:.3px;white-space:nowrap;border-bottom:2px solid var(--gold);cursor:pointer;user-select:none}
+.tbl thead th:hover{background:var(--navy-mid)}
+.tbl thead th.no-sort{cursor:default}
+.tbl thead th.no-sort:hover{background:transparent}
+.tbl thead th .sort-ind{font-size:10px;color:var(--gold);margin-left:4px;font-weight:700}
+.tbl tbody tr{border-bottom:1px solid var(--border);transition:background .12s}
+.tbl tbody tr:nth-child(even){background:var(--row-alt)}
+.tbl tbody tr:hover{background:rgba(201,168,76,.07)}
+.tbl td{padding:9px 10px;font-size:13px;vertical-align:middle}
+.tbl td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:500}
+.tbl td.nowrap{white-space:nowrap}
+.tbl td.fname{word-break:break-all;min-width:180px}
+.tbl .empty-row td{text-align:center;padding:48px 20px;color:var(--muted);font-size:14px}
+
+/* ── Forms / Inputs ── */
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.3px;text-transform:uppercase}
+.input{height:44px;padding:0 14px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:16px;font-family:inherit;outline:none;width:100%;transition:border-color .15s}
+.input:focus{border-color:var(--gold)}
+.input-sm{height:36px;font-size:13px;padding:0 10px}
+body.dark .input{color-scheme:dark}
+
+/* ── Modal ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.65);z-index:9000;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px);overflow-y:auto}
+.modal-overlay.open{display:flex}
+.modal{background:var(--card-bg);border-radius:var(--radius-lg);max-width:520px;width:100%;max-height:92dvh;overflow-y:auto;border-top:4px solid var(--gold);animation:slideUp .22s ease;position:relative}
+.modal-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:16px 20px;border-bottom:1px solid var(--border)}
+.modal-head h3{font-size:16px;font-weight:700;word-break:break-all}
+.modal-close{background:transparent;border:none;font-size:24px;color:var(--muted);cursor:pointer;padding:4px 8px;border-radius:var(--radius-sm);line-height:1}
+.modal-close:hover{color:var(--text);background:rgba(0,0,0,.06)}
+.modal-body{padding:20px}
+.modal-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:max(24px,env(safe-area-inset-bottom));right:16px;padding:12px 20px;border-radius:var(--radius-md);color:#fff;z-index:9999;animation:slideIn .3s ease;font-weight:500;box-shadow:var(--shadow-lg);max-width:90vw;font-size:13px}
+.toast-success{background:#1e9e57}
+.toast-error{background:var(--danger)}
+.toast-warning{background:var(--warning);color:var(--navy)}
+.toast-info{background:var(--navy-mid);border-left:3px solid var(--gold)}
+
+/* ── Spinner + loading bar ── */
+.spinner-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.55);align-items:center;justify-content:center;z-index:99999;backdrop-filter:blur(3px)}
+.spinner-overlay.show{display:flex}
+.spinner-box{background:#fff;border-radius:var(--radius-lg);padding:32px 40px;text-align:center;border-top:4px solid var(--gold);min-width:240px}
+.spinner-ring{width:48px;height:48px;border:5px solid #dde3f0;border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px}
+body.dark .spinner-box{background:var(--card-bg)}
+#loadingBar{position:fixed;top:0;left:0;height:3px;background:var(--gold);width:0;transition:width .4s;z-index:10000}
+
+/* ── Animations ── */
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes indet{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
+
+/* ── Utilities ── */
+.flex{display:flex}.flex-between{display:flex;align-items:center;justify-content:space-between}.gap-4{gap:4px}.gap-8{gap:8px}
+.mt-8{margin-top:8px}.mt-12{margin-top:12px}.mt-16{margin-top:16px}.mb-8{margin-bottom:8px}.mb-12{margin-bottom:12px}.mb-16{margin-bottom:16px}
+.txt-sm{font-size:12px}.txt-muted{color:var(--muted)}.txt-danger{color:var(--danger)}.txt-bold{font-weight:700}.txt-center{text-align:center}
+.num{font-variant-numeric:tabular-nums;font-weight:500}
+.hidden{display:none!important}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ── Stat cards ── */
+.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(min-width:640px){.stat-grid{grid-template-columns:repeat(4,1fr);gap:14px}}
+.stat-card{background:var(--card-bg);border-radius:var(--radius-md);padding:16px;border:1px solid var(--border);border-top:3px solid var(--gold)}
+.stat-card .s-label{font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin-bottom:6px}
+.stat-card .s-value{font-size:22px;font-weight:700;line-height:1.2}
+.stat-card .s-sub{font-size:11px;color:var(--muted);margin-top:4px}
+.stat-card.success{border-top-color:var(--success)}.stat-card.success .s-value{color:#1e9e57}
+@media(min-width:640px){.stat-card .s-value{font-size:26px}}
+
+/* ── Layout ── */
+.content{flex:1;padding:12px;max-width:1200px;margin:0 auto;width:100%}
+@media(min-width:640px){.content{padding:16px}}
+@media(min-width:1024px){.content{padding:20px}}
+.app-footer{text-align:center;color:var(--muted);font-size:12px;padding:20px 12px calc(20px + env(safe-area-inset-bottom))}
+#backToTop{position:fixed;bottom:max(24px,calc(16px + env(safe-area-inset-bottom)));right:max(16px,calc(12px + env(safe-area-inset-right)));background:var(--gold);color:var(--navy);border:none;border-radius:50%;width:46px;height:46px;display:none;align-items:center;justify-content:center;box-shadow:var(--shadow-gold);z-index:90;font-size:18px;font-weight:700;cursor:pointer}
+#backToTop.show{display:flex}
+
+/* ── Upload ── */
+.dropzone{border:2px dashed var(--border);border-radius:var(--radius-lg);padding:28px 16px;text-align:center;background:var(--card-bg);cursor:pointer;transition:border-color .15s,background .15s}
+.dropzone:hover,.dropzone.drag{border-color:var(--gold);background:rgba(201,168,76,.08)}
+.dz-icon{font-size:42px;line-height:1.1}
+.dz-title{font-size:18px;font-weight:700;margin-top:6px}
+.dz-hint{font-size:12px;color:var(--muted)}
+.dz-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:16px 0 10px}
+.dz-actions .btn{flex:1 1 140px;max-width:220px;justify-content:center}
+.q-actions{display:flex;flex-direction:column;gap:8px}
+.q-item{display:grid;grid-template-columns:72px 1fr;gap:12px;padding:12px 16px;border-top:1px solid var(--border)}
+.q-thumb{width:72px;height:72px;border-radius:var(--radius-sm);object-fit:cover;background:var(--row-alt);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:28px}
+.q-info{min-width:0}
+.q-name{font-weight:600;font-size:14px;word-break:break-all}
+.q-meta{font-size:12px;color:var(--muted);margin-top:2px}
+.q-remove{background:transparent;color:var(--muted);width:34px;height:34px;border-radius:var(--radius-sm);font-size:16px;flex-shrink:0}
+.q-remove:hover{background:rgba(231,76,60,.1);color:var(--danger)}
+.pbar{height:6px;border-radius:3px;background:var(--border);overflow:hidden;margin-top:10px}
+.pbar>i{display:block;height:100%;width:40%;background:var(--gold);border-radius:3px;animation:indet 1.1s ease-in-out infinite}
+.link-row{display:flex;gap:6px;margin-top:8px}
+.link-row .input{flex:1;min-width:0}
+.link-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px}
+
+/* ── History ── */
+.filter-bar{position:sticky;top:var(--top-h);z-index:50;background:var(--bg);padding:12px 0;display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end}
+.filter-bar .f-search{grid-column:1/-1}
+.filter-actions{grid-column:1/-1;display:flex;gap:8px}
+.filter-actions .btn{flex:1;justify-content:center}
+@media(min-width:768px){.filter-bar{grid-template-columns:2fr 1fr 1fr auto}.filter-bar .f-search,.filter-actions{grid-column:auto}.filter-actions .btn{flex:none}}
+.search{border-radius:22px;padding-left:18px}
+.t-thumb{width:48px;height:48px;border-radius:var(--radius-sm);object-fit:cover;cursor:zoom-in;background:var(--row-alt);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:20px}
+.preview-img{display:block;width:100%;max-height:50dvh;object-fit:contain;border-radius:var(--radius-md);background:var(--row-alt)}
+
+/* ── Settings ── */
+.alert{padding:10px 12px;border-radius:var(--radius-sm);background:var(--row-alt);border:1px solid var(--border);font-size:13px;line-height:1.6;word-break:break-word}
+.alert a{font-weight:600}
+.alert-ok{background:#e8f7ee;border-color:#b7e4c7;color:#1e8449}
+.alert-danger{background:#ffe9e6;border-color:#f5c6c0;color:#c0392b}
+body.dark .alert-ok{background:#1a3a25;border-color:#27573a;color:#7be0a3}
+body.dark .alert-danger{background:#3a1a17;border-color:#5c2a25;color:#ff8a7e}
+.setup-steps summary{cursor:pointer;font-weight:600;padding:6px 0}
+.setup-steps ol{padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:13px;margin-top:6px}
+.setup-steps a{color:var(--gold);font-weight:600}
+/* ── Shop picker (live-search dropdown) ── */
+.card-danger{border-top:3px solid var(--danger)}
+.shop-card .card-body{display:flex;flex-direction:column;gap:8px}
+.shop-card.need{border-color:var(--danger);box-shadow:0 0 0 3px rgba(231,76,60,.18)}
+.dd-wrap{position:relative;width:100%}
+.dd-trigger{width:100%;min-height:52px;padding:8px 14px;background:var(--card-bg);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;font-size:16px;text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.dd-trigger:focus-visible,.dd-wrap.open .dd-trigger{border-color:var(--gold);outline:none}
+.dd-ph{color:var(--muted)}
+.dd-sel{min-width:0}
+.dd-sel b{display:block;font-size:15px;line-height:1.35;word-break:break-word}
+.dd-sel small{display:block;font-size:12px;color:var(--muted)}
+.dd-panel{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--card-bg);border:1.5px solid var(--border);border-radius:10px;z-index:500;box-shadow:0 8px 24px rgba(0,0,0,.15);max-height:min(340px,55dvh);display:none;flex-direction:column}
+.dd-wrap.open .dd-panel{display:flex}
+.dd-search{padding:12px 14px;font-size:16px;border:none;border-bottom:1px solid var(--border);background:transparent;color:var(--text);outline:none;border-radius:10px 10px 0 0;font-family:inherit}
+.dd-list{overflow-y:auto;flex:1;list-style:none;padding:4px 0;margin:0}
+.dd-list li{padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border)}
+.dd-list li:last-child{border-bottom:none}
+.dd-list li b{display:block;font-size:14px;font-weight:600;line-height:1.35}
+.dd-list li small{display:block;font-size:12px;color:var(--muted)}
+.dd-list li:hover{background:var(--navy-light);color:#fff}
+.dd-list li:hover small{color:rgba(255,255,255,.75)}
+.dd-list li.dd-note,.dd-list li.dd-group{cursor:default;background:transparent;color:var(--muted)}
+.dd-list li.dd-note{font-size:12px;text-align:center}
+.dd-list li.dd-group{font-size:11px;font-weight:700;letter-spacing:.3px;padding:8px 14px 4px}
+.shop-meta{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.shop-meta button{background:none;color:var(--gold);font-weight:600;font-size:12px;min-height:32px}
+.q-shop{font-size:12px;margin-top:2px}
+#btnUpload{white-space:normal;text-align:center;line-height:1.35}
+#histTbl{min-width:760px}
+.tbl td.shop{min-width:160px}
+</style>
+</head>
+<body>
+<div id="loadingBar"></div>
+<div class="spinner-overlay" id="spinner"><div class="spinner-box"><div class="spinner-ring"></div><p id="spinnerMsg">กำลังโหลด...</p></div></div>
+
+<div class="topbar" id="topbar">
+  <header>
+    <div class="logo-text">Rattana <span>Update Photo Shop</span> <span class="ver-badge">v1.4 · 2026-09-15</span></div>
+    <div class="hdr-actions">
+      <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรชประวัติ" aria-label="รีเฟรชประวัติ">⟳</button>
+      <button class="icon-btn" onclick="openSettings()" title="ตั้งค่าการเชื่อมต่อ" aria-label="ตั้งค่า">⚙️</button>
+      <button class="icon-btn" id="btnTheme" onclick="toggleTheme()" title="สลับโหมดมืด/สว่าง" aria-label="สลับธีม">🌙</button>
+    </div>
+  </header>
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="upload" onclick="switchTab('upload')">📤 อัปโหลดรูป</button>
+    <button class="tab-btn" data-tab="history" onclick="switchTab('history')">🕘 ประวัติ <span class="tab-count hidden" id="histCount"></span></button>
+  </nav>
+</div>
+
+<main class="content">
+  <!-- ═══ Upload ═══ -->
+  <section class="tab-panel active" id="tab-upload">
+    <div class="card card-gold mb-16 hidden" id="setupNotice">
+      <div class="card-body">
+        <div class="txt-bold mb-8">⚠️ ยังไม่ได้เชื่อมต่อ Google Drive</div>
+        <p class="txt-sm txt-muted mb-12">ต้องติดตั้ง Apps Script 1 ครั้ง แล้วนำ Web App URL มาวางในหน้าตั้งค่า</p>
+        <button class="btn btn-gold" onclick="openSettings()">⚙️ ไปที่ตั้งค่า</button>
+      </div>
+    </div>
+
+    <div class="card card-danger mb-16 hidden" id="backendNotice">
+      <div class="card-body">
+        <div class="txt-bold mb-8">⚠️ Apps Script ยังเป็นเวอร์ชันเก่า</div>
+        <p class="txt-sm txt-muted">รูปอัปโหลดได้ แต่ชื่อร้านจะไม่ถูกบันทึกลง Google Sheet — วางโค้ด <code>rattana-update-photo-shop-apps-script-v1.2.gs</code> แล้ว Deploy → Manage deployments → New version</p>
+      </div>
+    </div>
+
+    <div class="card card-gold shop-card mb-16" id="shopCard">
+      <div class="card-head"><b>🏪 ร้านค้า <span class="txt-danger">*</span></b><span class="txt-sm txt-muted">ต้องเลือกก่อนอัปโหลด</span></div>
+      <div class="card-body">
+        <div class="dd-wrap" id="shopDD">
+          <button class="dd-trigger" type="button" id="shopTrigger" onclick="toggleShopDD()" aria-haspopup="listbox" aria-expanded="false">
+            <span class="dd-sel" id="shopLabel"><span class="dd-ph">-- เลือกร้านค้า --</span></span><span aria-hidden="true">▾</span>
+          </button>
+          <div class="dd-panel" id="shopPanel">
+            <input class="dd-search" id="shopSearch" type="search" placeholder="🔍 ชื่อร้าน / รหัส / อำเภอ / เซลล์" autocomplete="off" oninput="renderShopList()" onkeydown="shopSearchKey(event)">
+            <ul class="dd-list" id="shopList" role="listbox"></ul>
+          </div>
+        </div>
+        <div class="shop-meta"><span id="shopStatus">กำลังโหลดรายชื่อร้านค้า...</span><button type="button" onclick="loadShops({ force: true })">⟳ โหลดรายชื่อใหม่</button></div>
+      </div>
+    </div>
+
+    <div class="dropzone" id="dropzone">
+      <div class="dz-icon">🖼️</div>
+      <div class="dz-title">อัปโหลดรูปลง Google Drive แล้วรับลิงก์</div>
+      <div class="dz-hint">ลากรูปมาวาง · กด Ctrl+V เพื่อวางรูป · เลือกได้หลายรูปพร้อมกัน</div>
+      <div class="dz-actions">
+        <button class="btn btn-gold btn-lg" type="button" onclick="pickFiles(false)">🖼️ เลือกรูป</button>
+        <button class="btn btn-primary btn-lg" type="button" onclick="pickFiles(true)">📷 ถ่ายรูป</button>
+      </div>
+      <div class="dz-hint">รองรับ JPG, PNG, GIF, WEBP, HEIC · ไม่เกิน 20 MB ต่อรูป</div>
+    </div>
+    <input class="sr-only" type="file" id="fileInput" accept="image/*,.heic,.heif" multiple tabindex="-1" aria-hidden="true">
+    <input class="sr-only" type="file" id="cameraInput" accept="image/*" capture="environment" tabindex="-1" aria-hidden="true">
+
+    <div class="card card-gold mt-16 hidden" id="queueCard">
+      <div class="card-head">
+        <div class="flex gap-8" style="align-items:center;flex-wrap:wrap">
+          <b>รายการรูป</b>
+          <span class="badge badge-info hidden" id="qPending"></span>
+          <span class="badge badge-ok hidden" id="qDone"></span>
+          <span class="badge badge-danger hidden" id="qFail"></span>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="clearFinished()">🧹 ล้างที่เสร็จแล้ว</button>
+      </div>
+      <div class="card-body q-actions">
+        <button class="btn btn-gold btn-lg btn-block" id="btnUpload" onclick="startUpload()">⬆️ อัปโหลด</button>
+        <button class="btn btn-primary btn-block hidden" id="btnCopyAll" onclick="copyAllLinks()">📋 คัดลอกลิงก์ทั้งหมด</button>
+      </div>
+      <div id="queueList"></div>
+    </div>
+  </section>
+
+  <!-- ═══ History ═══ -->
+  <section class="tab-panel" id="tab-history">
+    <div class="stat-grid">
+      <div class="stat-card"><div class="s-label">รูปทั้งหมด</div><div class="s-value num" id="stTotal">-</div><div class="s-sub">ในประวัติ</div></div>
+      <div class="stat-card success"><div class="s-label">อัปวันนี้</div><div class="s-value num" id="stToday">-</div><div class="s-sub">รูป</div></div>
+      <div class="stat-card"><div class="s-label">7 วันล่าสุด</div><div class="s-value num" id="stWeek">-</div><div class="s-sub">รูป</div></div>
+      <div class="stat-card"><div class="s-label">พื้นที่ที่ใช้</div><div class="s-value num" id="stSize">-</div><div class="s-sub">รวมทุกไฟล์</div></div>
+    </div>
+
+    <div class="filter-bar">
+      <div class="f-search"><input class="input search" id="fSearch" type="search" placeholder="🔍 ค้นหาร้านค้า / รหัสร้าน / ชื่อไฟล์..." oninput="applyFilters()" autocomplete="off"></div>
+      <div class="field"><label for="fFrom">ตั้งแต่วันที่</label><input class="input" id="fFrom" type="date" onchange="applyFilters()"></div>
+      <div class="field"><label for="fTo">ถึงวันที่</label><input class="input" id="fTo" type="date" onchange="applyFilters()"></div>
+      <div class="filter-actions">
+        <button class="btn btn-outline" onclick="clearFilters()">✕ ล้างตัวกรอง</button>
+        <button class="btn btn-primary" onclick="exportHistory()">📊 Excel</button>
+      </div>
+    </div>
+
+    <div class="card card-gold">
+      <div class="card-head"><b>ประวัติการอัปโหลด</b><span class="txt-sm txt-muted" id="histSummary"></span></div>
+      <div class="tbl-wrap">
+        <table class="tbl" id="histTbl">
+          <thead>
+            <tr>
+              <th class="no-sort">รูป</th>
+              <th data-key="ts" data-type="date">วันที่ <span class="sort-ind"></span></th>
+              <th data-key="shop" data-type="str">ร้านค้า <span class="sort-ind"></span></th>
+              <th class="no-sort">คัดลอกลิงก์</th>
+              <th data-key="name" data-type="str">ชื่อไฟล์ <span class="sort-ind"></span></th>
+              <th data-key="size" data-type="num">ขนาด <span class="sort-ind"></span></th>
+              <th data-key="access" data-type="str">สิทธิ์ <span class="sort-ind"></span></th>
+            </tr>
+          </thead>
+          <tbody id="histBody"></tbody>
+        </table>
+      </div>
+      <div class="card-body txt-center hidden" id="histMoreWrap"><button class="btn btn-outline" onclick="showMore()">แสดงเพิ่ม</button></div>
+    </div>
+  </section>
+</main>
+
+<footer class="app-footer">Rattana Update Photo Shop v1.4 · 2026-09-15</footer>
+<button id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="กลับขึ้นด้านบน">↑</button>
+
+<!-- ═══ Settings modal ═══ -->
+<div class="modal-overlay" id="settingsModal" onclick="if(event.target===this)closeModal('settingsModal')">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="modal-head"><h3 id="settingsTitle">⚙️ เชื่อมต่อ Google Drive</h3><button class="modal-close" onclick="closeModal('settingsModal')" aria-label="ปิด">×</button></div>
+    <div class="modal-body">
+      <div class="field">
+        <label for="gasUrlInput">Apps Script Web App URL</label>
+        <input class="input" id="gasUrlInput" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="mt-12" id="connResult"></div>
+      <details class="setup-steps mt-16" id="setupSteps">
+        <summary>วิธีติดตั้ง Apps Script (ทำครั้งเดียว)</summary>
+        <ol>
+          <li>เปิด <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com</a> → สร้างโปรเจกต์ใหม่</li>
+          <li>ลบโค้ดเดิม วางโค้ดจากไฟล์ <code>rattana-update-photo-shop-apps-script-v1.2.gs</code> → กด Save</li>
+          <li>เลือกฟังก์ชัน <code>setup</code> → กด Run → อนุญาตสิทธิ์</li>
+          <li>Deploy → New deployment → Web app<br>Execute as: <b>Me</b> · Who has access: <b>Anyone</b></li>
+          <li>คัดลอก Web app URL (ลงท้าย <code>/exec</code>) มาวางในช่องด้านบน → กดบันทึก</li>
+        </ol>
+      </details>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" id="btnTest" onclick="testConnection()">🔌 ทดสอบ</button>
+      <button class="btn btn-gold" id="btnSaveSettings" onclick="saveSettings()">💾 บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Preview modal ═══ -->
+<div class="modal-overlay" id="previewModal" onclick="if(event.target===this)closeModal('previewModal')">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pvTitle">
+    <div class="modal-head"><h3 id="pvTitle">รูปภาพ</h3><button class="modal-close" onclick="closeModal('previewModal')" aria-label="ปิด">×</button></div>
+    <div class="modal-body" id="pvBody"></div>
+  </div>
+</div>
+<script>
+// ═══ Config ═══
+const APP_CONFIG = {
+  name: 'Rattana Update Photo Shop',
+  version: '1.4',
+  build: '2026-09-15',
+  gasUrl: 'https://script.google.com/macros/s/AKfycbwSREx-hFwY-bKUGWGcxGYAmxo6BCxcqlsiI3RnpGGe43bvJk-N4NCFIgWdW6as2ky47Q/exec',          // วาง Web App URL (…/exec) ตรงนี้ก่อนขึ้น GitHub Pages → ผู้ใช้ทุกคนใช้ได้ทันทีโดยไม่ต้องตั้งค่าเอง
+  maxFileMB: 20,       // ต้องไม่เกิน CONFIG.MAX_BYTES ใน Apps Script
+  concurrency: 2,
+  historyLimit: 1000,
+  pageSize: 100,
+  // รายชื่อร้านค้า — ชีตเดียวกับที่แอพ OM Report ใช้ (แท็บ Customer)
+  shopSheet: {
+    id: '1dAxF4Mz-zhJIVbuJ_Ql126gt08qvVS1wndJD50pqCZI',
+    tab: 'Customer',
+    cols: { name: 'ชื่อร้านค้า', code: 'รหัส บีพลัส', area: 'ต.,อ.,จ. ขอพร', wh: 'WH', sale: 'เซลล์ผู้ดูแล' },
+  },
+  shopTTL: 60 * 60 * 1000,
+};
+const LS = { gasUrl: 'rups_gasUrl', theme: 'rups_theme', tab: 'rups_tab', history: 'rups_history', shops: 'rups_shops', recentShops: 'rups_recent_shops' };
+const TTL = 5 * 60 * 1000;
+const IMAGE_EXT = /\.(jpe?g|png|gif|webp|heic|heif|avif|bmp)$/i;
+const ACCESS = {
+  anyone:  { label: '🌐 ทุกคนที่มีลิงก์', text: 'ทุกคนที่มีลิงก์', cls: 'badge-ok' },
+  domain:  { label: '🏢 เฉพาะในองค์กร', text: 'เฉพาะในองค์กร', cls: 'badge-warn' },
+  private: { label: '🔒 ส่วนตัว', text: 'ส่วนตัว', cls: 'badge-danger' },
+};
+const COPY_MSG = { view: 'คัดลอกลิงก์แชร์แล้ว ✓', direct: 'คัดลอกลิงก์รูปตรงแล้ว ✓', formula: 'คัดลอกสูตร Google Sheets แล้ว ✓' };
+
+// ═══ Storage (localStorage อาจใช้ไม่ได้ในโหมดไม่ระบุตัวตน) ═══
+const store = {
+  get: k => { try { return localStorage.getItem(k); } catch { return null; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch {} },
+  del: k => { try { localStorage.removeItem(k); } catch {} },
+};
+const getGasUrl = () => (store.get(LS.gasUrl) || APP_CONFIG.gasUrl || '').trim();
+
+// ═══ Format ═══
+function formatThaiDate(input) {
+  if (!input) return '-';
+  const d = input instanceof Date ? input : new Date(input);
+  if (isNaN(d)) return '-';
+  const dd   = String(d.getDate()).padStart(2, '0');
+  const mm   = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear() + 543;
+  return `${dd}/${mm}/${yyyy}`;
+}
+function formatThaiTime(input) {
+  if (!input) return '-';
+  const d = input instanceof Date ? input : new Date(input);
+  if (isNaN(d)) return '-';
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${hh}.${mm}`;
+}
+function formatThaiDateTime(input) {
+  return `${formatThaiDate(input)} ${formatThaiTime(input)}`;
+}
+function formatBytes(n) {
+  n = Number(n) || 0;
+  if (n < 1048576) return `${Math.max(1, Math.round(n / 1024)).toLocaleString('th-TH')} KB`;
+  if (n < 1073741824) return `${(n / 1048576).toLocaleString('th-TH', { maximumFractionDigits: 1 })} MB`;
+  return `${(n / 1073741824).toLocaleString('th-TH', { maximumFractionDigits: 2 })} GB`;
+}
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const dayKey = input => {
+  const d = new Date(input);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+// ลิงก์ทุกแบบสร้างจาก File ID — ลิงก์รูปตรงใช้ lh3.googleusercontent.com เพราะ uc?export=view แสดงรูปบนเว็บอื่นไม่ได้แล้วตั้งแต่ปี 2024
+function links(id) {
+  const fid = encodeURIComponent(id);
+  return {
+    view: `https://drive.google.com/file/d/${fid}/view?usp=sharing`,
+    direct: `https://lh3.googleusercontent.com/d/${fid}=s2000`,
+    thumb: `https://lh3.googleusercontent.com/d/${fid}=s200`,
+    formula: `=IMAGE("https://lh3.googleusercontent.com/d/${fid}=s1000")`,
+  };
+}
+
+// ═══ UI helpers ═══
+const showSpinner = (m = 'กำลังโหลด...') => { document.getElementById('spinnerMsg').textContent = m; document.getElementById('spinner').classList.add('show'); };
+const hideSpinner = () => document.getElementById('spinner').classList.remove('show');
+const setLoading  = on => { document.getElementById('loadingBar').style.width = on ? '85%' : '0'; };
+function showToast(msg, type = 'info') {
+  document.querySelectorAll('.toast').forEach(x => x.remove());
+  const t = document.createElement('div'); t.className = `toast toast-${type}`; t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
+}
+const openModal  = id => document.getElementById(id).classList.add('open');
+const closeModal = id => document.getElementById(id).classList.remove('open');
+function setBadge(id, text) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.classList.toggle('hidden', !text);
+}
+function thumbFail(img) {
+  const d = document.createElement('div');
+  d.className = img.className; d.textContent = '🖼️';
+  Object.assign(d.dataset, img.dataset);
+  img.replaceWith(d);
+}
+
+async function copyText(text, msg = 'คัดลอกแล้ว ✓') {
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; }
+  catch {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.appendChild(ta); ta.select();
+    try { ok = document.execCommand('copy'); } catch {}
+    ta.remove();
+  }
+  showToast(ok ? msg : 'คัดลอกไม่สำเร็จ — กดค้างที่ลิงก์เพื่อคัดลอกเอง', ok ? 'success' : 'error');
+}
+async function shareLink(url) {
+  try { await navigator.share({ title: APP_CONFIG.name, url }); }
+  catch (e) { if (e.name !== 'AbortError') copyText(url, COPY_MSG.view); }
+}
+
+// ═══ Apps Script API ═══
+// ส่ง body เป็น string → Content-Type: text/plain → ไม่เกิด CORS preflight (Apps Script ตอบ OPTIONS ไม่ได้)
+// ด้วยเหตุผลเดียวกันจึงไม่ใช้ XHR upload progress (ผูก event กับ xhr.upload แล้วเบราว์เซอร์จะยิง preflight)
+async function gasFetch({ params, body, timeout = 60000, base = getGasUrl() } = {}) {
+  if (!base) throw new Error('ยังไม่ได้ตั้งค่า Apps Script URL');
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeout);
+  try {
+    const url = params ? `${base}?${new URLSearchParams(params)}` : base;
+    const opt = body ? { method: 'POST', body: JSON.stringify(body) } : {};
+    const res = await fetch(url, { ...opt, signal: ctrl.signal, redirect: 'follow' });
+    const text = await res.text();
+    let json;
+    try { json = JSON.parse(text); }
+    catch { throw new Error('Apps Script ไม่ได้ตอบกลับเป็น JSON — ตรวจว่า Deploy เป็น Web app แบบ Anyone และใช้ URL ที่ลงท้าย /exec'); }
+    if (!json.ok) throw new Error(json.error || 'Apps Script แจ้งข้อผิดพลาด');
+    return json;
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('หมดเวลาเชื่อมต่อ — ลองใหม่อีกครั้ง');
+    if (e instanceof TypeError) throw new Error('เชื่อมต่อ Apps Script ไม่ได้ — ตรวจอินเทอร์เน็ต และตั้ง Who has access เป็น Anyone');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ═══ Shops (รายชื่อร้านค้าจาก Google Sheet) ═══
+let shops = [];
+let shopMatches = [];
+let selectedShop = null;
+const SHOP_LIMIT = 50;
+const SHOP_FIELDS = ['name', 'code', 'area', 'wh', 'sale'];
+const INVISIBLE = new RegExp('[' + String.fromCharCode(0x200b, 0x200c, 0x200d, 0xfeff) + ']', 'g');
+const NBSP = new RegExp(String.fromCharCode(0xa0), 'g');
+const cleanCell = s => String(s || '').replace(INVISIBLE, '').replace(NBSP, ' ').trim();
+const colLetter = i => {
+  let s = '';
+  for (i++; i > 0; i = Math.floor((i - 1) / 26)) s = String.fromCharCode(65 + (i - 1) % 26) + s;
+  return s;
+};
+
+// RFC-4180 CSV → array ของแถว (รองรับ comma / ขึ้นบรรทัดใหม่ในเครื่องหมายคำพูด)
+function parseCsvRows(text) {
+  text = String(text || '');
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+  const rows = [];
+  let row = [], cell = '', inQuote = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuote) {
+      if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else inQuote = false; }
+      else cell += ch;
+    } else if (ch === '"') inQuote = true;
+    else if (ch === ',') { row.push(cell); cell = ''; }
+    else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+    else if (ch !== '\r') cell += ch;
+  }
+  if (cell.length || row.length) { row.push(cell); rows.push(row); }
+  return rows.map(r => r.map(cleanCell));
+}
+
+async function fetchSheetCsv(tq) {
+  const { id, tab } = APP_CONFIG.shopSheet;
+  const url = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent(tab)}&tq=${encodeURIComponent(tq)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const text = await res.text();
+  if (/^\s*</.test(text)) throw new Error('ชีตรายชื่อร้านค้าไม่ได้แชร์แบบใครมีลิงก์ก็ดูได้');
+  return parseCsvRows(text);
+}
+
+// ชีตนี้มีเบอร์โทร/ที่อยู่ด้วย จึงดึงเฉพาะคอลัมน์ที่ใช้ — หาตำแหน่งจากชื่อหัวคอลัมน์ก่อน เผื่อมีการแทรกคอลัมน์
+async function fetchShops() {
+  const cols = APP_CONFIG.shopSheet.cols;
+  const header = (await fetchSheetCsv('select * limit 1'))[0] || [];
+  const keys = Object.keys(cols).filter(k => header.includes(cols[k]));
+  if (!keys.includes('name')) throw new Error(`ไม่พบคอลัมน์ "${cols.name}" ในแท็บ ${APP_CONFIG.shopSheet.tab}`);
+  const letter = k => colLetter(header.indexOf(cols[k]));
+  const rows = await fetchSheetCsv(`select ${keys.map(letter).join(', ')} where ${letter('name')} is not null`);
+  const seen = new Set();
+  return rows.slice(1)
+    .map(r => Object.fromEntries(keys.map((k, i) => [k, r[i] || ''])))
+    .filter(s => {
+      const key = `${s.code || ''}|${s.name}`;
+      if (!s.name || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, 'th'));
+}
+
+function indexShops(list) {
+  list.forEach(s => { s._t = SHOP_FIELDS.map(f => s[f] || '').join(' ').toLowerCase(); });
+  return list;
+}
+
+function renderShopStatus(ts, msg) {
+  document.getElementById('shopStatus').textContent = msg
+    || `${shops.length.toLocaleString('th-TH')} ร้าน${ts ? ` · อัปเดต ${formatThaiDateTime(ts)} น.` : ''}`;
+}
+
+// stale-while-revalidate: ใช้รายชื่อจาก cache ทันที แล้วโหลดใหม่เมื่อเกิน 1 ชั่วโมง
+async function loadShops({ force = false, quiet = false } = {}) {
+  let cached = null;
+  try {
+    const c = JSON.parse(store.get(LS.shops));
+    if (c && Array.isArray(c.data)) cached = c;
+  } catch {}
+  if (cached && !shops.length) {
+    shops = indexShops(cached.data.map(a => Object.fromEntries(SHOP_FIELDS.map((f, i) => [f, a[i] || '']))));
+    renderShopStatus(cached.ts);
+  }
+  if (!force && cached && Date.now() - cached.ts < APP_CONFIG.shopTTL) return;
+  if (!shops.length) renderShopStatus(0, 'กำลังโหลดรายชื่อร้านค้า...');
+  try {
+    shops = indexShops(await fetchShops());
+    const ts = Date.now();
+    store.set(LS.shops, JSON.stringify({ ts, data: shops.map(s => SHOP_FIELDS.map(f => s[f] || '')) }));
+    renderShopStatus(ts);
+    if (force && !quiet) showToast(`โหลดรายชื่อร้านค้า ${shops.length.toLocaleString('th-TH')} ร้านแล้ว ✓`, 'success');
+  } catch (e) {
+    if (!shops.length) renderShopStatus(0, `โหลดรายชื่อร้านค้าไม่สำเร็จ: ${e.message}`);
+    if ((force && !quiet) || !shops.length) showToast(`โหลดรายชื่อร้านค้าไม่สำเร็จ: ${e.message}`, 'error');
+  }
+  if (document.getElementById('shopDD').classList.contains('open')) renderShopList();
+}
+
+function getRecentShops() {
+  try { return JSON.parse(store.get(LS.recentShops)) || []; } catch { return []; }
+}
+function saveRecentShop(s) {
+  const rest = getRecentShops().filter(r => !(r.code === s.code && r.name === s.name));
+  store.set(LS.recentShops, JSON.stringify([s, ...rest].slice(0, 8)));
+}
+
+const shopItem = (s, i) => `<li role="option" data-shop="${i}"><b>${esc(s.name)}</b><small>${esc([s.code && `รหัส ${s.code}`, s.area, s.wh, s.sale].filter(Boolean).join(' · '))}</small></li>`;
+
+function renderShopList() {
+  const list = document.getElementById('shopList');
+  const terms = document.getElementById('shopSearch').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!shops.length) {
+    shopMatches = [];
+    list.innerHTML = `<li class="dd-note">${esc(document.getElementById('shopStatus').textContent)}</li>`;
+    return;
+  }
+  if (!terms.length) {
+    shopMatches = getRecentShops();
+    list.innerHTML = (shopMatches.length ? `<li class="dd-group">ร้านที่เลือกล่าสุด</li>${shopMatches.map(shopItem).join('')}` : '')
+      + `<li class="dd-note">พิมพ์ชื่อร้าน รหัส อำเภอ หรือชื่อเซลล์ เพื่อค้นหาจาก ${shops.length.toLocaleString('th-TH')} ร้าน</li>`;
+    return;
+  }
+  const found = shops.filter(s => terms.every(t => s._t.includes(t)));
+  shopMatches = found.slice(0, SHOP_LIMIT);
+  list.innerHTML = found.length
+    ? shopMatches.map(shopItem).join('') + (found.length > SHOP_LIMIT ? `<li class="dd-note">พบ ${found.length.toLocaleString('th-TH')} ร้าน — พิมพ์เพิ่มเพื่อให้แคบลง</li>` : '')
+    : '<li class="dd-note">ไม่พบร้านค้า</li>';
+}
+
+function toggleShopDD(open) {
+  const wrap = document.getElementById('shopDD');
+  const willOpen = open ?? !wrap.classList.contains('open');
+  if (willOpen === wrap.classList.contains('open')) return;
+  wrap.classList.toggle('open', willOpen);
+  document.getElementById('shopTrigger').setAttribute('aria-expanded', String(willOpen));
+  if (!willOpen) return;
+  const input = document.getElementById('shopSearch');
+  input.value = '';
+  renderShopList();
+  input.focus();
+}
+
+function selectShop(s) {
+  if (!s) return;
+  selectedShop = Object.fromEntries(SHOP_FIELDS.map(f => [f, s[f] || '']));
+  saveRecentShop(selectedShop);
+  document.getElementById('shopLabel').innerHTML = `<b>${esc(selectedShop.name)}</b><small>${esc([selectedShop.code && `รหัส ${selectedShop.code}`, selectedShop.area].filter(Boolean).join(' · '))}</small>`;
+  document.getElementById('shopCard').classList.remove('need');
+  toggleShopDD(false);
+  updateQueueSummary();
+}
+
+function promptShop() {
+  const card = document.getElementById('shopCard');
+  card.classList.add('need');
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  showToast('กรุณาเลือกร้านค้าก่อนอัปโหลด', 'warning');
+  toggleShopDD(true);
+}
+
+function shopSearchKey(e) {
+  if (e.isComposing) return;
+  if (e.key === 'Enter') { e.preventDefault(); selectShop(shopMatches[0]); }
+  if (e.key === 'Escape') { e.stopPropagation(); toggleShopDD(false); document.getElementById('shopTrigger').focus(); }
+}
+
+function initShopPicker() {
+  document.getElementById('shopList').addEventListener('click', e => {
+    const li = e.target.closest('li[data-shop]');
+    if (li) selectShop(shopMatches[Number(li.dataset.shop)]);
+  });
+  // ปุ่มอัปโหลดเปิดช่องเลือกร้านเอง (promptShop) จึงไม่ปิดเมื่อคลิกในการ์ดรายการรูป
+  document.addEventListener('click', e => { if (!e.target.closest('#shopDD, #queueCard')) toggleShopDD(false); });
+}
+
+// ═══ Upload queue ═══
+let queue = [];
+let uploading = false;
+let uidSeq = 0;
+const isImageFile = f => (f.type || '').startsWith('image/') || IMAGE_EXT.test(f.name || '');
+const STATUS_BADGE = {
+  pending:   '<span class="badge badge-info">รออัปโหลด</span>',
+  uploading: '<span class="badge badge-gold">กำลังอัปโหลด…</span>',
+  done:      '<span class="badge badge-ok">✓ สำเร็จ</span>',
+  error:     '<span class="badge badge-danger">ไม่สำเร็จ</span>',
+};
+
+function pickFiles(camera) {
+  document.getElementById(camera ? 'cameraInput' : 'fileInput').click();
+}
+
+function addFiles(fileList) {
+  let added = 0, skipped = 0;
+  for (const f of fileList) {
+    if (!isImageFile(f)) { skipped++; continue; }
+    const item = { uid: ++uidSeq, file: f, name: f.name || 'image.png', size: f.size, preview: URL.createObjectURL(f), status: 'pending' };
+    if (f.size > APP_CONFIG.maxFileMB * 1048576) Object.assign(item, { status: 'error', fatal: true, error: `ไฟล์ใหญ่เกิน ${APP_CONFIG.maxFileMB} MB` });
+    queue.push(item); added++;
+  }
+  if (skipped) showToast(`ข้าม ${skipped} ไฟล์ที่ไม่ใช่รูปภาพ`, 'warning');
+  if (added) {
+    renderQueue();
+    document.getElementById('queueCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+function readAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(',')[1] || '');
+    r.onerror = () => reject(new Error('อ่านไฟล์ไม่ได้'));
+    r.readAsDataURL(file);
+  });
+}
+
+async function startUpload() {
+  if (uploading) return;
+  if (!getGasUrl()) { showToast('กรุณาเชื่อมต่อ Apps Script ก่อน', 'warning'); openSettings(); return; }
+  const batch = queue.filter(q => q.status === 'pending');
+  if (!batch.length) return;
+  if (!selectedShop && batch.some(q => !q.shop)) { promptShop(); return; }
+  batch.forEach(q => { q.shop = q.shop || { ...selectedShop }; });
+  uploading = true; updateQueueSummary();
+  const worker = async () => {
+    for (let q = queue.find(x => x.status === 'pending'); q; q = queue.find(x => x.status === 'pending')) await uploadOne(q);
+  };
+  await Promise.all(Array.from({ length: APP_CONFIG.concurrency }, worker));
+  uploading = false; updateQueueSummary();
+  const ok = batch.filter(q => q.status === 'done').length;
+  const fail = batch.filter(q => q.status === 'error').length;
+  showToast(fail ? `สำเร็จ ${ok} รูป · ไม่สำเร็จ ${fail} รูป` : `อัปโหลดสำเร็จ ${ok} รูป ✓`, fail ? 'warning' : 'success');
+}
+
+async function uploadOne(q) {
+  q.status = 'uploading'; q.error = '';
+  renderItem(q); updateQueueSummary();
+  try {
+    const data = await readAsBase64(q.file);
+    const res = await gasFetch({ body: { action: 'upload', shop: q.shop.name, shopCode: q.shop.code, name: q.name, data }, timeout: 5 * 60 * 1000 });
+    // ช่วงแรกหลัง Deploy ใหม่ บางครั้ง POST ได้คำตอบของ doGet กลับมา (ไม่มี id) — แปลว่ารูปยังไม่ถูกบันทึก
+    if (!res.id) throw new Error('Apps Script ตอบกลับไม่ครบ รูปยังไม่ถูกบันทึก — กดลองใหม่อีกครั้ง');
+    if (!('shop' in res)) {
+      // Apps Script ยังเป็น v1.1 — รูปขึ้น Drive แล้วแต่ชื่อร้านไม่ถูกบันทึก
+      Object.assign(res, { shop: q.shop.name, shopCode: q.shop.code });
+      document.getElementById('backendNotice').classList.remove('hidden');
+    }
+    Object.assign(q, { status: 'done', result: res });
+    addHistoryRow(res);
+  } catch (e) {
+    Object.assign(q, { status: 'error', error: e.message });
+  }
+  renderItem(q); updateQueueSummary();
+}
+
+function linkBlock(r) {
+  const L = links(r.id), id = esc(r.id), a = ACCESS[r.access] || ACCESS.private;
+  return `<div class="link-row">
+      <input class="input input-sm" value="${esc(L.view)}" readonly onfocus="this.select()" aria-label="ลิงก์แชร์">
+      <button class="btn btn-gold btn-sm" data-act="copy" data-kind="view" data-id="${id}">📋 คัดลอกลิงก์</button>
+    </div>
+    <div class="link-actions">
+      <span class="badge ${a.cls}">${a.label}</span>
+      <button class="btn btn-outline btn-sm" data-act="copy" data-kind="direct" data-id="${id}">🔗 ลิงก์รูปตรง</button>
+      <button class="btn btn-outline btn-sm" data-act="copy" data-kind="formula" data-id="${id}">📊 สูตร Sheets</button>
+      ${navigator.share ? `<button class="btn btn-outline btn-sm" data-act="share" data-id="${id}">📤 แชร์</button>` : ''}
+      <a class="btn btn-outline btn-sm" href="${esc(L.view)}" target="_blank" rel="noopener">↗ เปิด</a>
+    </div>
+    ${r.access === 'domain' ? '<div class="txt-sm txt-muted mt-8">องค์กรปิดการแชร์ภายนอก — ลิงก์เปิดได้เฉพาะบัญชีในบริษัท และสูตร =IMAGE() จะไม่แสดงรูป</div>' : ''}
+    ${r.logged === false ? '<div class="txt-sm txt-danger mt-8">⚠️ รูปขึ้น Drive แล้ว แต่บันทึกประวัติลง Sheet ไม่สำเร็จ</div>' : ''}`;
+}
+
+function itemHTML(q) {
+  let extra = '';
+  if (q.status === 'uploading') extra = '<div class="pbar"><i></i></div>';
+  if (q.status === 'error') extra = `<div class="txt-sm txt-danger mt-8">${esc(q.error)}</div>`
+    + (q.fatal ? '' : `<button class="btn btn-outline btn-sm mt-8" onclick="retryItem(${q.uid})">↻ ลองใหม่</button>`);
+  if (q.status === 'done') extra = linkBlock(q.result);
+  const removable = q.status === 'pending' || q.status === 'error';
+  const zoom = q.status === 'done' ? ` data-act="preview" data-id="${esc(q.result.id)}" style="cursor:zoom-in"` : '';
+  return `<div class="q-item" id="q-${q.uid}">
+    <img class="q-thumb" src="${q.preview}" alt=""${zoom} onerror="thumbFail(this)">
+    <div class="q-info">
+      <div class="flex-between gap-8">
+        <div class="q-name">${esc(q.name)}</div>
+        ${removable ? `<button class="q-remove" onclick="removeItem(${q.uid})" title="เอาออกจากรายการ" aria-label="เอาออกจากรายการ">✕</button>` : ''}
+      </div>
+      <div class="q-meta">${formatBytes(q.size)} · ${STATUS_BADGE[q.status]}</div>
+      ${q.shop ? `<div class="q-shop">🏪 ${esc(q.shop.name)}</div>` : ''}
+      ${extra}
+    </div>
+  </div>`;
+}
+
+function renderQueue() {
+  document.getElementById('queueCard').classList.toggle('hidden', !queue.length);
+  document.getElementById('queueList').innerHTML = queue.map(itemHTML).join('');
+  updateQueueSummary();
+}
+function renderItem(q) {
+  const el = document.getElementById(`q-${q.uid}`);
+  if (el) el.outerHTML = itemHTML(q);
+}
+function updateQueueSummary() {
+  const count = s => queue.filter(q => q.status === s).length;
+  const pending = count('pending'), active = count('uploading'), done = count('done'), fail = count('error');
+  setBadge('qPending', pending + active ? `รอ ${pending + active}` : '');
+  setBadge('qDone', done ? `สำเร็จ ${done}` : '');
+  setBadge('qFail', fail ? `ไม่สำเร็จ ${fail}` : '');
+  const btn = document.getElementById('btnUpload');
+  btn.classList.toggle('hidden', !pending && !uploading);
+  btn.disabled = uploading;
+  btn.textContent = uploading ? `⏳ กำลังอัปโหลด… เหลือ ${pending + active} รูป`
+    : selectedShop ? `⬆️ อัปโหลด ${pending} รูป → ${selectedShop.name}` : `⬆️ อัปโหลด ${pending} รูป (เลือกร้านค้าก่อน)`;
+  const all = document.getElementById('btnCopyAll');
+  all.classList.toggle('hidden', done < 2);
+  all.textContent = `📋 คัดลอกลิงก์ทั้งหมด (${done} รูป)`;
+}
+
+function removeItem(uid) {
+  const i = queue.findIndex(q => q.uid === uid);
+  if (i < 0 || queue[i].status === 'uploading') return;
+  URL.revokeObjectURL(queue[i].preview);
+  queue.splice(i, 1);
+  renderQueue();
+}
+function retryItem(uid) {
+  const q = queue.find(x => x.uid === uid);
+  if (!q || q.fatal) return;
+  Object.assign(q, { status: 'pending', error: '' });
+  renderItem(q);
+  if (uploading) updateQueueSummary(); else startUpload();
+}
+function clearFinished() {
+  queue = queue.filter(q => {
+    const keep = q.status === 'pending' || q.status === 'uploading';
+    if (!keep) URL.revokeObjectURL(q.preview);
+    return keep;
+  });
+  renderQueue();
+}
+function copyAllLinks() {
+  const done = queue.filter(q => q.status === 'done');
+  if (done.length) copyText(done.map(q => links(q.result.id).view).join('\n'), `คัดลอกลิงก์ ${done.length} รูปแล้ว ✓`);
+}
+
+function initDropzone() {
+  const dz = document.getElementById('dropzone');
+  dz.addEventListener('click', e => { if (!e.target.closest('button')) pickFiles(false); });
+  ['fileInput', 'cameraInput'].forEach(id => document.getElementById(id).addEventListener('change', e => {
+    addFiles(e.target.files);
+    e.target.value = '';
+  }));
+  const hasFiles = e => [...(e.dataTransfer?.types || [])].includes('Files');
+  document.addEventListener('dragover', e => { if (hasFiles(e)) { e.preventDefault(); dz.classList.add('drag'); } });
+  document.addEventListener('dragleave', e => { if (!e.relatedTarget) dz.classList.remove('drag'); });
+  document.addEventListener('drop', e => {
+    dz.classList.remove('drag');
+    if (!e.dataTransfer?.files?.length) return;
+    e.preventDefault();
+    switchTab('upload');
+    addFiles(e.dataTransfer.files);
+  });
+  document.addEventListener('paste', e => {
+    const files = [...(e.clipboardData?.files || [])].filter(isImageFile);
+    if (!files.length) return;
+    e.preventDefault();
+    switchTab('upload');
+    addFiles(files);
+  });
+}
+
+// ปุ่มคัดลอก/แชร์/ดูรูป ใช้ data-* แทน onclick เพื่อไม่ต้องฝังข้อความลงใน JS string
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]');
+  if (!el) return;
+  const L = links(el.dataset.id);
+  if (el.dataset.act === 'copy') copyText(L[el.dataset.kind], COPY_MSG[el.dataset.kind]);
+  else if (el.dataset.act === 'share') shareLink(L.view);
+  else if (el.dataset.act === 'preview') openPreview(el.dataset.id);
+});
+window.addEventListener('beforeunload', e => { if (uploading) { e.preventDefault(); e.returnValue = ''; } });
+// ═══ History ═══
+let histRows = [];
+let filtered = [];
+let shown = APP_CONFIG.pageSize;
+const sortState = { key: 'ts', dir: 'desc' };  // ค่าเริ่มต้น: ล่าสุดอยู่บน
+
+function getCachedHistory() {
+  try {
+    const c = JSON.parse(store.get(LS.history));
+    return c && c.url === getGasUrl() && Array.isArray(c.data) ? c : null;
+  } catch { return null; }
+}
+function saveHistoryCache(ts) {
+  store.set(LS.history, JSON.stringify({ ts, url: getGasUrl(), data: histRows }));
+}
+
+async function fetchHistory() {
+  const res = await gasFetch({ params: { action: 'history', limit: APP_CONFIG.historyLimit } });
+  histRows = res.rows || [];
+  saveHistoryCache(Date.now());
+  applyFilters();
+}
+
+// stale-while-revalidate: แสดงจาก cache ทันที แล้วโหลดใหม่เมื่อ cache เกิน 5 นาที
+async function loadHistory(force = false) {
+  if (!getGasUrl()) { histRows = []; applyFilters(); return; }
+  const c = getCachedHistory();
+  if (c) {
+    histRows = c.data; applyFilters();
+    if (!force && Date.now() - c.ts < TTL) return;
+  }
+  setLoading(true);
+  try { await fetchHistory(); }
+  catch (e) { showToast(`โหลดประวัติไม่สำเร็จ: ${e.message}`, 'error'); }
+  finally { setLoading(false); }
+}
+
+function addHistoryRow(r) {
+  histRows = [r, ...histRows.filter(x => x.id !== r.id)];
+  saveHistoryCache(getCachedHistory()?.ts || 0);
+  applyFilters();
+}
+
+function applyFilters() {
+  const q = document.getElementById('fSearch').value.trim().toLowerCase();
+  const from = document.getElementById('fFrom').value;
+  const to = document.getElementById('fTo').value;
+  filtered = histRows.filter(r => {
+    if (q && !`${r.shop || ''} ${r.shopCode || ''} ${r.name} ${r.originalName}`.toLowerCase().includes(q)) return false;
+    const day = dayKey(r.ts);
+    return (!from || day >= from) && (!to || day <= to);
+  });
+  shown = APP_CONFIG.pageSize;
+  renderHistory();
+  renderStats();
+}
+function clearFilters() {
+  ['fSearch', 'fFrom', 'fTo'].forEach(id => { document.getElementById(id).value = ''; });
+  applyFilters();
+}
+function showMore() {
+  shown += APP_CONFIG.pageSize;
+  renderHistory();
+}
+
+function sortRows(rows, key, type, dir) {
+  const m = dir === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const va = a[key], vb = b[key];
+    if (type === 'num')  return ((parseFloat(va) || 0) - (parseFloat(vb) || 0)) * m;
+    if (type === 'date') return (new Date(va) - new Date(vb)) * m;
+    return String(va || '').localeCompare(String(vb || ''), 'th') * m;
+  });
+}
+function updateSortIndicators(tableId) {
+  document.querySelectorAll(`#${tableId} thead th`).forEach(th => {
+    const ind = th.querySelector('.sort-ind');
+    if (!ind) return;
+    ind.textContent = th.dataset.key === sortState.key ? (sortState.dir === 'asc' ? '▲' : '▼') : '';
+  });
+}
+function bindHeaderSort(tableId, rerender) {
+  document.querySelectorAll(`#${tableId} thead th`).forEach(th => {
+    if (!th.dataset.key) return;
+    th.addEventListener('click', () => {
+      const key  = th.dataset.key;
+      const type = th.dataset.type || 'str';
+      if (sortState.key === key) {
+        sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortState.key = key;
+        sortState.dir = (type === 'date' || type === 'num') ? 'desc' : 'asc';
+      }
+      rerender();
+      updateSortIndicators(tableId);
+    });
+  });
+}
+function sortedRows() {
+  const th = document.querySelector(`#histTbl th[data-key="${sortState.key}"]`);
+  return sortRows(filtered, sortState.key, th?.dataset.type || 'str', sortState.dir);
+}
+
+function rowHTML(r) {
+  const id = esc(r.id), a = ACCESS[r.access] || ACCESS.private;
+  return `<tr>
+    <td><img class="t-thumb" src="${esc(links(r.id).thumb)}" loading="lazy" alt="" data-act="preview" data-id="${id}" onerror="thumbFail(this)"></td>
+    <td class="nowrap">${formatThaiDate(r.ts)}<div class="txt-sm txt-muted">${formatThaiTime(r.ts)} น.</div></td>
+    <td class="shop">${r.shop ? esc(r.shop) + (r.shopCode ? `<div class="txt-sm txt-muted">${esc(r.shopCode)}</div>` : '') : '<span class="txt-muted">-</span>'}</td>
+    <td class="nowrap">
+      <button class="btn btn-gold btn-sm" data-act="copy" data-kind="view" data-id="${id}" title="คัดลอกลิงก์แชร์">📋 ลิงก์</button>
+      <button class="btn btn-outline btn-sm" data-act="copy" data-kind="direct" data-id="${id}" title="คัดลอกลิงก์รูปตรง" aria-label="คัดลอกลิงก์รูปตรง">🔗</button>
+      <button class="btn btn-outline btn-sm" data-act="copy" data-kind="formula" data-id="${id}" title="คัดลอกสูตร =IMAGE()" aria-label="คัดลอกสูตร Google Sheets">📊</button>
+    </td>
+    <td class="fname">${esc(r.name)}</td>
+    <td class="num">${formatBytes(r.size)}</td>
+    <td><span class="badge ${a.cls}">${a.label}</span></td>
+  </tr>`;
+}
+
+function renderHistory() {
+  const rows = sortedRows();
+  let empty = '';
+  if (!getGasUrl()) empty = 'ยังไม่ได้เชื่อมต่อ Apps Script — กดปุ่ม ⚙️ ด้านบนเพื่อตั้งค่า';
+  else if (!rows.length) empty = histRows.length ? 'ไม่พบรายการตามตัวกรอง' : 'ยังไม่มีประวัติการอัปโหลด';
+  document.getElementById('histBody').innerHTML = empty
+    ? `<tr class="empty-row"><td colspan="7">${empty}</td></tr>`
+    : rows.slice(0, shown).map(rowHTML).join('');
+  document.getElementById('histMoreWrap').classList.toggle('hidden', rows.length <= shown);
+  document.getElementById('histSummary').textContent = rows.length
+    ? `แสดง ${Math.min(shown, rows.length).toLocaleString('th-TH')} จาก ${rows.length.toLocaleString('th-TH')} รายการ` : '';
+  updateSortIndicators('histTbl');
+}
+
+function renderStats() {
+  const n = histRows.length;
+  const today = dayKey(new Date());
+  const weekAgo = Date.now() - 7 * 864e5;
+  document.getElementById('stTotal').textContent = n.toLocaleString('th-TH');
+  document.querySelector('#stTotal + .s-sub').textContent = n >= APP_CONFIG.historyLimit ? `ล่าสุด ${n.toLocaleString('th-TH')} รายการ` : 'ในประวัติ';
+  document.getElementById('stToday').textContent = histRows.filter(r => dayKey(r.ts) === today).length.toLocaleString('th-TH');
+  document.getElementById('stWeek').textContent = histRows.filter(r => new Date(r.ts) >= weekAgo).length.toLocaleString('th-TH');
+  document.getElementById('stSize').textContent = n ? formatBytes(histRows.reduce((s, r) => s + (Number(r.size) || 0), 0)) : '-';
+  setBadge('histCount', n ? n.toLocaleString('th-TH') : '');
+}
+
+function exportHistory() {
+  const rows = sortedRows();
+  if (!rows.length) { showToast('ไม่มีข้อมูลให้ Export', 'warning'); return; }
+  if (!window.XLSX) { showToast('โหลดตัว Export Excel ไม่สำเร็จ — ลองรีเฟรชหน้า', 'error'); return; }
+  const data = rows.map(r => {
+    const L = links(r.id);
+    return {
+      'วันที่': formatThaiDate(r.ts),
+      'เวลา': formatThaiTime(r.ts),
+      'รหัสร้าน': String(r.shopCode || ''),
+      'ชื่อร้านค้า': r.shop || '',
+      'ชื่อไฟล์': r.name,
+      'ชื่อไฟล์เดิม': r.originalName,
+      'ขนาด': formatBytes(r.size),
+      'สิทธิ์': (ACCESS[r.access] || ACCESS.private).text,
+      'ลิงก์แชร์': L.view,
+      'ลิงก์รูปตรง': L.direct,
+      'สูตร Google Sheets': L.formula,
+      'File ID': String(r.id),
+    };
+  });
+  const ws = XLSX.utils.json_to_sheet(data), wb = XLSX.utils.book_new();
+  ws['!cols'] = [12, 8, 14, 36, 40, 30, 10, 16, 62, 58, 72, 36].map(wch => ({ wch }));
+  XLSX.utils.book_append_sheet(wb, ws, 'ประวัติอัปโหลด');
+  XLSX.writeFile(wb, `${APP_CONFIG.name} - ประวัติอัปโหลด ${formatThaiDate(new Date()).replaceAll('/', '-')}.xlsx`);
+  showToast(`Export ${data.length.toLocaleString('th-TH')} รายการ ✓`, 'success');
+}
+
+function openPreview(id) {
+  const r = histRows.find(x => x.id === id) || queue.find(q => q.result?.id === id)?.result;
+  if (!r) return;
+  document.getElementById('pvTitle').textContent = r.name;
+  document.getElementById('pvBody').innerHTML = `
+    <img class="preview-img" src="${esc(links(id).direct)}" alt="${esc(r.name)}" onerror="thumbFail(this)">
+    ${r.shop ? `<div class="txt-bold mt-8">🏪 ${esc(r.shop)}${r.shopCode ? ` <span class="txt-sm txt-muted">(${esc(r.shopCode)})</span>` : ''}</div>` : ''}
+    <div class="txt-sm txt-muted mt-8">${formatThaiDateTime(r.ts)} น. · ${formatBytes(r.size)}</div>
+    ${linkBlock(r)}`;
+  openModal('previewModal');
+}
+
+// ═══ Settings ═══
+const updateSetupNotice = () => document.getElementById('setupNotice').classList.toggle('hidden', !!getGasUrl());
+
+function validateGasUrl(url) {
+  if (!url) return 'กรุณาวาง Web App URL';
+  if (/\/dev$/.test(url)) return 'URL ที่ลงท้าย /dev ใช้ได้เฉพาะเจ้าของสคริปต์ — ให้ใช้ URL จาก Deploy ที่ลงท้าย /exec';
+  if (!/^https:\/\/script\.google\.com\/\S+\/exec$/.test(url)) return 'URL ต้องขึ้นต้นด้วย https://script.google.com/ และลงท้ายด้วย /exec';
+  return '';
+}
+function openSettings() {
+  document.getElementById('gasUrlInput').value = getGasUrl();
+  document.getElementById('connResult').innerHTML = '';
+  document.getElementById('setupSteps').open = !getGasUrl();
+  openModal('settingsModal');
+}
+async function testConnection() {
+  const url = document.getElementById('gasUrlInput').value.trim();
+  const out = document.getElementById('connResult');
+  const invalid = validateGasUrl(url);
+  if (invalid) { out.innerHTML = `<div class="alert alert-danger">✕ ${esc(invalid)}</div>`; return false; }
+  const btns = ['btnTest', 'btnSaveSettings'].map(id => document.getElementById(id));
+  btns.forEach(b => { b.disabled = true; });
+  out.innerHTML = '<div class="alert">⏳ กำลังทดสอบการเชื่อมต่อ...</div>';
+  try {
+    const res = await gasFetch({ base: url, timeout: 30000 });
+    out.innerHTML = `<div class="alert alert-ok">✓ เชื่อมต่อสำเร็จ<br>
+      📁 <a href="${esc(res.folderUrl)}" target="_blank" rel="noopener">${esc(res.folderName)}</a> ·
+      📄 <a href="${esc(res.sheetUrl)}" target="_blank" rel="noopener">Google Sheet ประวัติ</a></div>`;
+    return true;
+  } catch (e) {
+    out.innerHTML = `<div class="alert alert-danger">✕ ${esc(e.message)}</div>`;
+    return false;
+  } finally {
+    btns.forEach(b => { b.disabled = false; });
+  }
+}
+async function saveSettings() {
+  if (!(await testConnection())) return;
+  const url = document.getElementById('gasUrlInput').value.trim();
+  if (url === APP_CONFIG.gasUrl) store.del(LS.gasUrl); else store.set(LS.gasUrl, url);
+  store.del(LS.history);
+  histRows = [];
+  closeModal('settingsModal');
+  updateSetupNotice();
+  showToast('เชื่อมต่อ Google Drive เรียบร้อย ✓', 'success');
+  loadHistory(true);
+}
+
+// ═══ Theme / Tabs / Refresh ═══
+function applyTheme(dark) {
+  document.body.classList.toggle('dark', dark);
+  document.getElementById('btnTheme').textContent = dark ? '☀️' : '🌙';
+}
+function toggleTheme() {
+  const dark = !document.body.classList.contains('dark');
+  applyTheme(dark);
+  store.set(LS.theme, dark ? 'dark' : 'light');
+}
+
+let currentTab = 'upload';
+function switchTab(name) {
+  if (name === currentTab) return;
+  currentTab = name;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${name}`));
+  store.set(LS.tab, name);
+  window.scrollTo({ top: 0 });
+  if (name === 'history') loadHistory();
+}
+
+async function refreshData() {
+  if (!getGasUrl()) { openSettings(); return; }
+  const b = document.getElementById('btnRefresh');
+  b.disabled = true; b.style.transform = 'rotate(360deg)'; b.style.transition = 'transform .6s';
+  showSpinner('กำลังโหลดประวัติและรายชื่อร้านค้า...');
+  try {
+    await Promise.all([fetchHistory(), loadShops({ force: true, quiet: true })]);
+    showToast('อัพเดทเรียบร้อย ✓', 'success');
+  } catch (e) {
+    showToast(`โหลดประวัติไม่สำเร็จ: ${e.message}`, 'error');
+  } finally {
+    hideSpinner();
+    b.disabled = false;
+    setTimeout(() => { b.style.transform = ''; b.style.transition = ''; }, 600);
+  }
+}
+
+function syncTopHeight() {
+  document.documentElement.style.setProperty('--top-h', `${document.getElementById('topbar').offsetHeight}px`);
+}
+
+window.addEventListener('scroll', () => {
+  document.getElementById('backToTop').classList.toggle('show', window.scrollY > 300);
+}, { passive: true });
+window.addEventListener('resize', syncTopHeight);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  const theme = store.get(LS.theme);
+  applyTheme(theme ? theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches);
+  syncTopHeight();
+  document.fonts?.ready.then(syncTopHeight);
+  initDropzone();
+  initShopPicker();
+  loadShops();
+  bindHeaderSort('histTbl', renderHistory);
+  updateSetupNotice();
+  const cached = getCachedHistory();
+  if (cached) histRows = cached.data;
+  applyFilters();
+  if (store.get(LS.tab) === 'history') switchTab('history');
+  else if (getGasUrl()) loadHistory();
+});
+</script>
+</body>
+</html>
