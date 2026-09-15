@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0d1b3e">
-<title>Rattana Update Photo Shop v1.5</title>
+<title>Rattana Update Photo Shop v1.6</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
@@ -291,7 +291,7 @@ body.dark .alert-danger{background:#3a1a17;border-color:#5c2a25;color:#ff8a7e}
 
 <div class="topbar" id="topbar">
   <header>
-    <div class="logo-text">Rattana <span>Update Photo Shop</span> <span class="ver-badge">v1.5 · 2026-09-15</span></div>
+    <div class="logo-text">Rattana <span>Update Photo Shop</span> <span class="ver-badge">v1.6 · 2026-09-15</span></div>
     <div class="hdr-actions">
       <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรชประวัติ" aria-label="รีเฟรชประวัติ">⟳</button>
       <button class="icon-btn" onclick="openSettings()" title="ตั้งค่าการเชื่อมต่อ" aria-label="ตั้งค่า">⚙️</button>
@@ -411,7 +411,7 @@ body.dark .alert-danger{background:#3a1a17;border-color:#5c2a25;color:#ff8a7e}
   </section>
 </main>
 
-<footer class="app-footer">Rattana Update Photo Shop v1.5 · 2026-09-15</footer>
+<footer class="app-footer">Rattana Update Photo Shop v1.6 · 2026-09-15</footer>
 <button id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="กลับขึ้นด้านบน">↑</button>
 
 <!-- ═══ Settings modal ═══ -->
@@ -453,7 +453,7 @@ body.dark .alert-danger{background:#3a1a17;border-color:#5c2a25;color:#ff8a7e}
 // ═══ Config ═══
 const APP_CONFIG = {
   name: 'Rattana Update Photo Shop',
-  version: '1.5',
+  version: '1.6',
   build: '2026-09-15',
   gasUrl: 'https://script.google.com/macros/s/AKfycbwSREx-hFwY-bKUGWGcxGYAmxo6BCxcqlsiI3RnpGGe43bvJk-N4NCFIgWdW6as2ky47Q/exec',          // วาง Web App URL (…/exec) ตรงนี้ก่อนขึ้น GitHub Pages → ผู้ใช้ทุกคนใช้ได้ทันทีโดยไม่ต้องตั้งค่าเอง
   maxFileMB: 20,       // ต้องไม่เกิน CONFIG.MAX_BYTES ใน Apps Script
@@ -571,9 +571,24 @@ async function shareLink(url) {
 }
 
 // ═══ Apps Script API ═══
+// Google ตอบผิดพลาดชั่วคราวได้เป็นระยะ (หน้า 404 / ตอบช้า) — คำขอแบบ GET จึงลองใหม่ให้อัตโนมัติ
 // ส่ง body เป็น string → Content-Type: text/plain → ไม่เกิด CORS preflight (Apps Script ตอบ OPTIONS ไม่ได้)
 // ด้วยเหตุผลเดียวกันจึงไม่ใช้ XHR upload progress (ผูก event กับ xhr.upload แล้วเบราว์เซอร์จะยิง preflight)
-async function gasFetch({ params, body, timeout = 60000, base = getGasUrl() } = {}) {
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const transientError = message => Object.assign(new Error(message), { transient: true });
+
+async function gasFetch({ params, body, timeout = 60000, base = getGasUrl(), retries = body ? 0 : 2 } = {}) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await gasFetchOnce({ params, body, timeout, base });
+    } catch (e) {
+      if (!e.transient || attempt >= retries) throw e;
+      await wait(1500 * (attempt + 1));
+    }
+  }
+}
+
+async function gasFetchOnce({ params, body, timeout, base }) {
   if (!base) throw new Error('ยังไม่ได้ตั้งค่า Apps Script URL');
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeout);
@@ -584,12 +599,12 @@ async function gasFetch({ params, body, timeout = 60000, base = getGasUrl() } = 
     const text = await res.text();
     let json;
     try { json = JSON.parse(text); }
-    catch { throw new Error('Apps Script ไม่ได้ตอบกลับเป็น JSON — ตรวจว่า Deploy เป็น Web app แบบ Anyone และใช้ URL ที่ลงท้าย /exec'); }
+    catch { throw transientError('Google ตอบกลับผิดพลาดชั่วคราว'); }
     if (!json.ok) throw new Error(json.error || 'Apps Script แจ้งข้อผิดพลาด');
     return json;
   } catch (e) {
-    if (e.name === 'AbortError') throw new Error('หมดเวลาเชื่อมต่อ — ลองใหม่อีกครั้ง');
-    if (e instanceof TypeError) throw new Error('เชื่อมต่อ Apps Script ไม่ได้ — ตรวจอินเทอร์เน็ต และตั้ง Who has access เป็น Anyone');
+    if (e.name === 'AbortError') throw transientError('หมดเวลาเชื่อมต่อ');
+    if (e instanceof TypeError) throw transientError('เชื่อมต่อ Apps Script ไม่ได้ — ตรวจอินเทอร์เน็ต');
     throw e;
   } finally {
     clearTimeout(timer);
@@ -855,24 +870,64 @@ async function startUpload() {
 }
 
 async function uploadOne(q) {
-  q.status = 'uploading'; q.error = '';
+  Object.assign(q, { status: 'uploading', error: '', note: '' });
   renderItem(q); updateQueueSummary();
   try {
-    const data = await readAsBase64(q.file);
-    const res = await gasFetch({ body: { action: 'upload', shop: q.shop.name, shopCode: q.shop.code, name: q.name, data }, timeout: 5 * 60 * 1000 });
-    // ช่วงแรกหลัง Deploy ใหม่ บางครั้ง POST ได้คำตอบของ doGet กลับมา (ไม่มี id) — แปลว่ารูปยังไม่ถูกบันทึก
-    if (!res.id) throw new Error('Apps Script ตอบกลับไม่ครบ รูปยังไม่ถูกบันทึก — กดลองใหม่อีกครั้ง');
-    if (!('shop' in res)) {
-      // Apps Script ยังเป็น v1.1 — รูปขึ้น Drive แล้วแต่ชื่อร้านไม่ถูกบันทึก
-      Object.assign(res, { shop: q.shop.name, shopCode: q.shop.code });
-      document.getElementById('backendNotice').classList.remove('hidden');
-    }
-    Object.assign(q, { status: 'done', result: res });
-    addHistoryRow(res);
+    // เคยส่งไปแล้ว (กดลองใหม่): เช็คประวัติก่อนว่ารูปถูกบันทึกไปแล้วหรือยัง
+    const saved = q.firstTry ? await findSavedUpload(q) : null;
+    if (saved) finishUpload(q, saved);
+    else await sendUpload(q);
   } catch (e) {
-    Object.assign(q, { status: 'error', error: e.message });
+    Object.assign(q, { status: 'error', error: e.message, note: '' });
   }
   renderItem(q); updateQueueSummary();
+}
+
+async function sendUpload(q) {
+  q.firstTry = q.firstTry || Date.now();
+  const data = await readAsBase64(q.file);
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const res = await gasFetch({ body: { action: 'upload', shop: q.shop.name, shopCode: q.shop.code, name: q.name, data }, timeout: 5 * 60 * 1000 });
+      // ช่วงแรกหลัง Deploy ใหม่ บางครั้ง POST ได้คำตอบของ doGet กลับมา (ไม่มี id) — แปลว่ารูปยังไม่ถูกบันทึก
+      if (!res.id) throw transientError('Apps Script ตอบกลับไม่ครบ');
+      return finishUpload(q, res);
+    } catch (e) {
+      if (!e.transient) throw e;
+      // คำตอบอาจหายระหว่างทางหลังบันทึกรูปไปแล้ว — เช็คประวัติก่อนส่งซ้ำ จะได้ไม่เกิดรูปซ้ำ
+      const saved = await findSavedUpload(q);
+      if (saved) return finishUpload(q, saved);
+      if (attempt >= 3) throw new Error(`${e.message} (ลองแล้ว ${attempt} ครั้ง) — กดลองใหม่ได้ ระบบจะเช็คก่อนว่ารูปถูกบันทึกหรือยัง`);
+      q.note = `${e.message} — กำลังลองใหม่ครั้งที่ ${attempt + 1}…`;
+      renderItem(q);
+      await wait(2000 * attempt);
+    }
+  }
+}
+
+// หารูปนี้ในประวัติ: ขนาดไฟล์ตรงกัน + ร้านเดียวกัน + บันทึกหลังจากเริ่มส่งครั้งแรก
+async function findSavedUpload(q) {
+  let rows;
+  try {
+    rows = (await gasFetch({ params: { action: 'history', limit: 30 }, timeout: 30000 })).rows || [];
+  } catch {
+    throw new Error('ตรวจกับ Google ไม่ได้ว่ารูปถูกบันทึกหรือยัง — กดลองใหม่อีกครั้ง');
+  }
+  const since = q.firstTry - 2 * 60 * 1000;
+  return rows.find(r => Number(r.size) === q.file.size
+    && new Date(r.ts).getTime() >= since
+    && (!r.shopCode || r.shopCode === String(q.shop.code || ''))
+    && !queue.some(o => o !== q && o.result && o.result.id === r.id)) || null;
+}
+
+function finishUpload(q, res) {
+  if (!('shop' in res)) {
+    // Apps Script ยังเป็น v1.1 — รูปขึ้น Drive แล้วแต่ชื่อร้านไม่ถูกบันทึก
+    Object.assign(res, { shop: q.shop.name, shopCode: q.shop.code });
+    document.getElementById('backendNotice').classList.remove('hidden');
+  }
+  Object.assign(q, { status: 'done', result: res, note: '' });
+  addHistoryRow(res);
 }
 
 function linkBlock(r) {
@@ -894,7 +949,7 @@ function linkBlock(r) {
 
 function itemHTML(q) {
   let extra = '';
-  if (q.status === 'uploading') extra = '<div class="pbar"><i></i></div>';
+  if (q.status === 'uploading') extra = '<div class="pbar"><i></i></div>' + (q.note ? `<div class="txt-sm txt-muted mt-8">${esc(q.note)}</div>` : '');
   if (q.status === 'error') extra = `<div class="txt-sm txt-danger mt-8">${esc(q.error)}</div>`
     + (q.fatal ? '' : `<button class="btn btn-outline btn-sm mt-8" onclick="retryItem(${q.uid})">↻ ลองใหม่</button>`);
   if (q.status === 'done') extra = linkBlock(q.result);
@@ -1212,13 +1267,14 @@ async function testConnection() {
   btns.forEach(b => { b.disabled = true; });
   out.innerHTML = '<div class="alert">⏳ กำลังทดสอบการเชื่อมต่อ...</div>';
   try {
-    const res = await gasFetch({ base: url, timeout: 30000 });
+    const res = await gasFetch({ base: url, timeout: 30000, retries: 1 });
     out.innerHTML = `<div class="alert alert-ok">✓ เชื่อมต่อสำเร็จ<br>
       📁 <a href="${esc(res.folderUrl)}" target="_blank" rel="noopener">${esc(res.folderName)}</a> ·
       📄 <a href="${esc(res.sheetUrl)}" target="_blank" rel="noopener">Google Sheet ประวัติ</a></div>`;
     return true;
   } catch (e) {
-    out.innerHTML = `<div class="alert alert-danger">✕ ${esc(e.message)}</div>`;
+    const hint = e.transient ? ' — ถ้าเป็นทุกครั้ง ให้ตรวจว่า Deploy เป็น Web app แบบ Anyone และใช้ URL ที่ลงท้าย /exec' : '';
+    out.innerHTML = `<div class="alert alert-danger">✕ ${esc(e.message + hint)}</div>`;
     return false;
   } finally {
     btns.forEach(b => { b.disabled = false; });
