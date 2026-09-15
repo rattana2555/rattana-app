@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0d1b3e">
-<title>Rattana Update Photo Shop v1.6</title>
+<title>Rattana Update Photo Shop v1.7</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
@@ -291,7 +291,7 @@ body.dark .alert-danger{background:#3a1a17;border-color:#5c2a25;color:#ff8a7e}
 
 <div class="topbar" id="topbar">
   <header>
-    <div class="logo-text">Rattana <span>Update Photo Shop</span> <span class="ver-badge">v1.6 · 2026-09-15</span></div>
+    <div class="logo-text">Rattana <span>Update Photo Shop</span> <span class="ver-badge">v1.7 · 2026-09-15</span></div>
     <div class="hdr-actions">
       <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรชประวัติ" aria-label="รีเฟรชประวัติ">⟳</button>
       <button class="icon-btn" onclick="openSettings()" title="ตั้งค่าการเชื่อมต่อ" aria-label="ตั้งค่า">⚙️</button>
@@ -411,7 +411,7 @@ body.dark .alert-danger{background:#3a1a17;border-color:#5c2a25;color:#ff8a7e}
   </section>
 </main>
 
-<footer class="app-footer">Rattana Update Photo Shop v1.6 · 2026-09-15</footer>
+<footer class="app-footer">Rattana Update Photo Shop v1.7 · 2026-09-15</footer>
 <button id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="กลับขึ้นด้านบน">↑</button>
 
 <!-- ═══ Settings modal ═══ -->
@@ -453,7 +453,7 @@ body.dark .alert-danger{background:#3a1a17;border-color:#5c2a25;color:#ff8a7e}
 // ═══ Config ═══
 const APP_CONFIG = {
   name: 'Rattana Update Photo Shop',
-  version: '1.6',
+  version: '1.7',
   build: '2026-09-15',
   gasUrl: 'https://script.google.com/macros/s/AKfycbwSREx-hFwY-bKUGWGcxGYAmxo6BCxcqlsiI3RnpGGe43bvJk-N4NCFIgWdW6as2ky47Q/exec',          // วาง Web App URL (…/exec) ตรงนี้ก่อนขึ้น GitHub Pages → ผู้ใช้ทุกคนใช้ได้ทันทีโดยไม่ต้องตั้งค่าเอง
   maxFileMB: 20,       // ต้องไม่เกิน CONFIG.MAX_BYTES ใน Apps Script
@@ -866,15 +866,19 @@ async function startUpload() {
   uploading = false; updateQueueSummary();
   const ok = batch.filter(q => q.status === 'done').length;
   const fail = batch.filter(q => q.status === 'error').length;
-  showToast(fail ? `สำเร็จ ${ok} รูป · ไม่สำเร็จ ${fail} รูป` : `อัปโหลดสำเร็จ ${ok} รูป ✓`, fail ? 'warning' : 'success');
+  const reused = batch.filter(q => q.reused && q.status === 'done').length;
+  const reusedText = reused ? ` (${reused} รูปเคยอัปแล้ว ใช้ลิงก์เดิม)` : '';
+  showToast(fail ? `สำเร็จ ${ok} รูป · ไม่สำเร็จ ${fail} รูป${reusedText}` : `อัปโหลดสำเร็จ ${ok} รูป ✓${reusedText}`, fail ? 'warning' : 'success');
 }
 
 async function uploadOne(q) {
-  Object.assign(q, { status: 'uploading', error: '', note: '' });
+  Object.assign(q, { status: 'uploading', error: '', note: '', startedAt: Date.now() });
   renderItem(q); updateQueueSummary();
   try {
-    // เคยส่งไปแล้ว (กดลองใหม่): เช็คประวัติก่อนว่ารูปถูกบันทึกไปแล้วหรือยัง
-    const saved = q.firstTry ? await findSavedUpload(q) : null;
+    // รูปที่มีในประวัติแล้วใช้ลิงก์เดิม / เคยส่งไปแล้ว (กดลองใหม่) เช็คประวัติก่อนว่าบันทึกไปแล้วหรือยัง
+    const before = q.firstTry ? null : findUploadedBefore(q);
+    const saved = before || (q.firstTry ? await findSavedUpload(q) : null);
+    q.reused = !!before;
     if (saved) finishUpload(q, saved);
     else await sendUpload(q);
   } catch (e) {
@@ -920,6 +924,13 @@ async function findSavedUpload(q) {
     && !queue.some(o => o !== q && o.result && o.result.id === r.id)) || null;
 }
 
+// รูปเดียวกัน (ชื่อไฟล์ + ขนาด + ร้าน) ที่มีอยู่แล้วในประวัติ เช่น เลือกรูปเดิมซ้ำหลังรีเฟรชหน้า
+function findUploadedBefore(q) {
+  return histRows.find(r => r.originalName === q.name
+    && Number(r.size) === q.file.size
+    && (!r.shopCode || r.shopCode === String(q.shop.code || ''))) || null;
+}
+
 function finishUpload(q, res) {
   if (!('shop' in res)) {
     // Apps Script ยังเป็น v1.1 — รูปขึ้น Drive แล้วแต่ชื่อร้านไม่ถูกบันทึก
@@ -949,10 +960,11 @@ function linkBlock(r) {
 
 function itemHTML(q) {
   let extra = '';
-  if (q.status === 'uploading') extra = '<div class="pbar"><i></i></div>' + (q.note ? `<div class="txt-sm txt-muted mt-8">${esc(q.note)}</div>` : '');
+  if (q.status === 'uploading') extra = '<div class="pbar"><i></i></div>'
+    + `<div class="txt-sm txt-muted mt-8">${q.note ? `${esc(q.note)} · ` : ''}ผ่านไป <span data-since="${q.startedAt || Date.now()}">0</span> วินาที</div>`;
   if (q.status === 'error') extra = `<div class="txt-sm txt-danger mt-8">${esc(q.error)}</div>`
     + (q.fatal ? '' : `<button class="btn btn-outline btn-sm mt-8" onclick="retryItem(${q.uid})">↻ ลองใหม่</button>`);
-  if (q.status === 'done') extra = linkBlock(q.result);
+  if (q.status === 'done') extra = (q.reused ? '<div class="txt-sm txt-muted mt-8">♻️ รูปนี้เคยอัปโหลดแล้ว — ใช้ลิงก์เดิม ไม่อัปซ้ำ</div>' : '') + linkBlock(q.result);
   const removable = q.status === 'pending' || q.status === 'error';
   const zoom = q.status === 'done' ? ` data-act="preview" data-id="${esc(q.result.id)}" style="cursor:zoom-in"` : '';
   return `<div class="q-item" id="q-${q.uid}">
@@ -1056,6 +1068,9 @@ document.addEventListener('click', e => {
   else if (el.dataset.act === 'share') shareLink(L.view);
   else if (el.dataset.act === 'preview') openPreview(el.dataset.id);
 });
+setInterval(() => {
+  document.querySelectorAll('[data-since]').forEach(el => { el.textContent = Math.round((Date.now() - Number(el.dataset.since)) / 1000); });
+}, 1000);
 window.addEventListener('beforeunload', e => { if (uploading) { e.preventDefault(); e.returnValue = ''; } });
 // ═══ History ═══
 let histRows = [];
