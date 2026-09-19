@@ -80,7 +80,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 
 <header class="app-header">
   <h1>Rattana <span>CN Dashboard</span></h1>
-  <span class="ver-badge">v1.3 &middot; 2026-09-19</span>
+  <span class="ver-badge">v1.4 &middot; 2026-09-19</span>
 </header>
 
 <div class="container">
@@ -313,25 +313,44 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     document.getElementById('remarkSubtitle').textContent = `รวม ${fmtComma(totalBills)} บิล (ไม่ซ้ำ) / ${items.length} หมายเหตุ`;
 
     const svg = document.getElementById('remarkCanvas');
-    const rowH = 32, gap = 4, labelW = 220, barArea = 500, pad = { t: 10, r: 20, b: 10, l: 10 };
-    const W = labelW + barArea + pad.l + pad.r;
-    const H = pad.t + items.length * (rowH + gap) + pad.b;
+    const n = items.length;
+    const pad = { t: 40, r: 20, b: 130, l: 55 };
+    const W = Math.max(780, n * 38 + pad.l + pad.r);
+    const H = 420;
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     svg.style.width = '100%';
     svg.style.height = 'auto';
 
-    const maxVal = items[0].count;
+    const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
+    const maxVal = Math.ceil(items[0].count / 500) * 500;
+    const slotW = cw / n;
+    const barW = Math.min(24, slotW - 4);
+    const xS = i => pad.l + slotW / 2 + i * slotW;
+    const yS = v => pad.t + ch - (v / maxVal) * ch;
+    const baseline = yS(0);
+
     let g = '';
 
-    items.forEach((d, i) => {
-      const y = pad.t + i * (rowH + gap);
-      const barW = Math.max(2, (d.count / maxVal) * barArea);
-      const color = REMARK_COLORS[i % REMARK_COLORS.length];
-      const truncLabel = d.remark.length > 28 ? d.remark.slice(0, 26) + '...' : d.remark;
+    for (let tick = 0; tick <= maxVal; tick += Math.ceil(maxVal / 5 / 500) * 500) {
+      const y = yS(tick);
+      g += `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" class="grid-line"/>`;
+      g += `<text x="${pad.l - 10}" y="${y + 4}" text-anchor="end" class="axis-label">${fmtComma(tick)}</text>`;
+    }
 
-      g += `<text x="${pad.l + labelW - 8}" y="${y + rowH / 2 + 4}" text-anchor="end" style="font-size:12px;fill:var(--text-2)">${truncLabel}</text>`;
-      g += `<rect x="${pad.l + labelW}" y="${y + 2}" width="${barW}" height="${rowH - 4}" rx="3" ry="3" fill="${color}" opacity="0.7" data-ri="${i}"/>`;
-      g += `<text x="${pad.l + labelW + barW + 6}" y="${y + rowH / 2 + 4}" style="font-size:12px;font-weight:600;fill:var(--text-1)">${fmtComma(d.count)}</text>`;
+    items.forEach((d, i) => {
+      const color = REMARK_COLORS[i % REMARK_COLORS.length];
+      const barTop = yS(d.count);
+      const barH = baseline - barTop;
+      g += `<rect x="${xS(i) - barW / 2}" y="${barTop}" width="${barW}" height="${barH}" rx="3" ry="3" fill="${color}" opacity="0.7" data-ri="${i}"/>`;
+
+      g += `<text x="${xS(i)}" y="${barTop - 6}" text-anchor="middle" style="font-size:9px;font-weight:600;fill:var(--text-2)">${fmtComma(d.count)}</text>`;
+
+      const truncLabel = d.remark.length > 18 ? d.remark.slice(0, 16) + '..' : d.remark;
+      g += `<text x="${xS(i)}" y="${H - pad.b + 14}" text-anchor="end" class="axis-label" transform="rotate(-55,${xS(i)},${H - pad.b + 14})" style="font-size:10px">${truncLabel}</text>`;
+    });
+
+    items.forEach((d, i) => {
+      g += `<rect x="${xS(i) - slotW / 2}" y="${pad.t}" width="${slotW}" height="${ch}" fill="transparent" data-ri="${i}" style="cursor:default"/>`;
     });
 
     svg.innerHTML = g;
@@ -340,9 +359,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     const card = document.getElementById('remarkChartCard');
     svg.querySelectorAll('rect[data-ri]').forEach(rect => {
       const idx = +rect.dataset.ri;
-      rect.style.cursor = 'default';
       rect.addEventListener('mouseenter', (e) => {
-        rect.setAttribute('opacity', '1');
+        const bars = svg.querySelectorAll('rect[fill]');
+        if (bars[idx]) bars[idx].setAttribute('opacity', '1');
         const d = items[idx];
         const pct = (d.count / totalBills * 100).toFixed(1);
         tip.innerHTML = `<div class="tt-month">${d.remark}</div><div>${fmtComma(d.count)} บิล (${pct}%)</div>`;
@@ -357,7 +376,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
         tip.style.top = (e.clientY - cR.top - 40) + 'px';
       });
       rect.addEventListener('mouseleave', () => {
-        rect.setAttribute('opacity', '0.7');
+        const bars = svg.querySelectorAll('rect[fill]');
+        if (bars[+rect.dataset.ri]) bars[+rect.dataset.ri].setAttribute('opacity', '0.7');
         tip.style.display = 'none';
       });
     });
