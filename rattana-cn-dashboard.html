@@ -104,7 +104,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 
 <header class="app-header">
   <h1>Rattana <span>CN Dashboard</span></h1>
-  <span class="ver-badge">v3.0 &middot; 2026-09-19</span>
+  <span class="ver-badge">v3.1 &middot; 2026-09-19</span>
 </header>
 
 <div class="container">
@@ -350,6 +350,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
   let saleShowAll = false;
   let saleItems = [];
   let activeSale = null;
+  let saleRemarkShowAll = false;
   let lastSaleData = [];
 
   function renderSaleChart(data) {
@@ -406,6 +407,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
       el.addEventListener('click', function() {
         const name = this.dataset.sale;
         activeSale = (activeSale === name) ? null : name;
+        saleRemarkShowAll = false;
         renderSaleChart(data);
         if (activeSale) renderSaleDetail(activeSale, data);
         else document.getElementById('saleDetail').classList.remove('show');
@@ -496,9 +498,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
         if (!byRemark.has(d.remark)) byRemark.set(d.remark, new Set());
         byRemark.get(d.remark).add(d.billNo);
       });
-      var items = [...byRemark.entries()]
+      var allItems = [...byRemark.entries()]
         .map(function(e) { return { remark: e[0], count: e[1].size }; })
         .sort(function(a, b) { return b.count - a.count; });
+      var items = (saleRemarkShowAll || allItems.length <= 5) ? allItems : allItems.slice(0, 5);
 
       var maxC = items[0].count;
       var rW = 350, rH = 200;
@@ -542,12 +545,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
       });
 
       html += '<hr class="sale-detail-sep"/>';
-      html += '<div class="sale-detail-hd2">หมายเหตุที่ถูกต้อง (' + items.length + ' รายการ)</div>';
+      html += '<div class="sale-detail-hd2">หมายเหตุที่ถูกต้อง (' + allItems.length + ' รายการ)</div>';
       html += '<svg viewBox="0 0 ' + rW + ' ' + rH + '">' + rg + '</svg>';
+      if (allItems.length > 5) {
+        html += '<div style="text-align:center;margin-top:6px"><button class="sale-toggle" id="remarkToggle">' + (saleRemarkShowAll ? 'แสดง Top 5' : 'ดูเพิ่มเติม (' + allItems.length + ')') + '</button></div>';
+      }
     }
 
     panel.innerHTML = html;
     panel.classList.add('show');
+
+    var rmkBtn = document.getElementById('remarkToggle');
+    if (rmkBtn) {
+      rmkBtn.addEventListener('click', function() {
+        saleRemarkShowAll = !saleRemarkShowAll;
+        renderSaleDetail(saleName, data);
+      });
+    }
   }
 
   function buildFilters() {
