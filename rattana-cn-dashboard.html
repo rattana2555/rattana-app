@@ -104,7 +104,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 
 <header class="app-header">
   <h1>Rattana <span>CN Dashboard</span></h1>
-  <span class="ver-badge">v3.2 &middot; 2026-09-19</span>
+  <span class="ver-badge">v3.3 &middot; 2026-09-19</span>
 </header>
 
 <div class="container">
@@ -121,6 +121,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
       <p class="chart-subtitle" id="chartSubtitle"></p>
       <div class="tooltip" id="tooltip"></div>
       <svg id="chartCanvas" viewBox="0 0 780 340"></svg>
+    </div>
+
+    <div class="chart-card" id="remarkChartCard" style="margin-top:24px">
+      <p class="chart-title">CN แยกตามหมายเหตุที่ถูกต้อง</p>
+      <p class="chart-subtitle" id="remarkChartSubtitle"></p>
+      <div id="remarkChartWrap"></div>
     </div>
 
     <div class="chart-card" id="saleChartCard" style="margin-top:24px">
@@ -347,11 +353,110 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     }).filter(d => d.sale && d.billNo);
   }
 
+  let remarkChartShowAll = false;
   let saleShowAll = false;
   let saleItems = [];
   let activeSale = null;
   let saleRemarkShowAll = false;
   let lastSaleData = [];
+
+  function renderRemarkChart(filteredR, filteredS) {
+    var billTotalMap = new Map();
+    filteredS.forEach(function(d) {
+      if (!billTotalMap.has(d.billNo)) billTotalMap.set(d.billNo, 0);
+      billTotalMap.set(d.billNo, billTotalMap.get(d.billNo) + d.total);
+    });
+
+    var byRemark = new Map();
+    filteredR.forEach(function(d) {
+      if (!byRemark.has(d.remark)) byRemark.set(d.remark, { bills: new Set(), total: 0 });
+      var r = byRemark.get(d.remark);
+      r.bills.add(d.billNo);
+      var amt = billTotalMap.get(d.billNo) || 0;
+      if (!r.counted) r.counted = new Set();
+      if (!r.counted.has(d.billNo)) { r.total += amt; r.counted.add(d.billNo); }
+    });
+
+    var allItems = [...byRemark.entries()]
+      .map(function(e) { return { remark: e[0], bills: e[1].bills.size, total: e[1].total }; })
+      .sort(function(a, b) { return b.bills - a.bills; });
+
+    if (allItems.length === 0) {
+      document.getElementById('remarkChartCard').style.display = 'none';
+      return;
+    }
+    document.getElementById('remarkChartCard').style.display = '';
+
+    var LIMIT = 10;
+    var items = (remarkChartShowAll || allItems.length <= LIMIT) ? allItems : allItems.slice(0, LIMIT);
+
+    document.getElementById('remarkChartSubtitle').textContent = 'รวม ' + allItems.length + ' รายการ / ' + fmtComma(allItems.reduce(function(s,d){return s+d.bills},0)) + ' บิล';
+
+    var rmkColors = ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#4a3aa7','#e34948','#00a7b5','#8b5e3c','#6c6ea0','#c45b9a','#3aaa5f','#d4782f','#5c9bd1','#b8860b','#7b68ee','#cd5c5c','#20b2aa','#daa520'];
+
+    var W = 780, H = 340;
+    var pad = { t: 25, r: 55, b: 90, l: 50 };
+    var cw = W - pad.l - pad.r;
+    var ch = H - pad.t - pad.b;
+    var maxBills = Math.ceil(Math.max.apply(null, items.map(function(d){return d.bills})) * 1.15 / 10) * 10 || 10;
+    var maxTotal = Math.ceil(Math.max.apply(null, items.map(function(d){return d.total})) * 1.15 / 100000) * 100000 || 100000;
+    var slotW = cw / items.length;
+    var rxS = function(i) { return pad.l + slotW / 2 + i * slotW; };
+    var ryL = function(v) { return pad.t + ch - (v / maxBills) * ch; };
+    var ryR = function(v) { return pad.t + ch - (v / maxTotal) * ch; };
+    var barW = Math.min(24, slotW * 0.6);
+
+    var g = '';
+    var stepB = Math.ceil(maxBills / 4 / 10) * 10 || 10;
+    for (var tick = 0; tick <= maxBills; tick += stepB) {
+      var y = ryL(tick);
+      g += '<line x1="' + pad.l + '" y1="' + y + '" x2="' + (W - pad.r) + '" y2="' + y + '" stroke="var(--border)" stroke-width="1"/>';
+      g += '<text x="' + (pad.l - 4) + '" y="' + (y + 3) + '" text-anchor="end" fill="var(--accent)" font-size="9">' + fmtComma(tick) + '</text>';
+    }
+
+    var stepT = Math.ceil(maxTotal / 4 / 100000) * 100000 || 100000;
+    for (var tick2 = 0; tick2 <= maxTotal; tick2 += stepT) {
+      var y2 = ryR(tick2);
+      g += '<text x="' + (W - pad.r + 4) + '" y="' + (y2 + 3) + '" text-anchor="start" fill="var(--accent2)" font-size="9">' + fmt(tick2) + '</text>';
+    }
+
+    g += '<text x="' + (pad.l - 4) + '" y="' + (pad.t - 8) + '" text-anchor="end" fill="var(--accent)" font-size="9" font-weight="600">บิล</text>';
+    g += '<text x="' + (W - pad.r + 4) + '" y="' + (pad.t - 8) + '" text-anchor="start" fill="var(--accent2)" font-size="9" font-weight="600">บาท</text>';
+
+    items.forEach(function(item, idx) {
+      var clr = rmkColors[idx % rmkColors.length];
+      var bTop = ryL(item.bills);
+      g += '<rect x="' + (rxS(idx) - barW / 2) + '" y="' + bTop + '" width="' + barW + '" height="' + (ryL(0) - bTop) + '" fill="' + clr + '" opacity="0.65" rx="3" ry="3"/>';
+      g += '<text x="' + rxS(idx) + '" y="' + (bTop - 5) + '" text-anchor="middle" fill="var(--text-2)" font-size="8" font-weight="600">' + fmtComma(item.bills) + '</text>';
+      var lbl = item.remark.length > 12 ? item.remark.slice(0, 11) + '..' : item.remark;
+      g += '<text x="' + rxS(idx) + '" y="' + (H - pad.b + 12) + '" text-anchor="end" fill="var(--text-3)" font-size="9" transform="rotate(-45,' + rxS(idx) + ',' + (H - pad.b + 12) + ')">' + lbl + '</text>';
+    });
+
+    if (items.length > 1) {
+      var lp = 'M' + rxS(0) + ',' + ryR(items[0].total);
+      for (var li = 1; li < items.length; li++) lp += ' L' + rxS(li) + ',' + ryR(items[li].total);
+      g += '<path d="' + lp + '" fill="none" stroke="var(--accent2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+    }
+
+    items.forEach(function(item, idx) {
+      g += '<circle cx="' + rxS(idx) + '" cy="' + ryR(item.total) + '" r="4" fill="var(--accent2)" stroke="var(--surface-card)" stroke-width="2"/>';
+      g += '<text x="' + rxS(idx) + '" y="' + (ryR(item.total) - 8) + '" text-anchor="middle" fill="var(--accent2)" font-size="8" font-weight="600">' + fmt(item.total) + '</text>';
+    });
+
+    var html = '<svg viewBox="0 0 ' + W + ' ' + H + '">' + g + '</svg>';
+    if (allItems.length > LIMIT) {
+      html += '<div style="text-align:center;margin-top:8px"><button class="sale-toggle" id="remarkChartToggle">' + (remarkChartShowAll ? 'แสดง Top 10' : 'ดูทั้งหมด (' + allItems.length + ')') + '</button></div>';
+    }
+    document.getElementById('remarkChartWrap').innerHTML = html;
+
+    var btn = document.getElementById('remarkChartToggle');
+    if (btn) {
+      btn.addEventListener('click', function() {
+        remarkChartShowAll = !remarkChartShowAll;
+        renderRemarkChart(filteredR, filteredS);
+      });
+    }
+  }
 
   function renderSaleChart(data) {
     lastSaleData = data;
@@ -633,6 +738,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 
     renderKPI(filtered, filteredR);
     renderChart(filtered);
+    remarkChartShowAll = false;
+    renderRemarkChart(filteredR, filteredS);
     activeSale = null;
     document.getElementById('saleDetail').classList.remove('show');
     if (filteredS.length > 0) renderSaleChart(filteredS);
@@ -667,6 +774,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
       remarkRaw = parseRemarkData(response);
       buildRemarkDropdown();
       if (allData.length > 0) renderKPI(allData, remarkRaw);
+      if (remarkRaw.length > 0 && saleRaw.length > 0) renderRemarkChart(remarkRaw, saleRaw);
     } catch (e) { console.error('Remark data error:', e); }
     delete window[CALLBACK2];
   };
@@ -678,6 +786,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     try {
       saleRaw = parseSaleData(response);
       if (saleRaw.length > 0) renderSaleChart(saleRaw);
+      if (remarkRaw.length > 0 && saleRaw.length > 0) renderRemarkChart(remarkRaw, saleRaw);
     } catch (e) { console.error('Sale data error:', e); }
     delete window[CALLBACK3];
   };
