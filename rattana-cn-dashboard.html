@@ -88,7 +88,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 
 <header class="app-header">
   <h1>Rattana <span>CN Dashboard</span></h1>
-  <span class="ver-badge">v1.8 &middot; 2026-09-19</span>
+  <span class="ver-badge">v1.9 &middot; 2026-09-19</span>
 </header>
 
 <div class="container">
@@ -105,18 +105,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
       <p class="chart-subtitle" id="chartSubtitle"></p>
       <div class="tooltip" id="tooltip"></div>
       <svg id="chartCanvas" viewBox="0 0 780 340"></svg>
-    </div>
-
-    <div class="chart-card" id="remarkChartCard" style="margin-top:24px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
-        <div>
-          <p class="chart-title">จำนวนบิลรับคืน (ไม่ซ้ำ) แยกตามหมายเหตุ</p>
-          <p class="chart-subtitle" id="remarkSubtitle"></p>
-        </div>
-        <select class="fselect" id="selRemark" style="max-width:240px;margin-top:2px"><option value="all">หมายเหตุ: ทั้งหมด</option></select>
-      </div>
-      <div class="tooltip" id="remarkTooltip"></div>
-      <svg id="remarkCanvas"></svg>
     </div>
 
     <div class="chart-card" id="top3Card" style="margin-top:24px">
@@ -317,92 +305,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 
   const REMARK_COLORS = ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#4a3aa7','#e34948'];
 
-  function renderRemarkChart(data) {
-    const grouped = new Map();
-    data.forEach(d => {
-      if (!grouped.has(d.remark)) grouped.set(d.remark, new Set());
-      grouped.get(d.remark).add(d.billNo);
-    });
-    const items = [...grouped.entries()]
-      .map(([remark, bills]) => ({ remark, count: bills.size }))
-      .sort((a, b) => b.count - a.count);
-
-    if (items.length === 0) return;
-
-    const totalBills = items.reduce((s, d) => s + d.count, 0);
-    document.getElementById('remarkSubtitle').textContent = `รวม ${fmtComma(totalBills)} บิล (ไม่ซ้ำ) / ${items.length} หมายเหตุ`;
-
-    const svg = document.getElementById('remarkCanvas');
-    const n = items.length;
-    const pad = { t: 40, r: 20, b: 130, l: 55 };
-    const W = Math.max(780, n * 38 + pad.l + pad.r);
-    const H = 420;
-    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-    svg.style.width = '100%';
-    svg.style.height = 'auto';
-
-    const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
-    const maxVal = Math.ceil(items[0].count / 500) * 500;
-    const slotW = cw / n;
-    const barW = Math.min(24, slotW - 4);
-    const xS = i => pad.l + slotW / 2 + i * slotW;
-    const yS = v => pad.t + ch - (v / maxVal) * ch;
-    const baseline = yS(0);
-
-    let g = '';
-
-    for (let tick = 0; tick <= maxVal; tick += Math.ceil(maxVal / 5 / 500) * 500) {
-      const y = yS(tick);
-      g += `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" class="grid-line"/>`;
-      g += `<text x="${pad.l - 10}" y="${y + 4}" text-anchor="end" class="axis-label">${fmtComma(tick)}</text>`;
-    }
-
-    items.forEach((d, i) => {
-      const color = REMARK_COLORS[i % REMARK_COLORS.length];
-      const barTop = yS(d.count);
-      const barH = baseline - barTop;
-      g += `<rect x="${xS(i) - barW / 2}" y="${barTop}" width="${barW}" height="${barH}" rx="3" ry="3" fill="${color}" opacity="0.7" data-ri="${i}"/>`;
-
-      g += `<text x="${xS(i)}" y="${barTop - 6}" text-anchor="middle" style="font-size:9px;font-weight:600;fill:var(--text-2)">${fmtComma(d.count)}</text>`;
-
-      const truncLabel = d.remark.length > 18 ? d.remark.slice(0, 16) + '..' : d.remark;
-      g += `<text x="${xS(i)}" y="${H - pad.b + 14}" text-anchor="end" class="axis-label" transform="rotate(-55,${xS(i)},${H - pad.b + 14})" style="font-size:10px">${truncLabel}</text>`;
-    });
-
-    items.forEach((d, i) => {
-      g += `<rect x="${xS(i) - slotW / 2}" y="${pad.t}" width="${slotW}" height="${ch}" fill="transparent" data-ri="${i}" style="cursor:default"/>`;
-    });
-
-    svg.innerHTML = g;
-
-    const tip = document.getElementById('remarkTooltip');
-    const card = document.getElementById('remarkChartCard');
-    svg.querySelectorAll('rect[data-ri]').forEach(rect => {
-      const idx = +rect.dataset.ri;
-      rect.addEventListener('mouseenter', (e) => {
-        const bars = svg.querySelectorAll('rect[fill]');
-        if (bars[idx]) bars[idx].setAttribute('opacity', '1');
-        const d = items[idx];
-        const pct = (d.count / totalBills * 100).toFixed(1);
-        tip.innerHTML = `<div class="tt-month">${d.remark}</div><div>${fmtComma(d.count)} บิล (${pct}%)</div>`;
-        tip.style.display = 'block';
-        const cR = card.getBoundingClientRect();
-        tip.style.left = (e.clientX - cR.left + 12) + 'px';
-        tip.style.top = (e.clientY - cR.top - 40) + 'px';
-      });
-      rect.addEventListener('mousemove', (e) => {
-        const cR = card.getBoundingClientRect();
-        tip.style.left = (e.clientX - cR.left + 12) + 'px';
-        tip.style.top = (e.clientY - cR.top - 40) + 'px';
-      });
-      rect.addEventListener('mouseleave', () => {
-        const bars = svg.querySelectorAll('rect[fill]');
-        if (bars[+rect.dataset.ri]) bars[+rect.dataset.ri].setAttribute('opacity', '0.7');
-        tip.style.display = 'none';
-      });
-    });
-  }
-
   function renderTop3(data) {
     const monthMap = new Map();
     data.forEach(d => {
@@ -453,6 +355,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     html += '<select class="fselect" id="selMonth"><option value="all">ทั้งหมด</option>';
     MONTH_TH.forEach((m, i) => { html += `<option value="${i}">${m.replace('.','')}</option>`; });
     html += '</select></div>';
+    html += '<div class="filter-group"><span class="filter-label">หมายเหตุ:</span>';
+    html += '<select class="fselect" id="selRemark"><option value="all">ทั้งหมด</option></select></div>';
     row.innerHTML = html;
 
     document.getElementById('selYear').addEventListener('change', function() {
@@ -463,12 +367,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
       selMonth = this.value === 'all' ? 'all' : +this.value;
       applyFilter();
     });
+    document.getElementById('selRemark').addEventListener('change', function() {
+      selRemark = this.value;
+      applyFilter();
+    });
+    if (remarkRaw.length > 0) buildRemarkDropdown();
   }
-
-  document.getElementById('selRemark').addEventListener('change', function() {
-    selRemark = this.value;
-    applyFilter();
-  });
 
   function buildRemarkDropdown() {
     const sel = document.getElementById('selRemark');
@@ -493,7 +397,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 
     renderKPI(filtered, filteredR);
     renderChart(filtered);
-    renderRemarkChart(filteredR);
     renderTop3(filteredR);
   }
 
@@ -525,7 +428,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     try {
       remarkRaw = parseRemarkData(response);
       buildRemarkDropdown();
-      renderRemarkChart(remarkRaw);
       renderTop3(remarkRaw);
       if (allData.length > 0) renderKPI(allData, remarkRaw);
     } catch (e) { console.error('Remark data error:', e); }
