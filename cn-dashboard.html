@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CN Dashboard 2025-2026</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root {
+    --surface: #f5f4f0;
+    --surface-card: #ffffff;
+    --surface-chart: #ffffff;
+    --text-primary: #1a1917;
+    --text-secondary: #5c5b56;
+    --text-muted: #8a8983;
+    --border: #e4e3de;
+    --border-light: #eeede9;
+    --accent: #2a78d6;
+    --accent-light: rgba(42,120,214,0.08);
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
+    --series-5: #e87ba4;
+    --stat-up: #c44200;
+    --stat-down: #0d7c4a;
+    --shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --surface: #141413;
+      --surface-card: #1e1e1c;
+      --surface-chart: #1e1e1c;
+      --text-primary: #f0efea;
+      --text-secondary: #b0afa8;
+      --text-muted: #7a7972;
+      --border: #2e2e2b;
+      --border-light: #252523;
+      --accent: #3987e5;
+      --accent-light: rgba(57,135,229,0.1);
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --series-3: #199e70;
+      --series-4: #c98500;
+      --series-5: #d55181;
+      --stat-up: #d95926;
+      --stat-down: #199e70;
+      --shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+  }
+  :root[data-theme="dark"] {
+    --surface: #141413;
+    --surface-card: #1e1e1c;
+    --surface-chart: #1e1e1c;
+    --text-primary: #f0efea;
+    --text-secondary: #b0afa8;
+    --text-muted: #7a7972;
+    --border: #2e2e2b;
+    --border-light: #252523;
+    --accent: #3987e5;
+    --accent-light: rgba(57,135,229,0.1);
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --stat-up: #d95926;
+    --stat-down: #199e70;
+    --shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'IBM Plex Sans Thai', system-ui, -apple-system, sans-serif;
+    background: var(--surface);
+    color: var(--text-primary);
+    padding: 0 16px;
+  }
+
+  .dashboard {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 24px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .header { display: flex; flex-direction: column; gap: 4px; }
+  .header h1 {
+    font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em;
+  }
+  .header p { font-size: 0.85rem; color: var(--text-muted); }
+  .header .refresh-info {
+    font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;
+  }
+
+  .loading-overlay {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 300px; color: var(--text-muted); font-size: 0.9rem;
+    gap: 10px;
+  }
+  .spinner {
+    width: 20px; height: 20px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-msg {
+    background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;
+    padding: 16px; border-radius: 10px; font-size: 0.85rem;
+  }
+
+  .stats-row {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+  }
+  @media (max-width: 600px) {
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+  }
+  .stat-card {
+    background: var(--surface-card); border: 1px solid var(--border-light);
+    border-radius: 10px; padding: 16px; box-shadow: var(--shadow);
+  }
+  .stat-label {
+    font-size: 0.75rem; color: var(--text-muted); font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;
+  }
+  .stat-value {
+    font-size: 1.35rem; font-weight: 700; font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+  }
+  .stat-delta {
+    font-size: 0.75rem; font-weight: 500; margin-top: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-delta.up { color: var(--stat-up); }
+  .stat-delta.down { color: var(--stat-down); }
+
+  .chart-card {
+    background: var(--surface-card); border: 1px solid var(--border-light);
+    border-radius: 10px; padding: 20px; box-shadow: var(--shadow);
+  }
+  .chart-title { font-size: 0.95rem; font-weight: 600; margin-bottom: 4px; }
+  .chart-subtitle { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 16px; }
+  .chart-wrap { position: relative; width: 100%; height: 300px; }
+  @media (max-width: 600px) { .chart-wrap { height: 220px; } }
+
+  .legend-row {
+    display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px;
+    padding-top: 12px; border-top: 1px solid var(--border-light);
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.72rem; color: var(--text-secondary); white-space: nowrap;
+  }
+  .legend-dot { width: 10px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+
+  .table-toggle {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 0.72rem; color: var(--text-muted); background: none;
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 4px 10px; cursor: pointer; margin-top: 12px; font-family: inherit;
+  }
+  .table-toggle:hover {
+    background: var(--accent-light); color: var(--accent); border-color: var(--accent);
+  }
+  .data-table-wrap { overflow-x: auto; margin-top: 10px; }
+  .data-table {
+    width: 100%; border-collapse: collapse; font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .data-table th {
+    text-align: left; font-weight: 600; color: var(--text-secondary);
+    padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  .data-table td {
+    padding: 5px 10px; border-bottom: 1px solid var(--border-light);
+    white-space: nowrap;
+  }
+  .data-table tr:last-child td { border-bottom: none; }
+
+  .btn-refresh {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 0.78rem; color: var(--accent); background: var(--accent-light);
+    border: 1px solid var(--accent); border-radius: 8px;
+    padding: 6px 14px; cursor: pointer; font-family: inherit; font-weight: 500;
+  }
+  .btn-refresh:hover { background: var(--accent); color: #fff; }
+</style>
+</head>
+<body>
+
+<div class="dashboard" id="app">
+  <div class="header">
+    <h1>CN Dashboard</h1>
+    <p>Credit Note Analysis &mdash; SQL CN1 &middot; ดึงข้อมูลสดจาก Google Sheets</p>
+    <div class="refresh-info" id="refresh-info"></div>
+  </div>
+  <div class="loading-overlay" id="loading">
+    <div class="spinner"></div>
+    <span>กำลังดึงข้อมูลจาก Google Sheets...</span>
+  </div>
+  <div id="error-container" hidden></div>
+  <div id="content" hidden>
+    <div class="stats-row" id="stats-row"></div>
+    <div class="chart-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div>
+          <h2 class="chart-title">CN_Total รายเดือน</h2>
+          <p class="chart-subtitle">มูลค่ารวม Credit Note ต่อเดือน (บาท)</p>
+        </div>
+        <button class="btn-refresh" onclick="loadData()">&#8635; รีเฟรช</button>
+      </div>
+      <div class="chart-wrap"><canvas id="chart1"></canvas></div>
+      <button class="table-toggle" onclick="toggleTable('t1')">แสดงตาราง</button>
+      <div id="t1" class="data-table-wrap" hidden></div>
+    </div>
+    <div class="chart-card">
+      <h2 class="chart-title">หมายเหตุที่ถูกต้อง (Top 5)</h2>
+      <p class="chart-subtitle">จำนวนรายการ CN แยกตามสาเหตุหลัก</p>
+      <div class="chart-wrap"><canvas id="chart2"></canvas></div>
+      <div class="legend-row" id="legend2"></div>
+      <button class="table-toggle" onclick="toggleTable('t2')">แสดงตาราง</button>
+      <div id="t2" class="data-table-wrap" hidden></div>
+    </div>
+    <div class="chart-card">
+      <h2 class="chart-title">Sale no Roo (Top 5)</h2>
+      <p class="chart-subtitle">มูลค่า CN_Total แยกตามพนักงานขาย (บาท)</p>
+      <div class="chart-wrap"><canvas id="chart3"></canvas></div>
+      <div class="legend-row" id="legend3"></div>
+      <button class="table-toggle" onclick="toggleTable('t3')">แสดงตาราง</button>
+      <div id="t3" class="data-table-wrap" hidden></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SHEET_ID = '1WNJFRUTMZg4lGftUJRLyTuLczhobmFb6jsOrm9l_TYg';
+const SHEET_NAME = 'SQL CN1';
+
+const MONTH_TH = {1:'ม.ค.',2:'ก.พ.',3:'มี.ค.',4:'เม.ย.',5:'พ.ค.',6:'มิ.ย.',
+  7:'ก.ค.',8:'ส.ค.',9:'ก.ย.',10:'ต.ค.',11:'พ.ย.',12:'ธ.ค.'};
+
+let chart1Inst, chart2Inst, chart3Inst;
+let _jsonpId = 0;
+
+function gvizJSONP(tq) {
+  return new Promise((resolve, reject) => {
+    const cbName = '__gviz_cb_' + (++_jsonpId) + '_' + Date.now();
+    const timeout = setTimeout(() => {
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      reject(new Error('Timeout loading data'));
+    }, 30000);
+
+    window[cbName] = function(response) {
+      clearTimeout(timeout);
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      if (response.status === 'error') {
+        reject(new Error(response.errors.map(e => e.message).join('; ')));
+        return;
+      }
+      const table = response.table;
+      const rows = table.rows.map(r => r.c.map(cell => cell ? (cell.v != null ? cell.v : '') : ''));
+      resolve(rows);
+    };
+
+    const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+      '/gviz/tq?sheet=' + encodeURIComponent(SHEET_NAME) +
+      '&tq=' + encodeURIComponent(tq) +
+      '&tqx=responseHandler:' + cbName;
+
+    const script = document.createElement('script');
+    script.src = url;
+    script.onerror = function() {
+      clearTimeout(timeout);
+      delete window[cbName];
+      reject(new Error('Script load failed'));
+    };
+    document.head.appendChild(script);
+  });
+}
+
+function dateToMonthKey(v) {
+  if (v instanceof Date) {
+    return v.getFullYear() + '-' + String(v.getMonth() + 1).padStart(2, '0');
+  }
+  if (typeof v === 'string') {
+    const m = v.match(/(\d{4})-(\d{1,2})/);
+    if (m) return m[1] + '-' + m[2].padStart(2, '0');
+    const d = v.match(/Date\((\d+),(\d+),(\d+)\)/);
+    if (d) return d[1] + '-' + String(parseInt(d[2]) + 1).padStart(2, '0');
+  }
+  return null;
+}
+
+function monthLabel(key) {
+  const [y, m] = key.split('-').map(Number);
+  return MONTH_TH[m] + ' ' + ((y + 543) % 100);
+}
+
+function monthSort(a, b) { return a.localeCompare(b); }
+
+function fmtShort(n) {
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return Math.round(n).toLocaleString('th-TH');
+  return Math.round(n).toString();
+}
+function fmtFull(n) { return Math.round(n).toLocaleString('th-TH'); }
+
+function getColors() {
+  const cs = getComputedStyle(document.documentElement);
+  const cv = v => cs.getPropertyValue(v).trim();
+  return {
+    series: [cv('--series-1')||'#2a78d6', cv('--series-2')||'#eb6834',
+      cv('--series-3')||'#1baf7a', cv('--series-4')||'#eda100', cv('--series-5')||'#e87ba4'],
+    grid: cv('--border-light') || '#eeede9',
+    text: cv('--text-muted') || '#8a8983',
+    card: cv('--surface-card') || '#fff',
+    primary: cv('--text-primary') || '#1a1917',
+    secondary: cv('--text-secondary') || '#5c5b56',
+    border: cv('--border') || '#e4e3de',
+    chartBg: cv('--surface-chart') || '#fff'
+  };
+}
+
+async function loadData() {
+  const loading = document.getElementById('loading');
+  const content = document.getElementById('content');
+  const errC = document.getElementById('error-container');
+
+  loading.hidden = false;
+  content.hidden = true;
+  errC.hidden = true;
+
+  try {
+    const [q1, q2, q3] = await Promise.all([
+      gvizJSONP('select W, sum(K) group by W order by W'),
+      gvizJSONP('select W, X, count(X) group by W, X order by W'),
+      gvizJSONP('select W, AF, sum(K) group by W, AF order by W')
+    ]);
+
+    const cnByMonth = {};
+    q1.forEach(r => {
+      const k = dateToMonthKey(r[0]);
+      const v = parseFloat(r[1]) || 0;
+      if (k) cnByMonth[k] = v;
+    });
+
+    const months = Object.keys(cnByMonth).sort(monthSort);
+    const labels = months.map(monthLabel);
+    const cnTotal = months.map(m => cnByMonth[m]);
+
+    const reasonAgg = {};
+    q2.forEach(r => {
+      const k = dateToMonthKey(r[0]);
+      const reason = String(r[1] || '').trim();
+      const cnt = parseInt(r[2]) || 0;
+      if (!reason || !k) return;
+      if (!reasonAgg[reason]) reasonAgg[reason] = {};
+      reasonAgg[reason][k] = (reasonAgg[reason][k] || 0) + cnt;
+    });
+
+    const reasonTotals = Object.entries(reasonAgg).map(([name, byMonth]) => ({
+      name, total: Object.values(byMonth).reduce((a, b) => a + b, 0)
+    })).sort((a, b) => b.total - a.total);
+
+    const top5Reasons = reasonTotals.slice(0, 5);
+    const reasonSeries = top5Reasons.map(r => ({
+      name: r.name,
+      data: months.map(m => reasonAgg[r.name][m] || 0)
+    }));
+
+    const saleAgg = {};
+    q3.forEach(r => {
+      const k = dateToMonthKey(r[0]);
+      const sale = String(r[1] || '').trim();
+      const val = parseFloat(r[2]) || 0;
+      if (!sale || !k) return;
+      if (!saleAgg[sale]) saleAgg[sale] = {};
+      saleAgg[sale][k] = (saleAgg[sale][k] || 0) + val;
+    });
+
+    const saleTotals = Object.entries(saleAgg).map(([name, byMonth]) => ({
+      name, total: Object.values(byMonth).reduce((a, b) => a + b, 0)
+    })).sort((a, b) => b.total - a.total);
+
+    const top5Sales = saleTotals.slice(0, 5);
+    const saleSeries = top5Sales.map(s => ({
+      name: s.name,
+      data: months.map(m => saleAgg[s.name][m] || 0)
+    }));
+
+    renderDashboard(labels, months, cnTotal, reasonSeries, saleSeries);
+
+    loading.hidden = true;
+    content.hidden = false;
+
+    const now = new Date();
+    document.getElementById('refresh-info').textContent =
+      'อัปเดตล่าสุด: ' + now.toLocaleDateString('th-TH') + ' ' +
+      now.toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'});
+
+  } catch (err) {
+    loading.hidden = true;
+    errC.hidden = false;
+    errC.innerHTML = '<div class="error-msg">ไม่สามารถดึงข้อมูลได้: ' +
+      err.message + '<br><br><button class="btn-refresh" onclick="loadData()">ลองใหม่</button></div>';
+  }
+}
+
+function renderDashboard(labels, months, cnTotal, reasonSeries, saleSeries) {
+  const C = getColors();
+
+  const total = cnTotal.reduce((a, b) => a + b, 0);
+  const avg = total / cnTotal.length;
+  const peakIdx = cnTotal.indexOf(Math.max(...cnTotal));
+  const current = cnTotal[cnTotal.length - 1];
+  const prev = cnTotal.length >= 2 ? cnTotal[cnTotal.length - 2] : current;
+  const pct = ((current - prev) / prev * 100);
+
+  const statsHtml = `
+    <div class="stat-card">
+      <div class="stat-label">CN รวมทั้งหมด</div>
+      <div class="stat-value">${fmtShort(total)} บ.</div>
+      <div class="stat-delta">${cnTotal.length} เดือน</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">เฉลี่ย/เดือน</div>
+      <div class="stat-value">${fmtShort(avg)} บ.</div>
+      <div class="stat-delta">ต่อเดือน</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">เดือนสูงสุด</div>
+      <div class="stat-value">${fmtShort(cnTotal[peakIdx])} บ.</div>
+      <div class="stat-delta">${labels[peakIdx]}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">เดือนล่าสุด</div>
+      <div class="stat-value">${fmtShort(current)} บ.</div>
+      <div class="stat-delta ${pct < 0 ? 'down' : 'up'}">${pct > 0 ? '+' : ''}${pct.toFixed(1)}% จากเดือนก่อน</div>
+    </div>`;
+  document.getElementById('stats-row').innerHTML = statsHtml;
+
+  const fontFamily = "'IBM Plex Sans Thai', system-ui";
+  const commonOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: C.card, titleColor: C.primary, bodyColor: C.secondary,
+        borderColor: C.border, borderWidth: 1, padding: 10,
+        titleFont: { family: fontFamily, weight: '600', size: 12 },
+        bodyFont: { family: fontFamily, size: 11 },
+        cornerRadius: 8, displayColors: true, boxWidth: 10, boxHeight: 3, boxPadding: 4
+      }
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: { color: C.text, font: { size: 10, family: fontFamily }, maxRotation: 45, autoSkip: true, maxTicksLimit: 12 },
+        border: { color: C.grid }
+      },
+      y: {
+        grid: { color: C.grid, lineWidth: 1 },
+        ticks: { color: C.text, font: { size: 10, family: fontFamily } },
+        border: { display: false },
+        beginAtZero: true
+      }
+    }
+  };
+
+  if (chart1Inst) chart1Inst.destroy();
+  chart1Inst = new Chart(document.getElementById('chart1'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data: cnTotal,
+        borderColor: C.series[0],
+        backgroundColor: C.series[0] + '18',
+        borderWidth: 2, pointRadius: 0,
+        pointHoverRadius: 5,
+        pointHoverBackgroundColor: C.series[0],
+        pointHoverBorderColor: C.chartBg,
+        pointHoverBorderWidth: 2,
+        fill: true, tension: 0.3
+      }]
+    },
+    options: {
+      ...commonOpts,
+      scales: {
+        ...commonOpts.scales,
+        y: { ...commonOpts.scales.y, ticks: { ...commonOpts.scales.y.ticks, callback: v => (v/1e6).toFixed(1)+'M' } }
+      },
+      plugins: {
+        ...commonOpts.plugins,
+        tooltip: { ...commonOpts.plugins.tooltip,
+          callbacks: { label: ctx => 'CN_Total: ' + fmtFull(ctx.parsed.y) + ' บาท' }
+        }
+      }
+    }
+  });
+
+  if (chart2Inst) chart2Inst.destroy();
+  const rDS = reasonSeries.map((s, i) => ({
+    label: s.name, data: s.data,
+    borderColor: C.series[i], borderWidth: 2, pointRadius: 0,
+    pointHoverRadius: 5, pointHoverBackgroundColor: C.series[i],
+    pointHoverBorderColor: C.chartBg, pointHoverBorderWidth: 2,
+    fill: false, tension: 0.3
+  }));
+  chart2Inst = new Chart(document.getElementById('chart2'), {
+    type: 'line',
+    data: { labels, datasets: rDS },
+    options: {
+      ...commonOpts,
+      plugins: {
+        ...commonOpts.plugins,
+        tooltip: { ...commonOpts.plugins.tooltip,
+          callbacks: { label: ctx => ctx.dataset.label + ': ' + fmtFull(ctx.parsed.y) + ' รายการ' }
+        }
+      }
+    }
+  });
+
+  if (chart3Inst) chart3Inst.destroy();
+  const sDS = saleSeries.map((s, i) => ({
+    label: s.name.replace('คุณ ', ''), data: s.data,
+    borderColor: C.series[i], borderWidth: 2, pointRadius: 0,
+    pointHoverRadius: 5, pointHoverBackgroundColor: C.series[i],
+    pointHoverBorderColor: C.chartBg, pointHoverBorderWidth: 2,
+    fill: false, tension: 0.3
+  }));
+  chart3Inst = new Chart(document.getElementById('chart3'), {
+    type: 'line',
+    data: { labels, datasets: sDS },
+    options: {
+      ...commonOpts,
+      scales: {
+        ...commonOpts.scales,
+        y: { ...commonOpts.scales.y, ticks: { ...commonOpts.scales.y.ticks, callback: v => v>=1e3?(v/1e3).toFixed(0)+'K':v } }
+      },
+      plugins: {
+        ...commonOpts.plugins,
+        tooltip: { ...commonOpts.plugins.tooltip,
+          callbacks: { label: ctx => ctx.dataset.label + ': ' + fmtFull(ctx.parsed.y) + ' บาท' }
+        }
+      }
+    }
+  });
+
+  buildLegend('legend2', reasonSeries.map(s => s.name), C.series);
+  buildLegend('legend3', saleSeries.map(s => s.name.replace('คุณ ', '')), C.series);
+
+  buildTable('t1', ['เดือน', 'CN_Total'],
+    labels.map((l, i) => [l, fmtFull(cnTotal[i]) + ' บาท']));
+
+  buildTable('t2', ['เดือน', ...reasonSeries.map(s => s.name.length > 18 ? s.name.substring(0,17)+'…' : s.name)],
+    labels.map((l, i) => [l, ...reasonSeries.map(s => fmtFull(s.data[i]))]));
+
+  buildTable('t3', ['เดือน', ...saleSeries.map(s => s.name.replace('คุณ ', ''))],
+    labels.map((l, i) => [l, ...saleSeries.map(s => fmtFull(s.data[i]))]));
+}
+
+function buildLegend(id, names, colors) {
+  const el = document.getElementById(id);
+  el.innerHTML = '';
+  names.forEach((n, i) => {
+    const item = document.createElement('span');
+    item.className = 'legend-item';
+    item.innerHTML = '<span class="legend-dot" style="background:' + colors[i] + '"></span>' + n;
+    el.appendChild(item);
+  });
+}
+
+function buildTable(id, headers, rows) {
+  const wrap = document.getElementById(id);
+  let html = '<table class="data-table"><thead><tr>';
+  headers.forEach(h => html += '<th>' + h + '</th>');
+  html += '</tr></thead><tbody>';
+  rows.forEach(r => {
+    html += '<tr>';
+    r.forEach(c => html += '<td>' + c + '</td>');
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function toggleTable(id) {
+  const el = document.getElementById(id);
+  el.hidden = !el.hidden;
+}
+
+loadData();
+</script>
+</body>
+</html>
