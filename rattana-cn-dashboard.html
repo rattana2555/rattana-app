@@ -80,7 +80,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 
 <header class="app-header">
   <h1>Rattana <span>CN Dashboard</span></h1>
-  <span class="ver-badge">v2.0 &middot; 2026-09-19</span>
+  <span class="ver-badge">v2.1 &middot; 2026-09-19</span>
 </header>
 
 <div class="container">
@@ -99,6 +99,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
       <svg id="chartCanvas" viewBox="0 0 780 340"></svg>
     </div>
 
+    <div class="chart-card" id="saleChartCard" style="margin-top:24px">
+      <p class="chart-title">CN แยกตาม Sale no Roo</p>
+      <p class="chart-subtitle" id="saleSubtitle"></p>
+      <div class="tooltip" id="saleTooltip"></div>
+      <svg id="saleCanvas"></svg>
+    </div>
   </div>
 
   <div id="errorBox" class="error-msg" style="display:none"></div>
@@ -115,6 +121,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
   const QUERY2 = encodeURIComponent('SELECT W, X, C WHERE X IS NOT NULL AND C IS NOT NULL');
   const CALLBACK2 = '__gvizCb2' + Date.now();
   const SRC2 = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=SQL%20CN1&tq=${QUERY2}&tqx=responseHandler:${CALLBACK2}`;
+
+  const QUERY3 = encodeURIComponent('SELECT W, AF, C, K WHERE AF IS NOT NULL AND C IS NOT NULL');
+  const CALLBACK3 = '__gvizCb3' + Date.now();
+  const SRC3 = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=SQL%20CN1&tq=${QUERY3}&tqx=responseHandler:${CALLBACK3}`;
 
   const MONTH_TH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
@@ -273,6 +283,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 
   let allData = [];
   let remarkRaw = [];
+  let saleRaw = [];
   let selYear = 'all';
   let selMonth = 'all';
   let selRemark = 'all';
@@ -288,6 +299,94 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
         billNo: r.c[2] ? String(r.c[2].v).trim() : ''
       };
     }).filter(d => d.remark && d.billNo);
+  }
+
+  function parseSaleData(obj) {
+    return obj.table.rows.map(r => {
+      const dateVal = r.c[0].v;
+      const match = dateVal.match(/Date\((\d+),(\d+),(\d+)\)/);
+      return {
+        year: +match[1],
+        month: +match[2],
+        sale: r.c[1] ? String(r.c[1].v).trim() : '',
+        billNo: r.c[2] ? String(r.c[2].v).trim() : '',
+        total: r.c[3] ? +r.c[3].v : 0
+      };
+    }).filter(d => d.sale && d.billNo);
+  }
+
+  function renderSaleChart(data) {
+    const grouped = new Map();
+    data.forEach(d => {
+      if (!grouped.has(d.sale)) grouped.set(d.sale, { bills: new Set(), total: 0 });
+      const g = grouped.get(d.sale);
+      g.bills.add(d.billNo);
+      g.total += d.total;
+    });
+    const items = [...grouped.entries()]
+      .map(([sale, v]) => ({ sale, bills: v.bills.size, total: v.total }))
+      .sort((a, b) => b.total - a.total);
+
+    if (items.length === 0) return;
+
+    const totalBills = items.reduce((s, d) => s + d.bills, 0);
+    const totalBaht = items.reduce((s, d) => s + d.total, 0);
+    document.getElementById('saleSubtitle').textContent = `รวม ${fmtComma(totalBills)} บิล / ${fmt(totalBaht)} บาท / ${items.length} Sale`;
+
+    const svg = document.getElementById('saleCanvas');
+    const n = items.length;
+    const rowH = 28;
+    const pad = { t: 10, r: 20, b: 10, l: 160 };
+    const W = 780;
+    const H = pad.t + n * rowH + pad.b;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.style.width = '100%';
+    svg.style.height = 'auto';
+
+    const cw = W - pad.l - pad.r;
+    const maxVal = items[0].total;
+    const barH = 16;
+    const COLORS = ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#4a3aa7','#e34948'];
+
+    let g = '';
+
+    items.forEach((d, i) => {
+      const y = pad.t + i * rowH;
+      const color = COLORS[i % COLORS.length];
+      const barW = Math.max(4, (d.total / maxVal) * cw);
+
+      const truncName = d.sale.length > 22 ? d.sale.slice(0, 20) + '..' : d.sale;
+      g += `<text x="${pad.l - 8}" y="${y + rowH / 2 + 4}" text-anchor="end" class="axis-label" style="font-size:11px">${truncName}</text>`;
+
+      g += `<rect x="${pad.l}" y="${y + (rowH - barH) / 2}" width="${barW}" height="${barH}" rx="3" ry="3" fill="${color}" opacity="0.7"/>`;
+
+      const label = `${fmtComma(d.bills)} บิล / ${fmt(d.total)}`;
+      g += `<text x="${pad.l + barW + 6}" y="${y + rowH / 2 + 4}" class="axis-label" style="font-size:10px;font-weight:600;fill:var(--text-2)">${label}</text>`;
+
+      g += `<rect x="${pad.l}" y="${y}" width="${cw}" height="${rowH}" fill="transparent" data-si="${i}" style="cursor:default"/>`;
+    });
+
+    svg.innerHTML = g;
+
+    const tip = document.getElementById('saleTooltip');
+    const card = document.getElementById('saleChartCard');
+    svg.querySelectorAll('rect[data-si]').forEach(rect => {
+      rect.addEventListener('mouseenter', (e) => {
+        const d = items[+rect.dataset.si];
+        const pct = (d.total / totalBaht * 100).toFixed(1);
+        tip.innerHTML = `<div class="tt-month">${d.sale}</div><div>${fmtComma(d.bills)} บิล (ไม่ซ้ำ)</div><div>${fmtComma(d.total)} บาท (${pct}%)</div>`;
+        tip.style.display = 'block';
+        const cR = card.getBoundingClientRect();
+        tip.style.left = (e.clientX - cR.left + 12) + 'px';
+        tip.style.top = (e.clientY - cR.top - 50) + 'px';
+      });
+      rect.addEventListener('mousemove', (e) => {
+        const cR = card.getBoundingClientRect();
+        tip.style.left = (e.clientX - cR.left + 12) + 'px';
+        tip.style.top = (e.clientY - cR.top - 50) + 'px';
+      });
+      rect.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+    });
   }
 
   function buildFilters() {
@@ -341,8 +440,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     if (selRemark !== 'all') filteredR = filteredR.filter(d => d.remark === selRemark);
     if (filteredR.length === 0) filteredR = remarkRaw;
 
+    let filteredS = saleRaw;
+    if (selYear !== 'all') filteredS = filteredS.filter(d => d.year === selYear);
+    if (selMonth !== 'all') filteredS = filteredS.filter(d => d.month === selMonth);
+
     renderKPI(filtered, filteredR);
     renderChart(filtered);
+    if (filteredS.length > 0) renderSaleChart(filteredS);
   }
 
   window[CALLBACK] = function(response) {
@@ -380,6 +484,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
   const sc2 = document.createElement('script');
   sc2.src = SRC2;
   document.head.appendChild(sc2);
+
+  window[CALLBACK3] = function(response) {
+    try {
+      saleRaw = parseSaleData(response);
+      if (saleRaw.length > 0) renderSaleChart(saleRaw);
+    } catch (e) { console.error('Sale data error:', e); }
+    delete window[CALLBACK3];
+  };
+  const sc3 = document.createElement('script');
+  sc3.src = SRC3;
+  document.head.appendChild(sc3);
 })();
 </script>
 </body>
