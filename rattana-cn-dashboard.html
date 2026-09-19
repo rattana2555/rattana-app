@@ -80,7 +80,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 
 <header class="app-header">
   <h1>Rattana <span>CN Dashboard</span></h1>
-  <span class="ver-badge">v1.2 &middot; 2026-09-19</span>
+  <span class="ver-badge">v1.3 &middot; 2026-09-19</span>
 </header>
 
 <div class="container">
@@ -98,6 +98,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
       <div class="tooltip" id="tooltip"></div>
       <svg id="chartCanvas" viewBox="0 0 780 340"></svg>
     </div>
+
+    <div class="chart-card" id="remarkChartCard" style="margin-top:24px">
+      <p class="chart-title">จำนวนบิลรับคืน (ไม่ซ้ำ) แยกตามหมายเหตุ</p>
+      <p class="chart-subtitle" id="remarkSubtitle"></p>
+      <div class="tooltip" id="remarkTooltip"></div>
+      <svg id="remarkCanvas"></svg>
+    </div>
   </div>
 
   <div id="errorBox" class="error-msg" style="display:none"></div>
@@ -110,6 +117,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
   const QUERY = encodeURIComponent('SELECT W, SUM(K), COUNT(K) GROUP BY W ORDER BY W');
   const CALLBACK = '__gvizCb' + Date.now();
   const SRC = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=SQL%20CN1&tq=${QUERY}&tqx=responseHandler:${CALLBACK}`;
+
+  const QUERY2 = encodeURIComponent('SELECT W, X, C WHERE X IS NOT NULL AND C IS NOT NULL');
+  const CALLBACK2 = '__gvizCb2' + Date.now();
+  const SRC2 = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=SQL%20CN1&tq=${QUERY2}&tqx=responseHandler:${CALLBACK2}`;
 
   const MONTH_TH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
@@ -267,8 +278,90 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
   }
 
   let allData = [];
+  let remarkRaw = [];
   let selYear = 'all';
   let selMonth = 'all';
+
+  function parseRemarkData(obj) {
+    return obj.table.rows.map(r => {
+      const dateVal = r.c[0].v;
+      const match = dateVal.match(/Date\((\d+),(\d+),(\d+)\)/);
+      return {
+        year: +match[1],
+        month: +match[2],
+        remark: r.c[1] ? String(r.c[1].v).trim() : '',
+        billNo: r.c[2] ? String(r.c[2].v).trim() : ''
+      };
+    }).filter(d => d.remark && d.billNo);
+  }
+
+  const REMARK_COLORS = ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#4a3aa7','#e34948'];
+
+  function renderRemarkChart(data) {
+    const grouped = new Map();
+    data.forEach(d => {
+      if (!grouped.has(d.remark)) grouped.set(d.remark, new Set());
+      grouped.get(d.remark).add(d.billNo);
+    });
+    const items = [...grouped.entries()]
+      .map(([remark, bills]) => ({ remark, count: bills.size }))
+      .sort((a, b) => b.count - a.count);
+
+    if (items.length === 0) return;
+
+    const totalBills = items.reduce((s, d) => s + d.count, 0);
+    document.getElementById('remarkSubtitle').textContent = `รวม ${fmtComma(totalBills)} บิล (ไม่ซ้ำ) / ${items.length} หมายเหตุ`;
+
+    const svg = document.getElementById('remarkCanvas');
+    const rowH = 32, gap = 4, labelW = 220, barArea = 500, pad = { t: 10, r: 20, b: 10, l: 10 };
+    const W = labelW + barArea + pad.l + pad.r;
+    const H = pad.t + items.length * (rowH + gap) + pad.b;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.style.width = '100%';
+    svg.style.height = 'auto';
+
+    const maxVal = items[0].count;
+    let g = '';
+
+    items.forEach((d, i) => {
+      const y = pad.t + i * (rowH + gap);
+      const barW = Math.max(2, (d.count / maxVal) * barArea);
+      const color = REMARK_COLORS[i % REMARK_COLORS.length];
+      const truncLabel = d.remark.length > 28 ? d.remark.slice(0, 26) + '...' : d.remark;
+
+      g += `<text x="${pad.l + labelW - 8}" y="${y + rowH / 2 + 4}" text-anchor="end" style="font-size:12px;fill:var(--text-2)">${truncLabel}</text>`;
+      g += `<rect x="${pad.l + labelW}" y="${y + 2}" width="${barW}" height="${rowH - 4}" rx="3" ry="3" fill="${color}" opacity="0.7" data-ri="${i}"/>`;
+      g += `<text x="${pad.l + labelW + barW + 6}" y="${y + rowH / 2 + 4}" style="font-size:12px;font-weight:600;fill:var(--text-1)">${fmtComma(d.count)}</text>`;
+    });
+
+    svg.innerHTML = g;
+
+    const tip = document.getElementById('remarkTooltip');
+    const card = document.getElementById('remarkChartCard');
+    svg.querySelectorAll('rect[data-ri]').forEach(rect => {
+      const idx = +rect.dataset.ri;
+      rect.style.cursor = 'default';
+      rect.addEventListener('mouseenter', (e) => {
+        rect.setAttribute('opacity', '1');
+        const d = items[idx];
+        const pct = (d.count / totalBills * 100).toFixed(1);
+        tip.innerHTML = `<div class="tt-month">${d.remark}</div><div>${fmtComma(d.count)} บิล (${pct}%)</div>`;
+        tip.style.display = 'block';
+        const cR = card.getBoundingClientRect();
+        tip.style.left = (e.clientX - cR.left + 12) + 'px';
+        tip.style.top = (e.clientY - cR.top - 40) + 'px';
+      });
+      rect.addEventListener('mousemove', (e) => {
+        const cR = card.getBoundingClientRect();
+        tip.style.left = (e.clientX - cR.left + 12) + 'px';
+        tip.style.top = (e.clientY - cR.top - 40) + 'px';
+      });
+      rect.addEventListener('mouseleave', () => {
+        rect.setAttribute('opacity', '0.7');
+        tip.style.display = 'none';
+      });
+    });
+  }
 
   function buildFilters() {
     const years = [...new Set(allData.map(d => d.year))].sort();
@@ -300,6 +393,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     if (filtered.length === 0) filtered = allData;
     renderKPI(filtered);
     renderChart(filtered);
+
+    let filteredR = remarkRaw;
+    if (selYear !== 'all') filteredR = filteredR.filter(d => d.year === selYear);
+    if (selMonth !== 'all') filteredR = filteredR.filter(d => d.month === selMonth);
+    if (filteredR.length === 0) filteredR = remarkRaw;
+    renderRemarkChart(filteredR);
   }
 
   window[CALLBACK] = function(response) {
@@ -325,6 +424,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     document.getElementById('errorBox').textContent = 'ไม่สามารถโหลดข้อมูลจาก Google Sheets ได้';
   };
   document.head.appendChild(sc);
+
+  window[CALLBACK2] = function(response) {
+    try {
+      remarkRaw = parseRemarkData(response);
+      renderRemarkChart(remarkRaw);
+    } catch (e) { console.error('Remark data error:', e); }
+    delete window[CALLBACK2];
+  };
+  const sc2 = document.createElement('script');
+  sc2.src = SRC2;
+  document.head.appendChild(sc2);
 })();
 </script>
 </body>
