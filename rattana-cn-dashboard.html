@@ -73,6 +73,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 .fselect{font-size:13px;padding:7px 32px 7px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface-card);color:var(--text-1);cursor:pointer;font-family:inherit;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 5l3 3 3-3' fill='none' stroke='%2352514e' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;transition:border-color .15s}
 .fselect:hover,.fselect:focus{border-color:var(--accent);outline:none}
 
+.sale-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.sale-tbl th{text-align:left;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;padding:8px 10px;border-bottom:2px solid var(--border)}
+.sale-tbl th.r{text-align:right}
+.sale-tbl td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.sale-tbl tr:hover{background:var(--accent-wash)}
+.sale-tbl td.r{text-align:right;font-variant-numeric:tabular-nums}
+.sale-tbl .rank{color:var(--text-3);font-weight:600;width:32px;text-align:center}
+.sale-tbl .bar-cell{width:120px;padding-right:16px}
+.sale-pct{display:inline-block;height:6px;border-radius:3px;background:var(--accent);opacity:.55}
+.sale-toggle{display:block;margin:12px auto 0;padding:6px 20px;font-size:12px;font-weight:600;color:var(--accent);background:none;border:1px solid var(--accent);border-radius:8px;cursor:pointer;font-family:inherit;transition:background .15s,color .15s}
+.sale-toggle:hover{background:var(--accent);color:#fff}
 .footer{text-align:center;font-size:11px;color:var(--text-3);margin-top:24px;padding:12px 0;border-top:1px solid var(--border)}
 </style>
 </head>
@@ -80,7 +91,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 
 <header class="app-header">
   <h1>Rattana <span>CN Dashboard</span></h1>
-  <span class="ver-badge">v2.1 &middot; 2026-09-19</span>
+  <span class="ver-badge">v2.2 &middot; 2026-09-19</span>
 </header>
 
 <div class="container">
@@ -102,8 +113,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     <div class="chart-card" id="saleChartCard" style="margin-top:24px">
       <p class="chart-title">CN แยกตาม Sale no Roo</p>
       <p class="chart-subtitle" id="saleSubtitle"></p>
-      <div class="tooltip" id="saleTooltip"></div>
-      <svg id="saleCanvas"></svg>
+      <div id="saleTableWrap"></div>
     </div>
   </div>
 
@@ -315,6 +325,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     }).filter(d => d.sale && d.billNo);
   }
 
+  let saleShowAll = false;
+  let saleItems = [];
+
   function renderSaleChart(data) {
     const grouped = new Map();
     data.forEach(d => {
@@ -323,70 +336,52 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
       g.bills.add(d.billNo);
       g.total += d.total;
     });
-    const items = [...grouped.entries()]
+    saleItems = [...grouped.entries()]
       .map(([sale, v]) => ({ sale, bills: v.bills.size, total: v.total }))
       .sort((a, b) => b.total - a.total);
 
-    if (items.length === 0) return;
+    if (saleItems.length === 0) return;
 
-    const totalBills = items.reduce((s, d) => s + d.bills, 0);
-    const totalBaht = items.reduce((s, d) => s + d.total, 0);
-    document.getElementById('saleSubtitle').textContent = `รวม ${fmtComma(totalBills)} บิล / ${fmt(totalBaht)} บาท / ${items.length} Sale`;
+    const totalBills = saleItems.reduce((s, d) => s + d.bills, 0);
+    const totalBaht = saleItems.reduce((s, d) => s + d.total, 0);
+    document.getElementById('saleSubtitle').textContent = `รวม ${fmtComma(totalBills)} บิล / ${fmt(totalBaht)} บาท / ${saleItems.length} Sale`;
 
-    const svg = document.getElementById('saleCanvas');
-    const n = items.length;
-    const rowH = 28;
-    const pad = { t: 10, r: 20, b: 10, l: 160 };
-    const W = 780;
-    const H = pad.t + n * rowH + pad.b;
-    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-    svg.style.width = '100%';
-    svg.style.height = 'auto';
+    const maxVal = saleItems[0].total;
+    const LIMIT = 15;
+    const show = saleShowAll ? saleItems : saleItems.slice(0, LIMIT);
 
-    const cw = W - pad.l - pad.r;
-    const maxVal = items[0].total;
-    const barH = 16;
-    const COLORS = ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#4a3aa7','#e34948'];
+    let html = '<table class="sale-tbl"><thead><tr>';
+    html += '<th>#</th><th>Sale no Roo</th><th class="r">บิล</th><th class="r">บาท</th><th class="r">%</th><th>สัดส่วน</th>';
+    html += '</tr></thead><tbody>';
 
-    let g = '';
-
-    items.forEach((d, i) => {
-      const y = pad.t + i * rowH;
-      const color = COLORS[i % COLORS.length];
-      const barW = Math.max(4, (d.total / maxVal) * cw);
-
-      const truncName = d.sale.length > 22 ? d.sale.slice(0, 20) + '..' : d.sale;
-      g += `<text x="${pad.l - 8}" y="${y + rowH / 2 + 4}" text-anchor="end" class="axis-label" style="font-size:11px">${truncName}</text>`;
-
-      g += `<rect x="${pad.l}" y="${y + (rowH - barH) / 2}" width="${barW}" height="${barH}" rx="3" ry="3" fill="${color}" opacity="0.7"/>`;
-
-      const label = `${fmtComma(d.bills)} บิล / ${fmt(d.total)}`;
-      g += `<text x="${pad.l + barW + 6}" y="${y + rowH / 2 + 4}" class="axis-label" style="font-size:10px;font-weight:600;fill:var(--text-2)">${label}</text>`;
-
-      g += `<rect x="${pad.l}" y="${y}" width="${cw}" height="${rowH}" fill="transparent" data-si="${i}" style="cursor:default"/>`;
+    show.forEach((d, i) => {
+      const pct = (d.total / totalBaht * 100).toFixed(1);
+      const barW = Math.max(2, (d.total / maxVal) * 100);
+      html += '<tr>';
+      html += `<td class="rank">${i + 1}</td>`;
+      html += `<td>${d.sale}</td>`;
+      html += `<td class="r">${fmtComma(d.bills)}</td>`;
+      html += `<td class="r">${fmtComma(d.total)}</td>`;
+      html += `<td class="r">${pct}%</td>`;
+      html += `<td class="bar-cell"><span class="sale-pct" style="width:${barW}%"></span></td>`;
+      html += '</tr>';
     });
 
-    svg.innerHTML = g;
+    html += '</tbody></table>';
 
-    const tip = document.getElementById('saleTooltip');
-    const card = document.getElementById('saleChartCard');
-    svg.querySelectorAll('rect[data-si]').forEach(rect => {
-      rect.addEventListener('mouseenter', (e) => {
-        const d = items[+rect.dataset.si];
-        const pct = (d.total / totalBaht * 100).toFixed(1);
-        tip.innerHTML = `<div class="tt-month">${d.sale}</div><div>${fmtComma(d.bills)} บิล (ไม่ซ้ำ)</div><div>${fmtComma(d.total)} บาท (${pct}%)</div>`;
-        tip.style.display = 'block';
-        const cR = card.getBoundingClientRect();
-        tip.style.left = (e.clientX - cR.left + 12) + 'px';
-        tip.style.top = (e.clientY - cR.top - 50) + 'px';
+    if (saleItems.length > LIMIT) {
+      html += `<button class="sale-toggle" id="saleToggle">${saleShowAll ? 'แสดง Top 15' : 'ดูทั้งหมด (' + saleItems.length + ')'}</button>`;
+    }
+
+    document.getElementById('saleTableWrap').innerHTML = html;
+
+    const btn = document.getElementById('saleToggle');
+    if (btn) {
+      btn.addEventListener('click', function() {
+        saleShowAll = !saleShowAll;
+        renderSaleChart(data);
       });
-      rect.addEventListener('mousemove', (e) => {
-        const cR = card.getBoundingClientRect();
-        tip.style.left = (e.clientX - cR.left + 12) + 'px';
-        tip.style.top = (e.clientY - cR.top - 50) + 'px';
-      });
-      rect.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
-    });
+    }
   }
 
   function buildFilters() {
