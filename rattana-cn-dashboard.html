@@ -80,6 +80,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 .sale-detail-hd{font-size:13px;font-weight:600;margin-bottom:4px}
 .sale-detail-sub{font-size:11px;color:var(--text-3);margin-bottom:10px}
 .sale-detail svg{display:block;width:100%;height:auto}
+.sale-detail-sep{border:none;border-top:1px solid var(--border);margin:14px 0 10px}
+.sale-detail-hd2{font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:8px}
 .sale-name-link{color:var(--accent);cursor:pointer;text-decoration:none}
 .sale-name-link:hover{text-decoration:underline}
 .sale-tbl tr.active{background:var(--accent-wash)}
@@ -100,7 +102,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 
 <header class="app-header">
   <h1>Rattana <span>CN Dashboard</span></h1>
-  <span class="ver-badge">v2.6 &middot; 2026-09-19</span>
+  <span class="ver-badge">v2.7 &middot; 2026-09-19</span>
 </header>
 
 <div class="container">
@@ -469,6 +471,44 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     let html = '<div class="sale-detail-hd">' + saleName + '</div>';
     html += '<div class="sale-detail-sub">รวม ' + fmtComma(grandBills) + ' บิล / ' + fmtComma(grandTotal) + ' บาท</div>';
     html += '<svg viewBox="0 0 ' + W + ' ' + H + '">' + g + '</svg>';
+
+    var saleBills = new Set(rows.map(d => d.billNo));
+    var filteredR = remarkRaw;
+    if (selYear !== 'all') filteredR = filteredR.filter(d => d.year === selYear);
+    if (selMonth !== 'all') filteredR = filteredR.filter(d => d.month === selMonth);
+    var matched = filteredR.filter(d => saleBills.has(d.billNo));
+
+    if (matched.length > 0) {
+      var byRemark = new Map();
+      matched.forEach(d => {
+        if (!byRemark.has(d.remark)) byRemark.set(d.remark, new Set());
+        byRemark.get(d.remark).add(d.billNo);
+      });
+      var items = [...byRemark.entries()]
+        .map(function(e) { return { remark: e[0], count: e[1].size }; })
+        .sort(function(a, b) { return b.count - a.count; });
+
+      var maxC = items[0].count;
+      var rowH = 22;
+      var rPad = { t: 8, r: 40, b: 8, l: 140 };
+      var rW = 350;
+      var rCw = rW - rPad.l - rPad.r;
+      var rH = rPad.t + items.length * rowH + rPad.b;
+
+      var rg = '';
+      items.forEach(function(item, idx) {
+        var y = rPad.t + idx * rowH;
+        var bw = (item.count / maxC) * rCw;
+        var label = item.remark.length > 18 ? item.remark.slice(0, 17) + '...' : item.remark;
+        rg += '<text x="' + (rPad.l - 6) + '" y="' + (y + 14) + '" text-anchor="end" fill="var(--text-2)" font-size="9">' + label + '</text>';
+        rg += '<rect x="' + rPad.l + '" y="' + (y + 3) + '" width="' + bw + '" height="' + 14 + '" fill="var(--accent)" opacity="0.55" rx="3" ry="3"/>';
+        rg += '<text x="' + (rPad.l + bw + 4) + '" y="' + (y + 14) + '" fill="var(--text-2)" font-size="9" font-weight="600">' + item.count + '</text>';
+      });
+
+      html += '<hr class="sale-detail-sep"/>';
+      html += '<div class="sale-detail-hd2">หมายเหตุที่ถูกต้อง (' + items.length + ' รายการ)</div>';
+      html += '<svg viewBox="0 0 ' + rW + ' ' + rH + '">' + rg + '</svg>';
+    }
 
     panel.innerHTML = html;
     panel.classList.add('show');
