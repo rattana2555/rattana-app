@@ -102,7 +102,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 
 <header class="app-header">
   <h1>Rattana <span>CN Dashboard</span></h1>
-  <span class="ver-badge">v2.7 &middot; 2026-09-19</span>
+  <span class="ver-badge">v2.8 &middot; 2026-09-19</span>
 </header>
 
 <div class="container">
@@ -489,20 +489,41 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
         .sort(function(a, b) { return b.count - a.count; });
 
       var maxC = items[0].count;
-      var rowH = 22;
-      var rPad = { t: 8, r: 40, b: 8, l: 140 };
-      var rW = 350;
+      var rW = 350, rH = 200;
+      var rPad = { t: 20, r: 10, b: 70, l: 35 };
       var rCw = rW - rPad.l - rPad.r;
-      var rH = rPad.t + items.length * rowH + rPad.b;
+      var rCh = rH - rPad.t - rPad.b;
+      var rMaxV = Math.ceil(maxC / 10) * 10 || 10;
+      var rSlotW = rCw / items.length;
+      var rxS = function(i) { return rPad.l + rSlotW / 2 + i * rSlotW; };
+      var ryS = function(v) { return rPad.t + rCh - (v / rMaxV) * rCh; };
 
       var rg = '';
+      var rStep = Math.ceil(rMaxV / 4 / 10) * 10 || 10;
+      for (var tick = 0; tick <= rMaxV; tick += rStep) {
+        var ty = ryS(tick);
+        rg += '<line x1="' + rPad.l + '" y1="' + ty + '" x2="' + (rW - rPad.r) + '" y2="' + ty + '" stroke="var(--border)" stroke-width="1"/>';
+        rg += '<text x="' + (rPad.l - 4) + '" y="' + (ty + 3) + '" text-anchor="end" fill="var(--text-3)" font-size="9">' + tick + '</text>';
+      }
+
+      var rBarW = Math.min(16, rSlotW - 3);
+      var rBaseline = ryS(0);
       items.forEach(function(item, idx) {
-        var y = rPad.t + idx * rowH;
-        var bw = (item.count / maxC) * rCw;
-        var label = item.remark.length > 18 ? item.remark.slice(0, 17) + '...' : item.remark;
-        rg += '<text x="' + (rPad.l - 6) + '" y="' + (y + 14) + '" text-anchor="end" fill="var(--text-2)" font-size="9">' + label + '</text>';
-        rg += '<rect x="' + rPad.l + '" y="' + (y + 3) + '" width="' + bw + '" height="' + 14 + '" fill="var(--accent)" opacity="0.55" rx="3" ry="3"/>';
-        rg += '<text x="' + (rPad.l + bw + 4) + '" y="' + (y + 14) + '" fill="var(--text-2)" font-size="9" font-weight="600">' + item.count + '</text>';
+        var bTop = ryS(item.count);
+        rg += '<rect x="' + (rxS(idx) - rBarW / 2) + '" y="' + bTop + '" width="' + rBarW + '" height="' + (rBaseline - bTop) + '" fill="var(--accent)" opacity="0.55" rx="3" ry="3"/>';
+        var lbl = item.remark.length > 10 ? item.remark.slice(0, 9) + '..' : item.remark;
+        rg += '<text x="' + rxS(idx) + '" y="' + (rH - rPad.b + 12) + '" text-anchor="end" fill="var(--text-3)" font-size="8" transform="rotate(-55,' + rxS(idx) + ',' + (rH - rPad.b + 12) + ')">' + lbl + '</text>';
+      });
+
+      if (items.length > 1) {
+        var lp = 'M' + rxS(0) + ',' + ryS(items[0].count);
+        for (var li = 1; li < items.length; li++) lp += ' L' + rxS(li) + ',' + ryS(items[li].count);
+        rg += '<path d="' + lp + '" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+      }
+
+      items.forEach(function(item, idx) {
+        rg += '<circle cx="' + rxS(idx) + '" cy="' + ryS(item.count) + '" r="3.5" fill="var(--accent)" stroke="var(--surface-card)" stroke-width="2"/>';
+        rg += '<text x="' + rxS(idx) + '" y="' + (ryS(item.count) - 7) + '" text-anchor="middle" fill="var(--text-2)" font-size="8" font-weight="600">' + item.count + '</text>';
       });
 
       html += '<hr class="sale-detail-sep"/>';
