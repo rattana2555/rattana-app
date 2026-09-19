@@ -80,7 +80,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 
 <header class="app-header">
   <h1>Rattana <span>CN Dashboard</span></h1>
-  <span class="ver-badge">v1.4 &middot; 2026-09-19</span>
+  <span class="ver-badge">v1.5 &middot; 2026-09-19</span>
 </header>
 
 <div class="container">
@@ -281,6 +281,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
   let remarkRaw = [];
   let selYear = 'all';
   let selMonth = 'all';
+  let selRemark = 'all';
 
   function parseRemarkData(obj) {
     return obj.table.rows.map(r => {
@@ -394,6 +395,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     html += '<select class="fselect" id="selMonth"><option value="all">ทั้งหมด</option>';
     MONTH_TH.forEach((m, i) => { html += `<option value="${i}">${m.replace('.','')}</option>`; });
     html += '</select></div>';
+    html += '<div class="filter-group"><span class="filter-label">หมายเหตุ:</span>';
+    html += '<select class="fselect" id="selRemark" style="max-width:220px"><option value="all">ทั้งหมด</option></select></div>';
     row.innerHTML = html;
 
     document.getElementById('selYear').addEventListener('change', function() {
@@ -404,6 +407,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
       selMonth = this.value === 'all' ? 'all' : +this.value;
       applyFilter();
     });
+    document.getElementById('selRemark').addEventListener('change', function() {
+      selRemark = this.value;
+      applyFilter();
+    });
+    if (remarkRaw.length > 0) buildRemarkDropdown();
+  }
+
+  function buildRemarkDropdown() {
+    const sel = document.getElementById('selRemark');
+    if (!sel) return;
+    const remarks = [...new Set(remarkRaw.map(d => d.remark))].sort();
+    let html = '<option value="all">ทั้งหมด</option>';
+    remarks.forEach(r => { html += `<option value="${r}">${r}</option>`; });
+    sel.innerHTML = html;
+    sel.value = selRemark;
   }
 
   function applyFilter() {
@@ -417,6 +435,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     let filteredR = remarkRaw;
     if (selYear !== 'all') filteredR = filteredR.filter(d => d.year === selYear);
     if (selMonth !== 'all') filteredR = filteredR.filter(d => d.month === selMonth);
+    if (selRemark !== 'all') filteredR = filteredR.filter(d => d.remark === selRemark);
     if (filteredR.length === 0) filteredR = remarkRaw;
     renderRemarkChart(filteredR);
   }
@@ -448,6 +467,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
   window[CALLBACK2] = function(response) {
     try {
       remarkRaw = parseRemarkData(response);
+      buildRemarkDropdown();
       renderRemarkChart(remarkRaw);
     } catch (e) { console.error('Remark data error:', e); }
     delete window[CALLBACK2];
