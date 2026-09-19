@@ -73,14 +73,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 .fselect{font-size:13px;padding:7px 32px 7px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface-card);color:var(--text-1);cursor:pointer;font-family:inherit;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 5l3 3 3-3' fill='none' stroke='%2352514e' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;transition:border-color .15s}
 .fselect:hover,.fselect:focus{border-color:var(--accent);outline:none}
 
-.month-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:12px}
-.month-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px}
-.month-card-hd{font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
-.rank-row{display:flex;align-items:center;gap:6px;margin-bottom:4px}
-.rank-num{font-size:12px;font-weight:600;color:var(--text-3);width:16px;text-align:center}
-.rank-bar{height:6px;border-radius:3px}
-.rank-val{font-size:12px;font-weight:600;color:var(--text-1);flex-shrink:0;min-width:32px;text-align:right}
-.rank-name{font-size:11px;color:var(--text-2);margin:0 0 6px 22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .footer{text-align:center;font-size:11px;color:var(--text-3);margin-top:24px;padding:12px 0;border-top:1px solid var(--border)}
 </style>
 </head>
@@ -88,7 +80,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 
 <header class="app-header">
   <h1>Rattana <span>CN Dashboard</span></h1>
-  <span class="ver-badge">v1.9 &middot; 2026-09-19</span>
+  <span class="ver-badge">v2.0 &middot; 2026-09-19</span>
 </header>
 
 <div class="container">
@@ -107,11 +99,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
       <svg id="chartCanvas" viewBox="0 0 780 340"></svg>
     </div>
 
-    <div class="chart-card" id="top3Card" style="margin-top:24px">
-      <p class="chart-title">Top 3 หมายเหตุรายเดือน</p>
-      <p class="chart-subtitle" id="top3Subtitle"></p>
-      <div id="top3Grid" class="month-grid"></div>
-    </div>
   </div>
 
   <div id="errorBox" class="error-msg" style="display:none"></div>
@@ -303,47 +290,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     }).filter(d => d.remark && d.billNo);
   }
 
-  const REMARK_COLORS = ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#4a3aa7','#e34948'];
-
-  function renderTop3(data) {
-    const monthMap = new Map();
-    data.forEach(d => {
-      const key = d.year + '-' + String(d.month).padStart(2, '0');
-      if (!monthMap.has(key)) monthMap.set(key, { year: d.year, month: d.month, items: new Map() });
-      const m = monthMap.get(key);
-      if (!m.items.has(d.remark)) m.items.set(d.remark, new Set());
-      m.items.get(d.remark).add(d.billNo);
-    });
-
-    const months = [...monthMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-    const grid = document.getElementById('top3Grid');
-
-    if (months.length === 0) { grid.innerHTML = ''; return; }
-
-    document.getElementById('top3Subtitle').textContent = `จำนวนบิลรับคืน (ไม่ซ้ำ) สูงสุด 3 อันดับแรก`;
-
-    let html = '';
-    months.forEach(([, m]) => {
-      const ranked = [...m.items.entries()]
-        .map(([remark, bills]) => ({ remark, count: bills.size }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 3);
-      const maxCount = ranked[0] ? ranked[0].count : 1;
-      const label = MONTH_TH[m.month] + ' ' + (m.year + 543);
-
-      html += '<div class="month-card">';
-      html += `<div class="month-card-hd">${label}</div>`;
-      ranked.forEach((r, i) => {
-        const color = REMARK_COLORS[i % REMARK_COLORS.length];
-        const barW = Math.max(4, (r.count / maxCount) * 100);
-        html += `<div class="rank-row"><span class="rank-num">${i + 1}</span><div class="rank-bar" style="width:${barW}px;background:${color}"></div><span class="rank-val">${fmtComma(r.count)}</span></div>`;
-        html += `<div class="rank-name">${r.remark}</div>`;
-      });
-      html += '</div>';
-    });
-    grid.innerHTML = html;
-  }
-
   function buildFilters() {
     const years = [...new Set(allData.map(d => d.year))].sort();
     const row = document.getElementById('filterRow');
@@ -397,7 +343,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 
     renderKPI(filtered, filteredR);
     renderChart(filtered);
-    renderTop3(filteredR);
   }
 
   window[CALLBACK] = function(response) {
@@ -428,7 +373,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     try {
       remarkRaw = parseRemarkData(response);
       buildRemarkDropdown();
-      renderTop3(remarkRaw);
       if (allData.length > 0) renderKPI(allData, remarkRaw);
     } catch (e) { console.error('Remark data error:', e); }
     delete window[CALLBACK2];
