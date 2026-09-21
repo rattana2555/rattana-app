@@ -24,7 +24,9 @@
     --header-bg:linear-gradient(135deg,#0d2b3e 0%,#1a5276 100%);
   }
 }
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--surface);color:var(--text-1);min-height:100vh}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--surface);color:var(--text-1);min-height:100vh;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.fixed-top{flex-shrink:0;background:var(--surface);z-index:100}
+.scroll-area{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .app-header{background:var(--header-bg);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
 .app-header h1{font-size:18px;font-weight:700;letter-spacing:.3px}
 .app-header h1 span{font-weight:400;opacity:.85}
@@ -102,20 +104,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 </head>
 <body>
 
-<header class="app-header">
-  <h1>Rattana <span>CN Dashboard</span></h1>
-  <span class="ver-badge">v3.6 &middot; 2026-09-19</span>
-</header>
+<div class="fixed-top">
+  <header class="app-header">
+    <h1>Rattana <span>CN Dashboard</span></h1>
+    <span class="ver-badge">v3.8 &middot; 2026-09-21</span>
+  </header>
+  <div id="fixedContent" class="container" style="padding-bottom:8px;display:none">
+    <div class="filter-row" id="filterRow"></div>
+    <div class="kpi-row" id="kpiRow" style="margin-bottom:0"></div>
+  </div>
+</div>
 
-<div class="container">
+<div class="scroll-area">
+<div class="container" style="padding-top:16px">
   <div id="loading" class="loading">
     <div class="spinner"></div><br>
     กำลังโหลดข้อมูลจาก Google Sheets...
   </div>
 
   <div id="dashboard" style="display:none">
-    <div class="filter-row" id="filterRow"></div>
-    <div class="kpi-row" id="kpiRow"></div>
     <div class="chart-card" id="chartCard">
       <p class="chart-title">CN Total รายเดือน</p>
       <p class="chart-subtitle" id="chartSubtitle"></p>
@@ -142,6 +149,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
   <div id="errorBox" class="error-msg" style="display:none"></div>
   <div class="footer">Rattana CN Dashboard &middot; ข้อมูลจากชีต SQL CN1</div>
 </div>
+</div>
 
 <script>
 (function(){
@@ -150,7 +158,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
   const CALLBACK = '__gvizCb' + Date.now();
   const SRC = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=SQL%20CN1&tq=${QUERY}&tqx=responseHandler:${CALLBACK}`;
 
-  const QUERY2 = encodeURIComponent('SELECT W, X, C WHERE X IS NOT NULL AND C IS NOT NULL');
+  const QUERY2 = encodeURIComponent('SELECT W, X, C WHERE C IS NOT NULL');
   const CALLBACK2 = '__gvizCb2' + Date.now();
   const SRC2 = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=SQL%20CN1&tq=${QUERY2}&tqx=responseHandler:${CALLBACK2}`;
 
@@ -333,10 +341,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
       return {
         year: +match[1],
         month: +match[2],
-        remark: r.c[1] ? String(r.c[1].v).trim().replace(/\s+/g,' ').replace(/\s*\(/g,'(') : '',
+        remark: r.c[1] && String(r.c[1].v).trim() ? String(r.c[1].v).trim().replace(/\s+/g,' ').replace(/\s*\(/g,'(') : '(ไม่ระบุ)',
         billNo: r.c[2] ? String(r.c[2].v).trim() : ''
       };
-    }).filter(d => d.remark && d.billNo);
+    }).filter(d => d.billNo);
   }
 
   function parseSaleData(obj) {
@@ -353,11 +361,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     }).filter(d => d.sale && d.billNo);
   }
 
-  let remarkChartShowAll = false;
   let saleShowAll = false;
   let saleItems = [];
   let activeSale = null;
-  let saleRemarkShowAll = false;
   let lastSaleData = [];
 
   function renderRemarkChart(filteredR, filteredS) {
@@ -380,7 +386,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 
     var allItems = [...byRemark.entries()]
       .map(function(e) { return { remark: e[0], bills: e[1].bills.size, total: e[1].total }; })
-      .sort(function(a, b) { return b.bills - a.bills; });
+      .sort(function(a, b) { return b.total - a.total; });
 
     if (allItems.length === 0) {
       document.getElementById('remarkChartCard').style.display = 'none';
@@ -388,45 +394,147 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     }
     document.getElementById('remarkChartCard').style.display = '';
 
-    var LIMIT = 10;
-    var items = (remarkChartShowAll || allItems.length <= LIMIT) ? allItems : allItems.slice(0, LIMIT);
+    var half = Math.ceil(allItems.length / 2);
+    var leftItems = allItems.slice(0, half);
+    var rightItems = allItems.slice(half);
     var totalBills = allItems.reduce(function(s, d) { return s + d.bills; }, 0);
-    document.getElementById('remarkChartSubtitle').textContent = 'รวม ' + allItems.length + ' รายการ / ' + fmtComma(totalBills) + ' บิล';
 
-    var html = '<table class="sale-tbl"><thead><tr>';
-    html += '<th style="width:36px;text-align:center">#</th>';
-    html += '<th>หมายเหตุ</th>';
-    html += '<th style="text-align:right">บิล</th>';
-    html += '<th style="text-align:right">บาท</th>';
-    html += '<th style="text-align:right;width:50px">%</th>';
-    html += '</tr></thead><tbody>';
+    var remarkPeriod = '';
+    if (selYear !== 'all' && selMonth !== 'all') {
+      remarkPeriod = MONTH_TH[selMonth] + ' ' + (selYear + 543);
+    } else if (selYear !== 'all') {
+      remarkPeriod = 'ปี ' + (selYear + 543);
+    } else if (selMonth !== 'all') {
+      remarkPeriod = MONTH_TH[selMonth] + ' (ทุกปี)';
+    } else {
+      var rmkMonths = [];
+      filteredR.forEach(function(d) {
+        var k = d.year * 100 + d.month;
+        if (rmkMonths.indexOf(k) === -1) rmkMonths.push(k);
+      });
+      rmkMonths.sort();
+      if (rmkMonths.length > 0) {
+        var fm = rmkMonths[0], lm = rmkMonths[rmkMonths.length - 1];
+        remarkPeriod = MONTH_TH[fm % 100] + ' ' + (Math.floor(fm / 100) + 543) + ' - ' + MONTH_TH[lm % 100] + ' ' + (Math.floor(lm / 100) + 543);
+      }
+    }
+    document.getElementById('remarkChartSubtitle').textContent = 'รวม ' + allItems.length + ' รายการ / ' + fmtComma(totalBills) + ' บิล · ' + remarkPeriod;
 
-    items.forEach(function(item, idx) {
-      var pct = totalBills > 0 ? (item.bills / totalBills * 100).toFixed(1) : '0.0';
-      var isTop = idx === 0;
-      html += '<tr' + (isTop ? ' style="background:var(--accent-wash)"' : '') + '>';
-      html += '<td style="text-align:center;font-weight:700">' + (idx + 1) + '</td>';
-      html += '<td style="font-weight:' + (isTop ? '600' : '500') + ';color:' + (isTop ? 'var(--accent)' : 'var(--text-1)') + '">' + item.remark + '</td>';
-      html += '<td style="text-align:right;font-weight:600">' + fmtComma(item.bills) + '</td>';
-      html += '<td style="text-align:right;font-weight:500;color:var(--text-2)">' + fmtComma(item.total) + '</td>';
-      html += '<td style="text-align:right;font-weight:600">' + pct + '%</td>';
-      html += '</tr>';
+    function buildRemarkTbl(items, startIdx) {
+      var t = '<table class="sale-tbl" style="width:100%"><thead><tr>';
+      t += '<th style="width:30px;text-align:center">#</th>';
+      t += '<th>หมายเหตุ</th>';
+      t += '<th style="text-align:right">บิล</th>';
+      t += '<th style="text-align:right">บาท</th>';
+      t += '<th style="text-align:right;width:46px">%</th>';
+      t += '</tr></thead><tbody>';
+      items.forEach(function(item, idx) {
+        var rank = startIdx + idx + 1;
+        var pct = totalBills > 0 ? (item.bills / totalBills * 100).toFixed(1) : '0.0';
+        var isTop = rank === 1;
+        t += '<tr' + (isTop ? ' style="background:var(--accent-wash)"' : '') + '>';
+        t += '<td style="text-align:center;font-weight:700">' + rank + '</td>';
+        t += '<td style="font-weight:' + (isTop ? '600' : '500') + ';color:' + (isTop ? 'var(--accent)' : 'var(--text-1)') + ';font-size:12px">' + item.remark + '</td>';
+        t += '<td style="text-align:right;font-weight:600">' + fmtComma(item.bills) + '</td>';
+        t += '<td style="text-align:right;font-weight:500;color:var(--text-2)">' + fmtComma(item.total) + '</td>';
+        t += '<td style="text-align:right;font-weight:600">' + pct + '%</td>';
+        t += '</tr>';
+      });
+      t += '</tbody></table>';
+      return t;
+    }
+
+    var html = '';
+    if (rightItems.length > 0) {
+      html += '<div style="display:flex;gap:16px;align-items:flex-start">';
+      html += '<div style="flex:1;min-width:0;overflow-x:auto">' + buildRemarkTbl(leftItems, 0) + '</div>';
+      html += '<div style="flex:1;min-width:0;overflow-x:auto">' + buildRemarkTbl(rightItems, half) + '</div>';
+      html += '</div>';
+    } else {
+      html += buildRemarkTbl(leftItems, 0);
+    }
+
+    var byMonthRemark = new Map();
+    filteredR.forEach(function(d) {
+      var mKey = d.year + '-' + String(d.month).padStart(2, '0');
+      if (!byMonthRemark.has(mKey)) byMonthRemark.set(mKey, { year: d.year, month: d.month, remarks: new Map() });
+      var mon = byMonthRemark.get(mKey);
+      if (!mon.remarks.has(d.remark)) mon.remarks.set(d.remark, { bills: new Set(), total: 0, counted: new Set() });
+      var r = mon.remarks.get(d.remark);
+      r.bills.add(d.billNo);
+      if (!r.counted.has(d.billNo)) {
+        r.total += billTotalMap.get(d.billNo) || 0;
+        r.counted.add(d.billNo);
+      }
     });
 
-    html += '</tbody></table>';
-
-    if (allItems.length > LIMIT) {
-      html += '<div style="text-align:center;margin-top:8px"><button class="sale-toggle" id="remarkChartToggle">' + (remarkChartShowAll ? 'แสดง Top 10' : 'ดูทั้งหมด (' + allItems.length + ')') + '</button></div>';
-    }
-    document.getElementById('remarkChartWrap').innerHTML = html;
-
-    var btn = document.getElementById('remarkChartToggle');
-    if (btn) {
-      btn.addEventListener('click', function() {
-        remarkChartShowAll = !remarkChartShowAll;
-        renderRemarkChart(filteredR, filteredS);
+    var monthKeys = [...byMonthRemark.keys()].sort();
+    if (monthKeys.length > 1) {
+      var topPerMonth = monthKeys.map(function(mKey) {
+        var mon = byMonthRemark.get(mKey);
+        var ranked = [...mon.remarks.entries()]
+          .map(function(e) { return { remark: e[0], bills: e[1].bills.size, total: e[1].total }; })
+          .sort(function(a, b) { return b.total - a.total; });
+        return { key: mKey, year: mon.year, month: mon.month, label: MONTH_TH[mon.month] + (mon.year % 100), top: ranked[0] };
       });
+
+      var uniqueRemarks = [...new Set(topPerMonth.map(function(d) { return d.top.remark; }))];
+      var rmkColors = ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#4a3aa7','#e34948'];
+      var colorMap = {};
+      uniqueRemarks.forEach(function(r, i) { colorMap[r] = rmkColors[i % rmkColors.length]; });
+
+      var cW = 780, cH = 400;
+      var cPad = { t: 40, r: 15, b: 80, l: 55 };
+      var cCw = cW - cPad.l - cPad.r;
+      var cCh = cH - cPad.t - cPad.b;
+      var maxTotal = Math.ceil(Math.max.apply(null, topPerMonth.map(function(d) { return d.top.total; })) / 100000) * 100000 || 100000;
+      var slotW = cCw / topPerMonth.length;
+      var cxS = function(i) { return cPad.l + slotW / 2 + i * slotW; };
+      var cyS = function(v) { return cPad.t + cCh - (v / maxTotal) * cCh; };
+      var barW = Math.min(24, slotW - 4);
+
+      var g = '';
+      var tickStep = Math.ceil(maxTotal / 5 / 100000) * 100000 || 100000;
+      for (var tick = 0; tick <= maxTotal; tick += tickStep) {
+        var ty = cyS(tick);
+        g += '<line x1="' + cPad.l + '" y1="' + ty + '" x2="' + (cW - cPad.r) + '" y2="' + ty + '" stroke="var(--border)" stroke-width="1"/>';
+        g += '<text x="' + (cPad.l - 6) + '" y="' + (ty + 3) + '" text-anchor="end" fill="var(--text-3)" font-size="10">' + fmt(tick) + '</text>';
+      }
+
+      topPerMonth.forEach(function(d, i) {
+        var barTop = cyS(d.top.total);
+        var barH = cyS(0) - barTop;
+        var clr = colorMap[d.top.remark];
+        g += '<rect x="' + (cxS(i) - barW / 2) + '" y="' + barTop + '" width="' + barW + '" height="' + barH + '" fill="' + clr + '" opacity="0.55" rx="3" ry="3"/>';
+        g += '<text x="' + cxS(i) + '" y="' + (cH - cPad.b + 14) + '" text-anchor="end" fill="var(--text-3)" font-size="10" transform="rotate(-45,' + cxS(i) + ',' + (cH - cPad.b + 14) + ')">' + d.label + '</text>';
+      });
+
+      var linePath = 'M' + cxS(0) + ',' + cyS(topPerMonth[0].top.total);
+      for (var li = 1; li < topPerMonth.length; li++) linePath += ' L' + cxS(li) + ',' + cyS(topPerMonth[li].top.total);
+      g += '<path d="' + linePath + '" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>';
+
+      topPerMonth.forEach(function(d, i) {
+        var cy = cyS(d.top.total);
+        g += '<circle cx="' + cxS(i) + '" cy="' + cy + '" r="4" fill="var(--accent)" stroke="var(--surface-card)" stroke-width="2"/>';
+        g += '<text x="' + cxS(i) + '" y="' + (cy - 14) + '" text-anchor="middle" fill="var(--text-2)" font-size="9" font-weight="600">' + fmt(d.top.total) + '</text>';
+        g += '<text x="' + cxS(i) + '" y="' + (cy - 4) + '" text-anchor="middle" fill="var(--text-3)" font-size="8">' + d.top.bills + ' บิล</text>';
+      });
+
+      html += '<div style="margin-top:20px;border-top:1px solid var(--border);padding-top:14px">';
+      html += '<p style="font-size:13px;font-weight:600;margin-bottom:4px">หมายเหตุอันดับ 1 แยกรายเดือน</p>';
+      html += '<p style="font-size:11px;color:var(--text-3);margin-bottom:10px">หมายเหตุที่มียอด CN สูงสุดในแต่ละเดือน (เรียงตามจำนวนเงิน)</p>';
+      html += '<svg viewBox="0 0 ' + cW + ' ' + cH + '" style="display:block;width:100%;height:auto">' + g + '</svg>';
+
+      html += '<div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;justify-content:center">';
+      uniqueRemarks.forEach(function(r) {
+        html += '<div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-2)">';
+        html += '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + colorMap[r] + ';opacity:0.75"></span>';
+        html += r + '</div>';
+      });
+      html += '</div></div>';
     }
+
+    document.getElementById('remarkChartWrap').innerHTML = html;
   }
 
   function renderSaleChart(data) {
@@ -446,7 +554,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 
     const totalBills = saleItems.reduce((s, d) => s + d.bills, 0);
     const totalBaht = saleItems.reduce((s, d) => s + d.total, 0);
-    document.getElementById('saleSubtitle').textContent = `รวม ${fmtComma(totalBills)} บิล / ${fmt(totalBaht)} บาท / ${saleItems.length} Sale`;
+    var salePeriod = '';
+    if (selYear !== 'all' && selMonth !== 'all') {
+      salePeriod = MONTH_TH[selMonth] + ' ' + (selYear + 543);
+    } else if (selYear !== 'all') {
+      salePeriod = 'ปี ' + (selYear + 543);
+    } else if (selMonth !== 'all') {
+      salePeriod = MONTH_TH[selMonth] + ' (ทุกปี)';
+    } else {
+      var saleMonths = [];
+      data.forEach(function(d) {
+        var k = d.year * 100 + d.month;
+        if (saleMonths.indexOf(k) === -1) saleMonths.push(k);
+      });
+      saleMonths.sort();
+      if (saleMonths.length > 0) {
+        var sf = saleMonths[0], sl = saleMonths[saleMonths.length - 1];
+        salePeriod = MONTH_TH[sf % 100] + ' ' + (Math.floor(sf / 100) + 543) + ' - ' + MONTH_TH[sl % 100] + ' ' + (Math.floor(sl / 100) + 543);
+      }
+    }
+    document.getElementById('saleSubtitle').textContent = `รวม ${fmtComma(totalBills)} บิล / ${fmt(totalBaht)} บาท / ${saleItems.length} Sale · ${salePeriod}`;
 
     if (!activeSale && saleItems.length > 0) activeSale = saleItems[0].sale;
 
@@ -482,11 +609,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     document.querySelectorAll('.sale-name-link').forEach(el => {
       el.addEventListener('click', function() {
         const name = this.dataset.sale;
-        activeSale = (activeSale === name) ? null : name;
-        saleRemarkShowAll = false;
+        activeSale = name;
         renderSaleChart(data);
-        if (activeSale) renderSaleDetail(activeSale, data);
-        else document.getElementById('saleDetail').classList.remove('show');
+        renderSaleDetail(activeSale, data);
       });
     });
 
@@ -589,7 +714,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
       var allItems = [...byRemark.entries()]
         .map(function(e) { return { remark: e[0], count: e[1].size }; })
         .sort(function(a, b) { return b.count - a.count; });
-      var items = (saleRemarkShowAll || allItems.length <= 5) ? allItems : allItems.slice(0, 5);
+      var items = allItems.slice(0, 5);
 
       var maxC = items[0].count;
       var rW = 350, rH = 200;
@@ -635,21 +760,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
       html += '<hr class="sale-detail-sep"/>';
       html += '<div class="sale-detail-hd2">หมายเหตุที่ถูกต้อง (' + allItems.length + ' รายการ)</div>';
       html += '<svg viewBox="0 0 ' + rW + ' ' + rH + '">' + rg + '</svg>';
-      if (allItems.length > 5) {
-        html += '<div style="text-align:center;margin-top:6px"><button class="sale-toggle" id="remarkToggle">' + (saleRemarkShowAll ? 'แสดง Top 5' : 'ดูเพิ่มเติม (' + allItems.length + ')') + '</button></div>';
-      }
     }
 
     panel.innerHTML = html;
     panel.classList.add('show');
 
-    var rmkBtn = document.getElementById('remarkToggle');
-    if (rmkBtn) {
-      rmkBtn.addEventListener('click', function() {
-        saleRemarkShowAll = !saleRemarkShowAll;
-        renderSaleDetail(saleName, data);
-      });
-    }
   }
 
   function buildFilters() {
@@ -709,10 +824,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 
     renderKPI(filtered, filteredR);
     renderChart(filtered);
-    remarkChartShowAll = false;
     renderRemarkChart(filteredR, filteredS);
-    activeSale = null;
-    document.getElementById('saleDetail').classList.remove('show');
     if (filteredS.length > 0) renderSaleChart(filteredS);
   }
 
@@ -721,6 +833,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
       allData = parseGvizObj(response);
       document.getElementById('loading').style.display = 'none';
       document.getElementById('dashboard').style.display = 'block';
+      document.getElementById('fixedContent').style.display = 'block';
       buildFilters();
       renderKPI(allData, remarkRaw);
       renderChart(allData);
@@ -746,6 +859,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
       buildRemarkDropdown();
       if (allData.length > 0) renderKPI(allData, remarkRaw);
       if (remarkRaw.length > 0 && saleRaw.length > 0) renderRemarkChart(remarkRaw, saleRaw);
+      if (activeSale && saleRaw.length > 0) renderSaleDetail(activeSale, saleRaw);
     } catch (e) { console.error('Remark data error:', e); }
     delete window[CALLBACK2];
   };
