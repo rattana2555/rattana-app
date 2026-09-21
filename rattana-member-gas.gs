@@ -1,11 +1,20 @@
 // ════════════════════════════════════════════════════════
-//  Rattana Member System — GAS v1.20
+//  Rattana Member System — GAS v1.21
 // ════════════════════════════════════════════════════════
 
 const SHEET_ID        = '1gbBrJtE36fX8TM7KC0RbXgPZI6AyNpbC3XhJ6uiLsOE';
 const SHEET_NAME      = 'Members';
 const POINT_SHEET     = 'Member Point';
-const DISCORD_WEBHOOK = 'https://discordapp.com/api/webhooks/1514920273910956034/QQxs7EoSmxHVGZiu284OELLcXns93acZc1-YTLpzSfP-Nhn86l-kRQY-iq-EGAvcEBs2';
+// v1.21: ไม่เก็บ webhook ในโค้ดอีกแล้ว (repo เป็น public — URL เคยหลุดโดนบอทสแปม)
+// ตั้งค่าที่ Apps Script → ⚙️ การตั้งค่าโครงการ → คุณสมบัติของสคริปต์
+//   ชื่อ: DISCORD_WEBHOOK   ค่า: <URL ของ webhook>
+function getDiscordWebhook_() {
+  try {
+    return PropertiesService.getScriptProperties().getProperty('DISCORD_WEBHOOK') || '';
+  } catch (e) {
+    return '';
+  }
+}
 
 const HEADERS = [
   'LINE User ID','ชื่อ LINE','ชื่อ','นามสกุล',
@@ -154,7 +163,8 @@ function findRowBy(sheet, predicate) {
 
 // ─── Discord notification ─────────────────────────────
 function notifyDiscord(data, isNew) {
-  if (!DISCORD_WEBHOOK) return;
+  var DISCORD_WEBHOOK = getDiscordWebhook_();
+  if (!DISCORD_WEBHOOK) { Logger.log("ยังไม่ได้ตั้ง Script Property: DISCORD_WEBHOOK"); return; }
   try {
     // v1.20: กันแจ้งซ้ำ — เบอร์เดิม + สถานะเดิม ภายใน 90 วินาที ส่งครั้งเดียว
     var dupKey = 'dc_' + (isNew ? 'n_' : 'u_') + String(data.phone || '');
@@ -178,7 +188,7 @@ function notifyDiscord(data, isNew) {
 }
 
 function testDiscord() {
-  const res = UrlFetchApp.fetch(DISCORD_WEBHOOK, {
+  const res = UrlFetchApp.fetch(getDiscordWebhook_(), {
     method: 'POST',
     contentType: 'application/json',
     payload: JSON.stringify({ content: '🧪 Test — Rattana Member webhook ใช้งานได้!' }),
@@ -211,7 +221,7 @@ function doGet(e) {
     }
 
     if (!p.userId && !p.phone) {
-      return ContentService.createTextOutput(JSON.stringify({status:'ok', msg:'GAS v1.20 running'})).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({status:'ok', msg:'GAS v1.21 running'})).setMimeType(ContentService.MimeType.JSON);
     }
 
     const sheet = getSheet();
