@@ -1442,10 +1442,14 @@ const TH_CONS = {
   'อ':['',''],'ฮ':['h','']
 };
 
+// คำที่ถอดเสียงตามกติกาไม่ได้ ต้องระบุตรงๆ
+const TH_WORD_FIX = { 'ศรี':'si', 'ทร':'s', 'ทรัพย์':'sap', 'จันทร์':'chan' };
+
 function thIni_(cl) {
   if (cl.length === 2) {
     if (cl[0] === 'ห') return thIni_(cl[1]);              // ห นำ: หน หม หล หย หว
     if (cl === 'อย') return 'y';
+    if (cl === 'ทร') return 's';                          // ทร ออกเสียง ซ (ทราย = sai)
     const s2 = { 'ร':'r', 'ล':'l', 'ว':'w' }[cl[1]];
     if (s2) return (TH_CONS[cl[0]] ? TH_CONS[cl[0]][0] : '') + s2;
   }
@@ -1462,9 +1466,12 @@ function thTakeFinal_(rest) {
 }
 
 const TH_SYL = (function () {
-  const C = '(ห[ก-ฮ]|อย|[ก-ฮ][รลว]|[ก-ฮ])', F = '([ก-ฮ])';
+  // ควบกล้ำแท้เท่านั้น — ไม่งั้น ฉลอม จะกลายเป็น chlom แทน chalom
+  const CLUSTER = '(?:กร|ขร|คร|ตร|ปร|พร|ทร|กล|ขล|คล|ปล|ผล|พล|กว|ขว|คว)';
+  const C = '(ห[ก-ฮ]|อย|' + CLUSTER + '|[ก-ฮ])', F = '([ก-ฮ])';
   const p = [];
-  const add = (re, v, hasF) => p.push({ re: new RegExp('^' + re), v: v, hasF: !!hasF });
+  // reqF = ตัวสะกดบังคับ (ตัดออกไม่ได้) · ไม่ใส่ = มีก็ได้ ตัดออกแล้วใช้พยางค์สั้นได้
+  const add = (re, v, hasF, reqF) => p.push({ re: new RegExp('^' + re), v: v, hasF: !!hasF, reqF: !!reqF });
   add('เ'+C+'ีย'+F+'?','ia',1);   add('เ'+C+'ือ'+F+'?','uea',1);
   add('เ'+C+'าะ','o',0);          add('เ'+C+'อะ','oe',0);
   add('เ'+C+'อ'+F+'?','oe',1);    add('เ'+C+'ิ'+F+'?','oe',1);
@@ -1476,13 +1483,14 @@ const TH_SYL = (function () {
   add('ใ'+C,'ai',0);              add('ไ'+C,'ai',0);
   add(C+'ัวะ','ua',0);            add(C+'ัว'+F+'?','ua',1);
   add(C+'ำ','am',0);              add(C+'ัย','ai',0);
+  add(C+'ะ','a',0);               add(C+'อ'+F+'?','o',1);
   add(C+'ั'+F+'?','a',1);         add(C+'าย','ai',0);
   add(C+'าว','ao',0);             add(C+'า'+F+'?','a',1);
   add(C+'ิว','io',0);             add(C+'ิ'+F+'?','i',1);
   add(C+'ี'+F+'?','i',1);         add(C+'ึ'+F+'?','ue',1);
   add(C+'ื'+F+'?','ue',1);        add(C+'ุ'+F+'?','u',1);
   add(C+'ู'+F+'?','u',1);         add(C+'็'+F+'?','o',1);
-  add(C+F,'o',1);                 add(C,'a',0);
+  add(C+F,'o',1,true);                 add(C,'a',0);
   return p;
 })();
 
@@ -1499,9 +1507,14 @@ function thRomanizeWord_(w) {
       const m = s.match(pat.re);
       if (!m) continue;
       const cl = m[1];
-      const fc = pat.hasF ? (m[2] || '') : '';
-      if (fc && !thTakeFinal_(s.slice(m[0].length))) continue;
-      hit = { txt: thIni_(cl) + pat.v + thFin_(fc), len: m[0].length };
+      let fc  = pat.hasF ? (m[2] || '') : '';
+      let len = m[0].length;
+      if (fc && !thTakeFinal_(s.slice(len))) {
+        if (pat.reqF) continue;   // ตัวสะกดบังคับแต่ไม่เข้าเงื่อนไข → ลองรูปแบบอื่น
+        len -= fc.length;         // ตัวสะกดแบบ "มีก็ได้" → ตัดออก ใช้พยางค์สั้น
+        fc = '';
+      }
+      hit = { txt: thIni_(cl) + pat.v + thFin_(fc), len: len };
       break;
     }
     if (!hit) { out += s[0]; s = s.slice(1); continue; }
@@ -1523,14 +1536,19 @@ function thRomanize(str) {
   }
   s = s.split(/([฀-๿]+)/).map(function (chunk) {
     if (!/^[฀-๿]+$/.test(chunk)) return chunk;
+    if (TH_PROVINCE_EN[chunk]) return TH_PROVINCE_EN[chunk];
+    if (TH_WORD_FIX[chunk])    return thCap_(TH_WORD_FIX[chunk]);
     let pre = '';
     for (let i = 0; i < TH_PLACE_PREFIX.length; i++) {
       const p = TH_PLACE_PREFIX[i];
       if (chunk.length > p.length && chunk.indexOf(p) === 0) {
-        pre = thRomanizeWord_(p); chunk = chunk.slice(p.length); break;
+        pre = TH_WORD_FIX[p] || thRomanizeWord_(p);
+        chunk = chunk.slice(p.length);
+        break;
       }
     }
-    const body = thRomanizeWord_(chunk);
+    // "เมืองสมุทรสาคร" → เมือง + ชื่อจังหวัดในตาราง (ครบทั้ง 77 อำเภอเมือง)
+    const body = TH_PROVINCE_EN[chunk] || TH_WORD_FIX[chunk] || thRomanizeWord_(chunk);
     return pre ? (thCap_(pre) + ' ' + thCap_(body)) : thCap_(body);
   }).join('');
   return s.split('').join('').replace(/\s{2,}/g, ' ').trim();
