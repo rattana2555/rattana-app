@@ -221,7 +221,7 @@
       <div class="brand-mark">R</div>
       <div>
         <div class="brand-text">RATTANA <span>MART</span></div>
-        <div class="version-tag">v1.24</div>
+        <div class="version-tag">v1.25</div>
       </div>
     </div>
     <div class="h-action" id="headerActions">
@@ -1295,8 +1295,10 @@ function backToView() {
   else if (linePrimaryMember) { currentMember = linePrimaryMember; renderDashboard(currentMember); showScreen('dashScreen'); }
   else showScreen('homeScreen');
 }
+let editOrig = { phone: '', dob: '' };   // v1.24
 function goEditFromView() {
   isEditMode = true;
+  editOrig = { phone: currentMember?.phone || '', dob: currentMember?.dateOfBirth || '' };
   document.getElementById('editModeBanner').style.display = 'block';
   document.getElementById('submitLabel').textContent = t('btn.update');
   fillFormFromMember(currentMember);
@@ -1675,7 +1677,9 @@ async function doLogin() {
     if (result.status === 'found') {
       currentMember = result.data;
       // ถ้าเปิดผ่าน LINE และยังไม่มี userId ใน record → ผูก LINE เข้ากับ account
-      if (lineProfile && !currentMember.lineUserId) {
+      // v1.24: ผูก LINE เฉพาะตอนไลน์นี้ยังไม่มีสมาชิกหลัก (กติกา 1 LINE = 1 สมาชิกหลัก)
+      //        เดิมผูกเสมอ → โหมด "ดูสมาชิกอื่น" ไปผูก/เขียนทับแถวของเจ้าของไลน์
+      if (lineProfile && !currentMember.lineUserId && !linePrimaryMember) {
         await mergeLineProfile();
       } else if (lineProfile) {
         // อัปเดต pic + name ถ้าเปลี่ยน
@@ -1721,10 +1725,14 @@ async function mergeLineProfile() {
       pictureUrl: lineProfile.pictureUrl,
       mode:       'link_line',
     };
-    await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(withAuth_(payload)) });
+    const res = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(withAuth_(payload)) });
+    const result = await res.json().catch(() => ({}));
+    // v1.24: ผูกสำเร็จจริงเท่านั้นถึงจำว่าผูกแล้ว (เดิมโชว์ "ผูกแล้ว" แม้เซิร์ฟเวอร์ปฏิเสธ)
+    if (result.status !== 'ok') { console.warn('link_line rejected:', result); return; }
     currentMember.lineUserId = lineProfile.userId;
     currentMember.lineName   = lineProfile.displayName;
     currentMember.pictureUrl = lineProfile.pictureUrl;
+    linePrimaryMember = currentMember;
     showToast(t('toast.lineLinked'), 'success');
   } catch(e) { console.warn('merge line failed:', e); }
 }
@@ -1732,6 +1740,9 @@ async function mergeLineProfile() {
 // Sync pic + name ถ้า LINE เปลี่ยน
 async function syncLineProfile() {
   if (!lineProfile || !currentMember) return;
+  // v1.24: อัปเดตรูป/ชื่อ LINE เฉพาะสมาชิกที่ผูกกับ LINE นี้จริง
+  //        (กันรูปไลน์ของคนที่ "ดูสมาชิกอื่น" ไปทับของเจ้าของ)
+  if (currentMember.lineUserId !== lineProfile.userId) return;
   if (currentMember.pictureUrl === lineProfile.pictureUrl &&
       currentMember.lineName    === lineProfile.displayName) return;
   try {
@@ -1901,6 +1912,9 @@ async function submitForm() {
 
   const payload = {
     mode:         isEditMode ? 'update' : 'create',
+    // v1.24: ค่าเดิมก่อนแก้ — GAS ใช้หาแถวเดิม (แก้เบอร์/วันเกิดแล้วไม่เกิดสมาชิกซ้ำ)
+    origPhone:    isEditMode ? (editOrig.phone || '') : '',
+    origDob:      isEditMode ? (editOrig.dob   || '') : '',
     lineUserId:   payloadLineUserId,
     lineName:     payloadLineName,
     pictureUrl:   payloadPicture,

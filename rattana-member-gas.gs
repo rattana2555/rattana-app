@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════
-//  Rattana Member System — GAS v1.23
+//  Rattana Member System — GAS v1.24
 // ════════════════════════════════════════════════════════
 
 const SHEET_ID        = '1gbBrJtE36fX8TM7KC0RbXgPZI6AyNpbC3XhJ6uiLsOE';
@@ -292,7 +292,7 @@ function doGet(e) {
     }
 
     if (!p.idToken && !p.userId && !p.phone) {
-      return json_({ status: 'ok', msg: 'GAS v1.23 running' });
+      return json_({ status: 'ok', msg: 'GAS v1.24 running' });
     }
 
     const sheet = getSheet();
@@ -361,29 +361,63 @@ function doPost_(e) {
     // (โหมดดูสมาชิกอื่นส่ง lineUserId ว่าง → ต้องไม่ไปเจอแถวสมาชิกหลักแล้วเขียนทับ)
     const actsOnLineRow = !!verifiedUid && String(data.lineUserId || '') === verifiedUid;
 
+    const byPhoneDob = (ph, dob) => findRowBy(sheet, r =>
+      padZero(r[4], 10) === padZero(ph, 10) && dateToISO(r[5]) === String(dob).trim());
+    const byPhone = ph => findRowBy(sheet, r => padZero(r[4], 10) === padZero(ph, 10));
+    const conflict_ = msg => json_({ status: 'conflict', message: msg });
+
     let row = -1;
-    if (actsOnLineRow) {
-      row = findRowBy(sheet, r => String(r[0]).trim() === verifiedUid);
-    }
-    if (row < 0 && data.phone && data.dateOfBirth) {
-      row = findRowBy(sheet, r => {
-        const rowPhone = padZero(r[4], 10);
-        const rowDob   = dateToISO(r[5]);
-        return rowPhone === padZero(data.phone, 10) && rowDob === String(data.dateOfBirth).trim();
-      });
+    let bindLine = false;
+
+    if (data.mode === 'link_line') {
+      // v1.24: ผูก LINE กับสมาชิกที่เพิ่งล็อกอินด้วยเบอร์+วันเกิด
+      //   ต้องหาแถว "จากเบอร์+วันเกิด" เท่านั้น — เดิมหาจาก LINE ก่อน
+      //   → เจอแถวสมาชิกหลักของ LINE นี้ แล้วเขียนข้อมูลอีกคนทับ (ข้อมูลหาย)
+      if (!actsOnLineRow) return json_({ status: 'error', message: 'ยืนยันตัวตน LINE ไม่สำเร็จ' });
+      row = byPhoneDob(data.phone, data.dateOfBirth);
+      if (row < 0) return json_({ status: 'not_found' });
+      const uidRow = findRowBy(sheet, r => String(r[0]).trim() === verifiedUid);
+      if (uidRow > 0 && uidRow !== row) return conflict_('บัญชี LINE นี้ผูกกับสมาชิกคนอื่นอยู่แล้ว');
+      const curUid = String(sheet.getRange(row, 1).getValue() || '').trim();
+      if (curUid && curUid !== verifiedUid) return conflict_('สมาชิกนี้ผูกกับบัญชี LINE อื่นอยู่แล้ว');
+      bindLine = true;
+    } else {
+      if (actsOnLineRow) row = findRowBy(sheet, r => String(r[0]).trim() === verifiedUid);
+      // v1.24: แก้ไขข้อมูล → หาแถวจากเบอร์+วันเกิด "ค่าเดิม" ก่อน
+      //        (เดิมหาจากค่าใหม่ → แก้เบอร์/วันเกิดแล้วหาไม่เจอ → สร้างสมาชิกซ้ำ)
+      if (row < 0 && data.origPhone && data.origDob) row = byPhoneDob(data.origPhone, data.origDob);
+      if (row < 0 && data.phone && data.dateOfBirth) row = byPhoneDob(data.phone, data.dateOfBirth);
+      bindLine = actsOnLineRow;
     }
     const isNew = row < 0;
 
-    // คอลัมน์ A: ผูก LINE ได้เฉพาะเมื่อยืนยันแล้ว และตรงกับที่แอปขอผูกจริง
-    //   ไม่ยืนยัน → แถวเดิมคงค่าเดิมไว้ (แก้จากคอมไม่ทำให้ LINE หลุด) · แถวใหม่ = ว่าง
+    // v1.24: เบอร์ = รหัสสมาชิก ห้ามซ้ำ
+    //   บล็อกเฉพาะ "สมัครใหม่" หรือ "เปลี่ยนเบอร์" — แก้ข้อมูลอื่นโดยไม่เปลี่ยนเบอร์ผ่านเสมอ
+    //   (กันคนที่มีแถวเบอร์ซ้ำค้างจากก่อน v1.24 แก้ข้อมูลตัวเองไม่ได้)
+    if (data.phone) {
+      if (isNew) {
+        if (byPhone(data.phone) > 0) return conflict_('เบอร์นี้เป็นสมาชิกอยู่แล้ว กรุณาเข้าสู่ระบบ');
+      } else {
+        const curPhone = padZero(sheet.getRange(row, 5).getValue(), 10);
+        if (curPhone !== padZero(data.phone, 10) && byPhone(data.phone) > 0) {
+          return conflict_('เบอร์นี้ถูกใช้กับสมาชิกคนอื่นแล้ว');
+        }
+      }
+    }
+
+    // คอลัมน์ A/B/M: ผูก LINE ได้เฉพาะเมื่อยืนยันแล้ว และตรงกับที่แอปขอผูกจริง
+    //   ไม่ยืนยัน → แถวเดิมคงค่าเดิม (รวมรูปโปรไฟล์ — กันรูปไลน์คนดูไปทับของเจ้าของ) · แถวใหม่ = ว่าง
     let lineUidToWrite = '';
     let lineNameToWrite = '';
-    if (actsOnLineRow) {
+    let pictureToWrite = '';
+    if (bindLine) {
       lineUidToWrite  = verifiedUid;
       lineNameToWrite = data.lineName || '';
+      pictureToWrite  = data.pictureUrl || '';
     } else if (row > 0) {
       lineUidToWrite  = String(sheet.getRange(row, 1).getValue() || '');
       lineNameToWrite = String(sheet.getRange(row, 2).getValue() || '');
+      pictureToWrite  = String(sheet.getRange(row, 13).getValue() || '');
     }
 
     const rowValues = [
@@ -397,7 +431,7 @@ function doPost_(e) {
       "'" + String(data.province || ''),
       "'" + String(data.postcode || ''),
       data.source,
-      data.pictureUrl || '',
+      pictureToWrite,
       data.registeredAt, thDate, nowTh,
       "'" + String(data.nationalId || ''),
       data.consent === true ? 'TRUE' : (data.consent === false ? 'FALSE' : ''),
