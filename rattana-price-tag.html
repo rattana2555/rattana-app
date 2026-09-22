@@ -5681,17 +5681,28 @@ function superSave8Slots(){
   const out = []; for (let r = 0; r < 2; r++) for (let c = 0; c < 4; c++) out.push({ x:X[c], y:Y[r], w:W[c], h:H }); return out;
 }
 function special1Slots(){ return [{ x:5, y:33, w:90, h:46.5 }]; }
+// v7.20 — font size (pt) that fits a price string into a badge `budgetPx` wide (page px); ".-" adds `bahtEm`
+function ssvFitPt(txt, maxPt, budgetPx, bahtEm){
+  let w = bahtEm;
+  for (const ch of String(txt)) w += /\d/.test(ch) ? 0.6 : (ch === ',' || ch === '.') ? 0.28 : 0.55;
+  return Math.max(10, Math.min(maxPt, Math.floor(budgetPx / w / 1.3333)));
+}
+// v7.20 — each Super template keeps its OWN canvas keys ('s8:' / 's1:' + sku), so a position/size tweak in one never
+// bleeds into the other template or into the weekly Flash card of the same product (both used the bare sku before).
+function ssvKeyPfx(){ const k = isFlashMode() ? flashTemplateKind() : ''; return k === 'save8' ? 's8:' : k === 'special1' ? 's1:' : ''; }
 // bg8 slot: product image + name + yellow price circle
 function superSave8Card(arg){
   const p = Array.isArray(arg) ? arg[0] : arg; if (!p) return '';
-  const sk = escapeAttr(p.sku);
+  const bare = escapeAttr(p.sku), sk = escapeAttr('s8:' + p.sku);   // layout key namespaced · typed price stays on the bare sku
   const ovr = (k, d) => textOverrides[k] != null ? escapeHtml(textOverrides[k]) : d;
-  const priceKey = `${sk}::ssv8price`;
-  const imgHtml = p.image ? `<img src="${escapeAttr(imgAtWidth(p.image, 300))}" data-imgsku="${sk}" draggable="false" onerror="this.style.display='none'" crossorigin="anonymous">` : '';
+  const priceKey = `${bare}::ssv8price`;
+  const priceRaw = textOverrides[priceKey] != null ? textOverrides[priceKey] : fmtThaiBaht(ssvPrice(p));
+  const pt = ssvFitPt(priceRaw, 34, 62, 0.27);   // circle ≈ 74px on the page, ~62px usable
+  const imgHtml = p.image ? `<img src="${escapeAttr(imgAtWidth(p.image, 300))}" data-imgsku="${bare}" draggable="false" onerror="this.style.display='none'" crossorigin="anonymous">` : '';
   return `<div class="fxw-card ssv-card ssv8-card">
     <div class="fxw-img ssv8-img" data-fs-sku="${sk}" data-fs-role="img">${imgHtml}</div>
     <div class="fxw-name ssv8-name" data-fs-sku="${sk}" data-fs-role="name">${nameCellHtml(p, true)}</div>
-    <div class="ssv8-circle" data-fs-sku="${sk}" data-fs-role="price"><span class="ssv8-num editable-txt" data-edit="${priceKey}" contenteditable="true" spellcheck="false">${ovr(priceKey, fmtThaiBaht(ssvPrice(p)))}</span><span class="ssv8-baht">.-</span></div>
+    <div class="ssv8-circle" data-fs-sku="${sk}" data-fs-role="price" style="font-size:${pt}pt"><span class="ssv8-pw"><span class="ssv8-num editable-txt" data-edit="${priceKey}" contenteditable="true" spellcheck="false">${ovr(priceKey, fmtThaiBaht(ssvPrice(p)))}</span><span class="ssv8-baht">.-</span></span></div>
   </div>`;
 }
 // bg1 slot: big product image + red starburst price badge (พิเศษเพียง XX.- / ปกติ XX.-)
