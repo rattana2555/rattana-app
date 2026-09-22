@@ -5696,6 +5696,20 @@ function ssvFitPt(txt, maxPt, budgetPx, bahtEm){
   for (const ch of String(txt)) w += /\d/.test(ch) ? 0.6 : (ch === ',' || ch === '.') ? 0.28 : 0.55;
   return Math.max(10, Math.min(maxPt, Math.floor(budgetPx / w / 1.3333)));
 }
+// v7.21 — Thai short-month range for the Super Save posters: "1 – 31 ต.ค. 2569" · "15 ก.ย. – 15 ต.ค. 2569" · "28 ธ.ค. 2569 – 3 ม.ค. 2570"
+function ssvDateRange(ds, de){
+  const M = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const p = s => { const m = String(s || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); return m ? { y:+m[1], m:+m[2]-1, d:+m[3] } : null; };   // <input type=date> "YYYY-MM-DD" (no timezone shift)
+  const f = (x, mon, yr) => x.d + (mon ? ' ' + M[x.m] : '') + (yr ? ' ' + (x.y + 543) : '');
+  const a = p(ds), b = p(de);
+  if (a && b) {
+    if (a.y !== b.y) return `${f(a,1,1)} – ${f(b,1,1)}`;
+    if (a.m !== b.m) return `${f(a,1,0)} – ${f(b,1,1)}`;
+    if (a.d === b.d) return f(b,1,1);
+    return `${f(a,0,0)} – ${f(b,1,1)}`;
+  }
+  const one = a || b; return one ? f(one,1,1) : '';
+}
 // v7.20 — each Super template keeps its OWN canvas keys ('s8:' / 's1:' + sku), so a position/size tweak in one never
 // bleeds into the other template or into the weekly Flash card of the same product (both used the bare sku before).
 function ssvKeyPfx(){ const k = isFlashMode() ? flashTemplateKind() : ''; return k === 'save8' ? 's8:' : k === 'special1' ? 's1:' : ''; }
