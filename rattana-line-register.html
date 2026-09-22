@@ -224,7 +224,7 @@
       <div class="brand-mark">R</div>
       <div>
         <div class="brand-text">RATTANA <span>MART</span></div>
-        <div class="version-tag">v1.21</div>
+        <div class="version-tag">v1.22</div>
       </div>
     </div>
     <div class="h-action" id="headerActions">
@@ -650,7 +650,7 @@ const I18N = {
     'consent.accept':'✓ ยอมรับและดำเนินการต่อ',
     'barcode.label':'ยิงบาร์โค้ดเพื่อสะสมแต้ม',
     'spinner.line':'กำลังเชื่อมต่อ LINE...','spinner.check':'กำลังตรวจสอบ...','spinner.save':'กำลังบันทึก...','spinner.member':'กำลังตรวจสอบสมาชิก...',
-    'hint.foundCustomer':'✓ พบข้อมูลลูกค้าเก่า','hint.alreadyMember':'✓ คุณเป็นสมาชิกอยู่แล้ว — กำลังพาไปหน้าเข้าสู่ระบบ...','hint.checking':'⏳ กำลังตรวจสอบ...',
+    'hint.foundCustomer':'✓ พบข้อมูลลูกค้าเก่า','hint.foundMasked':'✓ พบข้อมูลของ {name} — เลือกวันเกิดเพื่อดึงข้อมูลอัตโนมัติ','hint.prefillMismatch':'วันเกิดไม่ตรงกับข้อมูลเดิม — กรอกข้อมูลเองได้เลย','toast.prefilled':'✓ ดึงข้อมูลเดิมให้แล้ว','hint.alreadyMember':'✓ คุณเป็นสมาชิกอยู่แล้ว — กำลังพาไปหน้าเข้าสู่ระบบ...','hint.checking':'⏳ กำลังตรวจสอบ...',
   },
   en: {
     'home.welcome':'Welcome','home.subtitle':'Join Rattana Mart membership<br>Get exclusive benefits & discounts',
@@ -695,7 +695,7 @@ const I18N = {
     'consent.accept':'✓ Accept and continue',
     'barcode.label':'Scan barcode to earn points',
     'spinner.line':'Connecting to LINE...','spinner.check':'Checking...','spinner.save':'Saving...','spinner.member':'Verifying membership...',
-    'hint.foundCustomer':'✓ Existing customer found','hint.alreadyMember':'✓ Already a member — Redirecting to sign in...','hint.checking':'⏳ Checking...',
+    'hint.foundCustomer':'✓ Existing customer found','hint.foundMasked':'✓ Found a record for {name} — select your date of birth to auto-fill','hint.prefillMismatch':'Date of birth does not match our record — please fill in manually','toast.prefilled':'✓ Your details were filled in','hint.alreadyMember':'✓ Already a member — Redirecting to sign in...','hint.checking':'⏳ Checking...',
   }
 };
 let currentLang = localStorage.getItem('rattanaLang') || 'th';
@@ -848,6 +848,13 @@ function showToast(msg, type='') {
   setTimeout(() => t.remove(), 3000);
 }
 
+// v1.22: กันข้อมูลที่ผู้ใช้กรอก (ชื่อ/ที่อยู่) ถูกตีความเป็น HTML ตอนใส่ innerHTML
+function escHtml(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function formatThaiDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso), pad = n => String(n).padStart(2,'0');
@@ -967,7 +974,7 @@ function filterDD(inp, listId) {
 }
 function setDDLabel(wrapId, label) {
   const trigger = document.querySelector(`#${wrapId} .dd-trigger`);
-  trigger.innerHTML = `<span>${label}</span><span class="dd-arrow">▼</span>`;
+  trigger.innerHTML = `<span>${escHtml(label)}</span><span class="dd-arrow">▼</span>`;
   trigger.classList.add('has-value');
 }
 function resetDD(wrapId, placeholder) {
@@ -1014,6 +1021,8 @@ function updateDobPreview(parts, previewId) {
     const monthLabel = getMonths()[parseInt(parts.month)-1];
     el.textContent = `📅 ${parts.day} ${monthLabel} ${parts.year}`;
     el.style.color = 'var(--success)';
+    // v1.22: วันเกิดครบในหน้าสมัคร → ลอง pre-fill (ถ้าเบอร์นี้เจอใน Member Point)
+    if (previewId === 'dobPreview' && typeof tryPrefillWithDob === 'function') tryPrefillWithDob();
   } else { el.textContent = '—'; el.style.color = 'var(--text-2)'; }
 }
 function dobPartsToISO(parts) {
@@ -1634,14 +1643,14 @@ function renderDashboard(d) {
     d.postcode || ''
   ].filter(Boolean).join(addrSep);
   const nidDisplay = d.nationalId
-    ? `<span class="ic-val">${d.nationalId}</span>`
+    ? `<span class="ic-val">${escHtml(d.nationalId)}</span>`
     : `<span class="ic-val" style="color:var(--danger);font-weight:600">⚠ ${t('profile.nationalIdMissing')}</span>`;
   pb.innerHTML = `
-    <div class="ic-row"><span class="ic-lbl">${t('profile.fullName')}</span><span class="ic-val">${d.firstName} ${d.lastName}</span></div>
-    <div class="ic-row"><span class="ic-lbl">${t('profile.phone')}</span><span class="ic-val">${d.phone || '—'}</span></div>
+    <div class="ic-row"><span class="ic-lbl">${t('profile.fullName')}</span><span class="ic-val">${escHtml(d.firstName)} ${escHtml(d.lastName)}</span></div>
+    <div class="ic-row"><span class="ic-lbl">${t('profile.phone')}</span><span class="ic-val">${escHtml(d.phone) || '—'}</span></div>
     <div class="ic-row"><span class="ic-lbl">${t('profile.nationalId')}</span>${nidDisplay}</div>
     <div class="ic-row"><span class="ic-lbl">${t('profile.dob')}</span><span class="ic-val">${formatThaiDate(d.dateOfBirth)}</span></div>
-    <div class="ic-row"><span class="ic-lbl">${t('profile.address')}</span><span class="ic-val">${addressParts}</span></div>
+    <div class="ic-row"><span class="ic-lbl">${t('profile.address')}</span><span class="ic-val">${escHtml(addressParts)}</span></div>
     ${d.lineUserId ? `<div class="ic-row"><span class="ic-lbl">LINE</span><span class="ic-val" style="color:var(--line)">${t('profile.connected')}</span></div>` : ''}
   `;
   // แสดง banner เตือนถ้าไม่มีเลขบัตร
@@ -1752,13 +1761,50 @@ async function checkExistingPoint() {
       return;
     }
     if (result.status === 'found') {
-      const d = result.data;
-      // Pre-fill ทุก field ที่มีจาก Member Point
-      const setIfEmpty = (id, v) => { const el=document.getElementById(id); if(el && !el.value && v) el.value = v; };
-      setIfEmpty('firstName', d.firstName);
-      setIfEmpty('lastName',  d.lastName);
-      setIfEmpty('address',   d.address);
-      if (d.dateOfBirth) setDobFromISO(d.dateOfBirth, 'ddDob', dobParts, 'dobPreview');
+      // v1.22: เซิร์ฟเวอร์ส่งแค่ชื่อปิดบางส่วน — ข้อมูลเต็มต้องยืนยันวันเกิดก่อน (tryPrefillWithDob)
+      pendingPrefillPhone = result.canPrefill ? phone : '';
+      hint.textContent = result.canPrefill
+        ? t('hint.foundMasked').replace('{name}', result.masked || '')
+        : t('hint.foundCustomer') + ' — ' + (result.masked || '');
+      hint.style.color = 'var(--success)';
+      showToast(t('toast.foundOld'), 'success');
+      if (result.canPrefill && dobPartsToISO(dobParts)) tryPrefillWithDob();   // กรอกวันเกิดไว้ก่อนแล้ว
+    } else {
+      pendingPrefillPhone = '';
+      hint.textContent = t('hint.phone');
+      hint.style.color = 'var(--text-2)';
+    }
+  } catch(e) {
+    pendingPrefillPhone = '';
+    hint.textContent = t('hint.phone');
+    hint.style.color = 'var(--text-2)';
+  }
+}
+
+// v1.22: pre-fill ข้อมูลเต็มจาก Member Point — เรียกหลังเลือกวันเกิดครบเท่านั้น
+let pendingPrefillPhone = '';
+let prefillBusy = false;
+async function tryPrefillWithDob() {
+  if (isEditMode || prefillBusy) return;
+  const phone = document.getElementById('phone').value.trim();
+  const dob   = dobPartsToISO(dobParts);
+  if (!pendingPrefillPhone || pendingPrefillPhone !== phone || !dob) return;
+  const hint = document.getElementById('phoneHint');
+  prefillBusy = true;
+  try {
+    const res = await fetch(`${GAS_URL}?phone=${encodeURIComponent(phone)}&dob=${encodeURIComponent(dob)}&prefill=1`);
+    const result = await res.json();
+    if (result.status !== 'found') {
+      hint.textContent = t('hint.prefillMismatch');
+      hint.style.color = 'var(--text-2)';
+      return;
+    }
+    pendingPrefillPhone = '';          // ดึงครั้งเดียวพอ
+    const d = result.data;
+    const setIfEmpty = (id, v) => { const el=document.getElementById(id); if(el && !el.value && v) el.value = v; };
+    setIfEmpty('firstName', d.firstName);
+    setIfEmpty('lastName',  d.lastName);
+    setIfEmpty('address',   d.address);
       // Cascading address pre-fill
       if (d.province && addressTree && addressTree[d.province]) {
         selectedValues.province = d.province; setDDLabel('ddProvince', d.province);
@@ -1775,16 +1821,13 @@ async function checkExistingPoint() {
         }
       }
       const ptsUnit = currentLang === 'en' ? 'pts' : 'แต้ม';
-      hint.innerHTML = `${t('hint.foundCustomer')} — ${d.firstName} ${d.lastName} · ${d.tier} · ${d.points} ${ptsUnit}`;
+      hint.textContent = `${t('hint.foundCustomer')} — ${d.firstName} ${d.lastName} · ${d.tier} · ${d.points} ${ptsUnit}`;
       hint.style.color = 'var(--success)';
-      showToast(t('toast.foundOld'), 'success');
-    } else {
-      hint.textContent = t('hint.phone');
-      hint.style.color = 'var(--text-2)';
-    }
+      showToast(t('toast.prefilled'), 'success');
   } catch(e) {
-    hint.textContent = t('hint.phone');
-    hint.style.color = 'var(--text-2)';
+    console.warn('prefill failed:', e);
+  } finally {
+    prefillBusy = false;
   }
 }
 

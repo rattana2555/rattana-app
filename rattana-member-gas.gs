@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════
-//  Rattana Member System — GAS v1.21
+//  Rattana Member System — GAS v1.22
 // ════════════════════════════════════════════════════════
 
 const SHEET_ID        = '1gbBrJtE36fX8TM7KC0RbXgPZI6AyNpbC3XhJ6uiLsOE';
@@ -198,30 +198,52 @@ function testDiscord() {
   Logger.log('Body: ' + res.getContentText());
 }
 
+// v1.22: helpers
+function json_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+// ปิดชื่อบางส่วน: ภักรวรรณ งั่วสมบูรณ์ → ภั***ณ งั***
+function maskName_(first, last) {
+  const m = function (s, keepEnd) {
+    s = String(s || '').trim();
+    if (!s) return '';
+    const chars = Array.from(s);
+    if (chars.length <= 2) return chars[0] + '*';
+    return chars.slice(0, 2).join('') + '***' + (keepEnd ? chars[chars.length - 1] : '');
+  };
+  return (m(first, true) + ' ' + m(last, false)).trim();
+}
+
 // ─── GET ──────────────────────────────────────────────
 function doGet(e) {
   try {
     const p = (e && e.parameter) || {};
 
+    // v1.22: เช็คเบอร์ — ตอบแค่ "มี/ไม่มี" + ชื่อปิดบางส่วน ห้ามส่งวันเกิด/ที่อยู่
+    //        (เดิมส่งทุกอย่าง → ใครรู้เบอร์ก็ได้วันเกิด ซึ่งเป็นรหัสผ่านล็อกอิน)
     if (p.phone && p.checkPoint) {
       const r = lookupPointByPhone(p.phone);
       const memberSheet = getSheet();
       const target = padZero(p.phone, 10);
       const registered = findRowBy(memberSheet, row => padZero(row[4], 10) === target) > 0;
-      if (registered) {
-        return ContentService.createTextOutput(JSON.stringify({
-          status: 'registered',
-          data: r.firstName ? r : null
-        })).setMimeType(ContentService.MimeType.JSON);
-      }
+      if (registered) return json_({ status: 'registered' });
       if (r.firstName || r.lastName) {
-        return ContentService.createTextOutput(JSON.stringify({status:'found', data: r})).setMimeType(ContentService.MimeType.JSON);
+        return json_({ status: 'found', masked: maskName_(r.firstName, r.lastName), canPrefill: !!r.dateOfBirth });
       }
-      return ContentService.createTextOutput(JSON.stringify({status:'not_found'})).setMimeType(ContentService.MimeType.JSON);
+      return json_({ status: 'not_found' });
+    }
+
+    // v1.22: ข้อมูลเต็มสำหรับ pre-fill → ต้องยืนยันวันเกิดให้ตรงกับ Member Point ก่อน
+    if (p.phone && p.dob && p.prefill) {
+      const r = lookupPointByPhone(p.phone);
+      if ((r.firstName || r.lastName) && r.dateOfBirth && r.dateOfBirth === String(p.dob).trim()) {
+        return json_({ status: 'found', data: r });
+      }
+      return json_({ status: 'mismatch' });
     }
 
     if (!p.userId && !p.phone) {
-      return ContentService.createTextOutput(JSON.stringify({status:'ok', msg:'GAS v1.21 running'})).setMimeType(ContentService.MimeType.JSON);
+      return json_({ status: 'ok', msg: 'GAS v1.22 running' });
     }
 
     const sheet = getSheet();
@@ -248,7 +270,20 @@ function doGet(e) {
 }
 
 // ─── POST ─────────────────────────────────────────────
+// v1.22: ล็อกทั้งช่วง "ค้นหา → เขียน" กัน 2 คำขอพร้อมกันต่อท้ายซ้ำเป็น 2 แถว
 function doPost(e) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(25000)) {
+    return json_({ status: 'error', message: 'ระบบกำลังบันทึกรายการอื่นอยู่ กรุณาลองใหม่อีกครั้ง' });
+  }
+  try {
+    return doPost_(e);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function doPost_(e) {
   try {
     const data  = JSON.parse(e.postData.contents);
     const sheet = getSheet();
