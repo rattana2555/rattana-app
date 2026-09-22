@@ -5612,11 +5612,72 @@ const DEAL_BG_PRESETS = [   // v7.15 — Deal of the Week backgrounds (Drive fol
   { id:'1ll8Hpq2ftM8O7R3-IFD1pAxbvovqr6JA', name:'ชมพู (Deal)',    color:'#e84393' },
 ];
 function isDealFlashBg(){ const t = SHEET_CONFIG.flashTemplate || ''; return DEAL_BG_PRESETS.some(b => t.includes(b.id)); }
-let flashBgSet = 'flash';   // 'flash' | 'deal'
-try { const _s = localStorage.getItem('rattanaPriceTag_flashBgSet'); if (_s === 'deal' || _s === 'flash') flashBgSet = _s; } catch {}
-function flashBgActiveList(){ return flashBgSet === 'deal' ? DEAL_BG_PRESETS : FLASH_BG_PRESETS; }
+
+/* v7.18 — a THIRD background set "⭐ ราคาพิเศษ" (Super Save). Unlike Flash/Deal, each template here has a
+   FIXED slot count + its OWN price-badge style (auto-selected by the active template):
+   • save8  = SUPER SAVE poster (1122×1402, aspect 0.800): 4×2 = 8 product slots, each with a yellow price circle
+   • special1 = ราคาพิเศษ poster (1254×1254, square): 1 big product slot with a red starburst price badge */
+const SUPER_BG_PRESETS = [
+  { id:'1QsSrBC5kLCNJsJNHyVoik7wASXpq4TPS', name:'SUPER SAVE (8 ช่อง)', color:'#1e63c9', kind:'save8' },
+  { id:'1Pc7vy8TaV5nd0Cj8ktD0EJQrgA3hz9zf', name:'ราคาพิเศษ (1 ช่อง)', color:'#12306e', kind:'special1' },
+];
+function flashTemplateKind(){ const t = SHEET_CONFIG.flashTemplate || ''; const m = SUPER_BG_PRESETS.find(b => t.includes(b.id)); return m ? m.kind : ''; }
+// price resolution for the Super Save cards (honours the manual "แก้ราคา" override like poster/flash)
+function ssvUnit(p){ return p.usedUnit || ['EA','PA','BP','CS'].find(u => p.unitPrices && p.unitPrices[u] && (p.unitPrices[u].sale || p.unitPrices[u].price)) || 'EA'; }
+function ssvPrice(p){
+  const u = ssvUnit(p);
+  try { if (typeof priceOverrides !== 'undefined' && priceOverrides[p.sku] && +priceOverrides[p.sku].price > 0 && u === p.usedUnit) return +priceOverrides[p.sku].price; } catch {}
+  const up = p.unitPrices && p.unitPrices[u]; return up ? +(up.sale || up.price) : (+p.price || 0);
+}
+function ssvOldPrice(p){ const u = ssvUnit(p); const up = p.unitPrices && p.unitPrices[u]; return up ? +up.price : (+p.oldPrice || 0); }
+// spiky starburst polygon (18 spikes, slightly irregular) for the ราคาพิเศษ badge — recreated to resemble the reference art
+const SSV_STAR_PTS = (function(){ const n = 18, cx = 100, cy = 100, out = []; for (let i = 0; i < n*2; i++){ const a = Math.PI*i/n - Math.PI/2; const rad = (i % 2 ? 74 : 99) - ((i % 4 === 0) ? 7 : 0); out.push((cx + rad*Math.cos(a)).toFixed(1) + ',' + (cy + rad*Math.sin(a)).toFixed(1)); } return out.join(' '); })();
+// slot geometry measured from the two background images (percent of page)
+function superSave8Slots(){
+  const X = [2.5, 26.8, 50.7, 74.3], W = [23.5, 23.2, 22.9, 23.2], Y = [30.0, 55.4], H = 24.9;
+  const out = []; for (let r = 0; r < 2; r++) for (let c = 0; c < 4; c++) out.push({ x:X[c], y:Y[r], w:W[c], h:H }); return out;
+}
+function special1Slots(){ return [{ x:5, y:33, w:90, h:46.5 }]; }
+// bg8 slot: product image + name + yellow price circle
+function superSave8Card(arg){
+  const p = Array.isArray(arg) ? arg[0] : arg; if (!p) return '';
+  const sk = escapeAttr(p.sku);
+  const ovr = (k, d) => textOverrides[k] != null ? escapeHtml(textOverrides[k]) : d;
+  const priceKey = `${sk}::ssv8price`;
+  const imgHtml = p.image ? `<img src="${escapeAttr(imgAtWidth(p.image, 300))}" data-imgsku="${sk}" onerror="this.style.display='none'" crossorigin="anonymous">` : '';
+  return `<div class="fxw-card ssv-card ssv8-card">
+    <div class="fxw-img ssv8-img" data-fs-sku="${sk}" data-fs-role="img">${imgHtml}</div>
+    <div class="fxw-name ssv8-name" data-fs-sku="${sk}" data-fs-role="name">${nameCellHtml(p, true)}</div>
+    <div class="ssv8-circle" data-fs-sku="${sk}" data-fs-role="price"><span class="ssv8-num editable-txt" data-edit="${priceKey}" contenteditable="true" spellcheck="false">${ovr(priceKey, fmtThaiBaht(ssvPrice(p)))}</span><span class="ssv8-baht">.-</span></div>
+  </div>`;
+}
+// bg1 slot: big product image + red starburst price badge (พิเศษเพียง XX.- / ปกติ XX.-)
+function special1Card(arg){
+  const p = Array.isArray(arg) ? arg[0] : arg; if (!p) return '';
+  const sk = escapeAttr(p.sku);
+  const ovr = (k, d) => textOverrides[k] != null ? escapeHtml(textOverrides[k]) : d;
+  const priceKey = `${sk}::ssv1price`, oldKey = `${sk}::ssv1old`;
+  const imgHtml = p.image ? `<img src="${escapeAttr(imgAtWidth(p.image, 500))}" data-imgsku="${sk}" onerror="this.style.display='none'" crossorigin="anonymous">` : '';
+  const newv = ssvPrice(p), oldv = ssvOldPrice(p);
+  const oldHtml = (oldv > newv) ? `<div class="ssv1-old">ปกติ <s class="editable-txt" data-edit="${oldKey}" contenteditable="true" spellcheck="false">${ovr(oldKey, fmtThaiBaht(oldv))}</s>.-</div>` : '';
+  return `<div class="fxw-card ssv-card ssv1-card">
+    <div class="fxw-img ssv1-img" data-fs-sku="${sk}" data-fs-role="img">${imgHtml}</div>
+    <div class="ssv1-burst" data-fs-sku="${sk}" data-fs-role="price">
+      <svg class="ssv1-star" viewBox="0 0 200 200" preserveAspectRatio="none" aria-hidden="true"><polygon points="${SSV_STAR_PTS}"></polygon></svg>
+      <div class="ssv1-inner">
+        <div class="ssv1-lbl">พิเศษเพียง</div>
+        <div class="ssv1-price"><span class="editable-txt" data-edit="${priceKey}" contenteditable="true" spellcheck="false">${ovr(priceKey, fmtThaiBaht(newv))}</span><span class="ssv1-baht">.-</span></div>
+        ${oldHtml}
+      </div>
+    </div>
+  </div>`;
+}
+
+let flashBgSet = 'flash';   // 'flash' | 'deal' | 'super'  (v7.18)
+try { const _s = localStorage.getItem('rattanaPriceTag_flashBgSet'); if (_s === 'deal' || _s === 'flash' || _s === 'super') flashBgSet = _s; } catch {}
+function flashBgActiveList(){ return flashBgSet === 'deal' ? DEAL_BG_PRESETS : flashBgSet === 'super' ? SUPER_BG_PRESETS : FLASH_BG_PRESETS; }
 function setFlashBgSet(set){
-  flashBgSet = (set === 'deal') ? 'deal' : 'flash';
+  flashBgSet = (set === 'deal' || set === 'super') ? set : 'flash';
   try { localStorage.setItem('rattanaPriceTag_flashBgSet', flashBgSet); } catch {}
   initFlashBgSwatches();
 }
