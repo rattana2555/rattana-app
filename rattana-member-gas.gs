@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════
-//  Rattana Member System — GAS v1.22
+//  Rattana Member System — GAS v1.23
 // ════════════════════════════════════════════════════════
 
 const SHEET_ID        = '1gbBrJtE36fX8TM7KC0RbXgPZI6AyNpbC3XhJ6uiLsOE';
@@ -198,6 +198,52 @@ function testDiscord() {
   Logger.log('Body: ' + res.getContentText());
 }
 
+// ─── v1.23: ยืนยันตัวตน LINE ─────────────────────────
+// Channel ID ของ LINE Login channel "Rattana Member" (= ตัวเลขหน้า LIFF ID) — ไม่ใช่ความลับ
+const LINE_CHANNEL_ID = '2010284376';
+
+// ส่ง ID token ให้ LINE ตรวจ → คืน User ID (sub) ถ้าจริง · ปลอม/หมดอายุ → ''
+function verifyLineIdToken_(idToken) {
+  if (!idToken) return '';
+  const cache = CacheService.getScriptCache();
+  const key = 'idt_' + Utilities.base64EncodeWebSafe(
+    Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(idToken))).slice(0, 40);
+  const hit = cache.get(key);
+  if (hit) return hit === '-' ? '' : hit;
+  try {
+    const res = UrlFetchApp.fetch('https://api.line.me/oauth2/v2.1/verify', {
+      method: 'post',
+      payload: { id_token: String(idToken), client_id: LINE_CHANNEL_ID },
+      muteHttpExceptions: true,
+    });
+    if (res.getResponseCode() !== 200) { cache.put(key, '-', 300); return ''; }
+    const body = JSON.parse(res.getContentText());
+    const uid = String(body.sub || '');
+    // จำผลไว้ไม่เกินอายุ token (สูงสุด 10 นาที) ไม่ต้องถาม LINE ทุกคำขอ
+    const ttl = Math.max(30, Math.min(600, Math.floor((Number(body.exp || 0) * 1000 - Date.now()) / 1000)));
+    if (uid) cache.put(key, uid, ttl);
+    return uid;
+  } catch (e) {
+    Logger.log('verifyLineIdToken failed: ' + e.message);
+    return '';
+  }
+}
+
+// ─── v1.23: จำกัดการเดาวันเกิด ────────────────────────
+const LOGIN_MAX_FAIL = 5;      // ผิดได้ 5 ครั้ง
+const LOGIN_LOCK_SEC = 900;    // แล้วล็อกเบอร์นั้น 15 นาที (นับจากครั้งที่ผิดล่าสุด)
+function loginKey_(phone) { return 'lf_' + padZero(phone, 10); }
+function loginLocked_(phone) {
+  return Number(CacheService.getScriptCache().get(loginKey_(phone)) || 0) >= LOGIN_MAX_FAIL;
+}
+function loginFail_(phone) {
+  const c = CacheService.getScriptCache(), k = loginKey_(phone);
+  const n = Number(c.get(k) || 0) + 1;
+  c.put(k, String(n), LOGIN_LOCK_SEC);
+  return n;
+}
+function loginOk_(phone) { CacheService.getScriptCache().remove(loginKey_(phone)); }
+
 // v1.22: helpers
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
@@ -235,33 +281,48 @@ function doGet(e) {
 
     // v1.22: ข้อมูลเต็มสำหรับ pre-fill → ต้องยืนยันวันเกิดให้ตรงกับ Member Point ก่อน
     if (p.phone && p.dob && p.prefill) {
+      if (loginLocked_(p.phone)) return json_({ status: 'locked', retryMin: LOGIN_LOCK_SEC / 60 });
       const r = lookupPointByPhone(p.phone);
       if ((r.firstName || r.lastName) && r.dateOfBirth && r.dateOfBirth === String(p.dob).trim()) {
+        loginOk_(p.phone);
         return json_({ status: 'found', data: r });
       }
+      loginFail_(p.phone);
       return json_({ status: 'mismatch' });
     }
 
-    if (!p.userId && !p.phone) {
-      return json_({ status: 'ok', msg: 'GAS v1.22 running' });
+    if (!p.idToken && !p.userId && !p.phone) {
+      return json_({ status: 'ok', msg: 'GAS v1.23 running' });
     }
 
     const sheet = getSheet();
     let row = -1;
-    if (p.userId) {
-      row = findRowBy(sheet, r => String(r[0]).trim() === String(p.userId).trim());
+
+    // v1.23: เข้าผ่าน LINE — เชื่อเฉพาะ User ID ที่ LINE ยืนยันจาก ID token
+    //        (เดิมเชื่อ ?userId= ที่ส่งมาตรงๆ → ใครรู้ User ID คนอื่นก็ดึงข้อมูลได้)
+    if (p.idToken) {
+      const uid = verifyLineIdToken_(p.idToken);
+      if (!uid) return json_({ status: 'invalid_token' });
+      row = findRowBy(sheet, r => String(r[0]).trim() === uid);
+      if (row < 0 && !p.phone) return json_({ status: 'not_found' });
     }
+
+    // เข้าด้วยเบอร์ + วันเกิด — จำกัดผิดได้ 5 ครั้ง / 15 นาที ต่อเบอร์
     if (row < 0 && p.phone && p.dob) {
+      if (loginLocked_(p.phone)) return json_({ status: 'locked', retryMin: LOGIN_LOCK_SEC / 60 });
       const targetPhone = padZero(p.phone, 10);
       row = findRowBy(sheet, r => {
         const rowPhone = padZero(r[4], 10);
         const rowDob   = dateToISO(r[5]);
         return rowPhone === targetPhone && rowDob === String(p.dob).trim();
       });
+      if (row < 0) {
+        const n = loginFail_(p.phone);
+        return json_({ status: 'not_found', attemptsLeft: Math.max(0, LOGIN_MAX_FAIL - n) });
+      }
+      loginOk_(p.phone);
     }
-    if (row < 0) {
-      return ContentService.createTextOutput(JSON.stringify({status:'not_found'})).setMimeType(ContentService.MimeType.JSON);
-    }
+    if (row < 0) return json_({ status: 'not_found' });
     const values = sheet.getRange(row, 1, 1, HEADERS.length).getValues()[0];
     return ContentService.createTextOutput(JSON.stringify({status:'found', data: rowToObject(values)})).setMimeType(ContentService.MimeType.JSON);
   } catch(err) {
@@ -293,9 +354,16 @@ function doPost_(e) {
     const n     = new Date();
     const nowTh = pad(n.getDate())+'/'+pad(n.getMonth()+1)+'/'+(n.getFullYear()+543)+' '+pad(n.getHours())+':'+pad(n.getMinutes());
 
+    // v1.23: ใช้ LINE User ID เฉพาะที่ LINE ยืนยันแล้ว — ห้ามเชื่อ data.lineUserId ตรงๆ
+    //        (เดิมส่ง lineUserId ของคนอื่นมา = เขียนทับแถวของเขาได้เลย)
+    const verifiedUid = verifyLineIdToken_(data.idToken);
+    // ค้นด้วย LINE เฉพาะตอนแอปตั้งใจจัดการ "สมาชิกหลักของ LINE นี้" เท่านั้น
+    // (โหมดดูสมาชิกอื่นส่ง lineUserId ว่าง → ต้องไม่ไปเจอแถวสมาชิกหลักแล้วเขียนทับ)
+    const actsOnLineRow = !!verifiedUid && String(data.lineUserId || '') === verifiedUid;
+
     let row = -1;
-    if (data.lineUserId) {
-      row = findRowBy(sheet, r => String(r[0]).trim() === String(data.lineUserId).trim());
+    if (actsOnLineRow) {
+      row = findRowBy(sheet, r => String(r[0]).trim() === verifiedUid);
     }
     if (row < 0 && data.phone && data.dateOfBirth) {
       row = findRowBy(sheet, r => {
@@ -306,8 +374,20 @@ function doPost_(e) {
     }
     const isNew = row < 0;
 
+    // คอลัมน์ A: ผูก LINE ได้เฉพาะเมื่อยืนยันแล้ว และตรงกับที่แอปขอผูกจริง
+    //   ไม่ยืนยัน → แถวเดิมคงค่าเดิมไว้ (แก้จากคอมไม่ทำให้ LINE หลุด) · แถวใหม่ = ว่าง
+    let lineUidToWrite = '';
+    let lineNameToWrite = '';
+    if (actsOnLineRow) {
+      lineUidToWrite  = verifiedUid;
+      lineNameToWrite = data.lineName || '';
+    } else if (row > 0) {
+      lineUidToWrite  = String(sheet.getRange(row, 1).getValue() || '');
+      lineNameToWrite = String(sheet.getRange(row, 2).getValue() || '');
+    }
+
     const rowValues = [
-      data.lineUserId || '', data.lineName || '',
+      lineUidToWrite, lineNameToWrite,
       data.firstName, data.lastName,
       "'" + String(data.phone || ''),
       "'" + String(data.dateOfBirth || ''),

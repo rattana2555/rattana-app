@@ -224,7 +224,7 @@
       <div class="brand-mark">R</div>
       <div>
         <div class="brand-text">RATTANA <span>MART</span></div>
-        <div class="version-tag">v1.22</div>
+        <div class="version-tag">v1.23</div>
       </div>
     </div>
     <div class="h-action" id="headerActions">
@@ -637,7 +637,7 @@ const I18N = {
     'success.sub':'ขอบคุณที่เป็นส่วนหนึ่งของ Rattana Mart<br>ข้อมูลของท่านถูกบันทึกแล้ว','success.viewDash':'ดู Dashboard สมาชิก →',
     'err.phone':'กรุณากรอกเบอร์โทรให้ถูกต้อง','err.dob':'กรุณาเลือกวันเกิดให้ครบ','err.firstName':'กรุณากรอกชื่อ','err.lastName':'กรุณากรอกนามสกุล','err.nationalId':'กรุณากรอกเลขบัตรประชาชน 13 หลัก',
     'err.address':'กรุณากรอกที่อยู่','err.province':'กรุณาเลือกจังหวัด','err.district':'กรุณาเลือกอำเภอ','err.subDistrict':'กรุณาเลือกตำบล',
-    'err.source':'กรุณาเลือกช่องทาง','err.specify':'กรุณาระบุช่องทาง','err.staffName':'กรุณาระบุชื่อพนักงานที่แนะนำ','err.notFound':'ไม่พบข้อมูลสมาชิก กรุณาตรวจสอบ',
+    'err.source':'กรุณาเลือกช่องทาง','err.locked':'🔒 กรอกผิดหลายครั้งเกินไป — ลองใหม่ได้ในอีก {min} นาที','err.notFoundLeft':'ไม่พบข้อมูล — เหลือโอกาสอีก {n} ครั้ง','err.specify':'กรุณาระบุช่องทาง','err.staffName':'กรุณาระบุชื่อพนักงานที่แนะนำ','err.notFound':'ไม่พบข้อมูลสมาชิก กรุณาตรวจสอบ',
     'err.generic':'เกิดข้อผิดพลาด กรุณาลองใหม่','err.connect':'ไม่สามารถเชื่อมต่อได้',
     'toast.signedIn':'✓ เข้าสู่ระบบสำเร็จ','toast.signedOut':'ออกจากระบบแล้ว',
     'toast.foundOld':'✓ พบข้อมูลลูกค้าเก่าในระบบ','toast.alreadyMember':'✓ คุณเป็นสมาชิกอยู่แล้ว → เข้าสู่ระบบ',
@@ -682,7 +682,7 @@ const I18N = {
     'success.sub':'Thank you for joining Rattana Mart<br>Your information has been saved','success.viewDash':'View Member Dashboard →',
     'err.phone':'Please enter a valid phone number','err.dob':'Please select your date of birth','err.firstName':'Please enter your first name','err.lastName':'Please enter your last name','err.nationalId':'Please enter a 13-digit National ID',
     'err.address':'Please enter your address','err.province':'Please select a province','err.district':'Please select a district','err.subDistrict':'Please select a sub-district',
-    'err.source':'Please select a source','err.specify':'Please specify the source','err.staffName':'Please enter the recommending staff name','err.notFound':'Member not found. Please check your info',
+    'err.source':'Please select a source','err.locked':'🔒 Too many attempts — please try again in {min} minutes','err.notFoundLeft':'Not found — {n} attempts left','err.specify':'Please specify the source','err.staffName':'Please enter the recommending staff name','err.notFound':'Member not found. Please check your info',
     'err.generic':'Error occurred. Please try again','err.connect':'Cannot connect',
     'toast.signedIn':'✓ Signed in successfully','toast.signedOut':'Signed out',
     'toast.foundOld':'✓ Found existing customer record','toast.alreadyMember':'✓ Already a member → Sign in',
@@ -741,6 +741,7 @@ async function refreshData() {
     if (typeof liff !== 'undefined' && liff.isLoggedIn && liff.isLoggedIn()) {
       try {
         lineProfile = await liff.getProfile();
+        refreshLineIdToken_();
         const strip = document.getElementById('profilePic');
         if (strip) strip.src = lineProfile.pictureUrl || '';
         const nameEl = document.getElementById('profileName');
@@ -821,6 +822,9 @@ const BENEFITS = {
 //  State
 // ════════════════════════════════════════════════
 let lineProfile = null;
+let lineIdToken = '';      // v1.23: ID token จาก LINE — เซิร์ฟเวอร์ใช้ยืนยันตัวตน (แทนการเชื่อ User ID ตรงๆ)
+function refreshLineIdToken_() { try { lineIdToken = (typeof liff !== 'undefined' && liff.getIDToken && liff.getIDToken()) || ''; } catch(e) { lineIdToken = ''; } return lineIdToken; }
+function withAuth_(p) { const c = Object.assign({}, p); delete c.idToken; if (lineIdToken) c.idToken = lineIdToken; return c; }   // สำเนา — token ไม่ติดไปอยู่ใน currentMember/แคช
 let currentMember = null;
 let linePrimaryMember = null;  // สมาชิกที่ผูกกับ LINE บัญชีนี้ (1 ต่อ 1)
 let isEditMode = false;
@@ -1262,7 +1266,7 @@ async function handleConsentAccept() {
       await fetch(GAS_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(withAuth_(payload)),
       });
       Object.assign(currentMember, consentInfo);
       if (currentMember.lineUserId) cacheSet(currentMember.lineUserId, currentMember);
@@ -1690,6 +1694,13 @@ async function doLogin() {
       }
       renderDashboard(currentMember);
       showScreen('dashScreen');
+    } else if (result.status === 'locked') {
+      // v1.23: ผิดเกิน 5 ครั้ง → เซิร์ฟเวอร์ล็อกเบอร์นี้ชั่วคราว
+      showLoginErr(t('err.locked').replace('{min}', result.retryMin || 15));
+    } else if (typeof result.attemptsLeft === 'number' && result.attemptsLeft <= 2) {
+      showLoginErr(result.attemptsLeft === 0
+        ? t('err.locked').replace('{min}', 15)
+        : t('err.notFoundLeft').replace('{n}', result.attemptsLeft));
     } else {
       showLoginErr(t('err.notFound'));
     }
@@ -1713,7 +1724,7 @@ async function mergeLineProfile() {
       pictureUrl: lineProfile.pictureUrl,
       mode:       'link_line',
     };
-    await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload) });
+    await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(withAuth_(payload)) });
     currentMember.lineUserId = lineProfile.userId;
     currentMember.lineName   = lineProfile.displayName;
     currentMember.pictureUrl = lineProfile.pictureUrl;
@@ -1733,7 +1744,7 @@ async function syncLineProfile() {
       pictureUrl: lineProfile.pictureUrl,
       mode:       'sync_line',
     };
-    await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload) });
+    await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(withAuth_(payload)) });
     currentMember.pictureUrl = lineProfile.pictureUrl;
     currentMember.lineName   = lineProfile.displayName;
   } catch(e) { console.warn('sync line failed:', e); }
@@ -1795,7 +1806,9 @@ async function tryPrefillWithDob() {
     const res = await fetch(`${GAS_URL}?phone=${encodeURIComponent(phone)}&dob=${encodeURIComponent(dob)}&prefill=1`);
     const result = await res.json();
     if (result.status !== 'found') {
-      hint.textContent = t('hint.prefillMismatch');
+      hint.textContent = result.status === 'locked'
+        ? t('err.locked').replace('{min}', result.retryMin || 15)
+        : t('hint.prefillMismatch');
       hint.style.color = 'var(--text-2)';
       return;
     }
@@ -1930,7 +1943,7 @@ async function sendMemberPayload(payload) {
   showSpinner(t('spinner.save'));
   setSubmitLock(true);
   try {
-    const res = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload) });
+    const res = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(withAuth_(payload)) });
     const result = await res.json();
     if (result.status === 'ok') {
       currentMember = payload;
@@ -1970,6 +1983,8 @@ async function initLiffOptional() {
     if (!liff.isInClient()) { hideSpinner(); return; }
     if (!liff.isLoggedIn()) { liff.login(); return; }
     lineProfile = await liff.getProfile();
+    refreshLineIdToken_();
+    if (!lineIdToken) console.warn('[v1.23] ไม่ได้ ID token — เช็ค LIFF scope ว่าติ๊ก openid');
 
     document.getElementById('profilePic').src = lineProfile.pictureUrl || '';
     document.getElementById('profileName').textContent = lineProfile.displayName || '—';
@@ -2002,7 +2017,7 @@ async function initLiffOptional() {
 
 async function checkLineMember(userId, silent) {
   try {
-    const res = await fetch(`${GAS_URL}?userId=${encodeURIComponent(userId)}`);
+    const res = await fetch(`${GAS_URL}?idToken=${encodeURIComponent(lineIdToken)}`);
     if (!res.ok) return;
     const result = await res.json();
     if (result.status === 'found') {
