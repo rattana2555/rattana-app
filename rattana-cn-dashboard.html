@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rattana CN Dashboard</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --surface:#fcfcfb;--surface-card:#ffffff;--border:#e5e5e0;
+  --text-1:#0b0b0b;--text-2:#52514e;--text-3:#8a8983;
+  --accent:#2a78d6;--accent-wash:rgba(42,120,214,0.10);
+  --accent2:#eb6834;--accent2-wash:rgba(235,104,52,0.10);
+  --red:#e34948;--green:#1baf7a;
+  --header-bg:linear-gradient(135deg,#1a5276 0%,#2e86c1 100%);
+}
+@media(prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --surface:#141413;--surface-card:#1e1e1d;--border:#333330;
+    --text-1:#ffffff;--text-2:#c3c2b7;--text-3:#7a7970;
+    --accent:#3987e5;--accent-wash:rgba(57,135,229,0.12);
+    --accent2:#d95926;--accent2-wash:rgba(217,89,38,0.12);
+    --red:#e66767;--green:#199e70;
+    --header-bg:linear-gradient(135deg,#0d2b3e 0%,#1a5276 100%);
+  }
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--surface);color:var(--text-1);min-height:100vh;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.fixed-top{flex-shrink:0;background:var(--surface);z-index:100}
+.scroll-area{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.app-header{background:var(--header-bg);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.app-header h1{font-size:18px;font-weight:700;letter-spacing:.3px}
+.app-header h1 span{font-weight:400;opacity:.85}
+.ver-badge{font-size:11px;background:rgba(255,255,255,.18);padding:3px 10px;border-radius:12px;white-space:nowrap}
+.container{max-width:860px;margin:0 auto;padding:20px 16px 40px}
+
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px}
+.stat-tile{background:var(--surface-card);border:1px solid var(--border);border-radius:10px;padding:16px 18px;transition:box-shadow .15s}
+.stat-tile:hover{box-shadow:0 2px 12px rgba(0,0,0,.06)}
+.stat-label{font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.stat-value{font-size:28px;font-weight:700;line-height:1.1}
+.stat-sub{font-size:12px;color:var(--text-2);margin-top:4px}
+.stat-delta{font-size:12px;margin-top:4px;font-weight:600}
+.stat-delta.up{color:var(--red)}
+.stat-delta.down{color:var(--green)}
+
+.chart-card{background:var(--surface-card);border:1px solid var(--border);border-radius:10px;padding:20px;position:relative}
+.chart-title{font-size:15px;font-weight:600;margin-bottom:4px}
+.chart-subtitle{font-size:12px;color:var(--text-3);margin-bottom:16px}
+#chartCanvas{display:block;width:100%;height:auto}
+.grid-line{stroke:var(--border);stroke-width:1}
+.axis-label{fill:var(--text-3);font-size:11px}
+.data-bar{fill:var(--accent);opacity:.55;rx:3;ry:3;transition:opacity .12s}
+.data-bar:hover{opacity:.8}
+.data-line{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.data-dot{fill:var(--accent);stroke:var(--surface-card);stroke-width:2;cursor:pointer;transition:r .1s}
+.data-dot:hover{r:6}
+.year-line{stroke:var(--accent);stroke-width:1;stroke-dasharray:4,4;opacity:.35}
+
+.tooltip{
+  position:absolute;display:none;background:var(--text-1);color:var(--surface);
+  padding:8px 14px;border-radius:8px;font-size:13px;pointer-events:none;
+  white-space:nowrap;z-index:10;box-shadow:0 4px 16px rgba(0,0,0,.18);
+  line-height:1.6;
+}
+.tooltip .tt-month{font-weight:700}
+.tooltip .tt-count{font-size:11px;color:var(--text-3)}
+
+.crosshair{stroke:var(--accent);stroke-width:1;stroke-dasharray:3,3;opacity:.4;display:none}
+.loading{text-align:center;padding:60px 20px;color:var(--text-3);font-size:14px}
+.loading .spinner{display:inline-block;width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-bottom:12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.error-msg{text-align:center;padding:40px 20px;color:var(--red);font-size:14px}
+
+.filter-row{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;align-items:center}
+.filter-group{display:flex;align-items:center;gap:6px}
+.filter-label{font-size:13px;font-weight:600;color:var(--text-2);white-space:nowrap}
+.fselect{font-size:13px;padding:7px 32px 7px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface-card);color:var(--text-1);cursor:pointer;font-family:inherit;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 5l3 3 3-3' fill='none' stroke='%2352514e' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;transition:border-color .15s}
+.fselect:hover,.fselect:focus{border-color:var(--accent);outline:none}
+
+.sale-layout{display:flex;gap:20px;align-items:flex-start}
+.sale-left{flex:1;min-width:0;overflow-x:auto}
+.sale-detail{width:380px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;display:none}
+.sale-detail.show{display:block}
+.sale-detail-hd{font-size:13px;font-weight:600;margin-bottom:4px}
+.sale-detail-sub{font-size:11px;color:var(--text-3);margin-bottom:10px}
+.sale-detail svg{display:block;width:100%;height:auto}
+.sale-detail-sep{border:none;border-top:1px solid var(--border);margin:14px 0 10px}
+.sale-detail-hd2{font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:8px}
+.sale-name-link{color:var(--accent);cursor:pointer;text-decoration:none}
+.sale-name-link:hover{text-decoration:underline}
+.sale-tbl tr.active{background:var(--accent-wash)}
+@media(max-width:640px){.sale-layout{flex-direction:column}.sale-detail{width:100%}}
+.sale-tbl{width:auto;border-collapse:collapse;font-size:13px}
+.sale-tbl th{text-align:left;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;padding:8px 10px;border-bottom:2px solid var(--border)}
+.sale-tbl th.r{text-align:right}
+.sale-tbl td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.sale-tbl tr:hover{background:var(--accent-wash)}
+.sale-tbl td.r{text-align:right;font-variant-numeric:tabular-nums}
+.sale-tbl .rank{color:var(--text-3);font-weight:600;width:32px;text-align:center}
+.sale-toggle{display:block;margin:12px auto 0;padding:6px 20px;font-size:12px;font-weight:600;color:var(--accent);background:none;border:1px solid var(--accent);border-radius:8px;cursor:pointer;font-family:inherit;transition:background .15s,color .15s}
+.sale-toggle:hover{background:var(--accent);color:#fff}
+.footer{text-align:center;font-size:11px;color:var(--text-3);margin-top:24px;padding:12px 0;border-top:1px solid var(--border)}
+</style>
+</head>
+<body>
+
+<div class="fixed-top">
+  <header class="app-header">
+    <h1>Rattana <span>CN Dashboard</span></h1>
+    <span class="ver-badge">v3.8 &middot; 2026-09-21</span>
+  </header>
+  <div id="fixedContent" class="container" style="padding-bottom:8px;display:none">
+    <div class="filter-row" id="filterRow"></div>
+    <div class="kpi-row" id="kpiRow" style="margin-bottom:0"></div>
+  </div>
+</div>
+
+<div class="scroll-area">
+<div class="container" style="padding-top:16px">
+  <div id="loading" class="loading">
+    <div class="spinner"></div><br>
+    กำลังโหลดข้อมูลจาก Google Sheets...
+  </div>
+
+  <div id="dashboard" style="display:none">
+    <div class="chart-card" id="chartCard">
+      <p class="chart-title">CN Total รายเดือน</p>
+      <p class="chart-subtitle" id="chartSubtitle"></p>
+      <div class="tooltip" id="tooltip"></div>
+      <svg id="chartCanvas" viewBox="0 0 780 340"></svg>
+    </div>
+
+    <div class="chart-card" id="remarkChartCard" style="margin-top:24px">
+      <p class="chart-title">CN แยกตามหมายเหตุที่ถูกต้อง</p>
+      <p class="chart-subtitle" id="remarkChartSubtitle"></p>
+      <div id="remarkChartWrap"></div>
+    </div>
+
+    <div class="chart-card" id="saleChartCard" style="margin-top:24px">
+      <p class="chart-title">CN แยกตาม Sale no Roo</p>
+      <p class="chart-subtitle" id="saleSubtitle"></p>
+      <div class="sale-layout">
+        <div class="sale-left" id="saleTableWrap"></div>
+        <div class="sale-detail" id="saleDetail"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="errorBox" class="error-msg" style="display:none"></div>
+  <div class="footer">Rattana CN Dashboard &middot; ข้อมูลจากชีต SQL CN1</div>
+</div>
+</div>
+
+<script>
+(function(){
+  const SHEET_ID = '1WNJFRUTMZg4lGftUJRLyTuLczhobmFb6jsOrm9l_TYg';
+  const QUERY = encodeURIComponent('SELECT W, SUM(K), COUNT(K) GROUP BY W ORDER BY W');
+  const CALLBACK = '__gvizCb' + Date.now();
+  const SRC = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=SQL%20CN1&tq=${QUERY}&tqx=responseHandler:${CALLBACK}`;
+
+  const QUERY2 = encodeURIComponent('SELECT W, X, C WHERE C IS NOT NULL');
+  const CALLBACK2 = '__gvizCb2' + Date.now();
+  const SRC2 = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=SQL%20CN1&tq=${QUERY2}&tqx=responseHandler:${CALLBACK2}`;
+
+  const QUERY3 = encodeURIComponent('SELECT W, AF, C, K WHERE AF IS NOT NULL AND C IS NOT NULL');
+  const CALLBACK3 = '__gvizCb3' + Date.now();
+  const SRC3 = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=SQL%20CN1&tq=${QUERY3}&tqx=responseHandler:${CALLBACK3}`;
+
+  const MONTH_TH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+  function parseGvizObj(obj) {
+    return obj.table.rows.map(r => {
+      const dateVal = r.c[0].v;
+      const match = dateVal.match(/Date\((\d+),(\d+),(\d+)\)/);
+      const year = +match[1];
+      const month = +match[2];
+      return {
+        year, month,
+        label: MONTH_TH[month] + (year % 100),
+        fullLabel: MONTH_TH[month] + ' ' + (year + 543),
+        total: r.c[1] ? +r.c[1].v : 0,
+        count: r.c[2] ? +r.c[2].v : 0
+      };
+    });
+  }
+
+  function fmt(n) {
+    if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+    if (n >= 1e3) return (n / 1e3).toFixed(0) + 'K';
+    return n.toFixed(0);
+  }
+  function fmtComma(n) { return n.toLocaleString('th-TH', {maximumFractionDigits: 0}); }
+
+  function renderKPI(data, remarkData) {
+    const totalAll = data.reduce((s, d) => s + d.total, 0);
+    const countAll = data.reduce((s, d) => s + d.count, 0);
+    const avg = totalAll / data.length;
+    const peak = data.reduce((a, b) => a.total > b.total ? a : b);
+
+    const y1 = data.filter(d => d.year === data[0].year);
+    const y2 = data.filter(d => d.year === data[0].year + 1);
+    const maxMonths = Math.min(y1.length, y2.length);
+    let yoy = null;
+    if (maxMonths >= 3) {
+      const s1 = y1.slice(0, maxMonths).reduce((s, d) => s + d.total, 0);
+      const s2 = y2.slice(0, maxMonths).reduce((s, d) => s + d.total, 0);
+      yoy = ((s2 - s1) / s1 * 100).toFixed(1);
+    }
+
+    const kpis = [
+      { label: 'CN รวมทั้งหมด', value: fmt(totalAll), sub: yoy !== null ? `${yoy > 0 ? '↑' : '↓'} ${Math.abs(yoy)}% YoY (${maxMonths} เดือน)` : `${data.length} เดือน`, cls: yoy > 0 ? 'up' : 'down' },
+      { label: 'เฉลี่ย / เดือน', value: fmt(avg), sub: `${data.length} เดือน` },
+      { label: 'เดือนสูงสุด', value: fmt(peak.total), sub: peak.fullLabel },
+      { label: 'จำนวน Bill', value: fmtComma(remarkData ? new Set(remarkData.map(d => d.billNo)).size : countAll), sub: 'บิลไม่ซ้ำ' }
+    ];
+
+    const row = document.getElementById('kpiRow');
+    row.innerHTML = kpis.map(k => `
+      <div class="stat-tile">
+        <div class="stat-label">${k.label}</div>
+        <div class="stat-value">${k.value}</div>
+        ${k.cls ? `<div class="stat-delta ${k.cls}">${k.sub}</div>` : `<div class="stat-sub">${k.sub}</div>`}
+      </div>
+    `).join('');
+  }
+
+  function renderChart(data) {
+    const svg = document.getElementById('chartCanvas');
+    const W = 780, H = 420;
+    const pad = { t: 40, r: 55, b: 70, l: 60 };
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
+
+    const maxV = Math.ceil(Math.max(...data.map(d => d.total)) / 500000) * 500000;
+    const slotW = cw / data.length;
+    const xS = i => pad.l + slotW / 2 + i * slotW;
+    const yS = v => pad.t + ch - (v / maxV) * ch;
+    const barW = Math.min(24, slotW - 4);
+    const baseline = yS(0);
+
+    let g = '';
+
+    for (let tick = 0; tick <= maxV; tick += 500000) {
+      const y = yS(tick);
+      g += `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" class="grid-line"/>`;
+      g += `<text x="${pad.l - 10}" y="${y + 4}" text-anchor="end" class="axis-label">${(tick / 1e6).toFixed(1)}M</text>`;
+    }
+
+    let yearSep = -1;
+    data.forEach((d, i) => {
+      if (i > 0 && d.year !== data[i - 1].year) {
+        yearSep = i;
+        g += `<line x1="${xS(i) - slotW / 2}" y1="${pad.t}" x2="${xS(i) - slotW / 2}" y2="${H - pad.b}" class="year-line"/>`;
+      }
+    });
+
+    data.forEach((d, i) => {
+      g += `<text x="${xS(i)}" y="${H - pad.b + 14}" text-anchor="end" class="axis-label" transform="rotate(-45,${xS(i)},${H - pad.b + 14})">${d.label}</text>`;
+    });
+
+    const avgVal = data.reduce((s, d) => s + d.total, 0) / data.length;
+    data.forEach((d, i) => {
+      const barTop = yS(d.total);
+      const barH = baseline - barTop;
+      const barFill = d.total > avgVal ? 'var(--red)' : 'var(--accent)';
+      g += `<rect x="${xS(i) - barW / 2}" y="${barTop}" width="${barW}" height="${barH}" fill="${barFill}" opacity=".55" rx="3" ry="3" data-i="${i}" style="cursor:default;transition:opacity .12s" onmouseenter="this.style.opacity='.8'" onmouseleave="this.style.opacity='.55'"/>`;
+    });
+    const avgY = yS(avgVal);
+    g += `<line x1="${pad.l}" y1="${avgY}" x2="${W - pad.r}" y2="${avgY}" stroke="var(--red)" stroke-width="1.5" stroke-dasharray="6,4" opacity=".6"/>`;
+    g += `<text x="${W - pad.r + 4}" y="${avgY + 3}" fill="var(--red)" font-size="9" font-weight="600">AVG ${fmt(avgVal)}</text>`;
+
+    let linePath = `M${xS(0)},${yS(data[0].total)}`;
+    for (let i = 1; i < data.length; i++) linePath += ` L${xS(i)},${yS(data[i].total)}`;
+    g += `<path d="${linePath}" class="data-line"/>`;
+
+    data.forEach((d, i) => {
+      g += `<circle cx="${xS(i)}" cy="${yS(d.total)}" r="4" class="data-dot" data-i="${i}"/>`;
+    });
+
+    data.forEach((d, i) => {
+      const valLabel = (d.total / 1e6).toFixed(2);
+      const valColor = d.total > avgVal ? 'var(--red)' : 'var(--text-2)';
+      g += `<text x="${xS(i)}" y="${yS(d.total) - 10}" text-anchor="middle" class="axis-label" style="font-size:9px;font-weight:700;fill:${valColor}">${valLabel}M</text>`;
+    });
+
+    data.forEach((d, i) => {
+      g += `<rect x="${xS(i) - slotW / 2}" y="${pad.t}" width="${slotW}" height="${ch}" fill="transparent" data-col="${i}" style="cursor:default"/>`;
+    });
+
+    svg.innerHTML = g;
+
+    const last = data[data.length - 1];
+    document.getElementById('chartSubtitle').textContent =
+      `${data[0].fullLabel} — ${last.fullLabel} (${data.length} เดือน)`;
+
+    const tip = document.getElementById('tooltip');
+    const card = document.getElementById('chartCard');
+    const crossV = document.getElementById('crosshairV');
+
+    svg.querySelectorAll('rect[data-col]').forEach(rect => {
+      rect.addEventListener('mouseenter', () => {
+        const i = +rect.dataset.col;
+        const d = data[i];
+        tip.innerHTML = `<div class="tt-month">${d.fullLabel}</div><div>${fmtComma(d.total)} บาท</div><div class="tt-count">${fmtComma(d.count)} รายการ</div>`;
+        tip.style.display = 'block';
+        crossV.style.display = 'block';
+
+        const svgR = svg.getBoundingClientRect();
+        const cR = card.getBoundingClientRect();
+        const sx = svgR.width / W;
+        const cx = xS(i);
+
+        crossV.setAttribute('x1', cx);
+        crossV.setAttribute('x2', cx);
+
+        let left = svgR.left - cR.left + cx * sx - 60;
+        if (left + 160 > cR.clientWidth) left = svgR.left - cR.left + cx * sx - 170;
+        if (left < 0) left = svgR.left - cR.left + cx * sx + 10;
+        const cy = yS(d.total);
+        tip.style.left = left + 'px';
+        tip.style.top = (svgR.top - cR.top + cy * (svgR.height / H) - 60) + 'px';
+      });
+      rect.addEventListener('mouseleave', () => {
+        tip.style.display = 'none';
+        crossV.style.display = 'none';
+      });
+    });
+  }
+
+  let allData = [];
+  let remarkRaw = [];
+  let saleRaw = [];
+  let selYear = 'all';
+  let selMonth = 'all';
+  let selRemark = 'all';
+
+  function parseRemarkData(obj) {
+    return obj.table.rows.map(r => {
+      const dateVal = r.c[0].v;
+      const match = dateVal.match(/Date\((\d+),(\d+),(\d+)\)/);
+      return {
+        year: +match[1],
+        month: +match[2],
+        remark: r.c[1] && String(r.c[1].v).trim() ? String(r.c[1].v).trim().replace(/\s+/g,' ').replace(/\s*\(/g,'(') : '(ไม่ระบุ)',
+        billNo: r.c[2] ? String(r.c[2].v).trim() : ''
+      };
+    }).filter(d => d.billNo);
+  }
+
+  function parseSaleData(obj) {
+    return obj.table.rows.map(r => {
+      const dateVal = r.c[0].v;
+      const match = dateVal.match(/Date\((\d+),(\d+),(\d+)\)/);
+      return {
+        year: +match[1],
+        month: +match[2],
+        sale: r.c[1] ? String(r.c[1].v).trim() : '',
+        billNo: r.c[2] ? String(r.c[2].v).trim() : '',
+        total: r.c[3] ? +r.c[3].v : 0
+      };
+    }).filter(d => d.sale && d.billNo);
+  }
+
+  let saleShowAll = false;
+  let saleItems = [];
+  let activeSale = null;
+  let lastSaleData = [];
+
+  function renderRemarkChart(filteredR, filteredS) {
+    var billTotalMap = new Map();
+    filteredS.forEach(function(d) {
+      if (!billTotalMap.has(d.billNo)) billTotalMap.set(d.billNo, 0);
+      billTotalMap.set(d.billNo, billTotalMap.get(d.billNo) + d.total);
+    });
+
+    var byRemark = new Map();
+    filteredR.forEach(function(d) {
+      if (!byRemark.has(d.remark)) byRemark.set(d.remark, { bills: new Set(), total: 0, counted: new Set() });
+      var r = byRemark.get(d.remark);
+      r.bills.add(d.billNo);
+      if (!r.counted.has(d.billNo)) {
+        r.total += billTotalMap.get(d.billNo) || 0;
+        r.counted.add(d.billNo);
+      }
+    });
+
+    var allItems = [...byRemark.entries()]
+      .map(function(e) { return { remark: e[0], bills: e[1].bills.size, total: e[1].total }; })
+      .sort(function(a, b) { return b.total - a.total; });
+
+    if (allItems.length === 0) {
+      document.getElementById('remarkChartCard').style.display = 'none';
+      return;
+    }
+    document.getElementById('remarkChartCard').style.display = '';
+
+    var half = Math.ceil(allItems.length / 2);
+    var leftItems = allItems.slice(0, half);
+    var rightItems = allItems.slice(half);
+    var totalBills = allItems.reduce(function(s, d) { return s + d.bills; }, 0);
+
+    var remarkPeriod = '';
+    if (selYear !== 'all' && selMonth !== 'all') {
+      remarkPeriod = MONTH_TH[selMonth] + ' ' + (selYear + 543);
+    } else if (selYear !== 'all') {
+      remarkPeriod = 'ปี ' + (selYear + 543);
+    } else if (selMonth !== 'all') {
+      remarkPeriod = MONTH_TH[selMonth] + ' (ทุกปี)';
+    } else {
+      var rmkMonths = [];
+      filteredR.forEach(function(d) {
+        var k = d.year * 100 + d.month;
+        if (rmkMonths.indexOf(k) === -1) rmkMonths.push(k);
+      });
+      rmkMonths.sort();
+      if (rmkMonths.length > 0) {
+        var fm = rmkMonths[0], lm = rmkMonths[rmkMonths.length - 1];
+        remarkPeriod = MONTH_TH[fm % 100] + ' ' + (Math.floor(fm / 100) + 543) + ' - ' + MONTH_TH[lm % 100] + ' ' + (Math.floor(lm / 100) + 543);
+      }
+    }
+    document.getElementById('remarkChartSubtitle').textContent = 'รวม ' + allItems.length + ' รายการ / ' + fmtComma(totalBills) + ' บิล · ' + remarkPeriod;
+
+    function buildRemarkTbl(items, startIdx) {
+      var t = '<table class="sale-tbl" style="width:100%"><thead><tr>';
+      t += '<th style="width:30px;text-align:center">#</th>';
+      t += '<th>หมายเหตุ</th>';
+      t += '<th style="text-align:right">บิล</th>';
+      t += '<th style="text-align:right">บาท</th>';
+      t += '<th style="text-align:right;width:46px">%</th>';
+      t += '</tr></thead><tbody>';
+      items.forEach(function(item, idx) {
+        var rank = startIdx + idx + 1;
+        var pct = totalBills > 0 ? (item.bills / totalBills * 100).toFixed(1) : '0.0';
+        var isTop = rank === 1;
+        t += '<tr' + (isTop ? ' style="background:var(--accent-wash)"' : '') + '>';
+        t += '<td style="text-align:center;font-weight:700">' + rank + '</td>';
+        t += '<td style="font-weight:' + (isTop ? '600' : '500') + ';color:' + (isTop ? 'var(--accent)' : 'var(--text-1)') + ';font-size:12px">' + item.remark + '</td>';
+        t += '<td style="text-align:right;font-weight:600">' + fmtComma(item.bills) + '</td>';
+        t += '<td style="text-align:right;font-weight:500;color:var(--text-2)">' + fmtComma(item.total) + '</td>';
+        t += '<td style="text-align:right;font-weight:600">' + pct + '%</td>';
+        t += '</tr>';
+      });
+      t += '</tbody></table>';
+      return t;
+    }
+
+    var html = '';
+    if (rightItems.length > 0) {
+      html += '<div style="display:flex;gap:16px;align-items:flex-start">';
+      html += '<div style="flex:1;min-width:0;overflow-x:auto">' + buildRemarkTbl(leftItems, 0) + '</div>';
+      html += '<div style="flex:1;min-width:0;overflow-x:auto">' + buildRemarkTbl(rightItems, half) + '</div>';
+      html += '</div>';
+    } else {
+      html += buildRemarkTbl(leftItems, 0);
+    }
+
+    var byMonthRemark = new Map();
+    filteredR.forEach(function(d) {
+      var mKey = d.year + '-' + String(d.month).padStart(2, '0');
+      if (!byMonthRemark.has(mKey)) byMonthRemark.set(mKey, { year: d.year, month: d.month, remarks: new Map() });
+      var mon = byMonthRemark.get(mKey);
+      if (!mon.remarks.has(d.remark)) mon.remarks.set(d.remark, { bills: new Set(), total: 0, counted: new Set() });
+      var r = mon.remarks.get(d.remark);
+      r.bills.add(d.billNo);
+      if (!r.counted.has(d.billNo)) {
+        r.total += billTotalMap.get(d.billNo) || 0;
+        r.counted.add(d.billNo);
+      }
+    });
+
+    var monthKeys = [...byMonthRemark.keys()].sort();
+    if (monthKeys.length > 1) {
+      var topPerMonth = monthKeys.map(function(mKey) {
+        var mon = byMonthRemark.get(mKey);
+        var ranked = [...mon.remarks.entries()]
+          .map(function(e) { return { remark: e[0], bills: e[1].bills.size, total: e[1].total }; })
+          .sort(function(a, b) { return b.total - a.total; });
+        return { key: mKey, year: mon.year, month: mon.month, label: MONTH_TH[mon.month] + (mon.year % 100), top: ranked[0] };
+      });
+
+      var uniqueRemarks = [...new Set(topPerMonth.map(function(d) { return d.top.remark; }))];
+      var rmkColors = ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#4a3aa7','#e34948'];
+      var colorMap = {};
+      uniqueRemarks.forEach(function(r, i) { colorMap[r] = rmkColors[i % rmkColors.length]; });
+
+      var cW = 780, cH = 400;
+      var cPad = { t: 40, r: 15, b: 80, l: 55 };
+      var cCw = cW - cPad.l - cPad.r;
+      var cCh = cH - cPad.t - cPad.b;
+      var maxTotal = Math.ceil(Math.max.apply(null, topPerMonth.map(function(d) { return d.top.total; })) / 100000) * 100000 || 100000;
+      var slotW = cCw / topPerMonth.length;
+      var cxS = function(i) { return cPad.l + slotW / 2 + i * slotW; };
+      var cyS = function(v) { return cPad.t + cCh - (v / maxTotal) * cCh; };
+      var barW = Math.min(24, slotW - 4);
+
+      var g = '';
+      var tickStep = Math.ceil(maxTotal / 5 / 100000) * 100000 || 100000;
+      for (var tick = 0; tick <= maxTotal; tick += tickStep) {
+        var ty = cyS(tick);
+        g += '<line x1="' + cPad.l + '" y1="' + ty + '" x2="' + (cW - cPad.r) + '" y2="' + ty + '" stroke="var(--border)" stroke-width="1"/>';
+        g += '<text x="' + (cPad.l - 6) + '" y="' + (ty + 3) + '" text-anchor="end" fill="var(--text-3)" font-size="10">' + fmt(tick) + '</text>';
+      }
+
+      topPerMonth.forEach(function(d, i) {
+        var barTop = cyS(d.top.total);
+        var barH = cyS(0) - barTop;
+        var clr = colorMap[d.top.remark];
+        g += '<rect x="' + (cxS(i) - barW / 2) + '" y="' + barTop + '" width="' + barW + '" height="' + barH + '" fill="' + clr + '" opacity="0.55" rx="3" ry="3"/>';
+        g += '<text x="' + cxS(i) + '" y="' + (cH - cPad.b + 14) + '" text-anchor="end" fill="var(--text-3)" font-size="10" transform="rotate(-45,' + cxS(i) + ',' + (cH - cPad.b + 14) + ')">' + d.label + '</text>';
+      });
+
+      var linePath = 'M' + cxS(0) + ',' + cyS(topPerMonth[0].top.total);
+      for (var li = 1; li < topPerMonth.length; li++) linePath += ' L' + cxS(li) + ',' + cyS(topPerMonth[li].top.total);
+      g += '<path d="' + linePath + '" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>';
+
+      topPerMonth.forEach(function(d, i) {
+        var cy = cyS(d.top.total);
+        g += '<circle cx="' + cxS(i) + '" cy="' + cy + '" r="4" fill="var(--accent)" stroke="var(--surface-card)" stroke-width="2"/>';
+        g += '<text x="' + cxS(i) + '" y="' + (cy - 14) + '" text-anchor="middle" fill="var(--text-2)" font-size="9" font-weight="600">' + fmt(d.top.total) + '</text>';
+        g += '<text x="' + cxS(i) + '" y="' + (cy - 4) + '" text-anchor="middle" fill="var(--text-3)" font-size="8">' + d.top.bills + ' บิล</text>';
+      });
+
+      html += '<div style="margin-top:20px;border-top:1px solid var(--border);padding-top:14px">';
+      html += '<p style="font-size:13px;font-weight:600;margin-bottom:4px">หมายเหตุอันดับ 1 แยกรายเดือน</p>';
+      html += '<p style="font-size:11px;color:var(--text-3);margin-bottom:10px">หมายเหตุที่มียอด CN สูงสุดในแต่ละเดือน (เรียงตามจำนวนเงิน)</p>';
+      html += '<svg viewBox="0 0 ' + cW + ' ' + cH + '" style="display:block;width:100%;height:auto">' + g + '</svg>';
+
+      html += '<div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;justify-content:center">';
+      uniqueRemarks.forEach(function(r) {
+        html += '<div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-2)">';
+        html += '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + colorMap[r] + ';opacity:0.75"></span>';
+        html += r + '</div>';
+      });
+      html += '</div></div>';
+    }
+
+    document.getElementById('remarkChartWrap').innerHTML = html;
+  }
+
+  function renderSaleChart(data) {
+    lastSaleData = data;
+    const grouped = new Map();
+    data.forEach(d => {
+      if (!grouped.has(d.sale)) grouped.set(d.sale, { bills: new Set(), total: 0 });
+      const g = grouped.get(d.sale);
+      g.bills.add(d.billNo);
+      g.total += d.total;
+    });
+    saleItems = [...grouped.entries()]
+      .map(([sale, v]) => ({ sale, bills: v.bills.size, total: v.total }))
+      .sort((a, b) => b.total - a.total);
+
+    if (saleItems.length === 0) return;
+
+    const totalBills = saleItems.reduce((s, d) => s + d.bills, 0);
+    const totalBaht = saleItems.reduce((s, d) => s + d.total, 0);
+    var salePeriod = '';
+    if (selYear !== 'all' && selMonth !== 'all') {
+      salePeriod = MONTH_TH[selMonth] + ' ' + (selYear + 543);
+    } else if (selYear !== 'all') {
+      salePeriod = 'ปี ' + (selYear + 543);
+    } else if (selMonth !== 'all') {
+      salePeriod = MONTH_TH[selMonth] + ' (ทุกปี)';
+    } else {
+      var saleMonths = [];
+      data.forEach(function(d) {
+        var k = d.year * 100 + d.month;
+        if (saleMonths.indexOf(k) === -1) saleMonths.push(k);
+      });
+      saleMonths.sort();
+      if (saleMonths.length > 0) {
+        var sf = saleMonths[0], sl = saleMonths[saleMonths.length - 1];
+        salePeriod = MONTH_TH[sf % 100] + ' ' + (Math.floor(sf / 100) + 543) + ' - ' + MONTH_TH[sl % 100] + ' ' + (Math.floor(sl / 100) + 543);
+      }
+    }
+    document.getElementById('saleSubtitle').textContent = `รวม ${fmtComma(totalBills)} บิล / ${fmt(totalBaht)} บาท / ${saleItems.length} Sale · ${salePeriod}`;
+
+    if (!activeSale && saleItems.length > 0) activeSale = saleItems[0].sale;
+
+    const LIMIT = 15;
+    const show = saleShowAll ? saleItems : saleItems.slice(0, LIMIT);
+
+    let html = '<table class="sale-tbl"><thead><tr>';
+    html += '<th>#</th><th>Sale no Roo</th><th class="r">บิล</th><th class="r">บาท</th><th class="r">%</th>';
+    html += '</tr></thead><tbody>';
+
+    show.forEach((d, i) => {
+      const pct = (d.total / totalBaht * 100).toFixed(1);
+      const isActive = activeSale === d.sale;
+      html += `<tr${isActive ? ' class="active"' : ''}>`;
+      html += `<td class="rank">${i + 1}</td>`;
+      html += `<td><span class="sale-name-link" data-sale="${d.sale.replace(/"/g,'&quot;')}">${d.sale}</span></td>`;
+      html += `<td class="r">${fmtComma(d.bills)}</td>`;
+      html += `<td class="r">${fmtComma(d.total)}</td>`;
+      html += `<td class="r">${pct}%</td>`;
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+
+    if (saleItems.length > LIMIT) {
+      html += `<button class="sale-toggle" id="saleToggle">${saleShowAll ? 'แสดง Top 15' : 'ดูทั้งหมด (' + saleItems.length + ')'}</button>`;
+    }
+
+    document.getElementById('saleTableWrap').innerHTML = html;
+
+    if (activeSale) renderSaleDetail(activeSale, data);
+
+    document.querySelectorAll('.sale-name-link').forEach(el => {
+      el.addEventListener('click', function() {
+        const name = this.dataset.sale;
+        activeSale = name;
+        renderSaleChart(data);
+        renderSaleDetail(activeSale, data);
+      });
+    });
+
+    const btn = document.getElementById('saleToggle');
+    if (btn) {
+      btn.addEventListener('click', function() {
+        saleShowAll = !saleShowAll;
+        renderSaleChart(data);
+        if (activeSale) renderSaleDetail(activeSale, data);
+      });
+    }
+  }
+
+  function renderSaleDetail(saleName, data) {
+    const panel = document.getElementById('saleDetail');
+    const rows = data.filter(d => d.sale === saleName);
+    if (rows.length === 0) { panel.classList.remove('show'); return; }
+
+    const byMonth = new Map();
+    rows.forEach(d => {
+      const key = d.year + '-' + String(d.month).padStart(2, '0');
+      if (!byMonth.has(key)) byMonth.set(key, { year: d.year, month: d.month, total: 0, bills: new Set() });
+      const m = byMonth.get(key);
+      m.total += d.total;
+      m.bills.add(d.billNo);
+    });
+
+    const months = [...byMonth.values()].sort((a, b) => {
+      if (a.year !== b.year) return a.year - b.year;
+      return a.month - b.month;
+    });
+
+    const grandTotal = months.reduce((s, m) => s + m.total, 0);
+    const grandBills = months.reduce((s, m) => s + m.bills.size, 0);
+
+    const W = 350, H = 220;
+    const pad = { t: 20, r: 10, b: 50, l: 45 };
+    const cw = W - pad.l - pad.r;
+    const ch = H - pad.t - pad.b;
+    const maxV = Math.ceil(Math.max(...months.map(m => m.total)) / 100000) * 100000 || 100000;
+    const slotW = cw / months.length;
+    const xS = i => pad.l + slotW / 2 + i * slotW;
+    const yS = v => pad.t + ch - (v / maxV) * ch;
+    const barW = Math.min(20, slotW - 4);
+
+    let g = '';
+    for (let tick = 0; tick <= maxV; tick += Math.ceil(maxV / 4 / 100000) * 100000) {
+      const y = yS(tick);
+      g += '<line x1="' + pad.l + '" y1="' + y + '" x2="' + (W - pad.r) + '" y2="' + y + '" stroke="var(--border)" stroke-width="1"/>';
+      g += '<text x="' + (pad.l - 4) + '" y="' + (y + 3) + '" text-anchor="end" fill="var(--text-3)" font-size="9">' + fmt(tick) + '</text>';
+    }
+
+    months.forEach((m, i) => {
+      const barTop = yS(m.total);
+      const barH = yS(0) - barTop;
+      g += '<rect x="' + (xS(i) - barW / 2) + '" y="' + barTop + '" width="' + barW + '" height="' + barH + '" fill="var(--accent)" opacity="0.55" rx="3" ry="3"/>';
+      const lbl = MONTH_TH[m.month] + (m.year % 100);
+      g += '<text x="' + xS(i) + '" y="' + (H - pad.b + 12) + '" text-anchor="end" fill="var(--text-3)" font-size="9" transform="rotate(-45,' + xS(i) + ',' + (H - pad.b + 12) + ')">' + lbl + '</text>';
+    });
+
+    if (months.length > 1) {
+      let linePath = 'M' + xS(0) + ',' + yS(months[0].total);
+      for (let i = 1; i < months.length; i++) linePath += ' L' + xS(i) + ',' + yS(months[i].total);
+      g += '<path d="' + linePath + '" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+    }
+
+    months.forEach((m, i) => {
+      g += '<circle cx="' + xS(i) + '" cy="' + yS(m.total) + '" r="3.5" fill="var(--accent)" stroke="var(--surface-card)" stroke-width="2"/>';
+      g += '<text x="' + xS(i) + '" y="' + (yS(m.total) - 7) + '" text-anchor="middle" fill="var(--text-2)" font-size="8" font-weight="600">' + fmt(m.total) + '</text>';
+    });
+
+    var periodText = '';
+    if (selYear !== 'all' && selMonth !== 'all') {
+      periodText = MONTH_TH[selMonth] + ' ' + (selYear + 543);
+    } else if (selYear !== 'all') {
+      periodText = 'ปี ' + (selYear + 543);
+    } else if (selMonth !== 'all') {
+      periodText = MONTH_TH[selMonth] + ' (ทุกปี)';
+    } else {
+      var firstM = months[0], lastM = months[months.length - 1];
+      periodText = MONTH_TH[firstM.month] + (firstM.year % 100) + ' - ' + MONTH_TH[lastM.month] + (lastM.year % 100);
+    }
+
+    let html = '<div class="sale-detail-hd">' + saleName + '</div>';
+    html += '<div class="sale-detail-sub">รวม ' + fmtComma(grandBills) + ' บิล / ' + fmtComma(grandTotal) + ' บาท · ' + periodText + '</div>';
+    html += '<svg viewBox="0 0 ' + W + ' ' + H + '">' + g + '</svg>';
+
+    var saleBills = new Set(rows.map(d => d.billNo));
+    var filteredR = remarkRaw;
+    if (selYear !== 'all') filteredR = filteredR.filter(d => d.year === selYear);
+    if (selMonth !== 'all') filteredR = filteredR.filter(d => d.month === selMonth);
+    var matched = filteredR.filter(d => saleBills.has(d.billNo));
+
+    if (matched.length > 0) {
+      var byRemark = new Map();
+      matched.forEach(d => {
+        if (!byRemark.has(d.remark)) byRemark.set(d.remark, new Set());
+        byRemark.get(d.remark).add(d.billNo);
+      });
+      var allItems = [...byRemark.entries()]
+        .map(function(e) { return { remark: e[0], count: e[1].size }; })
+        .sort(function(a, b) { return b.count - a.count; });
+      var items = allItems.slice(0, 5);
+
+      var maxC = items[0].count;
+      var rW = 350, rH = 200;
+      var rPad = { t: 20, r: 10, b: 70, l: 35 };
+      var rCw = rW - rPad.l - rPad.r;
+      var rCh = rH - rPad.t - rPad.b;
+      var rMaxV = Math.ceil(maxC / 10) * 10 || 10;
+      var rSlotW = rCw / items.length;
+      var rxS = function(i) { return rPad.l + rSlotW / 2 + i * rSlotW; };
+      var ryS = function(v) { return rPad.t + rCh - (v / rMaxV) * rCh; };
+
+      var rg = '';
+      var rStep = Math.ceil(rMaxV / 4 / 10) * 10 || 10;
+      for (var tick = 0; tick <= rMaxV; tick += rStep) {
+        var ty = ryS(tick);
+        rg += '<line x1="' + rPad.l + '" y1="' + ty + '" x2="' + (rW - rPad.r) + '" y2="' + ty + '" stroke="var(--border)" stroke-width="1"/>';
+        rg += '<text x="' + (rPad.l - 4) + '" y="' + (ty + 3) + '" text-anchor="end" fill="var(--text-3)" font-size="9">' + tick + '</text>';
+      }
+
+      var rmkColors = ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#4a3aa7','#e34948','#00a7b5','#8b5e3c','#6c6ea0','#c45b9a','#3aaa5f','#d4782f','#5c9bd1','#b8860b','#7b68ee','#cd5c5c','#20b2aa','#daa520'];
+      var rBarW = Math.min(16, rSlotW - 3);
+      var rBaseline = ryS(0);
+      items.forEach(function(item, idx) {
+        var bTop = ryS(item.count);
+        var clr = rmkColors[idx % rmkColors.length];
+        rg += '<rect x="' + (rxS(idx) - rBarW / 2) + '" y="' + bTop + '" width="' + rBarW + '" height="' + (rBaseline - bTop) + '" fill="' + clr + '" opacity="0.7" rx="3" ry="3"/>';
+        var lbl = item.remark.length > 10 ? item.remark.slice(0, 9) + '..' : item.remark;
+        rg += '<text x="' + rxS(idx) + '" y="' + (rH - rPad.b + 12) + '" text-anchor="end" fill="var(--text-3)" font-size="8" transform="rotate(-55,' + rxS(idx) + ',' + (rH - rPad.b + 12) + ')">' + lbl + '</text>';
+      });
+
+      if (items.length > 1) {
+        var lp = 'M' + rxS(0) + ',' + ryS(items[0].count);
+        for (var li = 1; li < items.length; li++) lp += ' L' + rxS(li) + ',' + ryS(items[li].count);
+        rg += '<path d="' + lp + '" fill="none" stroke="var(--text-3)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4,3"/>';
+      }
+
+      items.forEach(function(item, idx) {
+        var clr = rmkColors[idx % rmkColors.length];
+        rg += '<circle cx="' + rxS(idx) + '" cy="' + ryS(item.count) + '" r="3.5" fill="' + clr + '" stroke="var(--surface-card)" stroke-width="2"/>';
+        rg += '<text x="' + rxS(idx) + '" y="' + (ryS(item.count) - 7) + '" text-anchor="middle" fill="var(--text-2)" font-size="8" font-weight="600">' + item.count + '</text>';
+      });
+
+      html += '<hr class="sale-detail-sep"/>';
+      html += '<div class="sale-detail-hd2">หมายเหตุที่ถูกต้อง (' + allItems.length + ' รายการ)</div>';
+      html += '<svg viewBox="0 0 ' + rW + ' ' + rH + '">' + rg + '</svg>';
+    }
+
+    panel.innerHTML = html;
+    panel.classList.add('show');
+
+  }
+
+  function buildFilters() {
+    const years = [...new Set(allData.map(d => d.year))].sort();
+    const row = document.getElementById('filterRow');
+    let html = '<div class="filter-group"><span class="filter-label">ปี:</span>';
+    html += '<select class="fselect" id="selYear"><option value="all">ทั้งหมด</option>';
+    years.forEach(y => { html += `<option value="${y}">${y + 543}</option>`; });
+    html += '</select></div>';
+    html += '<div class="filter-group"><span class="filter-label">เดือน:</span>';
+    html += '<select class="fselect" id="selMonth"><option value="all">ทั้งหมด</option>';
+    MONTH_TH.forEach((m, i) => { html += `<option value="${i}">${m.replace('.','')}</option>`; });
+    html += '</select></div>';
+    html += '<div class="filter-group"><span class="filter-label">หมายเหตุ:</span>';
+    html += '<select class="fselect" id="selRemark"><option value="all">ทั้งหมด</option></select></div>';
+    row.innerHTML = html;
+
+    document.getElementById('selYear').addEventListener('change', function() {
+      selYear = this.value === 'all' ? 'all' : +this.value;
+      applyFilter();
+    });
+    document.getElementById('selMonth').addEventListener('change', function() {
+      selMonth = this.value === 'all' ? 'all' : +this.value;
+      applyFilter();
+    });
+    document.getElementById('selRemark').addEventListener('change', function() {
+      selRemark = this.value;
+      applyFilter();
+    });
+    if (remarkRaw.length > 0) buildRemarkDropdown();
+  }
+
+  function buildRemarkDropdown() {
+    const sel = document.getElementById('selRemark');
+    if (!sel) return;
+    const remarks = [...new Set(remarkRaw.map(d => d.remark))].sort();
+    let html = '<option value="all">หมายเหตุ: ทั้งหมด</option>';
+    remarks.forEach(r => { html += `<option value="${r}">${r}</option>`; });
+    sel.innerHTML = html;
+    sel.value = selRemark;
+  }
+
+  function applyFilter() {
+    let filtered = allData;
+    if (selYear !== 'all') filtered = filtered.filter(d => d.year === selYear);
+    if (selMonth !== 'all') filtered = filtered.filter(d => d.month === selMonth);
+    if (filtered.length === 0) filtered = allData;
+    let filteredR = remarkRaw;
+    if (selYear !== 'all') filteredR = filteredR.filter(d => d.year === selYear);
+    if (selMonth !== 'all') filteredR = filteredR.filter(d => d.month === selMonth);
+    if (selRemark !== 'all') filteredR = filteredR.filter(d => d.remark === selRemark);
+    if (filteredR.length === 0) filteredR = remarkRaw;
+
+    let filteredS = saleRaw;
+    if (selYear !== 'all') filteredS = filteredS.filter(d => d.year === selYear);
+    if (selMonth !== 'all') filteredS = filteredS.filter(d => d.month === selMonth);
+
+    renderKPI(filtered, filteredR);
+    renderChart(filtered);
+    renderRemarkChart(filteredR, filteredS);
+    if (filteredS.length > 0) renderSaleChart(filteredS);
+  }
+
+  window[CALLBACK] = function(response) {
+    try {
+      allData = parseGvizObj(response);
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+      document.getElementById('fixedContent').style.display = 'block';
+      buildFilters();
+      renderKPI(allData, remarkRaw);
+      renderChart(allData);
+    } catch (err) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('errorBox').style.display = 'block';
+      document.getElementById('errorBox').textContent = 'ไม่สามารถประมวลผลข้อมูลได้: ' + err.message;
+    }
+    delete window[CALLBACK];
+  };
+  const sc = document.createElement('script');
+  sc.src = SRC;
+  sc.onerror = function() {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('errorBox').style.display = 'block';
+    document.getElementById('errorBox').textContent = 'ไม่สามารถโหลดข้อมูลจาก Google Sheets ได้';
+  };
+  document.head.appendChild(sc);
+
+  window[CALLBACK2] = function(response) {
+    try {
+      remarkRaw = parseRemarkData(response);
+      buildRemarkDropdown();
+      if (allData.length > 0) renderKPI(allData, remarkRaw);
+      if (remarkRaw.length > 0 && saleRaw.length > 0) renderRemarkChart(remarkRaw, saleRaw);
+      if (activeSale && saleRaw.length > 0) renderSaleDetail(activeSale, saleRaw);
+    } catch (e) { console.error('Remark data error:', e); }
+    delete window[CALLBACK2];
+  };
+  const sc2 = document.createElement('script');
+  sc2.src = SRC2;
+  document.head.appendChild(sc2);
+
+  window[CALLBACK3] = function(response) {
+    try {
+      saleRaw = parseSaleData(response);
+      if (saleRaw.length > 0) renderSaleChart(saleRaw);
+      if (remarkRaw.length > 0 && saleRaw.length > 0) renderRemarkChart(remarkRaw, saleRaw);
+    } catch (e) { console.error('Sale data error:', e); }
+    delete window[CALLBACK3];
+  };
+  const sc3 = document.createElement('script');
+  sc3.src = SRC3;
+  document.head.appendChild(sc3);
+})();
+</script>
+</body>
+</html>

@@ -1,11 +1,20 @@
 // ════════════════════════════════════════════════════════
-//  Rattana Member System — GAS v1.20
+//  Rattana Member System — GAS v1.24
 // ════════════════════════════════════════════════════════
 
 const SHEET_ID        = '1gbBrJtE36fX8TM7KC0RbXgPZI6AyNpbC3XhJ6uiLsOE';
 const SHEET_NAME      = 'Members';
 const POINT_SHEET     = 'Member Point';
-const DISCORD_WEBHOOK = 'https://discordapp.com/api/webhooks/1514920273910956034/QQxs7EoSmxHVGZiu284OELLcXns93acZc1-YTLpzSfP-Nhn86l-kRQY-iq-EGAvcEBs2';
+// v1.21: ไม่เก็บ webhook ในโค้ดอีกแล้ว (repo เป็น public — URL เคยหลุดโดนบอทสแปม)
+// ตั้งค่าที่ Apps Script → ⚙️ การตั้งค่าโครงการ → คุณสมบัติของสคริปต์
+//   ชื่อ: DISCORD_WEBHOOK   ค่า: <URL ของ webhook>
+function getDiscordWebhook_() {
+  try {
+    return PropertiesService.getScriptProperties().getProperty('DISCORD_WEBHOOK') || '';
+  } catch (e) {
+    return '';
+  }
+}
 
 const HEADERS = [
   'LINE User ID','ชื่อ LINE','ชื่อ','นามสกุล',
@@ -154,7 +163,8 @@ function findRowBy(sheet, predicate) {
 
 // ─── Discord notification ─────────────────────────────
 function notifyDiscord(data, isNew) {
-  if (!DISCORD_WEBHOOK) return;
+  var DISCORD_WEBHOOK = getDiscordWebhook_();
+  if (!DISCORD_WEBHOOK) { Logger.log("ยังไม่ได้ตั้ง Script Property: DISCORD_WEBHOOK"); return; }
   try {
     // v1.20: กันแจ้งซ้ำ — เบอร์เดิม + สถานะเดิม ภายใน 90 วินาที ส่งครั้งเดียว
     var dupKey = 'dc_' + (isNew ? 'n_' : 'u_') + String(data.phone || '');
@@ -178,7 +188,7 @@ function notifyDiscord(data, isNew) {
 }
 
 function testDiscord() {
-  const res = UrlFetchApp.fetch(DISCORD_WEBHOOK, {
+  const res = UrlFetchApp.fetch(getDiscordWebhook_(), {
     method: 'POST',
     contentType: 'application/json',
     payload: JSON.stringify({ content: '🧪 Test — Rattana Member webhook ใช้งานได้!' }),
@@ -188,48 +198,131 @@ function testDiscord() {
   Logger.log('Body: ' + res.getContentText());
 }
 
+// ─── v1.23: ยืนยันตัวตน LINE ─────────────────────────
+// Channel ID ของ LINE Login channel "Rattana Member" (= ตัวเลขหน้า LIFF ID) — ไม่ใช่ความลับ
+const LINE_CHANNEL_ID = '2010284376';
+
+// ส่ง ID token ให้ LINE ตรวจ → คืน User ID (sub) ถ้าจริง · ปลอม/หมดอายุ → ''
+function verifyLineIdToken_(idToken) {
+  if (!idToken) return '';
+  const cache = CacheService.getScriptCache();
+  const key = 'idt_' + Utilities.base64EncodeWebSafe(
+    Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(idToken))).slice(0, 40);
+  const hit = cache.get(key);
+  if (hit) return hit === '-' ? '' : hit;
+  try {
+    const res = UrlFetchApp.fetch('https://api.line.me/oauth2/v2.1/verify', {
+      method: 'post',
+      payload: { id_token: String(idToken), client_id: LINE_CHANNEL_ID },
+      muteHttpExceptions: true,
+    });
+    if (res.getResponseCode() !== 200) { cache.put(key, '-', 300); return ''; }
+    const body = JSON.parse(res.getContentText());
+    const uid = String(body.sub || '');
+    // จำผลไว้ไม่เกินอายุ token (สูงสุด 10 นาที) ไม่ต้องถาม LINE ทุกคำขอ
+    const ttl = Math.max(30, Math.min(600, Math.floor((Number(body.exp || 0) * 1000 - Date.now()) / 1000)));
+    if (uid) cache.put(key, uid, ttl);
+    return uid;
+  } catch (e) {
+    Logger.log('verifyLineIdToken failed: ' + e.message);
+    return '';
+  }
+}
+
+// ─── v1.23: จำกัดการเดาวันเกิด ────────────────────────
+const LOGIN_MAX_FAIL = 5;      // ผิดได้ 5 ครั้ง
+const LOGIN_LOCK_SEC = 900;    // แล้วล็อกเบอร์นั้น 15 นาที (นับจากครั้งที่ผิดล่าสุด)
+function loginKey_(phone) { return 'lf_' + padZero(phone, 10); }
+function loginLocked_(phone) {
+  return Number(CacheService.getScriptCache().get(loginKey_(phone)) || 0) >= LOGIN_MAX_FAIL;
+}
+function loginFail_(phone) {
+  const c = CacheService.getScriptCache(), k = loginKey_(phone);
+  const n = Number(c.get(k) || 0) + 1;
+  c.put(k, String(n), LOGIN_LOCK_SEC);
+  return n;
+}
+function loginOk_(phone) { CacheService.getScriptCache().remove(loginKey_(phone)); }
+
+// v1.22: helpers
+function json_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+// ปิดชื่อบางส่วน: ภักรวรรณ งั่วสมบูรณ์ → ภั***ณ งั***
+function maskName_(first, last) {
+  const m = function (s, keepEnd) {
+    s = String(s || '').trim();
+    if (!s) return '';
+    const chars = Array.from(s);
+    if (chars.length <= 2) return chars[0] + '*';
+    return chars.slice(0, 2).join('') + '***' + (keepEnd ? chars[chars.length - 1] : '');
+  };
+  return (m(first, true) + ' ' + m(last, false)).trim();
+}
+
 // ─── GET ──────────────────────────────────────────────
 function doGet(e) {
   try {
     const p = (e && e.parameter) || {};
 
+    // v1.22: เช็คเบอร์ — ตอบแค่ "มี/ไม่มี" + ชื่อปิดบางส่วน ห้ามส่งวันเกิด/ที่อยู่
+    //        (เดิมส่งทุกอย่าง → ใครรู้เบอร์ก็ได้วันเกิด ซึ่งเป็นรหัสผ่านล็อกอิน)
     if (p.phone && p.checkPoint) {
       const r = lookupPointByPhone(p.phone);
       const memberSheet = getSheet();
       const target = padZero(p.phone, 10);
       const registered = findRowBy(memberSheet, row => padZero(row[4], 10) === target) > 0;
-      if (registered) {
-        return ContentService.createTextOutput(JSON.stringify({
-          status: 'registered',
-          data: r.firstName ? r : null
-        })).setMimeType(ContentService.MimeType.JSON);
-      }
+      if (registered) return json_({ status: 'registered' });
       if (r.firstName || r.lastName) {
-        return ContentService.createTextOutput(JSON.stringify({status:'found', data: r})).setMimeType(ContentService.MimeType.JSON);
+        return json_({ status: 'found', masked: maskName_(r.firstName, r.lastName), canPrefill: !!r.dateOfBirth });
       }
-      return ContentService.createTextOutput(JSON.stringify({status:'not_found'})).setMimeType(ContentService.MimeType.JSON);
+      return json_({ status: 'not_found' });
     }
 
-    if (!p.userId && !p.phone) {
-      return ContentService.createTextOutput(JSON.stringify({status:'ok', msg:'GAS v1.20 running'})).setMimeType(ContentService.MimeType.JSON);
+    // v1.22: ข้อมูลเต็มสำหรับ pre-fill → ต้องยืนยันวันเกิดให้ตรงกับ Member Point ก่อน
+    if (p.phone && p.dob && p.prefill) {
+      if (loginLocked_(p.phone)) return json_({ status: 'locked', retryMin: LOGIN_LOCK_SEC / 60 });
+      const r = lookupPointByPhone(p.phone);
+      if ((r.firstName || r.lastName) && r.dateOfBirth && r.dateOfBirth === String(p.dob).trim()) {
+        loginOk_(p.phone);
+        return json_({ status: 'found', data: r });
+      }
+      loginFail_(p.phone);
+      return json_({ status: 'mismatch' });
+    }
+
+    if (!p.idToken && !p.userId && !p.phone) {
+      return json_({ status: 'ok', msg: 'GAS v1.24 running' });
     }
 
     const sheet = getSheet();
     let row = -1;
-    if (p.userId) {
-      row = findRowBy(sheet, r => String(r[0]).trim() === String(p.userId).trim());
+
+    // v1.23: เข้าผ่าน LINE — เชื่อเฉพาะ User ID ที่ LINE ยืนยันจาก ID token
+    //        (เดิมเชื่อ ?userId= ที่ส่งมาตรงๆ → ใครรู้ User ID คนอื่นก็ดึงข้อมูลได้)
+    if (p.idToken) {
+      const uid = verifyLineIdToken_(p.idToken);
+      if (!uid) return json_({ status: 'invalid_token' });
+      row = findRowBy(sheet, r => String(r[0]).trim() === uid);
+      if (row < 0 && !p.phone) return json_({ status: 'not_found' });
     }
+
+    // เข้าด้วยเบอร์ + วันเกิด — จำกัดผิดได้ 5 ครั้ง / 15 นาที ต่อเบอร์
     if (row < 0 && p.phone && p.dob) {
+      if (loginLocked_(p.phone)) return json_({ status: 'locked', retryMin: LOGIN_LOCK_SEC / 60 });
       const targetPhone = padZero(p.phone, 10);
       row = findRowBy(sheet, r => {
         const rowPhone = padZero(r[4], 10);
         const rowDob   = dateToISO(r[5]);
         return rowPhone === targetPhone && rowDob === String(p.dob).trim();
       });
+      if (row < 0) {
+        const n = loginFail_(p.phone);
+        return json_({ status: 'not_found', attemptsLeft: Math.max(0, LOGIN_MAX_FAIL - n) });
+      }
+      loginOk_(p.phone);
     }
-    if (row < 0) {
-      return ContentService.createTextOutput(JSON.stringify({status:'not_found'})).setMimeType(ContentService.MimeType.JSON);
-    }
+    if (row < 0) return json_({ status: 'not_found' });
     const values = sheet.getRange(row, 1, 1, HEADERS.length).getValues()[0];
     return ContentService.createTextOutput(JSON.stringify({status:'found', data: rowToObject(values)})).setMimeType(ContentService.MimeType.JSON);
   } catch(err) {
@@ -238,7 +331,20 @@ function doGet(e) {
 }
 
 // ─── POST ─────────────────────────────────────────────
+// v1.22: ล็อกทั้งช่วง "ค้นหา → เขียน" กัน 2 คำขอพร้อมกันต่อท้ายซ้ำเป็น 2 แถว
 function doPost(e) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(25000)) {
+    return json_({ status: 'error', message: 'ระบบกำลังบันทึกรายการอื่นอยู่ กรุณาลองใหม่อีกครั้ง' });
+  }
+  try {
+    return doPost_(e);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function doPost_(e) {
   try {
     const data  = JSON.parse(e.postData.contents);
     const sheet = getSheet();
@@ -248,21 +354,74 @@ function doPost(e) {
     const n     = new Date();
     const nowTh = pad(n.getDate())+'/'+pad(n.getMonth()+1)+'/'+(n.getFullYear()+543)+' '+pad(n.getHours())+':'+pad(n.getMinutes());
 
+    // v1.23: ใช้ LINE User ID เฉพาะที่ LINE ยืนยันแล้ว — ห้ามเชื่อ data.lineUserId ตรงๆ
+    //        (เดิมส่ง lineUserId ของคนอื่นมา = เขียนทับแถวของเขาได้เลย)
+    const verifiedUid = verifyLineIdToken_(data.idToken);
+    // ค้นด้วย LINE เฉพาะตอนแอปตั้งใจจัดการ "สมาชิกหลักของ LINE นี้" เท่านั้น
+    // (โหมดดูสมาชิกอื่นส่ง lineUserId ว่าง → ต้องไม่ไปเจอแถวสมาชิกหลักแล้วเขียนทับ)
+    const actsOnLineRow = !!verifiedUid && String(data.lineUserId || '') === verifiedUid;
+
+    const byPhoneDob = (ph, dob) => findRowBy(sheet, r =>
+      padZero(r[4], 10) === padZero(ph, 10) && dateToISO(r[5]) === String(dob).trim());
+    const byPhone = ph => findRowBy(sheet, r => padZero(r[4], 10) === padZero(ph, 10));
+    const conflict_ = msg => json_({ status: 'conflict', message: msg });
+
     let row = -1;
-    if (data.lineUserId) {
-      row = findRowBy(sheet, r => String(r[0]).trim() === String(data.lineUserId).trim());
-    }
-    if (row < 0 && data.phone && data.dateOfBirth) {
-      row = findRowBy(sheet, r => {
-        const rowPhone = padZero(r[4], 10);
-        const rowDob   = dateToISO(r[5]);
-        return rowPhone === padZero(data.phone, 10) && rowDob === String(data.dateOfBirth).trim();
-      });
+    let bindLine = false;
+
+    if (data.mode === 'link_line') {
+      // v1.24: ผูก LINE กับสมาชิกที่เพิ่งล็อกอินด้วยเบอร์+วันเกิด
+      //   ต้องหาแถว "จากเบอร์+วันเกิด" เท่านั้น — เดิมหาจาก LINE ก่อน
+      //   → เจอแถวสมาชิกหลักของ LINE นี้ แล้วเขียนข้อมูลอีกคนทับ (ข้อมูลหาย)
+      if (!actsOnLineRow) return json_({ status: 'error', message: 'ยืนยันตัวตน LINE ไม่สำเร็จ' });
+      row = byPhoneDob(data.phone, data.dateOfBirth);
+      if (row < 0) return json_({ status: 'not_found' });
+      const uidRow = findRowBy(sheet, r => String(r[0]).trim() === verifiedUid);
+      if (uidRow > 0 && uidRow !== row) return conflict_('บัญชี LINE นี้ผูกกับสมาชิกคนอื่นอยู่แล้ว');
+      const curUid = String(sheet.getRange(row, 1).getValue() || '').trim();
+      if (curUid && curUid !== verifiedUid) return conflict_('สมาชิกนี้ผูกกับบัญชี LINE อื่นอยู่แล้ว');
+      bindLine = true;
+    } else {
+      if (actsOnLineRow) row = findRowBy(sheet, r => String(r[0]).trim() === verifiedUid);
+      // v1.24: แก้ไขข้อมูล → หาแถวจากเบอร์+วันเกิด "ค่าเดิม" ก่อน
+      //        (เดิมหาจากค่าใหม่ → แก้เบอร์/วันเกิดแล้วหาไม่เจอ → สร้างสมาชิกซ้ำ)
+      if (row < 0 && data.origPhone && data.origDob) row = byPhoneDob(data.origPhone, data.origDob);
+      if (row < 0 && data.phone && data.dateOfBirth) row = byPhoneDob(data.phone, data.dateOfBirth);
+      bindLine = actsOnLineRow;
     }
     const isNew = row < 0;
 
+    // v1.24: เบอร์ = รหัสสมาชิก ห้ามซ้ำ
+    //   บล็อกเฉพาะ "สมัครใหม่" หรือ "เปลี่ยนเบอร์" — แก้ข้อมูลอื่นโดยไม่เปลี่ยนเบอร์ผ่านเสมอ
+    //   (กันคนที่มีแถวเบอร์ซ้ำค้างจากก่อน v1.24 แก้ข้อมูลตัวเองไม่ได้)
+    if (data.phone) {
+      if (isNew) {
+        if (byPhone(data.phone) > 0) return conflict_('เบอร์นี้เป็นสมาชิกอยู่แล้ว กรุณาเข้าสู่ระบบ');
+      } else {
+        const curPhone = padZero(sheet.getRange(row, 5).getValue(), 10);
+        if (curPhone !== padZero(data.phone, 10) && byPhone(data.phone) > 0) {
+          return conflict_('เบอร์นี้ถูกใช้กับสมาชิกคนอื่นแล้ว');
+        }
+      }
+    }
+
+    // คอลัมน์ A/B/M: ผูก LINE ได้เฉพาะเมื่อยืนยันแล้ว และตรงกับที่แอปขอผูกจริง
+    //   ไม่ยืนยัน → แถวเดิมคงค่าเดิม (รวมรูปโปรไฟล์ — กันรูปไลน์คนดูไปทับของเจ้าของ) · แถวใหม่ = ว่าง
+    let lineUidToWrite = '';
+    let lineNameToWrite = '';
+    let pictureToWrite = '';
+    if (bindLine) {
+      lineUidToWrite  = verifiedUid;
+      lineNameToWrite = data.lineName || '';
+      pictureToWrite  = data.pictureUrl || '';
+    } else if (row > 0) {
+      lineUidToWrite  = String(sheet.getRange(row, 1).getValue() || '');
+      lineNameToWrite = String(sheet.getRange(row, 2).getValue() || '');
+      pictureToWrite  = String(sheet.getRange(row, 13).getValue() || '');
+    }
+
     const rowValues = [
-      data.lineUserId || '', data.lineName || '',
+      lineUidToWrite, lineNameToWrite,
       data.firstName, data.lastName,
       "'" + String(data.phone || ''),
       "'" + String(data.dateOfBirth || ''),
@@ -272,7 +431,7 @@ function doPost(e) {
       "'" + String(data.province || ''),
       "'" + String(data.postcode || ''),
       data.source,
-      data.pictureUrl || '',
+      pictureToWrite,
       data.registeredAt, thDate, nowTh,
       "'" + String(data.nationalId || ''),
       data.consent === true ? 'TRUE' : (data.consent === false ? 'FALSE' : ''),
