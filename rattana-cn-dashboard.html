@@ -115,7 +115,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 <div class="fixed-top">
   <header class="app-header">
     <h1>Rattana <span>CN Dashboard</span></h1>
-    <span class="ver-badge">v3.8 &middot; 2026-09-21</span>
+    <span class="ver-badge">v3.9 &middot; 2026-09-21</span>
   </header>
   <div id="fixedContent" class="container" style="padding-bottom:8px;display:none">
     <div class="filter-row" id="filterRow"></div>
@@ -162,15 +162,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 <script>
 (function(){
   const SHEET_ID = '1WNJFRUTMZg4lGftUJRLyTuLczhobmFb6jsOrm9l_TYg';
-  const QUERY = encodeURIComponent('SELECT W, SUM(K), COUNT(K) GROUP BY W ORDER BY W');
+  const QUERY = encodeURIComponent('SELECT W, V, SUM(K), COUNT(K) GROUP BY W, V ORDER BY W');
   const CALLBACK = '__gvizCb' + Date.now();
   const SRC = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=SQL%20CN1&tq=${QUERY}&tqx=responseHandler:${CALLBACK}`;
 
-  const QUERY2 = encodeURIComponent('SELECT W, X, C WHERE C IS NOT NULL');
+  const QUERY2 = encodeURIComponent('SELECT W, X, C, V WHERE C IS NOT NULL');
   const CALLBACK2 = '__gvizCb2' + Date.now();
   const SRC2 = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=SQL%20CN1&tq=${QUERY2}&tqx=responseHandler:${CALLBACK2}`;
 
-  const QUERY3 = encodeURIComponent('SELECT W, AF, C, K, B, H WHERE AF IS NOT NULL AND C IS NOT NULL');
+  const QUERY3 = encodeURIComponent('SELECT W, AF, C, K, B, H, V WHERE AF IS NOT NULL AND C IS NOT NULL');
   const CALLBACK3 = '__gvizCb3' + Date.now();
   const SRC3 = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=SQL%20CN1&tq=${QUERY3}&tqx=responseHandler:${CALLBACK3}`;
 
@@ -186,10 +186,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
         year, month,
         label: MONTH_TH[month] + (year % 100),
         fullLabel: MONTH_TH[month] + ' ' + (year + 543),
-        total: r.c[1] ? +r.c[1].v : 0,
-        count: r.c[2] ? +r.c[2].v : 0
+        wh: r.c[1] ? String(r.c[1].v).trim() : '',
+        total: r.c[2] ? +r.c[2].v : 0,
+        count: r.c[3] ? +r.c[3].v : 0
       };
     });
+  }
+
+  function aggregateByMonth(data) {
+    var map = new Map();
+    data.forEach(function(d) {
+      var key = d.year + '-' + d.month;
+      if (!map.has(key)) map.set(key, {year:d.year, month:d.month, label:d.label, fullLabel:d.fullLabel, total:0, count:0});
+      var m = map.get(key);
+      m.total += d.total;
+      m.count += d.count;
+    });
+    return [...map.values()].sort(function(a,b){ return a.year - b.year || a.month - b.month; });
   }
 
   function fmt(n) {
@@ -341,6 +354,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
   let selYear = 'all';
   let selMonth = 'all';
   let selRemark = 'all';
+  let selWH = 'all';
 
   function parseRemarkData(obj) {
     return obj.table.rows.map(r => {
@@ -350,7 +364,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
         year: +match[1],
         month: +match[2],
         remark: r.c[1] && String(r.c[1].v).trim() ? String(r.c[1].v).trim().replace(/\s+/g,' ').replace(/\s*\(/g,'(') : '(ไม่ระบุ)',
-        billNo: r.c[2] ? String(r.c[2].v).trim() : ''
+        billNo: r.c[2] ? String(r.c[2].v).trim() : '',
+        wh: r.c[3] ? String(r.c[3].v).trim() : ''
       };
     }).filter(d => d.billNo);
   }
@@ -366,7 +381,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
         billNo: r.c[2] ? String(r.c[2].v).trim() : '',
         total: r.c[3] ? +r.c[3].v : 0,
         customer: r.c[4] ? String(r.c[4].v).trim() : '',
-        sku: r.c[5] ? String(r.c[5].v).trim() : ''
+        sku: r.c[5] ? String(r.c[5].v).trim() : '',
+        wh: r.c[6] ? String(r.c[6].v).trim() : ''
       };
     }).filter(d => d.sale && d.billNo);
   }
@@ -851,6 +867,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     html += '</select></div>';
     html += '<div class="filter-group"><span class="filter-label">หมายเหตุ:</span>';
     html += '<select class="fselect" id="selRemark"><option value="all">ทั้งหมด</option></select></div>';
+    var whs = [...new Set(allData.map(d => d.wh))].filter(Boolean).sort();
+    html += '<div class="filter-group"><span class="filter-label">คลัง:</span>';
+    html += '<select class="fselect" id="selWH"><option value="all">ทั้งหมด</option>';
+    whs.forEach(function(w) { html += '<option value="' + w + '">' + w + '</option>'; });
+    html += '</select></div>';
     row.innerHTML = html;
 
     document.getElementById('selYear').addEventListener('change', function() {
@@ -863,6 +884,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     });
     document.getElementById('selRemark').addEventListener('change', function() {
       selRemark = this.value;
+      applyFilter();
+    });
+    document.getElementById('selWH').addEventListener('change', function() {
+      selWH = this.value;
       applyFilter();
     });
     if (remarkRaw.length > 0) buildRemarkDropdown();
@@ -880,21 +905,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 
   function applyFilter() {
     let filtered = allData;
+    if (selWH !== 'all') filtered = filtered.filter(d => d.wh === selWH);
     if (selYear !== 'all') filtered = filtered.filter(d => d.year === selYear);
     if (selMonth !== 'all') filtered = filtered.filter(d => d.month === selMonth);
-    if (filtered.length === 0) filtered = allData;
+    var aggregated = aggregateByMonth(filtered);
+    if (aggregated.length === 0) aggregated = aggregateByMonth(allData);
     let filteredR = remarkRaw;
+    if (selWH !== 'all') filteredR = filteredR.filter(d => d.wh === selWH);
     if (selYear !== 'all') filteredR = filteredR.filter(d => d.year === selYear);
     if (selMonth !== 'all') filteredR = filteredR.filter(d => d.month === selMonth);
     if (selRemark !== 'all') filteredR = filteredR.filter(d => d.remark === selRemark);
     if (filteredR.length === 0) filteredR = remarkRaw;
 
     let filteredS = saleRaw;
+    if (selWH !== 'all') filteredS = filteredS.filter(d => d.wh === selWH);
     if (selYear !== 'all') filteredS = filteredS.filter(d => d.year === selYear);
     if (selMonth !== 'all') filteredS = filteredS.filter(d => d.month === selMonth);
 
-    renderKPI(filtered, filteredR);
-    renderChart(filtered);
+    renderKPI(aggregated, filteredR);
+    renderChart(aggregated);
     renderRemarkChart(filteredR, filteredS);
     if (filteredS.length > 0) renderSaleChart(filteredS);
   }
@@ -906,8 +935,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
       document.getElementById('dashboard').style.display = 'block';
       document.getElementById('fixedContent').style.display = 'block';
       buildFilters();
-      renderKPI(allData, remarkRaw);
-      renderChart(allData);
+      var agg = aggregateByMonth(allData);
+      renderKPI(agg, remarkRaw);
+      renderChart(agg);
     } catch (err) {
       document.getElementById('loading').style.display = 'none';
       document.getElementById('errorBox').style.display = 'block';
@@ -928,7 +958,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     try {
       remarkRaw = parseRemarkData(response);
       buildRemarkDropdown();
-      if (allData.length > 0) renderKPI(allData, remarkRaw);
+      if (allData.length > 0) renderKPI(aggregateByMonth(allData), remarkRaw);
       if (remarkRaw.length > 0 && saleRaw.length > 0) renderRemarkChart(remarkRaw, saleRaw);
       if (activeSale && saleRaw.length > 0) renderSaleDetail(activeSale, saleRaw);
     } catch (e) { console.error('Remark data error:', e); }
