@@ -221,7 +221,7 @@
       <div class="brand-mark">R</div>
       <div>
         <div class="brand-text">RATTANA <span>MART</span></div>
-        <div class="version-tag">v1.26</div>
+        <div class="version-tag">v1.27</div>
       </div>
     </div>
     <div class="h-action" id="headerActions">
@@ -624,7 +624,7 @@ const I18N = {
     'dash.hi':'สวัสดี','dash.tier':'ระดับสมาชิก','dash.points':'แต้มสะสม','dash.pointsUnit':'คะแนน',
     'stat.memberId':'รหัสสมาชิก','stat.tier':'ระดับ',
     'tab.benefits':'สิทธิประโยชน์','tab.profile':'ข้อมูลส่วนตัว',
-    'profile.memberInfo':'ข้อมูลสมาชิก','profile.fullName':'ชื่อ-นามสกุล','profile.phone':'เบอร์โทร','profile.dob':'วันเกิด','profile.address':'ที่อยู่','profile.connected':'✓ เชื่อมต่อแล้ว','profile.nationalId':'เลขบัตรประชาชน','profile.nationalIdMissing':'ยังไม่ได้กรอก','warn.nationalId':'ยังไม่มีข้อมูลเลขบัตรประชาชน กรุณากด "แก้ไขข้อมูล" เพื่ออัปเดต',
+    'profile.memberInfo':'ข้อมูลสมาชิก','profile.nidShow':'👁 แสดง','profile.nidHide':'🙈 ซ่อน','profile.fullName':'ชื่อ-นามสกุล','profile.phone':'เบอร์โทร','profile.dob':'วันเกิด','profile.address':'ที่อยู่','profile.connected':'✓ เชื่อมต่อแล้ว','profile.nationalId':'เลขบัตรประชาชน','profile.nationalIdMissing':'ยังไม่ได้กรอก','warn.nationalId':'ยังไม่มีข้อมูลเลขบัตรประชาชน กรุณากด "แก้ไขข้อมูล" เพื่ออัปเดต',
     'form.editMode':'✓ โหมดแก้ไข — กรุณาตรวจสอบและแก้ไขข้อมูล',
     'form.section1':'1️⃣ ข้อมูลส่วนตัว','form.section2':'2️⃣ ที่อยู่','form.section3':'3️⃣ ทราบจากช่องทางใด',
     'source.social':'โซเชียลมีเดีย (Facebook, TikTok)','source.google':'ค้นหาผ่าน Google / เว็บไซต์',
@@ -669,7 +669,7 @@ const I18N = {
     'dash.hi':'Hello','dash.tier':'Membership Tier','dash.points':'Points Balance','dash.pointsUnit':'pts',
     'stat.memberId':'Member ID','stat.tier':'Tier',
     'tab.benefits':'Benefits','tab.profile':'Profile',
-    'profile.memberInfo':'Member Information','profile.fullName':'Full Name','profile.phone':'Phone','profile.dob':'Date of Birth','profile.address':'Address','profile.connected':'✓ Connected','profile.nationalId':'National ID','profile.nationalIdMissing':'Not provided','warn.nationalId':'National ID is missing. Please tap "Edit Profile" to update.',
+    'profile.memberInfo':'Member Information','profile.nidShow':'👁 Show','profile.nidHide':'🙈 Hide','profile.fullName':'Full Name','profile.phone':'Phone','profile.dob':'Date of Birth','profile.address':'Address','profile.connected':'✓ Connected','profile.nationalId':'National ID','profile.nationalIdMissing':'Not provided','warn.nationalId':'National ID is missing. Please tap "Edit Profile" to update.',
     'form.editMode':'✓ Edit mode — Please review and update your info',
     'form.section1':'1️⃣ Personal Information','form.section2':'2️⃣ Address','form.section3':'3️⃣ How did you hear about us?',
     'source.social':'Social Media (Facebook, TikTok)','source.google':'Google Search / Website',
@@ -847,6 +847,26 @@ function showToast(msg, type='') {
   t.innerHTML = msg;
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 3000);
+}
+
+// ── v1.27: เลขบัตรประชาชน แสดงแบบปิดบางส่วน กันคนข้างหลังเห็น/ถ่ายจอ ──
+//    ชีทยังเก็บครบ 13 หลักเหมือนเดิม POS ใช้ได้ตามปกติ
+let nidRevealed = false;
+function fmtNid(v, reveal) {
+  const s = String(v == null ? '' : v).replace(/\D/g, '');
+  if (s.length !== 13) return String(v || '');
+  const g = [s.slice(0,1), s.slice(1,5), s.slice(5,10), s.slice(10,12), s.slice(12)];
+  return reveal ? g.join('-') : `${g[0]}-${g[1]}-XXXXX-XX-${g[4]}`;
+}
+function toggleNid() {
+  nidRevealed = !nidRevealed;
+  const el  = document.getElementById('nidVal');
+  const btn = document.getElementById('nidToggle');
+  if (el && currentMember) el.textContent = fmtNid(currentMember.nationalId, nidRevealed);
+  if (btn) {
+    btn.textContent = nidRevealed ? t('profile.nidHide') : t('profile.nidShow');
+    btn.title = btn.textContent;
+  }
 }
 
 // v1.22: กันข้อมูลที่ผู้ใช้กรอก (ชื่อ/ที่อยู่) ถูกตีความเป็น HTML ตอนใส่ innerHTML
@@ -1645,8 +1665,15 @@ function renderDashboard(d) {
     d.province    ? addrPrefix.prov + addrEN(d.province, true) : '',
     d.postcode || ''
   ].filter(Boolean).join(addrSep);
+  nidRevealed = false;                       // v1.27: เปิดหน้าใหม่ = ซ่อนไว้ก่อนเสมอ
   const nidDisplay = d.nationalId
-    ? `<span class="ic-val">${escHtml(d.nationalId)}</span>`
+    ? `<span class="ic-val" style="display:flex;align-items:center;gap:8px;justify-content:flex-end">
+         <span id="nidVal">${escHtml(fmtNid(d.nationalId, false))}</span>
+         <button type="button" id="nidToggle" onclick="toggleNid()" title="${t('profile.nidShow')}"
+           style="border:1px solid var(--border);background:transparent;color:var(--text-2);border-radius:8px;
+                  padding:3px 9px;font-family:inherit;font-size:11px;cursor:pointer;white-space:nowrap">
+           ${t('profile.nidShow')}</button>
+       </span>`
     : `<span class="ic-val" style="color:var(--danger);font-weight:600">⚠ ${t('profile.nationalIdMissing')}</span>`;
   pb.innerHTML = `
     <div class="ic-row"><span class="ic-lbl">${t('profile.fullName')}</span><span class="ic-val">${escHtml(d.firstName)} ${escHtml(d.lastName)}</span></div>
