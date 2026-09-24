@@ -2963,6 +2963,18 @@ body.dark .pdf-stage{background-color:#0a1226}
             <span id="flashBgSwatches" style="display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap"></span>
           </div>
         </div>
+        <!-- v7.22 — SUPER SAVE (8 ช่อง): how a product with several units (หลายหน่วย) shows its prices -->
+        <div class="img-scale-wrap" id="ssvStyleBar" style="display:none">
+          <div class="img-scale-bar" style="flex-wrap:wrap">
+            <span class="img-scale-label">🏷️ หลายหน่วย</span>
+            <span class="fs-target-btns" id="ssvStyleBtns">
+              <button type="button" class="fs-tbtn" data-st="A" onclick="setSsv8Style('A')">⭕ วงกลม + ป้าย</button>
+              <button type="button" class="fs-tbtn" data-st="B" onclick="setSsv8Style('B')">⭕⭕ วงกลมหลายวง</button>
+              <button type="button" class="fs-tbtn" data-st="C" onclick="setSsv8Style('C')">▭ แผงราคา</button>
+            </span>
+            <span class="txt-muted" style="font-size:11px">เลือกหน่วยที่ลดด้วยปุ่ม "หลายหน่วย" ในหน้าออกแบบ · คลิกราคา/หน่วยบนโปสเตอร์เพื่อพิมพ์แก้</span>
+          </div>
+        </div>
         <!-- v6.18 — Flash Sale size control: pick รูป/ชื่อ/ราคา, then slide to resize on every card -->
         <div class="img-scale-wrap" id="flashSizeBar" style="display:none">
           <div class="img-scale-bar">
@@ -5734,41 +5746,126 @@ function ssvDateRange(ds, de){
 // v7.20 — each Super template keeps its OWN canvas keys ('s8:' / 's1:' + sku), so a position/size tweak in one never
 // bleeds into the other template or into the weekly Flash card of the same product (both used the bare sku before).
 function ssvKeyPfx(){ const k = isFlashMode() ? flashTemplateKind() : ''; return k === 'save8' ? 's8:' : k === 'special1' ? 's1:' : ''; }
-// bg8 slot: product image + name + yellow price circle
+// ───── v7.22 — MULTI-UNIT prices for the Super Save cards ─────
+// Units shown = the design tab's "หลายหน่วย" choice (the ✓ units under that button, via effectiveMultiUnits — exactly what the
+// user sees ticked there); any other template = the product's single unit. Every unit keeps its own typed price / ปกติ / label.
+const SSV_UNIT_ORDER = ['EA','PA','BP','CS'];
+function ssvUnits(p, max){
+  const has = u => !!(p.unitPrices && p.unitPrices[u]);
+  let us = (typeof getTplType === 'function' && getTplType(p) === 'multi' && typeof effectiveMultiUnits === 'function')
+    ? effectiveMultiUnits(p).filter(has).sort((a, b) => SSV_UNIT_ORDER.indexOf(a) - SSV_UNIT_ORDER.indexOf(b))
+    : [];
+  if (!us.length) us = [ssvUnit(p)];
+  return us.slice(0, max);
+}
+// unit label from the sheet: pack "แพ็คx6" → "แพ็ค 6", "ชิ้นx1" → "ชิ้น"; falls back to the unit name / Thai unit
+function ssvUnitLabel(p, u){
+  const up = p.unitPrices && p.unitPrices[u];
+  const th = { EA:'ชิ้น', PA:'แพ็ค', BP:'แพ็คใหญ่', CS:'ลัง' }[u] || u;
+  if (!up) return th;
+  const m = String(up.pack || '').trim().match(/^(.*?)\s*[xX×]\s*(\d+)$/);
+  if (m && m[1]) return +m[2] > 1 ? `${m[1]} ${m[2]}` : m[1];
+  return up.name || th;
+}
+// special / regular (ปกติ) price of ONE unit — "แก้ราคา" (priceOverrides) belongs to the product's own unit only
+function ssvUnitPrice(p, u){
+  try { const o = priceOverrides[p.sku]; if (o && +o.price > 0 && u === ssvUnit(p)) return +o.price; } catch {}
+  const up = p.unitPrices && p.unitPrices[u]; return up ? +(up.sale || up.price) : 0;
+}
+function ssvUnitOld(p, u){
+  try { const o = priceOverrides[p.sku]; if (o && +o.oldPrice > 0 && u === ssvUnit(p)) return +o.oldPrice; } catch {}
+  const up = p.unitPrices && p.unitPrices[u]; return up ? +up.price : 0;
+}
+function ssvParse(s){ const v = parseFloat(String(s == null ? '' : s).replace(/[^\d.]/g, '')); return isFinite(v) ? v : 0; }
+// rough text width in em (Thai combining marks count 0) — used to auto-fit font sizes
+function ssvTxtEm(s){ let w = 0; for (const ch of String(s)) { if (/[ัิ-ฺ็-๎]/.test(ch)) continue; w += /\d/.test(ch) ? 0.6 : (ch === ',' || ch === '.' || ch === ' ') ? 0.28 : 0.55; } return w; }
+// a circle of diameter D (page px) holding "price.-" plus a small unit line under it
+function ssvCirclePt(priceTxt, D, maxPt){ return Math.max(8, Math.min(ssvFitPt(priceTxt, maxPt, D * 0.84, 0.27), Math.floor(D * 0.6 / 1.3333))); }
+// 1-slot column: every unit the SAME size — fit the widest "price.- /unit" line into 228px and all blocks into the ~196px above the brush
+function ssv1Pt(rows){
+  const lineEm = Math.max(...rows.map(r => ssvTxtEm(r.price) + 0.29 + 0.15 + 0.3 * ssvTxtEm('/' + r.label)));
+  const px = Math.min(228 / lineEm, 196 / (rows.length * (0.92 + 0.36 + 0.14)));
+  return Math.max(12, Math.min(100, Math.floor(px / 1.3333)));
+}
+function ssvEd(key, html, cls){ return `<span class="${cls} editable-txt" data-edit="${key}" contenteditable="true" spellcheck="false">${html}</span>`; }
+// save8 multi-unit style — 'A' circle + pills · 'B' several circles · 'C' yellow panel (switch in the print toolbar / ⚙️ panel; persisted)
+let ssv8Style = 'A';
+try { const s = localStorage.getItem('rattanaPriceTag_ssv8Style'); if (/^[ABC]$/.test(s || '')) ssv8Style = s; } catch {}
+function ssvSyncStyleBtns(){ document.querySelectorAll('#ssvStyleBtns .fs-tbtn, #qsSsvStyleBtns .fs-tbtn').forEach(b => b.classList.toggle('active', b.dataset.st === ssv8Style)); }
+function setSsv8Style(st){
+  if (!/^[ABC]$/.test(st)) return;
+  ssv8Style = st;
+  try { localStorage.setItem('rattanaPriceTag_ssv8Style', st); } catch {}
+  ssvSyncStyleBtns();
+  if (typeof rerenderActivePreview === 'function') rerenderActivePreview();
+}
+// bg8 slot: product image + name + price column (1 unit → the approved circle · several units → the chosen style)
 function superSave8Card(arg){
   const p = Array.isArray(arg) ? arg[0] : arg; if (!p) return '';
-  const bare = escapeAttr(p.sku), sk = escapeAttr('s8:' + p.sku);   // layout key namespaced · typed price stays on the bare sku
+  const bare = escapeAttr(p.sku), sk = escapeAttr('s8:' + p.sku);   // layout key namespaced · typed texts stay on the bare sku
   const ovr = (k, d) => textOverrides[k] != null ? escapeHtml(textOverrides[k]) : d;
-  const priceKey = `${bare}::ssv8price`;
-  const priceRaw = textOverrides[priceKey] != null ? textOverrides[priceKey] : fmtThaiBaht(ssvPrice(p));
-  const pt = ssvFitPt(priceRaw, 36, 66, 0.27);   // circle ≈ 74px on the page, ~66px usable across its middle
+  const raw = (k, d) => textOverrides[k] != null ? textOverrides[k] : d;
+  const prim = ssvUnit(p), units = ssvUnits(p, 3);
+  const pk = u => `${bare}::ssv8price` + (u === prim ? '' : ':' + u);   // the product's own unit keeps the pre-v7.22 key → earlier typed prices survive
+  const uk = u => `${bare}::ssvunit:${u}`;                               // unit label (shared with the 1-slot template)
+  const pDef = u => fmtThaiBaht(ssvUnitPrice(p, u));
+  const price = u => ssvEd(pk(u), ovr(pk(u), pDef(u)), 'ssv8-num');
+  const label = u => ssvEd(uk(u), ovr(uk(u), escapeHtml(ssvUnitLabel(p, u))), 'ssv8-ul');
+  const circle = (u, pct) => {   // pct = circle width as % of the price column (73.6px on the page)
+    const pt = ssvCirclePt(raw(pk(u), pDef(u)), 73.6 * pct / 100, pct >= 100 ? 33 : 24);
+    const sz = pct >= 100 ? '' : `width:${pct}%;padding-bottom:calc(${pct}% - 5px);`;
+    return `<div class="ssv8-circle" style="${sz}font-size:${pt}pt"><div class="ssv8-cin"><span class="ssv8-pw">${price(u)}<span class="ssv8-baht">.-</span></span><span class="ssv8-u">/${label(u)}</span></div></div>`;
+  };
+  const st = units.length > 1 ? ssv8Style : 'A';
+  let inner;
+  if (st === 'B') inner = units.map(u => circle(u, units.length === 2 ? 76 : 54)).join('');
+  else if (st === 'C') inner = `<div class="ssv8-panel">${units.map(u => `<div class="ssv8-row"><span class="ssv8-ru">${label(u)}</span><span class="ssv8-rp">${price(u)}<small>.-</small></span></div>`).join('')}</div>`;
+  else inner = circle(units[0], 100) + units.slice(1).map(u => `<div class="ssv8-pill"><span class="ssv8-pu">${label(u)}</span><span class="ssv8-pp">${price(u)}<small>.-</small></span></div>`).join('');
   const imgHtml = p.image ? `<img src="${escapeAttr(imgAtWidth(p.image, 300))}" data-imgsku="${bare}" draggable="false" onerror="this.style.display='none'" crossorigin="anonymous">` : '';
   return `<div class="fxw-card ssv-card ssv8-card">
     <div class="fxw-img ssv8-img" data-fs-sku="${sk}" data-fs-role="img">${imgHtml}</div>
     <div class="fxw-name ssv8-name" data-fs-sku="${sk}" data-fs-role="name">${nameCellHtml(p, true)}</div>
-    <div class="ssv8-circle" data-fs-sku="${sk}" data-fs-role="price" style="font-size:${pt}pt"><span class="ssv8-pw"><span class="ssv8-num editable-txt" data-edit="${priceKey}" contenteditable="true" spellcheck="false">${ovr(priceKey, fmtThaiBaht(ssvPrice(p)))}</span><span class="ssv8-baht">.-</span></span></div>
+    <div class="ssv8-price st-${st}" data-fs-sku="${sk}" data-fs-role="price">${inner}</div>
   </div>`;
 }
-// bg1 slot: product (left) + big puffy yellow/red-outline price (right) + "ปกติ" + name under the product
+// bg1 slot: product (left) + price column (right — every unit the same size, red "ปกติ" under each) + name under the product
 function special1Card(arg){
   const p = Array.isArray(arg) ? arg[0] : arg; if (!p) return '';
   const bare = escapeAttr(p.sku), sk = escapeAttr('s1:' + p.sku);   // v7.20 — layout key namespaced · typed prices stay on the bare sku
   const ovr = (k, d) => textOverrides[k] != null ? escapeHtml(textOverrides[k]) : d;
-  const priceKey = `${bare}::ssv1price`, oldKey = `${bare}::ssv1old`;
+  const raw = (k, d) => textOverrides[k] != null ? textOverrides[k] : d;
+  const prim = ssvUnit(p), units = ssvUnits(p, 4);
+  const pk = u => `${bare}::ssv1price` + (u === prim ? '' : ':' + u);   // own unit keeps the pre-v7.22 keys
+  const ok = u => `${bare}::ssv1old` + (u === prim ? '' : ':' + u);
+  const uk = u => `${bare}::ssvunit:${u}`;
+  const rows = units.map(u => ({ u, pDef: fmtThaiBaht(ssvUnitPrice(p, u)), oDef: fmtThaiBaht(ssvUnitOld(p, u)), lDef: ssvUnitLabel(p, u) }));
+  rows.forEach(r => { r.price = raw(pk(r.u), r.pDef); r.label = raw(uk(r.u), r.lDef); });
+  const pt = ssv1Pt(rows);
+  const blocks = rows.map(r => {
+    const nv = ssvParse(r.price), ov = ssvParse(raw(ok(r.u), r.oDef));
+    const off = (ov > nv && nv > 0) ? '' : ' ssv-off';   // "ปกติ" only when it's really higher (re-checked live while typing — initSsvLive)
+    return `<div class="ssv1-u">
+      <div class="ssv1-line"><span class="ssv1-big">${ssvEd(pk(r.u), ovr(pk(r.u), r.pDef), 'ssv1-num')}<span class="ssv1-baht">.-</span></span><span class="ssv1-uname">/${ssvEd(uk(r.u), ovr(uk(r.u), escapeHtml(r.lDef)), 'ssv1-ul')}</span></div>
+      <div class="ssv1-old${off}">ปกติ <s class="editable-txt" data-edit="${ok(r.u)}" contenteditable="true" spellcheck="false">${ovr(ok(r.u), r.oDef)}</s>.-</div>
+    </div>`;
+  }).join('');
   const imgHtml = p.image ? `<img src="${escapeAttr(imgAtWidth(p.image, 500))}" data-imgsku="${bare}" draggable="false" onerror="this.style.display='none'" crossorigin="anonymous">` : '';
-  const newv = ssvPrice(p), oldv = ssvOldPrice(p);
-  const priceRaw = textOverrides[priceKey] != null ? textOverrides[priceKey] : fmtThaiBaht(newv);
-  const pt = ssvFitPt(priceRaw, 110, 228, 0.3);   // price column ≈ 34% of the 714px frame
-  const oldHtml = (oldv > newv) ? `<div class="ssv1-old">ปกติ <s class="editable-txt" data-edit="${oldKey}" contenteditable="true" spellcheck="false">${ovr(oldKey, fmtThaiBaht(oldv))}</s>.-</div>` : '';
   return `<div class="fxw-card ssv-card ssv1-card">
     <div class="fxw-img ssv1-img" data-fs-sku="${sk}" data-fs-role="img">${imgHtml}</div>
-    <div class="ssv1-price" data-fs-sku="${sk}" data-fs-role="price">
-      <div class="ssv1-big" style="font-size:${pt}pt"><span class="editable-txt" data-edit="${priceKey}" contenteditable="true" spellcheck="false">${ovr(priceKey, fmtThaiBaht(newv))}</span><span class="ssv1-baht">.-</span></div>
-      ${oldHtml}
-    </div>
+    <div class="ssv1-price" data-fs-sku="${sk}" data-fs-role="price" style="font-size:${pt}pt">${blocks}</div>
     <div class="fxw-name ssv1-name" data-fs-sku="${sk}" data-fs-role="name">${nameCellHtml(p, true)}</div>
   </div>`;
 }
+(function initSsvLive(){   // v7.22 — typing a LOWER price shows that unit's "ปกติ" line at once (and hides it again if not lower)
+  const stage = document.getElementById('pdfStage'); if (!stage) return;
+  stage.addEventListener('input', e => {
+    const blk = e.target && e.target.closest && e.target.closest('.ssv1-u'); if (!blk) return;
+    const num = blk.querySelector('.ssv1-num'), old = blk.querySelector('.ssv1-old'), os = old && old.querySelector('s');
+    if (!num || !old || !os) return;
+    const nv = ssvParse(num.textContent), ov = ssvParse(os.textContent);
+    old.classList.toggle('ssv-off', !(ov > nv && nv > 0));
+  });
+})();
 
 let flashBgSet = 'flash';   // 'flash' | 'deal' | 'super'  (v7.18)
 try { const _s = localStorage.getItem('rattanaPriceTag_flashBgSet'); if (_s === 'deal' || _s === 'flash' || _s === 'super') flashBgSet = _s; } catch {}
