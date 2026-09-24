@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════
-//  Rattana Member System — GAS v1.24
+//  Rattana Member System — GAS v1.25
 // ════════════════════════════════════════════════════════
 
 const SHEET_ID        = '1gbBrJtE36fX8TM7KC0RbXgPZI6AyNpbC3XhJ6uiLsOE';
@@ -21,7 +21,7 @@ const HEADERS = [
   'เบอร์โทร','วันเกิด','ที่อยู่','ตำบล/แขวง','อำเภอ/เขต','จังหวัด','รหัสไปรษณีย์',
   'ทราบจาก','รูป Profile URL','วันสมัคร (ISO)','วันสมัคร (ไทย)','อัปเดตล่าสุด',
   'เลขบัตรประชาชน',
-  'ยินยอมเงื่อนไข','Consent Version','วันยินยอม'
+  'ยินยอมเงื่อนไข','Consent Version','วันยินยอม','ยินยอมรับข่าวสาร'
 ];
 
 // ─── Helpers ───────────────────────────────────────────
@@ -146,6 +146,7 @@ function rowToObject(values) {
     consent:        String(values[17]||'').toUpperCase() === 'TRUE',
     consentVersion: String(values[18]||''),
     consentDate:    values[19] instanceof Date ? values[19].toISOString() : String(values[19]||''),
+    marketingConsent: String(values[20]||'').toUpperCase() === 'TRUE',   // v1.25: U
     points:      pt.points,
     tier:        pt.tier,
   };
@@ -292,7 +293,7 @@ function doGet(e) {
     }
 
     if (!p.idToken && !p.userId && !p.phone) {
-      return json_({ status: 'ok', msg: 'GAS v1.24 running' });
+      return json_({ status: 'ok', msg: 'GAS v1.25 running' });
     }
 
     const sheet = getSheet();
@@ -436,7 +437,8 @@ function doPost_(e) {
       "'" + String(data.nationalId || ''),
       data.consent === true ? 'TRUE' : (data.consent === false ? 'FALSE' : ''),
       String(data.consentVersion || ''),
-      toThaiDateTime_(data.consentDate)   // v1.19: วันยินยอม = รูปแบบไทยเหมือน "วันสมัคร (ไทย)"
+      toThaiDateTime_(data.consentDate),  // v1.19: วันยินยอม = รูปแบบไทยเหมือน "วันสมัคร (ไทย)"
+      data.marketingConsent === true ? 'TRUE' : (data.marketingConsent === false ? 'FALSE' : '')   // v1.25: U ยินยอมการตลาด (แยกตาม PDPA ม.19)
     ];
 
     if (row > 0) {
