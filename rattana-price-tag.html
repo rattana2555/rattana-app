@@ -5816,15 +5816,74 @@ function setSsv8Style(st){
   ssvSyncStyleBtns();
   if (typeof rerenderActivePreview === 'function') rerenderActivePreview();
 }
-// bg8 slot: product image + name + price column (1 unit → the approved circle · several units → the chosen style)
+// ───── v7.24 — same-CAT-SIZE variants share ONE Super Save slot (user: "ถ้าสินค้า Cat size เดียวกันให้จับรูปกรุ๊ปด้วยกัน") ─────
+// buildFlashPreview merges them like weekly Flash (v6.61), so a slot gets a GROUP: photos side by side in the product frame,
+// ONE price (the first product's — same as weekly), a 2-line name. A merged slot's keys hang off the stable 'g:'+CAT SIZE —
+// never group[0].sku, which changes when a member is (de)selected; a single product keeps its bare-sku keys (unchanged).
+function ssvCtx(arg, pfx){
+  const group = (Array.isArray(arg) ? arg : [arg]).filter(Boolean), p = group[0];
+  if (!p) return null;
+  const isGrp = group.length > 1, tk = isGrp ? 'g:' + String(p.size || '').trim() : p.sku;
+  return { group, p, isGrp, tk, lk: pfx + tk,   // tk = typed-text key base · lk = canvas (layout) key 's8:'/'s1:' + tk
+    fb: k => (isGrp && k.startsWith(tk)) ? p.sku + k.slice(tk.length) : null };   // merged slot → what was typed on the first product's own card
+}
+function ssvTx(c, k, d){   // typed text (raw) of a slot key → its fallback key → default
+  if (textOverrides[k] != null) return textOverrides[k];
+  const f = c.fb(k); return (f && textOverrides[f] != null) ? textOverrides[f] : d;
+}
+// product frame: 1 photo = the whole frame drags (role "img") · a group = every photo its own piece (role "img:<sku>", like weekly Flash)
+function ssvImgHtml(c, cls, px, colsFor){
+  const lk = escapeAttr(c.lk), imgs = c.group.filter(x => x.image).slice(0, 6);
+  const tag = x => `<img src="${escapeAttr(imgAtWidth(x.image, px))}" data-imgsku="${escapeAttr(x.sku)}" draggable="false" onerror="this.style.display='none'" crossorigin="anonymous">`;
+  if (imgs.length < 2) return `<div class="fxw-img ${cls}" data-fs-sku="${lk}" data-fs-role="img">${imgs[0] ? tag(imgs[0]) : ''}</div>`;
+  const cols = colsFor(imgs.length), rows = Math.ceil(imgs.length / cols);
+  const wh = `width:${(100 / cols).toFixed(3)}%;height:${(100 / rows).toFixed(3)}%`;
+  return `<div class="fxw-img fxw-img-grp ${cls}"><div class="ssv-collage">${imgs.map(x =>
+    `<div class="fxw-citem ssv-citem" data-fs-sku="${lk}" data-fs-role="img:${escapeAttr(x.sku)}" style="${wh}">${tag(x)}</div>`).join('')}</div></div>`;
+}
+// merged name: the words EVERY variant shares (front + back — brand/line + size) = title, the differing middles = variant line:
+// "กลาสทูโกล บอดี้เซรั่ม 180มล." + "ไนอะซินาไมด์ / เรตินอล". Names sharing no first word → weekly Flash's CAT SIZE + flavours.
+function ssvGroupName(group){
+  const toks = group.map(x => String(x.name || '').replace(/^\S*@/, '').replace(/\s+/g, ' ').trim().split(' '));
+  const t0 = toks[0];
+  if (toks.every(t => t.join(' ') === t0.join(' '))) return { title: t0.join(' '), flav: '' };
+  let pre = 0; while (toks.every(t => t.length > pre + 1 && t[pre] === t0[pre])) pre++;
+  if (!pre) return { title: flashGroupTitle(group), flav: flashGroupFlavors(group) };
+  let suf = 0; while (toks.every(t => t.length > pre + suf + 1 && t[t.length - 1 - suf] === t0[t0.length - 1 - suf])) suf++;
+  const seen = new Set(), flav = [];
+  toks.forEach(t => { const m = t.slice(pre, t.length - suf).join(' '); if (m && !seen.has(m)) { seen.add(m); flav.push(m); } });
+  return { title: [...t0.slice(0, pre), ...t0.slice(t0.length - suf)].join(' '), flav: flav.join(' / ') };
+}
+// shrink the merged name (title + .7em variant line) until both fit the name box W×H (page px) — rough widths via ssvTxtEm
+function ssvNameFit(title, flav, basePt, W, H){
+  const lines = (s, px) => s ? Math.max(1, Math.ceil(ssvTxtEm(s) * px / W)) : 0;
+  for (let k = 1; k >= 0.55; k -= 0.05) {
+    const T = basePt * k * 1.3333, F = T * 0.7;
+    if (lines(title, T) * T * 1.05 + lines(flav, F) * F * 1.05 + (flav ? T * 0.12 : 0) <= H) return k;
+  }
+  return 0.55;
+}
+function ssvNameHtml(c, cls, basePt, W, H){
+  const lk = escapeAttr(c.lk);
+  if (!c.isGrp) return `<div class="fxw-name ${cls}" data-fs-sku="${lk}" data-fs-role="name">${nameCellHtml(c.p, true)}</div>`;
+  const nm = ssvGroupName(c.group), tKey = c.tk + '::ssvgtitle', fKey = c.tk + '::ssvgflavor';   // shared by both Super templates (like the unit label)
+  const title = textOverrides[tKey] != null ? textOverrides[tKey] : nm.title;
+  const flav  = textOverrides[fKey] != null ? textOverrides[fKey] : nm.flav;
+  const pt = +(basePt * ssvNameFit(title, flav, basePt, W, H)).toFixed(1);
+  return `<div class="fxw-name fxw-name-grp ${cls}" data-fs-sku="${lk}" data-fs-role="name" style="font-size:${pt}pt">
+      <div class="fxw-gtitle editable-txt" data-edit="${escapeAttr(tKey)}" contenteditable="true" spellcheck="false">${escapeHtml(title)}</div>
+      ${flav ? `<div class="fxw-gflavor editable-txt" data-edit="${escapeAttr(fKey)}" contenteditable="true" spellcheck="false">${escapeHtml(flav)}</div>` : ''}
+    </div>`;
+}
+// bg8 slot: product image(s) + name + price column (1 unit → the approved circle · several units → the chosen style)
 function superSave8Card(arg){
-  const p = Array.isArray(arg) ? arg[0] : arg; if (!p) return '';
-  const bare = escapeAttr(p.sku), sk = escapeAttr('s8:' + p.sku);   // layout key namespaced · typed texts stay on the bare sku
-  const ovr = (k, d) => textOverrides[k] != null ? escapeHtml(textOverrides[k]) : d;
-  const raw = (k, d) => textOverrides[k] != null ? textOverrides[k] : d;
+  const c = ssvCtx(arg, 's8:'); if (!c) return '';
+  const p = c.p;
+  const raw = (k, d) => ssvTx(c, k, d);
+  const ovr = (k, d) => { const v = ssvTx(c, k, null); return v != null ? escapeHtml(v) : d; };
   const prim = ssvUnit(p), units = ssvUnits(p, 3);
-  const pk = u => `${bare}::ssv8price` + (u === prim ? '' : ':' + u);   // the product's own unit keeps the pre-v7.22 key → earlier typed prices survive
-  const uk = u => `${bare}::ssvunit:${u}`;                               // unit label (shared with the 1-slot template)
+  const pk = u => `${c.tk}::ssv8price` + (u === prim ? '' : ':' + u);   // the product's own unit keeps the pre-v7.22 key → earlier typed prices survive
+  const uk = u => `${c.tk}::ssvunit:${u}`;                               // unit label (shared with the 1-slot template)
   const pDef = u => fmtThaiBaht(ssvUnitPrice(p, u));
   const price = u => ssvEd(pk(u), ovr(pk(u), pDef(u)), 'ssv8-num');
   const label = u => ssvEd(uk(u), ovr(uk(u), escapeHtml(ssvUnitLabel(p, u))), 'ssv8-ul');
@@ -5840,42 +5899,41 @@ function superSave8Card(arg){
   if (st === 'B') inner = units.map(u => circle(u, units.length === 2 ? 76 : 54)).join('');   // same-size circles; each price fitted to its own circle (a uniform size made "13" as tiny as "3,700")
   else if (st === 'C') inner = `<div class="ssv8-panel">${units.map(u => `<div class="ssv8-row"><span class="ssv8-ru">${label(u)}</span><span class="ssv8-rp">${price(u)}<small>.-</small></span></div>`).join('')}</div>`;
   else inner = circle(units[0], 100) + units.slice(1).map(u => `<div class="ssv8-pill"><span class="ssv8-pu">${label(u)}</span><span class="ssv8-pp">${price(u)}<small>.-</small></span></div>`).join('');
-  const imgHtml = p.image ? `<img src="${escapeAttr(imgAtWidth(p.image, 300))}" data-imgsku="${bare}" draggable="false" onerror="this.style.display='none'" crossorigin="anonymous">` : '';
   return `<div class="fxw-card ssv-card ssv8-card">
-    <div class="fxw-img ssv8-img" data-fs-sku="${sk}" data-fs-role="img">${imgHtml}</div>
-    <div class="fxw-name ssv8-name" data-fs-sku="${sk}" data-fs-role="name">${nameCellHtml(p, true)}</div>
-    <div class="ssv8-price st-${st}" data-fs-sku="${sk}" data-fs-role="price">${inner}</div>
+    ${ssvImgHtml(c, 'ssv8-img', 300, n => n <= 2 ? n : n <= 4 ? 2 : 3)}
+    ${ssvNameHtml(c, 'ssv8-name', 10.5, 170, 44)}
+    <div class="ssv8-price st-${st}" data-fs-sku="${escapeAttr(c.lk)}" data-fs-role="price">${inner}</div>
   </div>`;
 }
-// bg1 slot: product (left) + price column (right — every unit the same size, red "ปกติ" under each) + name under the product
+// bg1 slot: product(s) (left) + price column (right — every unit the same size, red "ปกติ" under each) + name under the product
 function special1Card(arg){
-  const p = Array.isArray(arg) ? arg[0] : arg; if (!p) return '';
-  const bare = escapeAttr(p.sku), sk = escapeAttr('s1:' + p.sku);   // v7.20 — layout key namespaced · typed prices stay on the bare sku
-  const ovr = (k, d) => textOverrides[k] != null ? escapeHtml(textOverrides[k]) : d;
-  const raw = (k, d) => textOverrides[k] != null ? textOverrides[k] : d;
+  const c = ssvCtx(arg, 's1:'); if (!c) return '';
+  const p = c.p;
+  const raw = (k, d) => ssvTx(c, k, d);
+  const ovr = (k, d) => { const v = ssvTx(c, k, null); return v != null ? escapeHtml(v) : d; };
   const prim = ssvUnit(p), units = ssvUnits(p, 4);
-  const pk = u => `${bare}::ssv1price` + (u === prim ? '' : ':' + u);   // own unit keeps the pre-v7.22 keys
-  const ok = u => `${bare}::ssv1old` + (u === prim ? '' : ':' + u);
-  const uk = u => `${bare}::ssvunit:${u}`;
+  const pk = u => `${c.tk}::ssv1price` + (u === prim ? '' : ':' + u);   // own unit keeps the pre-v7.22 keys
+  const ok = u => `${c.tk}::ssv1old` + (u === prim ? '' : ':' + u);
+  const uk = u => `${c.tk}::ssvunit:${u}`;
   const rows = units.map(u => ({ u, pDef: fmtThaiBaht(ssvUnitPrice(p, u)), oDef: fmtThaiBaht(ssvUnitOld(p, u)), lDef: ssvUnitLabel(p, u) }));
   rows.forEach(r => { r.price = raw(pk(r.u), r.pDef); r.label = raw(uk(r.u), r.lDef); });
   const pt = ssv1Pt(rows);
   const blocks = rows.map(r => {
     // "ปกติ" shows when it's really higher than the price — or whenever the user has typed their own ปกติ (so a half-typed
     // value can never hide the line for good). Clearing the ปกติ text = back to the sheet's regular price.
-    const oT = textOverrides[ok(r.u)], oHas = oT != null && String(oT).trim() !== '';
+    const oT = raw(ok(r.u), null), oHas = oT != null && String(oT).trim() !== '';
     const nv = ssvParse(r.price), ov = ssvParse(oHas ? oT : r.oDef);
     const off = (oHas || (ov > nv && nv > 0)) ? '' : ' ssv-off';
+    const fb = c.fb(ok(r.u));   // merged slot: initSsvLive also honours a ปกติ typed on the first product's own card
     return `<div class="ssv1-u">
       <div class="ssv1-line"><span class="ssv1-big">${ssvEd(pk(r.u), ovr(pk(r.u), r.pDef), 'ssv1-num')}<span class="ssv1-baht">.-</span></span><span class="ssv1-uname">/${ssvEd(uk(r.u), ovr(uk(r.u), escapeHtml(r.lDef)), 'ssv1-ul')}</span></div>
-      <div class="ssv1-old${off}">ปกติ <s class="editable-txt" data-edit="${ok(r.u)}" contenteditable="true" spellcheck="false">${oHas ? escapeHtml(oT) : r.oDef}</s>.-</div>
+      <div class="ssv1-old${off}">ปกติ <s class="editable-txt" data-edit="${escapeAttr(ok(r.u))}"${fb ? ` data-fb="${escapeAttr(fb)}"` : ''} contenteditable="true" spellcheck="false">${oHas ? escapeHtml(oT) : r.oDef}</s>.-</div>
     </div>`;
   }).join('');
-  const imgHtml = p.image ? `<img src="${escapeAttr(imgAtWidth(p.image, 500))}" data-imgsku="${bare}" draggable="false" onerror="this.style.display='none'" crossorigin="anonymous">` : '';
   return `<div class="fxw-card ssv-card ssv1-card">
-    <div class="fxw-img ssv1-img" data-fs-sku="${sk}" data-fs-role="img">${imgHtml}</div>
-    <div class="ssv1-price" data-fs-sku="${sk}" data-fs-role="price" style="font-size:${pt}pt">${blocks}</div>
-    <div class="fxw-name ssv1-name" data-fs-sku="${sk}" data-fs-role="name">${nameCellHtml(p, true)}</div>
+    ${ssvImgHtml(c, 'ssv1-img', 500, n => n <= 3 ? n : n === 4 ? 2 : 3)}
+    <div class="ssv1-price" data-fs-sku="${escapeAttr(c.lk)}" data-fs-role="price" style="font-size:${pt}pt">${blocks}</div>
+    ${ssvNameHtml(c, 'ssv1-name', 17.5, 495, 51)}
   </div>`;
 }
 (function initSsvLive(){   // v7.22 — typing a LOWER price shows that unit's "ปกติ" line at once (and hides it again if not lower)
@@ -5885,7 +5943,8 @@ function special1Card(arg){
     const num = e.target && e.target.closest && e.target.closest('.ssv1-num'); if (!num) return;
     const blk = num.closest('.ssv1-u'), old = blk && blk.querySelector('.ssv1-old'), os = old && old.querySelector('s');
     if (!old || !os) return;
-    const oT = textOverrides[os.getAttribute('data-edit')], oHas = oT != null && String(oT).trim() !== '';
+    const k = os.getAttribute('data-edit'), fb = os.getAttribute('data-fb');
+    const oT = textOverrides[k] != null ? textOverrides[k] : (fb ? textOverrides[fb] : undefined), oHas = oT != null && String(oT).trim() !== '';
     const nv = ssvParse(num.textContent), ov = ssvParse(os.textContent);
     old.classList.toggle('ssv-off', !(oHas || (ov > nv && nv > 0)));
   });
@@ -6548,7 +6607,7 @@ function buildFlashPreview() {
   // v6.61 — weekly Flash (flash6): merge same-CAT-SIZE products into ONE card (image collage), like the catalog. Monthly = one card per product.
   // Only a REAL CAT SIZE groups; empty/placeholder sizes (ไม่กำหนด/ไม่ระบุ/ไม่มี/-/N/A) stay as their own card so unrelated items never merge.
   let entries;
-  if (isFlashMode() && !flashTemplateKind()) {   // v6.61/v6.69 — Flash merges same-CAT-SIZE variants into one collage card · v7.18 — Super Save templates keep every product as its own slot (no merge)
+  if (isFlashMode()) {   // v6.61/v6.69 — Flash merges same-CAT-SIZE variants into one collage card · v7.24 — Super Save templates too (user asked: same CAT SIZE → one slot, photos grouped · ssvCtx)
     const realSize = s => { const t = String(s || '').trim(); if (!t || /^ไม่(กำหนด|ระบุ|มี)/.test(t) || /^[-–—]+$/.test(t) || /^n\/?a$/i.test(t)) return ''; return t; };
     const groups = new Map();
     sel.forEach(p => { const rs = realSize(p.size); const key = rs || ('__solo:' + p.sku); if (!groups.has(key)) groups.set(key, []); groups.get(key).push(p); });
