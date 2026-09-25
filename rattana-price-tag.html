@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Design Hub v7.24</title>
+<title>Rattana Design Hub v7.25</title>
 <meta name="description" content="Rattana Design Hub — ออกแบบป้ายราคา โปรโมชั่น Flash Sale และแคตตาล็อก จาก Google Sheet พิมพ์ PDF/PNG/JPEG">
 <meta name="theme-color" content="#132248">
 <meta name="apple-mobile-web-app-title" content="Rattana Design Hub">
@@ -2349,7 +2349,7 @@ body.dark .pdf-stage{background-color:#0a1226}
   <header>
     <button class="icon-btn hamburger-btn" onclick="toggleDrawer(true)" title="เมนูฟีเจอร์" aria-label="เมนู">☰</button>
     <img class="logo-img" src="rattana-hub-icon-512.png?v=2" alt="Rattana Design Hub" width="44" height="44" style="object-fit:cover">
-    <div class="logo-text">RATTANA <span style="color:var(--gold)">DESIGN HUB</span><small>ออกแบบป้าย · โปรโมชั่น · แคตตาล็อก v7.24</small></div>
+    <div class="logo-text">RATTANA <span style="color:var(--gold)">DESIGN HUB</span><small>ออกแบบป้าย · โปรโมชั่น · แคตตาล็อก v7.25</small></div>
     <button class="icon-btn" id="btnInstallApp" onclick="installApp()" title="ติดตั้งแอปลงเครื่อง" style="display:none;background:var(--gold);color:#0d1b3e">📥</button>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="โหลดข้อมูลใหม่">⟳</button>
     <button class="icon-btn" onclick="toggleDark()" title="โหมดมืด">🌙</button>
@@ -5829,7 +5829,11 @@ function ssvCtx(arg, pfx){
   if (!p) return null;
   const isGrp = group.length > 1, tk = isGrp ? 'g:' + String(p.size || '').trim() : p.sku;
   return { group, p, isGrp, tk, lk: pfx + tk,   // tk = typed-text key base · lk = canvas (layout) key 's8:'/'s1:' + tk
-    fb: k => (isGrp && k.startsWith(tk)) ? p.sku + k.slice(tk.length) : null };   // merged slot → what was typed on the first product's own card
+    fb: k => {   // merged slot → what was typed on the first product's own card (its own unit's price keys carry no unit suffix)
+      if (!(isGrp && k.startsWith(tk))) return null;
+      const f = p.sku + k.slice(tk.length), su = ':' + ssvUnit(p);
+      return (/::ssv(8price|1price|1old):/.test(f) && f.endsWith(su)) ? f.slice(0, -su.length) : f;
+    } };
 }
 function ssvTx(c, k, d){   // typed text (raw) of a slot key → its fallback key → default
   if (textOverrides[k] != null) return textOverrides[k];
@@ -5905,16 +5909,26 @@ function ssvPackGroup(col){
     if (o.br) { const br = document.createElement('div'); br.className = 'ssv-br'; col.insertBefore(br, it); }
   });
 }
+// save8: multi-unit price styles A (pills) / C (panel) are wider than the circle → slide the group frame right of the column's REAL edge
+function ssvClearPriceCol(col){
+  const fr = col.parentElement, card = fr && fr.closest('.ssv8-card'), pr = card && card.querySelector('.ssv8-price');
+  if (!pr || !card.clientWidth) return;
+  const edge = Math.max(0, ...[...pr.children].map(ch => pr.offsetLeft + ch.offsetLeft + ch.offsetWidth));   // layout px (ignores the preview scale)
+  const lp = (edge + 3) / card.clientWidth * 100;   // + a 3px gap
+  if (edge > fr.offsetLeft && lp < 70) { fr.style.left = lp.toFixed(2) + '%'; fr.style.width = (98 - lp).toFixed(2) + '%'; }   // circle styles never trigger this
+}
 async function ssvGroupPhotos(){
+  const cap = (pr, v) => Promise.race([pr, new Promise(r => setTimeout(() => r(v), 8000))]);   // a stuck Drive photo must never hang an export (8 s, like waitForPageImages)
   const cols = [...document.querySelectorAll('#pdfStage .ssv-collage')];
   await Promise.all(cols.map(async col => {
+    ssvClearPriceCol(col);
     await Promise.all([...col.querySelectorAll('img.ssv-gimg')].map(async img => {
       const src = img.getAttribute('src');
       if (src && !src.startsWith('data:')) {
-        const t = await ssvTrimmed(img.src);
+        const t = await cap(ssvTrimmed(img.src), null);   // timed out → keep the original photo
         if (t && t !== img.src && img.isConnected) { img.src = t; img.setAttribute('data-baked', '1'); }
       }
-      if (!img.complete) await new Promise(r => { img.addEventListener('load', r, { once:true }); img.addEventListener('error', r, { once:true }); });
+      if (!img.complete) await cap(new Promise(r => { img.addEventListener('load', r, { once:true }); img.addEventListener('error', r, { once:true }); }));
     }));
     if (col.isConnected) ssvPackGroup(col);
   }));
@@ -5945,8 +5959,9 @@ function ssvNameHtml(c, cls, basePt, W, H){
   const lk = escapeAttr(c.lk);
   if (!c.isGrp) return `<div class="fxw-name ${cls}" data-fs-sku="${lk}" data-fs-role="name">${nameCellHtml(c.p, true)}</div>`;
   const nm = ssvGroupName(c.group), tKey = c.tk + '::ssvgtitle', fKey = c.tk + '::ssvgflavor';   // shared by both Super templates (like the unit label)
-  const title = textOverrides[tKey] != null ? textOverrides[tKey] : nm.title;
-  const flav  = textOverrides[fKey] != null ? textOverrides[fKey] : nm.flav;
+  const ov = k => { const v = textOverrides[k]; return (v != null && String(v).trim() !== '') ? v : null; };   // cleared = back to the auto text (a blank line would vanish for good)
+  const title = ov(tKey) != null ? ov(tKey) : nm.title;
+  const flav  = ov(fKey) != null ? ov(fKey) : nm.flav;
   const pt = +(basePt * ssvNameFit(title, flav, basePt, W, H)).toFixed(1);
   return `<div class="fxw-name fxw-name-grp ${cls}" data-fs-sku="${lk}" data-fs-role="name" style="font-size:${pt}pt">
       <div class="fxw-gtitle editable-txt" data-edit="${escapeAttr(tKey)}" contenteditable="true" spellcheck="false">${escapeHtml(title)}</div>
@@ -5960,7 +5975,7 @@ function superSave8Card(arg){
   const raw = (k, d) => ssvTx(c, k, d);
   const ovr = (k, d) => { const v = ssvTx(c, k, null); return v != null ? escapeHtml(v) : d; };
   const prim = ssvUnit(p), units = ssvUnits(p, 3);
-  const pk = u => `${c.tk}::ssv8price` + (u === prim ? '' : ':' + u);   // the product's own unit keeps the pre-v7.22 key → earlier typed prices survive
+  const pk = u => `${c.tk}::ssv8price` + (c.isGrp || u !== prim ? ':' + u : '');   // single: own unit keeps the pre-v7.22 key · merged: ALWAYS ':<unit>' ('g:'+size outlives a unit/representative change → a bare key could land on another unit)
   const uk = u => `${c.tk}::ssvunit:${u}`;                               // unit label (shared with the 1-slot template)
   const pDef = u => fmtThaiBaht(ssvUnitPrice(p, u));
   const price = u => ssvEd(pk(u), ovr(pk(u), pDef(u)), 'ssv8-num');
@@ -5990,8 +6005,8 @@ function special1Card(arg){
   const raw = (k, d) => ssvTx(c, k, d);
   const ovr = (k, d) => { const v = ssvTx(c, k, null); return v != null ? escapeHtml(v) : d; };
   const prim = ssvUnit(p), units = ssvUnits(p, 4);
-  const pk = u => `${c.tk}::ssv1price` + (u === prim ? '' : ':' + u);   // own unit keeps the pre-v7.22 keys
-  const ok = u => `${c.tk}::ssv1old` + (u === prim ? '' : ':' + u);
+  const pk = u => `${c.tk}::ssv1price` + (c.isGrp || u !== prim ? ':' + u : '');   // single: own unit keeps the pre-v7.22 keys · merged: always ':<unit>'
+  const ok = u => `${c.tk}::ssv1old` + (c.isGrp || u !== prim ? ':' + u : '');
   const uk = u => `${c.tk}::ssvunit:${u}`;
   const rows = units.map(u => ({ u, pDef: fmtThaiBaht(ssvUnitPrice(p, u)), oDef: fmtThaiBaht(ssvUnitOld(p, u)), lDef: ssvUnitLabel(p, u) }));
   rows.forEach(r => { r.price = raw(pk(r.u), r.pDef); r.label = raw(uk(r.u), r.lDef); });
@@ -7622,21 +7637,24 @@ async function exportPDF() {
   pages.forEach(p => p.style.display = 'none');   // v4.8 — isolate: render one page at a time (peak memory ≈ 1 page)
   try {
     const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });   // v6.19 — all modes portrait A4
+    let pdf = null;   // v6.19 — all modes portrait A4 · v7.24 — except Super Save posters: their own page size (were stretched to A4)
     const pw = 210, ph = 297;
     const scale = exportScaleFor(pages.length);   // v4.8 — adaptive scale (fewer pages = sharper)
     for (let i = 0; i < pages.length; i++) {
       pages[i].style.display = '';
       $('#spinnerMsg').textContent = `กำลังสร้างหน้า ${i+1}/${pages.length}...`;
       const canvas = await capturePageCanvas(pages[i], scale);
+      const hmm = pages[i].classList.contains('ssv-page') ? +(pw * canvas.height / canvas.width).toFixed(2) : ph;
       const imgData = canvas.toDataURL('image/jpeg', 0.9);
       freeCanvas(canvas);   // v4.8 — release memory before next page
-      if (i > 0) pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', 0, 0, pw, ph);
+      const fmt = hmm === ph ? 'a4' : [pw, hmm];
+      if (!pdf) pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: fmt }); else pdf.addPage(fmt, 'portrait');
+      pdf.addImage(imgData, 'JPEG', 0, 0, pw, hmm);
       pages[i].style.display = 'none';
       // v4.8 — yield between pages so the browser repaints the spinner + reclaims memory (prevents freeze)
       await new Promise(r => setTimeout(r, 50));
     }
+    if (!pdf) pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const filename = `Rattana-PriceTag-${new Date().toISOString().slice(0,10)}.pdf`;
     pdf.save(filename);
     showToast(`✅ บันทึก PDF แล้ว (${pages.length} หน้า, ${exportCount()} ${isPromoMode() ? 'โปร' : 'ป้าย'})`, 'success');
