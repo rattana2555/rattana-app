@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Design Hub v7.23</title>
+<title>Rattana Design Hub v7.24</title>
 <meta name="description" content="Rattana Design Hub — ออกแบบป้ายราคา โปรโมชั่น Flash Sale และแคตตาล็อก จาก Google Sheet พิมพ์ PDF/PNG/JPEG">
 <meta name="theme-color" content="#132248">
 <meta name="apple-mobile-web-app-title" content="Rattana Design Hub">
@@ -2345,7 +2345,7 @@ body.dark .pdf-stage{background-color:#0a1226}
   <header>
     <button class="icon-btn hamburger-btn" onclick="toggleDrawer(true)" title="เมนูฟีเจอร์" aria-label="เมนู">☰</button>
     <img class="logo-img" src="rattana-hub-icon-512.png?v=2" alt="Rattana Design Hub" width="44" height="44" style="object-fit:cover">
-    <div class="logo-text">RATTANA <span style="color:var(--gold)">DESIGN HUB</span><small>ออกแบบป้าย · โปรโมชั่น · แคตตาล็อก v7.23</small></div>
+    <div class="logo-text">RATTANA <span style="color:var(--gold)">DESIGN HUB</span><small>ออกแบบป้าย · โปรโมชั่น · แคตตาล็อก v7.24</small></div>
     <button class="icon-btn" id="btnInstallApp" onclick="installApp()" title="ติดตั้งแอปลงเครื่อง" style="display:none;background:var(--gold);color:#0d1b3e">📥</button>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="โหลดข้อมูลใหม่">⟳</button>
     <button class="icon-btn" onclick="toggleDark()" title="โหมดมืด">🌙</button>
@@ -5837,9 +5837,69 @@ function ssvImgHtml(c, cls, px, colsFor){
   const tag = x => `<img src="${escapeAttr(imgAtWidth(x.image, px))}" data-imgsku="${escapeAttr(x.sku)}" draggable="false" onerror="this.style.display='none'" crossorigin="anonymous">`;
   if (imgs.length < 2) return `<div class="fxw-img ${cls}" data-fs-sku="${lk}" data-fs-role="img">${imgs[0] ? tag(imgs[0]) : ''}</div>`;
   const cols = colsFor(imgs.length), rows = Math.ceil(imgs.length / cols);
-  const wh = `width:${(100 / cols).toFixed(3)}%;height:${(100 / rows).toFixed(3)}%`;
-  return `<div class="fxw-img fxw-img-grp ${cls}"><div class="ssv-collage">${imgs.map(x =>
-    `<div class="fxw-citem ssv-citem" data-fs-sku="${lk}" data-fs-role="img:${escapeAttr(x.sku)}" style="${wh}">${tag(x)}</div>`).join('')}</div></div>`;
+  const wh = `width:${(100 / cols).toFixed(3)}%;height:${(100 / rows).toFixed(3)}%`;   // even split until ssvGroupPhotos packs them
+  return `<div class="fxw-img fxw-img-grp ${cls}"><div class="ssv-collage" data-cols="${cols}">${imgs.map(x =>
+    `<div class="fxw-citem ssv-citem" data-fs-sku="${lk}" data-fs-role="img:${escapeAttr(x.sku)}" style="${wh}">${tag(x).replace('<img ', '<img class="ssv-gimg" ')}</div>`).join('')}</div></div>`;
+}
+// grouped photos: Drive product shots carry wide white margins → two variants came out tiny and far apart. So a GROUP's photos are
+// baked (shared white-removal) and then CROPPED to the product's own edges, and each row is packed by the photos' real aspect
+// (same height, centred, small gap) → the variants stand together like one group shot. Single-product frames are untouched.
+const _ssvTrimCache = new Map();
+function ssvTrimmed(url){
+  if (_ssvTrimCache.has(url)) return _ssvTrimCache.get(url);
+  const pr = bakeWhiteTransparent(url).then(src => new Promise(resolve => {
+    if (!src || !String(src).startsWith('data:')) return resolve(src || url);   // bake failed (e.g. cross-origin taint) → as is
+    const im = new Image();
+    im.onload = () => {
+      try {
+        const w = im.naturalWidth, h = im.naturalHeight, c = document.createElement('canvas'); c.width = w; c.height = h;
+        const ctx = c.getContext('2d'); ctx.drawImage(im, 0, 0);
+        const a = ctx.getImageData(0, 0, w, h).data;
+        let x0 = w, y0 = h, x1 = -1, y1 = -1;
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (a[(y * w + x) * 4 + 3] > 16) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+        if (x1 < 0) return resolve(src);   // nothing opaque → keep
+        const pad = Math.round(Math.max(x1 - x0, y1 - y0) * 0.02);
+        x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(w - 1, x1 + pad); y1 = Math.min(h - 1, y1 + pad);
+        const cw = x1 - x0 + 1, ch = y1 - y0 + 1;
+        if (cw >= w * 0.97 && ch >= h * 0.97) return resolve(src);   // no margin to trim
+        const o = document.createElement('canvas'); o.width = cw; o.height = ch;
+        o.getContext('2d').drawImage(c, x0, y0, cw, ch, 0, 0, cw, ch);
+        resolve(o.toDataURL('image/png'));
+      } catch (e) { resolve(src); }
+    };
+    im.onerror = () => resolve(src);
+    im.src = src;
+  }));
+  _ssvTrimCache.set(url, pr);
+  return pr;
+}
+// size each photo of a row to the row height × its aspect (shrunk together if the row is too wide) → a tight, centred group
+function ssvPackGroup(col){
+  const items = [...col.querySelectorAll('.ssv-citem')]; if (items.length < 2) return;
+  const W = col.clientWidth, H = col.clientHeight; if (!W || !H) return;
+  const cols = +col.dataset.cols || items.length, rows = Math.ceil(items.length / cols), G = 3;   // G = gap per photo, % of the frame width
+  for (let r = 0; r < rows; r++) {
+    const row = items.slice(r * cols, r * cols + cols);
+    const ar = row.map(it => { const im = it.querySelector('img'); return (im && im.naturalWidth && im.naturalHeight && im.style.display !== 'none') ? im.naturalWidth / im.naturalHeight : 0; });
+    if (ar.some(v => !v)) continue;   // a photo missing / not loaded → keep this row's even split
+    const want = ar.map(v => (H / rows) * v / W * 100);
+    const k = Math.min(1, (100 - row.length * G) / want.reduce((s, v) => s + v, 0));
+    row.forEach((it, i) => { it.style.width = (want[i] * k + G).toFixed(3) + '%'; it.style.padding = `0 ${G / 2}%`; });
+  }
+}
+async function ssvGroupPhotos(){
+  const cols = [...document.querySelectorAll('#pdfStage .ssv-collage')];
+  await Promise.all(cols.map(async col => {
+    await Promise.all([...col.querySelectorAll('img.ssv-gimg')].map(async img => {
+      const src = img.getAttribute('src');
+      if (src && !src.startsWith('data:')) {
+        const t = await ssvTrimmed(img.src);
+        if (t && t !== img.src && img.isConnected) { img.src = t; img.setAttribute('data-baked', '1'); }
+      }
+      if (!img.complete) await new Promise(r => { img.addEventListener('load', r, { once:true }); img.addEventListener('error', r, { once:true }); });
+    }));
+    if (col.isConnected) ssvPackGroup(col);
+  }));
 }
 // merged name: the words EVERY variant shares (front + back — brand/line + size) = title, the differing middles = variant line:
 // "กลาสทูโกล บอดี้เซรั่ม 180มล." + "ไนอะซินาไมด์ / เรตินอล". Names sharing no first word → weekly Flash's CAT SIZE + flavours.
