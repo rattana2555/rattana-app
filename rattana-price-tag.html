@@ -5873,19 +5873,33 @@ function ssvTrimmed(url){
   _ssvTrimCache.set(url, pr);
   return pr;
 }
-// size each photo of a row to the row height × its aspect (shrunk together if the row is too wide) → a tight, centred group
+// arrange a group by the photos' REAL (cropped) shapes: try 1 row, 2 rows … and keep the arrangement that shows the most product —
+// thin tubes/lipsticks stand in one row, boxy packs go 2×2. In a row every photo is as tall as the row (× its aspect for the width),
+// shrunk together if the row is too wide; rows are forced with a zero-height .ssv-br so flex-wrap can't re-flow them.
 function ssvPackGroup(col){
-  const items = [...col.querySelectorAll('.ssv-citem')]; if (items.length < 2) return;
+  const items = [...col.querySelectorAll('.ssv-citem')], n = items.length; if (n < 2) return;
   const W = col.clientWidth, H = col.clientHeight; if (!W || !H) return;
-  const cols = +col.dataset.cols || items.length, rows = Math.ceil(items.length / cols), G = 3;   // G = gap per photo, % of the frame width
-  for (let r = 0; r < rows; r++) {
-    const row = items.slice(r * cols, r * cols + cols);
-    const ar = row.map(it => { const im = it.querySelector('img'); return (im && im.naturalWidth && im.naturalHeight && im.style.display !== 'none') ? im.naturalWidth / im.naturalHeight : 0; });
-    if (ar.some(v => !v)) continue;   // a photo missing / not loaded → keep this row's even split
-    const want = ar.map(v => (H / rows) * v / W * 100);
-    const k = Math.min(1, (100 - row.length * G) / want.reduce((s, v) => s + v, 0));
-    row.forEach((it, i) => { it.style.width = (want[i] * k + G).toFixed(3) + '%'; it.style.padding = `0 ${G / 2}%`; });
-  }
+  const ar = items.map(it => { const im = it.querySelector('img'); return (im && im.naturalWidth && im.naturalHeight && im.style.display !== 'none') ? im.naturalWidth / im.naturalHeight : 0; });
+  if (ar.some(v => !v)) return;   // a photo missing / not loaded → keep the even split
+  const G = 3;   // side gap per photo, % of the frame width
+  const plan = cols => {
+    const rows = Math.ceil(n / cols), rowH = H / rows, out = []; let area = 0;
+    for (let r = 0; r < rows; r++) {
+      const idx = []; for (let i = r * cols; i < Math.min(n, r * cols + cols); i++) idx.push(i);
+      const want = idx.map(i => rowH * ar[i] / W * 100);   // width % at full row height
+      const k = Math.min(1, (100 - idx.length * G) / want.reduce((s, v) => s + v, 0));
+      idx.forEach((i, j) => { out[i] = { w: want[j] * k + G, h: 100 / rows, br: r > 0 && j === 0 }; area += (rowH * k) * (rowH * k) * ar[i]; });
+    }
+    return { out, area };
+  };
+  let best = null;
+  for (let cols = n; cols >= Math.ceil(n / 3); cols--) { const p = plan(cols); if (!best || p.area > best.area * 1.02) best = p; }   // ≤ 3 rows · a tie keeps fewer rows
+  col.querySelectorAll('.ssv-br').forEach(b => b.remove());
+  items.forEach((it, i) => {
+    const o = best.out[i];
+    it.style.width = o.w.toFixed(3) + '%'; it.style.height = o.h.toFixed(3) + '%'; it.style.padding = `0 ${G / 2}%`;
+    if (o.br) { const br = document.createElement('div'); br.className = 'ssv-br'; col.insertBefore(br, it); }
+  });
 }
 async function ssvGroupPhotos(){
   const cols = [...document.querySelectorAll('#pdfStage .ssv-collage')];
