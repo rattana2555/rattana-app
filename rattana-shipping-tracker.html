@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Shipping Tracker v1.4</title>
+<title>Rattana Shipping Tracker v1.6</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -222,7 +222,7 @@ body.dark .pay-cn{background:#3a1a1a;color:#ff9d92}
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with" data-locale="th"></div>
     <p id="loginError" style="color:var(--danger);font-size:12px;margin-top:12px;display:none"></p>
     <button class="btn btn-outline btn-block mt-16" onclick="closeLoginModal()">ยกเลิก</button>
-    <p style="font-size:11px;color:var(--muted);margin-top:16px">v1.4 · 21/08/2569</p>
+    <p style="font-size:11px;color:var(--muted);margin-top:16px">v1.6 · 24/09/2569</p>
   </div>
 </div>
 
@@ -243,7 +243,7 @@ body.dark .pay-cn{background:#3a1a1a;color:#ff9d92}
 
 <!-- Header -->
 <header>
-  <div class="logo-text">Rattana <span>Track</span> <span class="ver-badge">v1.4</span></div>
+  <div class="logo-text">Rattana <span>Track</span> <span class="ver-badge">v1.6</span></div>
   <button class="icon-btn" onclick="loadData()" title="รีเฟรช">🔄</button>
   <button class="icon-btn" id="darkBtn" onclick="toggleDark()">🌙</button>
   <button class="icon-btn" id="adminBtn" onclick="handleAdminClick()">👤</button>
@@ -257,7 +257,7 @@ body.dark .pay-cn{background:#3a1a1a;color:#ff9d92}
 
 <!-- ═══ TAB: TRACK ═══ -->
 <div id="tab-track" class="tab-pane active">
-  <div class="search-bar">
+  <div class="search-bar" id="trackSearchBar" style="display:none">
     <input class="search-input" id="trackInput" type="text" placeholder="🔍  พิมพ์เลขเอกสาร เช่น DC566907/00439" oninput="liveSearch()" onkeydown="if(event.key==='Enter')doTrack()">
     <button class="search-btn" onclick="doTrack()">ค้นหา</button>
   </div>
@@ -269,8 +269,8 @@ body.dark .pay-cn{background:#3a1a1a;color:#ff9d92}
   <div id="trackEmpty" class="empty-state" style="animation:fadeIn .3s">
     <div class="icon">📦</div>
     <h3>ติดตามสถานะการจัดส่ง</h3>
-    <p>พิมพ์เลขเอกสาร (Doc No) เพื่อดูสถานะ</p>
-    <p class="mt-8 txt-sm">เช่น <strong style="color:var(--gold)">DC566907/00439</strong></p>
+    <p id="trackEmptyMsg">เปิดจากลิงก์ที่ได้รับเพื่อดูสถานะจัดส่ง</p>
+    <p class="mt-8 txt-sm" id="trackEmptyHint">หากลิงก์ใช้ไม่ได้ กรุณาติดต่อเจ้าหน้าที่</p>
   </div>
 
   <!-- Result -->
@@ -362,7 +362,7 @@ body.dark .pay-cn{background:#3a1a1a;color:#ff9d92}
           <th data-key="Doc_No" data-type="str">Doc No <span class="sort-ind"></span></th>
           <th data-key="Customer_Name" data-type="str">ลูกค้า <span class="sort-ind"></span></th>
           <th data-key="TotalBaht" data-type="num">ยอด (บาท) <span class="sort-ind"></span></th>
-          <th data-key="_cut" data-type="num">CN/หักยอด <span class="sort-ind"></span></th>
+          <th data-key="_cut" data-type="num">ใบลดหนี้ (CN) <span class="sort-ind"></span></th>
           <th data-key="_driver" data-type="str">คนขับ <span class="sort-ind"></span></th>
           <th data-key="_plate" data-type="str">ทะเบียน <span class="sort-ind"></span></th>
           <th data-key="วันที่ส่งสินค้า" data-type="date">วันที่ส่ง <span class="sort-ind"></span></th>
@@ -487,14 +487,16 @@ async function loadData() {
         _uAdd    : uAdd,
         _status  : computeStatus(delivStr, uAdd, tripClosed, !!trip),
         _amount  : parseAmount(r['TotalBaht']),
-        _cut     : parseAmount(r['ใบลดหนี้']) + parseAmount(r['ลดหนี้']),
+        // ยอดหัก = "ใบลดหนี้" เท่านั้น — "ลดหนี้" เป็นค่าสะท้อนของ CN ก้อนเดียวกัน บวกซ้ำไม่ได้
+        // (ตรวจกับชีทจริง: รวมยอดชำระ = TotalBaht − ใบลดหนี้ ตรง 336/355 แถว)
+        _cut     : parseAmount(r['ใบลดหนี้']),
       };
     });
 
     populateDriverFilter();
     renderAdmin();
     const p=new URLSearchParams(location.search);
-    if(p.get('doc')) doTrack();
+    if(p.get('doc')) doTrack(true);
   } catch(e) {
     showToast('โหลดข้อมูลไม่สำเร็จ: '+e.message,'error');
   } finally { hideSpinner(); }
@@ -573,15 +575,45 @@ function pickSuggest(docNo) {
 }
 function closeSuggest() { document.getElementById('trackSuggest').classList.add('hidden'); }
 
-function doTrack() {
+/* รหัสกำกับลิงก์ — คำนวณจาก Doc_No + รหัสร้าน
+   ลูกค้าแก้ ?doc= ในแถบที่อยู่แล้วเปิดบิลร้านอื่นไม่ได้ เพราะไม่รู้รหัสร้านของร้านนั้น
+   (กันการเดา ไม่ใช่การเข้ารหัส — ใครได้ลิงก์ไปก็เปิดได้) */
+function docKey(docNo, custCode) {
+  const s = String(docNo||'') + '|' + String(custCode||'') + '|rtn';
+  let h1=0x811c9dc5, h2=0x01000193;
+  for(let i=0;i<s.length;i++){
+    h1=(h1^s.charCodeAt(i))>>>0; h1=(h1*0x01000193)>>>0;
+    h2=(h2+s.charCodeAt(i)*(i+7))>>>0; h2=(h2^(h2<<5))>>>0;
+  }
+  return (h1.toString(36)+h2.toString(36)).slice(0,10);
+}
+
+function doTrack(fromLink) {
   closeSuggest();
   const q=document.getElementById('trackInput').value.trim();
   if(!q){showToast('กรุณาใส่เลขเอกสาร','warning');return;}
   const row=allRows.find(r=>(r['Doc_No']||'').toLowerCase()===q.toLowerCase());
-  if(!row){showToast(`ไม่พบเอกสาร "${q}" กรุณาตรวจสอบเลขอีกครั้ง`,'error');return;}
+  if(!row){ if(!fromLink) showToast(`ไม่พบเอกสาร "${q}" กรุณาตรวจสอบเลขอีกครั้ง`,'error'); else showBadLink(); return; }
+
+  // ลูกค้า (ไม่ได้ล็อกอิน) ต้องมีรหัสกำกับในลิงก์ที่ถูกต้อง
+  if(!currentUser) {
+    const k=new URLSearchParams(location.search).get('k')||'';
+    if(k !== docKey(row['Doc_No'], row['Customer_Code'])) { showBadLink(); return; }
+  }
+
   currentDocNo=row['Doc_No'];
   showTrackResult(row);
-  history.replaceState({},'',`?doc=${encodeURIComponent(q)}`);
+  if(currentUser) history.replaceState({},'',`?doc=${encodeURIComponent(q)}`);
+}
+
+function showBadLink() {
+  document.getElementById('trackResult').classList.add('hidden');
+  const e=document.getElementById('trackEmpty');
+  e.classList.remove('hidden');
+  e.querySelector('.icon').textContent='🔒';
+  e.querySelector('h3').textContent='เปิดรายการนี้ไม่ได้';
+  document.getElementById('trackEmptyMsg').textContent='ลิงก์ไม่ถูกต้องหรือหมดอายุ';
+  document.getElementById('trackEmptyHint').textContent='กรุณาใช้ลิงก์ที่ได้รับจากเจ้าหน้าที่ หรือติดต่อเจ้าหน้าที่';
 }
 
 function showTrackResult(row) {
@@ -609,16 +641,23 @@ function showTrackResult(row) {
   const cash = parseAmount(row['ธนบัตร']) + parseAmount(row['เหรียญ']);
   const transfer = parseAmount(row['โอนครั้งที่1']);
   let payChips = '';
-  if(cash>0) payChips += `<span class="pay-chip pay-cash">💵 เงินสด ฿${cash.toLocaleString('th-TH',{minimumFractionDigits:0})}</span>`;
-  if(transfer>0) payChips += `<span class="pay-chip pay-transfer">🏦 โอน ฿${transfer.toLocaleString('th-TH',{minimumFractionDigits:0})}${row['แบงค์1']?' ('+row['แบงค์1']+')':''}</span>`;
-  if(row['_cn']>0) payChips += `<span class="pay-chip pay-cn">📦 ใบลดหนี้ (CN) −฿${row['_cn'].toLocaleString('th-TH',{minimumFractionDigits:0})}</span>`;
-  if(row['_deduct']>0) payChips += `<span class="pay-chip pay-cn">✂️ หักยอด −฿${row['_deduct'].toLocaleString('th-TH',{minimumFractionDigits:0})}${row['_deductWhy']?' · '+row['_deductWhy']:''}</span>`;
+  if(currentUser) {
+    // เจ้าหน้าที่ — เห็นวิธีชำระแยกก้อน
+    if(cash>0) payChips += `<span class="pay-chip pay-cash">💵 เงินสด ฿${cash.toLocaleString('th-TH',{minimumFractionDigits:0})}</span>`;
+    if(transfer>0) payChips += `<span class="pay-chip pay-transfer">🏦 โอน ฿${transfer.toLocaleString('th-TH',{minimumFractionDigits:0})}${row['แบงค์1']?' ('+row['แบงค์1']+')':''}</span>`;
+  } else if(cash>0||transfer>0) {
+    // ลูกค้า — บอกแค่ว่าชำระแล้ว
+    payChips += `<span class="pay-chip pay-cash">✅ ชำระแล้ว</span>`;
+  }
+  if(row['_cut']>0) payChips += `<span class="pay-chip pay-cn">📦 ใบลดหนี้ (CN) −฿${row['_cut'].toLocaleString('th-TH',{minimumFractionDigits:0})}${row['_deductWhy']?' · '+row['_deductWhy']:''}</span>`;
   if(!payChips) payChips = `<span class="pay-chip" style="background:#eef0f6;color:var(--muted)">ยังไม่ชำระ</span>`;
 
   const totalAmt = parseAmount(row['TotalBaht']);
-  const cutAmt   = (row['_cn']||0) + (row['_deduct']||0);
+  const cutAmt   = row['_cut']||0;
+  // ใช้ "รวมยอดชำระ" จากชีทเป็นหลักถ้ามี ไม่งั้นคำนวณเอง
+  const netAmt   = row['_paid']>0 ? row['_paid'] : totalAmt-cutAmt;
   const netHtml  = cutAmt>0
-    ? `<div style="font-size:12px;color:var(--muted);margin-top:6px">ยอดเรียกเก็บสุทธิ <strong style="color:var(--success);font-size:15px">฿${(totalAmt-cutAmt).toLocaleString('th-TH',{minimumFractionDigits:2})}</strong> <span style="font-size:11px">(หัก ฿${cutAmt.toLocaleString('th-TH',{minimumFractionDigits:2})})</span></div>`
+    ? `<div style="font-size:12px;color:var(--muted);margin-top:6px">ยอดเรียกเก็บสุทธิ <strong style="color:var(--success);font-size:15px">฿${netAmt.toLocaleString('th-TH',{minimumFractionDigits:2})}</strong> <span style="font-size:11px">(หัก ฿${cutAmt.toLocaleString('th-TH',{minimumFractionDigits:2})})</span></div>`
     : '';
 
   const delivDisplay = row['วันที่ส่งสินค้า'] ? row['วันที่ส่งสินค้า'] : '-';
@@ -640,7 +679,8 @@ function showTrackResult(row) {
   const driverDiv=document.getElementById('resDriver');
   if(row['_driver']||row['_plate']) {
     driverDiv.style.display='block';
-    const helpersHtml = row['_helpers'].length
+    // ชื่อผู้ช่วย = ข้อมูลภายใน ลูกค้าไม่เห็น
+    const helpersHtml = (currentUser && row['_helpers'].length)
       ? `<div class="info-row"><div class="info-icon">👥</div><div class="info-body"><div class="info-label">ผู้ช่วย</div><div class="info-value">${row['_helpers'].join(', ')}</div></div></div>`
       : '';
     const closedHtml = row['_tripClosed']
@@ -660,8 +700,8 @@ function showTrackResult(row) {
     <div class="section-title">ℹ️ รายละเอียดการจัดส่ง</div>
     <div class="info-row"><div class="info-icon">👤</div><div class="info-body"><div class="info-label">ลูกค้า</div><div class="info-value">${row['Customer_Name']}</div><div style="font-size:12px;color:var(--muted)">รหัส ${row['Customer_Code']}</div></div></div>
     <div class="info-row"><div class="info-icon">📄</div><div class="info-body"><div class="info-label">เลขเอกสาร</div><div class="info-value" style="font-family:'Courier New',monospace">${row['Doc_No']}</div></div></div>
-    <div class="info-row"><div class="info-icon">🗂️</div><div class="info-body"><div class="info-label">เลขทริป</div><div class="info-value" style="font-family:'Courier New',monospace">${row['Trans_Code']}</div></div></div>
-    ${row['Warehouse']?`<div class="info-row"><div class="info-icon">🏭</div><div class="info-body"><div class="info-label">คลัง</div><div class="info-value">${row['Warehouse']}</div></div></div>`:''}
+    ${currentUser?`<div class="info-row"><div class="info-icon">🗂️</div><div class="info-body"><div class="info-label">เลขทริป</div><div class="info-value" style="font-family:'Courier New',monospace">${row['Trans_Code']}</div></div></div>`:''}
+    ${currentUser&&row['Warehouse']?`<div class="info-row"><div class="info-icon">🏭</div><div class="info-body"><div class="info-label">คลัง</div><div class="info-value">${row['Warehouse']}</div></div></div>`:''}
     <div class="info-row"><div class="info-icon">📅</div><div class="info-body"><div class="info-label">วันที่ส่งสินค้า</div><div class="info-value">${delivDisplay}${row['_status']==='transit'?' <span style="color:var(--warning);font-size:12px">● วันนี้</span>':''}</div></div></div>
   `;
 
@@ -869,7 +909,9 @@ document.addEventListener('DOMContentLoaded',()=>{
    SHARE
 ════════════════════════════════ */
 function shareDocLink(docNo) {
-  const url=`${location.origin}${location.pathname}?doc=${encodeURIComponent(docNo)}`;
+  const row=allRows.find(r=>r['Doc_No']===docNo);
+  const k=row?docKey(row['Doc_No'],row['Customer_Code']):'';
+  const url=`${location.origin}${location.pathname}?doc=${encodeURIComponent(docNo)}&k=${k}`;
   if(navigator.share){ navigator.share({title:`ติดตามสินค้า ${docNo}`,url}).catch(()=>{}); }
   else { navigator.clipboard.writeText(url).then(()=>showToast('คัดลอกลิงก์แล้ว ✓','success')).catch(()=>prompt('ลิงก์สำหรับลูกค้า:',url)); }
 }
@@ -926,6 +968,10 @@ function showAdminUI(){
   document.getElementById('adminTabBtn').style.display='block';
   document.getElementById('adminBtn').textContent='🔓';
   document.getElementById('adminBtn').title='ออกจากระบบ';
+  // ช่องค้นหาเปิดเฉพาะเจ้าหน้าที่ — ลูกค้าเข้าได้ทางลิงก์เท่านั้น
+  document.getElementById('trackSearchBar').style.display='flex';
+  document.getElementById('trackEmptyMsg').textContent='พิมพ์เลขเอกสาร (Doc No) เพื่อดูสถานะ';
+  document.getElementById('trackEmptyHint').innerHTML='เช่น <strong style="color:var(--gold)">DC566907/00439</strong>';
 }
 
 function handleAdminClick(){
@@ -934,6 +980,7 @@ function handleAdminClick(){
       localStorage.removeItem('rattana_track_u');currentUser=null;
       document.getElementById('adminTabBtn').style.display='none';
       document.getElementById('adminBtn').textContent='👤';
+      document.getElementById('trackSearchBar').style.display='none';
       switchTab('track',document.querySelector('.tab-btn'));
       showToast('ออกจากระบบแล้ว','info');
     }
