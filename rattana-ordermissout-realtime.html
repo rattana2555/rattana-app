@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Rattana OM Report v13.4</title>
+  <title>Rattana OM Report v13.5</title>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
@@ -326,6 +326,16 @@
     .raw-rec-g .val{text-align:right;word-break:break-word}
     .raw-rec-g .val.num{font-variant-numeric:tabular-nums}
 
+    /* ══ แถบเดือนปัจจุบัน (ข้อมูลสดจากชีต BP) ══ */
+    #liveBar{display:none;align-items:center;flex-wrap:wrap;gap:10px 18px;background:var(--card-bg);border:1px solid var(--border);border-left:3px solid var(--success);border-radius:var(--radius-md);padding:10px 14px;margin-bottom:12px;box-shadow:var(--shadow-sm)}
+    #liveBar.stale{border-left-color:var(--muted)}
+    .lb-dot{width:8px;height:8px;border-radius:50%;background:var(--success);flex-shrink:0;box-shadow:0 0 0 3px rgba(46,204,113,.22)}
+    .lb-item{display:flex;flex-direction:column;gap:1px;min-width:0}
+    .lb-lab{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.3px;text-transform:uppercase;white-space:nowrap}
+    .lb-val{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.15}
+    .lb-sub{font-size:11px;color:var(--muted);white-space:nowrap}
+    .lb-note{font-size:11px;color:var(--muted);flex:1;min-width:0}
+
     /* ── Login Screen ── */
   #loginScreen{position:fixed;inset:0;background:var(--navy);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px}
   .login-card{background:#fff;border-radius:20px;padding:40px 36px;text-align:center;max-width:380px;width:90%;border-top:4px solid var(--gold);box-shadow:0 12px 40px rgba(0,0,0,.25)}
@@ -395,7 +405,7 @@
 <header>
   <div class="header-row1">
     <button id="sidebarToggle" onclick="toggleSidebar()" title="ซ่อน/แสดง Sidebar">☰</button>
-    <div class="logo-text">Rattana <span>OM Report</span> <span class="ver-badge">v13.4 · 2026-09-14</span></div>
+    <div class="logo-text">Rattana <span>OM Report</span> <span class="ver-badge">v13.5 · 2026-09-26</span></div>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="รีเฟรชข้อมูล">↻</button>
     <button class="icon-btn" id="btnDark" onclick="toggleDark()" title="Dark mode">🌙</button>
     <button class="icon-btn" onclick="exportExcel()" title="Export Excel">📥</button>
@@ -488,6 +498,8 @@
   </div>
 
   <!-- Overall KPI strip -->
+  <div id="liveBar"></div>
+
   <div class="cmp-strip" id="cmpStrip">
     <div class="cmp-card avg">
       <div class="cmp-label">📐 AVG 3 M.</div>
@@ -1077,6 +1089,9 @@
 const SHEET_ID        = '1R_08VOaWqChx9AbcvqMeXnJUbR0ir9PaVNCvc544icc';
 const BUDGET_SHEET_ID = '1R_08VOaWqChx9AbcvqMeXnJUbR0ir9PaVNCvc544icc';
 const CUST_MASTER_ID  = '1dAxF4Mz-zhJIVbuJ_Ql126gt08qvVS1wndJD50pqCZI';
+// ชีตเดือนปัจจุบัน (realtime) — ใช้แสดงแยก ไม่รวมเข้าการคำนวณ AVG 3 M./OM
+const RT_SHEET_ID     = '1NxFkxiQev0xxGir93-qt0flNfzHz848-KuE7jDRSxQE';
+const RT_SHEET_NAME   = 'BP';
 const TTL             = 5 * 60 * 1000; // 5 min
 
 let budgetData   = {}; // normSale → Customer_Name → รวมส่วนต่าง
@@ -1271,6 +1286,71 @@ async function fetchSheet(sheetName) {
   return parseCsv(await res.text());
 }
 
+// ── เดือนปัจจุบันจากชีต BP ─────────────────────────
+// ให้ Google รวมยอดฝั่งเซิร์ฟเวอร์ (ตอบกลับ ~140 bytes แทน 4.7 MB)
+let liveMonth   = null;
+let _lastTotAvg = 0;
+
+async function fetchCurrentMonth(rooName) {
+  liveMonth = null;
+  if (!rooName) return;
+  // A=Doc_Date B=Doc_No J=Sales_CS N=EXVat AF='Sale NO ROO'
+  const q = `select sum(N), sum(J), count(B), max(A) where AF = '${String(rooName).replace(/'/g, "''")}'`;
+  const url = `https://docs.google.com/spreadsheets/d/${RT_SHEET_ID}/gviz/tq?tqx=out:csv`
+            + `&sheet=${encodeURIComponent(RT_SHEET_NAME)}&tq=${encodeURIComponent(q)}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const rows = parseCsv(await res.text());
+    if (!rows.length) return;
+    const v = Object.values(rows[0]);
+    const exvat = parseFloat(v[0]) || 0;
+    const m = String(v[3] || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);   // gviz คืน 2026-9-25
+    if (!exvat || !m) return;
+    liveMonth = {
+      exvat, cs: parseFloat(v[1]) || 0, bills: parseInt(v[2]) || 0,
+      day: +m[3], daysInMonth: new Date(+m[1], +m[2], 0).getDate(),
+      ym: `${m[1]}/${String(m[2]).padStart(2, '0')}`,
+    };
+  } catch (e) { liveMonth = null; }
+}
+
+function renderLiveBar(totAvg) {
+  const el = document.getElementById('liveBar');
+  if (!el) return;
+  if (!liveMonth) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const { exvat, cs, bills, day, daysInMonth, ym } = liveMonth;
+  const proj     = exvat / day * daysInMonth;
+  const filtered = !!(selBU || selRoute || selStoreType);
+  let paceHtml   = '';
+  if (filtered) {
+    paceHtml = `<div class="lb-note">⚠️ ยอดนี้เป็นของทั้งหมด ไม่ตามตัวกรองที่เลือกอยู่ จึงไม่เทียบอัตราให้</div>`;
+  } else if (totAvg > 0) {
+    const pace = totAvg * (day / daysInMonth);
+    const pct  = (exvat - pace) / pace * 100;
+    const up   = pct >= 0;
+    paceHtml = `<div class="lb-item">
+        <div class="lb-lab">เทียบอัตรา AVG 3 M.</div>
+        <div><span class="trend ${up ? 'up' : 'down'}">${up ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}%</span></div>
+        <div class="lb-sub">ควรได้ ${fmtFull(pace)} ณ วันที่ ${day}</div>
+      </div>`;
+  }
+  el.style.display = 'flex';
+  el.innerHTML = `
+    <span class="lb-dot"></span>
+    <div class="lb-item">
+      <div class="lb-lab">เดือนปัจจุบัน ${ym} (ถึงวันที่ ${day})</div>
+      <div class="lb-val">${fmtFull(exvat)}</div>
+      <div class="lb-sub">${fmtFull(cs)} CS · ${bills.toLocaleString('th-TH')} บิล</div>
+    </div>
+    <div class="lb-item">
+      <div class="lb-lab">คาดทั้งเดือน</div>
+      <div class="lb-val" style="color:var(--info)">${fmtFull(proj)}</div>
+      <div class="lb-sub">จาก ${day}/${daysInMonth} วัน</div>
+    </div>
+    ${paceHtml}`;
+}
+
 // ── Init ──────────────────────────────────────────
 function initApp() {
   // Build salesperson dropdown first — no data loaded yet
@@ -1353,11 +1433,13 @@ async function loadSheet(sheetName) {
       buildFilters(); applyFilters();
       showToast(`โหลดสำเร็จ ${allData.length.toLocaleString()} รายการ ✓`, 'success');
     }
+    // Sale_No_ROO ในข้อมูลคือกุญแจตรงกับคอลัมน์ 'Sale NO ROO' ของชีต BP
+    const _roo = (allData[0] && allData[0]['Sale_No_ROO']) || '';
+    fetchCurrentMonth(_roo).then(() => renderLiveBar(_lastTotAvg));
   } catch (e) {
     showToast('โหลดข้อมูลล้มเหลว: ' + e.message, 'error');
-    document.getElementById('mainTblBody').innerHTML =
-      `<tr class="empty-row"><td colspan="6">❌ โหลดข้อมูลล้มเหลว: ${e.message}</td></tr>`;
-    document.getElementById('infoBar').innerHTML = '❌ ไม่สามารถโหลดข้อมูลได้';
+    const _cc = document.getElementById('custCards');
+    if (_cc) _cc.innerHTML = `<div class="om-empty">❌ โหลดข้อมูลล้มเหลว: ${escHtml(e.message)}</div>`;
   } finally {
     hideSpinner(); setLoading(false);
     setTimeout(() => { document.getElementById('loadingBar').style.width = '0'; }, 400);
@@ -1611,74 +1693,7 @@ function renderMainTable(rows, totEx, totCS) {
 }
 
 // ── Charts ────────────────────────────────────────
-function renderCharts(buRows) {
-  const labels  = buRows.map(r => r.Cat_BU);
-  const exvats  = buRows.map(r => r.Exvat);
-  const colors  = labels.map((_, i) => BU_COLORS[i % BU_COLORS.length]);
-
-  // Bar
-  if (chartBar) chartBar.destroy();
-  chartBar = new Chart(document.getElementById('chartBar').getContext('2d'), {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{ label:'Exvat (บาท)', data: exvats, backgroundColor: colors, borderColor: colors, borderWidth:1, borderRadius:4 }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { display:false },
-        tooltip: { callbacks: { label: ctx => `฿ ${fmtFull(ctx.raw)}` } }
-      },
-      scales: {
-        y: { beginAtZero:true, ticks:{ callback: v => fmtShort(v), font:{size:11,family:'Sarabun'} }, grid:{ color:'rgba(0,0,0,.05)' } },
-        x: { ticks:{ font:{size:11,family:'Sarabun'}, maxRotation:30 } }
-      }
-    }
-  });
-
-  // Doughnut
-  if (chartDoughnut) chartDoughnut.destroy();
-  chartDoughnut = new Chart(document.getElementById('chartDoughnut').getContext('2d'), {
-    type: 'doughnut',
-    data: {
-      labels,
-      datasets: [{ data: exvats, backgroundColor: colors, borderWidth:2, borderColor:'#fff' }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { position:'right', labels:{ font:{size:11,family:'Sarabun'}, padding:8, boxWidth:13 } },
-        tooltip: {
-          callbacks: {
-            label: ctx => {
-              const tot = ctx.dataset.data.reduce((s,v) => s+v, 0);
-              return `${ctx.label}: ฿${fmtFull(ctx.raw)} (${(ctx.raw/tot*100).toFixed(1)}%)`;
-            }
-          }
-        }
-      }
-    }
-  });
-}
-
 // ── Brand table ───────────────────────────────────
-function renderBrandTable(rows) {
-  const tbody = document.getElementById('brandTblBody');
-  if (!rows.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="5">ไม่พบข้อมูล</td></tr>`; return;
-  }
-  tbody.innerHTML = rows.map(r => `
-    <tr>
-      <td><span class="badge badge-gold">${escHtml(r.bu)}</span></td>
-      <td><strong>${escHtml(r.brand)}</strong></td>
-      <td class="num">${fmtFull(r.Exvat)}</td>
-      <td class="num">${fmtFull(r.Sales_CS)}</td>
-      <td class="num" style="color:${r.pctInBU>=30?'var(--gold)':'inherit'}">${r.pctInBU.toFixed(1)}%</td>
-    </tr>
-  `).join('');
-}
-
 // ── Export Excel ──────────────────────────────────
 function exportExcel() {
   if (!filteredData.length) { showToast('ไม่มีข้อมูลสำหรับ Export', 'warning'); return; }
@@ -1754,11 +1769,8 @@ function toggleDark() {
   const dark = document.body.classList.contains('dark');
   document.getElementById('btnDark').textContent = dark ? '☀️' : '🌙';
   localStorage.setItem('om_dark', dark ? '1' : '0');
-  if (filteredData.length) {
-    const buRows = aggByBU(filteredData);
-    const sorted = sortRows(buRows, sortState.key, sortState.key==='Cat_BU'?'str':'num', sortState.dir);
-    renderCharts(sorted);
-  }
+  // เดิมวาดกราฟใหม่ที่นี่ แต่ canvas #chartBar/#chartDonut ถูกลบไปตั้งแต่ v12.0
+  // ทำให้ null.getContext() throw ทุกครั้งที่กดปุ่มนี้
 }
 
 // ── Column resize (drag handle) ────────────────────
@@ -1970,6 +1982,8 @@ function renderSummaryTab() {
   document.getElementById('cmpPctCard').className = `cmp-card ${isUp?'up':'down'}`;
   document.getElementById('cmpPctVal').textContent = totPct !== null ? (totPct>=0?'+':'') + totPct.toFixed(1) + '%' : 'N/A';
   document.getElementById('cmpPctVal').style.color = isUp ? 'var(--success)' : 'var(--danger)';
+  _lastTotAvg = totAvg;
+  renderLiveBar(totAvg);
 
   // ── Customer table ──
   // custMap[name] = { bu, latest, prevTot }
