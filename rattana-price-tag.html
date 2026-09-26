@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Design Hub v7.27</title>
+<title>Rattana Design Hub v7.28</title>
 <meta name="description" content="Rattana Design Hub — ออกแบบป้ายราคา โปรโมชั่น Flash Sale และแคตตาล็อก จาก Google Sheet พิมพ์ PDF/PNG/JPEG">
 <meta name="theme-color" content="#132248">
 <meta name="apple-mobile-web-app-title" content="Rattana Design Hub">
@@ -2376,6 +2376,19 @@ body.dark .pdf-stage{background-color:#0a1226}
 .aip-masked{-webkit-text-security:disc;text-security:disc}
 #aipKeyMsg{font-size:12px;font-weight:700;margin-top:6px;line-height:1.5}
 #aipKeyMsg.ok{color:#166534} #aipKeyMsg.warn{color:#b45309} #aipKeyMsg.err{color:#b91c1c}
+/* v7.28 — "มีเวอร์ชันใหม่" floating update card (above the page, below toasts/spinner) */
+#appUpdate{position:fixed;left:50%;bottom:22px;transform:translate(-50%,160%);z-index:946;visibility:hidden;display:flex;align-items:center;gap:12px;
+  width:max-content;max-width:min(580px,calc(100vw - 32px));box-sizing:border-box;background:#fff;color:var(--navy);border:2px solid var(--gold);
+  border-radius:16px;padding:12px 14px;box-shadow:0 14px 36px rgba(13,27,62,.3);opacity:0;pointer-events:none;transition:transform .35s ease,opacity .35s ease,visibility .35s}
+#appUpdate.show{transform:translate(-50%,0);opacity:1;pointer-events:auto;visibility:visible}
+#appUpdate .au-ico{font-size:26px;line-height:1}
+#appUpdate .au-txt{display:flex;flex-direction:column;gap:2px;font-size:12.5px;line-height:1.4;min-width:0}
+#appUpdate .au-txt b{font-size:14.5px}
+#appUpdate .au-warn{color:#b45309;font-weight:700}
+#appUpdate .au-btns{display:flex;gap:6px;flex-shrink:0}
+@media (max-width:540px){#appUpdate{flex-wrap:wrap;width:calc(100vw - 32px)}#appUpdate .au-txt{flex:1 1 0}#appUpdate .au-btns{width:100%;justify-content:flex-end}}
+@media (max-width:700px){body:has(#qsFab.show) #appUpdate{bottom:148px}}
+body.dark #appUpdate{background:#131c33;color:#e8eaf0}
 /* stickers (shared across features) */
 .sticker-tray{display:flex;gap:6px;overflow-x:auto;max-width:100%;padding:2px 0}
 .sticker-thumb{flex:0 0 auto;width:58px;height:44px;border:1.5px solid #d8def0;border-radius:8px;background:#fff;cursor:pointer;padding:3px;display:flex;align-items:center;justify-content:center}
@@ -2415,7 +2428,7 @@ body.dark .pdf-stage{background-color:#0a1226}
   <header>
     <button class="icon-btn hamburger-btn" onclick="toggleDrawer(true)" title="เมนูฟีเจอร์" aria-label="เมนู">☰</button>
     <img class="logo-img" src="rattana-hub-icon-512.png?v=2" alt="Rattana Design Hub" width="44" height="44" style="object-fit:cover">
-    <div class="logo-text">RATTANA <span style="color:var(--gold)">DESIGN HUB</span><small>ออกแบบป้าย · โปรโมชั่น · แคตตาล็อก v7.27</small></div>
+    <div class="logo-text">RATTANA <span style="color:var(--gold)">DESIGN HUB</span><small>ออกแบบป้าย · โปรโมชั่น · แคตตาล็อก v7.28</small></div>
     <button class="icon-btn" id="btnInstallApp" onclick="installApp()" title="ติดตั้งแอปลงเครื่อง" style="display:none;background:var(--gold);color:#0d1b3e">📥</button>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="โหลดข้อมูลใหม่">⟳</button>
     <button class="icon-btn" onclick="toggleDark()" title="โหมดมืด">🌙</button>
@@ -4814,6 +4827,15 @@ async function loadProducts(opts = {}) {
     // v7.16 — any full/soft reload reads + persists the #cfg* values, so a queued panel change is now
     // applied; clear the pending-reload indicator so the FAB dot / apply bar can't go stale.
     if (typeof qsPendingReload !== 'undefined') { qsPendingReload.clear(); if (typeof qsUpdateApplyBar === 'function') qsUpdateApplyBar(); }
+    try {   // v7.28 — after "อัปเดตเลย": bring back the selection + per-tag templates stashed by appDoUpdate (once)
+      const keep = JSON.parse(sessionStorage.getItem('rattanaPriceTag_updKeep') || 'null');
+      if (keep) {
+        sessionStorage.removeItem('rattanaPriceTag_updKeep');
+        const live = new Set(products.map(p => p.sku));
+        (keep.sel || []).forEach(s => { if (live.has(s)) selectedSkus.add(s); });
+        Object.keys(keep.tpl || {}).forEach(s => { if (live.has(s)) tplOverrides[s] = keep.tpl[s]; });
+      }
+    } catch {}
     updateStats();
     renderProducts();
     if (isAiPromoMode() && $('#tab-print')?.classList.contains('active')) buildPdfPreview();   // v7.26 — fresh S01–S03 prices reach the AI panel
@@ -8070,6 +8092,89 @@ function aipInitUI(){
 
 aipRestore();
 aipInitUI();
+
+/* ═══════════════ v7.28 — "มีเวอร์ชันใหม่" floating update prompt ═══════════════
+   The running version is the one in <title>. 20 s after load, every 30 min and whenever the tab comes back, re-read ONLY the
+   <title> of the live file (streamed with cache:'no-store' and cancelled right after the title — never the whole ~0.5 MB).
+   Newer → a floating card: "🔄 อัปเดตเลย" reloads with a ?v= cache-buster (GitHub Pages / an installed PWA window would
+   otherwise keep serving the cached HTML); "ภายหลัง" snoozes that version for 30 min. The ?v= is stripped again on load. */
+const APP_VERSION = (document.title.match(/v(\d+(?:\.\d+)+)/) || [])[1] || '';
+const APP_UPD_SNOOZE = 'rattanaPriceTag_updSnooze';
+let appUpdLast = 0, appUpdBusy = false;
+function appVerCmp(a, b){
+  const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d; }
+  return 0;
+}
+async function appFetchLiveVersion(){
+  const ctrl = new AbortController(), to = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const res = await fetch(location.pathname + '?vcheck=' + Date.now(), { cache:'no-store', signal: ctrl.signal });
+    if (!res.ok || !res.body) return null;
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let txt = '';
+    while (txt.length < 300000) {
+      const { done, value } = await reader.read(); if (done) break;
+      txt += dec.decode(value, { stream: true });
+      const m = txt.match(/<title>[^<]*?v(\d+(?:\.\d+)+)[^<]*<\/title>/i);
+      if (m) { reader.cancel().catch(() => {}); return m[1]; }
+    }
+    reader.cancel().catch(() => {});
+    return null;
+  } catch { return null; }
+  finally { clearTimeout(to); }
+}
+async function appCheckUpdate(force){
+  if (appUpdBusy || !APP_VERSION || !/^https?:$/.test(location.protocol)) return;   // a file:// copy has nothing to compare with
+  if (!force && Date.now() - appUpdLast < 5 * 60 * 1000) return;
+  appUpdBusy = true; appUpdLast = Date.now();
+  try {
+    const live = await appFetchLiveVersion();
+    if (!live || appVerCmp(live, APP_VERSION) <= 0) return;
+    let sn = null; try { sn = JSON.parse(sessionStorage.getItem(APP_UPD_SNOOZE) || 'null'); } catch {}
+    if (sn && sn.v === live && Date.now() < sn.until) return;   // "ภายหลัง" for this version
+    appShowUpdate(live);
+  } finally { appUpdBusy = false; }
+}
+function appUnsavedList(){   // session-only things a reload would lose (the selection itself is carried over — see appDoUpdate)
+  const L = [];
+  try {
+    if (typeof aipResults !== 'undefined') {
+      if (aipResults.some(j => j.status === 'loading')) L.push('ภาพ AI ที่กำลังสร้าง');
+      if (aipResults.some(j => j.img && j.status !== 'loading')) L.push('ภาพ AI ที่ยังไม่ได้ดาวน์โหลด');
+    }
+    if (typeof aipEdits !== 'undefined' && Object.keys(aipEdits).length) L.push('ราคา/ชื่อที่แก้ในตาราง AI');
+    if (typeof posterCfg !== 'undefined' && posterCfg.bgImg) L.push('รูปพื้นหลังโปสเตอร์ที่อัปโหลด');
+  } catch {}
+  return L;
+}
+function appShowUpdate(live){
+  let el = document.getElementById('appUpdate');
+  if (!el) { el = document.createElement('div'); el.id = 'appUpdate'; el.setAttribute('role', 'status'); document.body.appendChild(el); }
+  el.innerHTML = `<div class="au-ico">🎉</div>
+    <div class="au-txt"><b>มีเวอร์ชันใหม่ v${escapeHtml(live)}</b><span>ตอนนี้ใช้ v${escapeHtml(APP_VERSION)} · กดอัปเดตเพื่อใช้ฟีเจอร์และการแก้ไขล่าสุด (สินค้าที่เลือกไว้ยังอยู่)</span>${(u => u.length ? `<span class="au-warn">⚠️ จะหาย: ${escapeHtml(u.join(' · '))}</span>` : '')(appUnsavedList())}</div>
+    <div class="au-btns"><button type="button" class="btn btn-gold btn-sm" data-v="${escapeAttr(live)}" onclick="appDoUpdate(this.dataset.v)">🔄 อัปเดตเลย</button><button type="button" class="btn btn-sm btn-outline" data-v="${escapeAttr(live)}" onclick="appSnoozeUpdate(this.dataset.v)">ภายหลัง</button></div>`;
+  requestAnimationFrame(() => el.classList.add('show'));
+}
+function appSnoozeUpdate(live){
+  try { sessionStorage.setItem(APP_UPD_SNOOZE, JSON.stringify({ v: live, until: Date.now() + 30 * 60 * 1000 })); } catch {}
+  const el = document.getElementById('appUpdate'); if (el) el.classList.remove('show');
+}
+function appDoUpdate(live){
+  const lost = appUnsavedList();
+  if (lost.length && !confirm('สิ่งเหล่านี้จะหายเมื่ออัปเดต:\n• ' + lost.join('\n• ') + '\n\nอัปเดตเลยไหม?')) return;
+  try { sessionStorage.setItem('rattanaPriceTag_updKeep', JSON.stringify({ sel: [...selectedSkus], tpl: tplOverrides })); } catch {}   // restored after the fresh load
+  location.replace(location.pathname + '?v=' + encodeURIComponent(live || '') + location.hash);   // a new URL = the fresh HTML, not the cached one
+}
+(function initAppUpdate(){
+  try {   // strip our own cache-buster so bookmarks / the address bar stay clean
+    const u = new URL(location.href);
+    if (u.searchParams.has('v') || u.searchParams.has('vcheck')) { u.searchParams.delete('v'); u.searchParams.delete('vcheck'); history.replaceState(history.state, '', u.pathname + u.search + u.hash); }
+  } catch {}
+  setTimeout(() => appCheckUpdate(true), 20000);
+  setInterval(() => appCheckUpdate(false), 30 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') appCheckUpdate(false); });
+})();
 
 /* ═══════════════ STICKERS (shared across ALL features — v7.6) ═══════════════
    Ready-made promo stickers (stickers/sticker-NN.png, transparent, same-origin → export-safe).
