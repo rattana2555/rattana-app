@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Design Hub v7.28</title>
+<title>Rattana Design Hub v7.29</title>
 <meta name="description" content="Rattana Design Hub — ออกแบบป้ายราคา โปรโมชั่น Flash Sale และแคตตาล็อก จาก Google Sheet พิมพ์ PDF/PNG/JPEG">
 <meta name="theme-color" content="#132248">
 <meta name="apple-mobile-web-app-title" content="Rattana Design Hub">
@@ -2374,6 +2374,11 @@ body.dark .pdf-stage{background-color:#0a1226}
 .aip-asset img{width:56px;height:56px;object-fit:contain;border-radius:8px;background:#0d1b3e;border:1px solid #d8def0}
 .aip-upbtn{position:relative;overflow:hidden;cursor:pointer}
 .aip-masked{-webkit-text-security:disc;text-security:disc}
+.aip-steps{display:flex;flex-direction:column;gap:8px;margin:4px 0 8px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:10px}
+.aip-step{display:flex;gap:10px;align-items:flex-start}
+.aip-step>b{flex:0 0 26px;height:26px;border-radius:50%;background:#16a34a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px}
+.aip-step>div{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:#14532d;min-width:0}
+.aip-step>div>span{flex:1 1 220px}
 #aipKeyMsg{font-size:12px;font-weight:700;margin-top:6px;line-height:1.5}
 #aipKeyMsg.ok{color:#166534} #aipKeyMsg.warn{color:#b45309} #aipKeyMsg.err{color:#b91c1c}
 /* v7.28 — "มีเวอร์ชันใหม่" floating update card (above the page, below toasts/spinner) */
@@ -2428,7 +2433,7 @@ body.dark #appUpdate{background:#131c33;color:#e8eaf0}
   <header>
     <button class="icon-btn hamburger-btn" onclick="toggleDrawer(true)" title="เมนูฟีเจอร์" aria-label="เมนู">☰</button>
     <img class="logo-img" src="rattana-hub-icon-512.png?v=2" alt="Rattana Design Hub" width="44" height="44" style="object-fit:cover">
-    <div class="logo-text">RATTANA <span style="color:var(--gold)">DESIGN HUB</span><small>ออกแบบป้าย · โปรโมชั่น · แคตตาล็อก v7.28</small></div>
+    <div class="logo-text">RATTANA <span style="color:var(--gold)">DESIGN HUB</span><small>ออกแบบป้าย · โปรโมชั่น · แคตตาล็อก v7.29</small></div>
     <button class="icon-btn" id="btnInstallApp" onclick="installApp()" title="ติดตั้งแอปลงเครื่อง" style="display:none;background:var(--gold);color:#0d1b3e">📥</button>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="โหลดข้อมูลใหม่">⟳</button>
     <button class="icon-btn" onclick="toggleDark()" title="โหมดมืด">🌙</button>
@@ -2937,7 +2942,7 @@ body.dark #appUpdate{background:#131c33;color:#e8eaf0}
               <span class="ai-studio-icon">🪄</span>
               <div>
                 <div class="ai-studio-title">AI โปรโมทสินค้า (Nano Banana)</div>
-                <div class="ai-studio-sub">เจนโปสเตอร์ด้วย Google Gemini · คีย์เก็บเฉพาะในเบราว์เซอร์เครื่องนี้ ไม่ขึ้นไปกับไฟล์แอป</div>
+                <div class="ai-studio-sub">แบบฟรี (แอป Gemini) ไม่ต้องใช้คีย์ · คีย์ใช้กับแบบ API (จ่ายตามภาพ) หรือให้แอปอ่านราคาในภาพ · เก็บเฉพาะในเบราว์เซอร์เครื่องนี้</div>
               </div>
             </div>
             <div class="field">
@@ -3253,7 +3258,10 @@ body.dark #appUpdate{background:#131c33;color:#e8eaf0}
           <span id="aipKeyState" class="aip-keystate"></span>
         </div>
         <div class="card-body poster-panel">
-          <div class="pp-row">
+          <div class="pp-row"><label class="pp-lb">วิธีเจน</label><div class="pp-chips" id="aipViaChips">
+            <button type="button" class="pp-chip" data-v="app" onclick="aipSet('via','app')">🆓 แอป Gemini (ฟรี · แพ็กเกจ Pro)</button>
+            <button type="button" class="pp-chip" data-v="api" onclick="aipSet('via','api')">💳 API (อัตโนมัติ · จ่ายตามภาพ)</button></div></div>
+          <div class="pp-row" id="aipApiRow">
             <label class="pp-lb">โมเดล</label><select class="pp-sel" id="aipModel" onchange="aipSet('model', this.value)"></select>
             <label class="pp-lb">ความละเอียด</label><select class="pp-sel" id="aipSize" onchange="aipSet('size', this.value)"></select>
           </div>
@@ -3276,10 +3284,16 @@ body.dark #appUpdate{background:#131c33;color:#e8eaf0}
           <div class="aip-srcline" id="aipSrcLine"></div>
           <div id="aipRows" class="aip-rows"></div>
           <details class="aip-prompt"><summary>👁 ดูคำสั่ง (prompt) ที่จะส่งให้ AI</summary><pre id="aipPromptPrev"></pre></details>
-          <div class="pp-row aip-gorow">
+          <div class="aip-steps" id="aipAppGo">
+            <div class="aip-step"><b>1</b><div><button type="button" class="btn btn-gold btn-sm" onclick="aipAppCopy()">📋 คัดลอกคำสั่ง</button><span>คำสั่ง + ข้อความไทย + ราคาขั้นบันไดครบ</span></div></div>
+            <div class="aip-step"><b>2</b><div><button type="button" class="btn btn-primary btn-sm" onclick="aipAppDownload()">⬇️ โหลดรูปสินค้า/โลโก้ <span id="aipAppN"></span></button><span>ไฟล์ขึ้นต้นเลข 1, 2, 3… — แนบใน Gemini ตามลำดับเลข</span></div></div>
+            <div class="aip-step"><b>3</b><div><a class="btn btn-success btn-sm" href="https://gemini.google.com/app" target="_blank" rel="noopener">🌐 เปิด Gemini</a><span>ใช้บัญชีที่มีแพ็กเกจ Pro · ถ้ามีตัวเลือก 🍌 สร้างรูปภาพ / รุ่น Pro ให้เลือก · แนบรูปทั้งหมด → วางคำสั่ง (Ctrl+V) → ส่ง</span></div></div>
+            <div class="aip-step"><b>4</b><div><label class="btn btn-outline btn-sm aip-upbtn">📤 เอาภาพที่ได้มาตรวจราคา<input type="file" accept="image/*" multiple hidden onchange="aipAppImport(this.files); this.value=''"></label><button type="button" class="btn btn-outline btn-sm" onclick="aipAppCopyFix()">📋 คัดลอกคำสั่งแก้ราคา</button><span id="aipAppKeyHint"></span></div></div>
+          </div>
+          <div class="pp-row"><label class="pp-ck"><input type="checkbox" id="aipCheck" onchange="aipSet('check', this.checked)"> ตรวจราคาในภาพอัตโนมัติ (ต้องมีคีย์)</label></div>
+          <div class="pp-row aip-gorow" id="aipApiGo">
             <button type="button" class="btn btn-gold" id="aipGo1" onclick="aipGenerate(1)">✨ เจนภาพ</button>
             <button type="button" class="btn btn-outline" id="aipGo2" onclick="aipGenerate(2)">✨ เจน 2 แบบ</button>
-            <label class="pp-ck"><input type="checkbox" id="aipCheck" onchange="aipSet('check', this.checked)"> ตรวจราคาในภาพอัตโนมัติ</label>
             <span id="aipPresInfo" class="txt-muted" style="font-size:12px"></span>
           </div>
           <div class="txt-muted" id="aipCost" style="font-size:12px"></div>
@@ -7452,7 +7466,7 @@ const AIP_STYLES = [
   { k:'brand',   n:'💙 น้ำเงิน-ทอง รัตน', d:'Rattana Mart brand colours: deep navy blue (#0d1b3e) with golden yellow (#fbbf24) accents, premium glossy look, subtle supermarket-shelf background.' },
 ];
 const AIP_FMTS = [ { k:'a', n:'5 ลัง ราคา 350 ฿' }, { k:'b', n:'5 ลัง 350.-' } ];
-const AIP_DEF = { model:'gemini-3-pro-image', ratio:'4:5', size:'2K', style:'auto', fmt:'a', headline:'', sub:'สินค้าราคายกลัง', badge:'ราคาพิเศษ ลูกค้ารัตนมาร์ท', extra:'', check:true };
+const AIP_DEF = { via:'app', model:'gemini-3-pro-image', ratio:'4:5', size:'2K', style:'auto', fmt:'a', headline:'', sub:'สินค้าราคายกลัง', badge:'ราคาพิเศษ ลูกค้ารัตนมาร์ท', extra:'', check:true };
 let aipCfg = { ...AIP_DEF };
 let aipEdits = {};          // sku → { name, label, tiers:[{q,p}] } — session only (prices always start fresh from the sheets)
 let aipResults = [];        // session only: { id, status:'loading'|'done'|'error', img:{mime,data}, parts, prompt, expect, check, hist:[], err, note, model, ratio, ctrl, t0 }
@@ -7691,12 +7705,12 @@ function aipRefPlan(rows){
   if (aipStyleRef) refs.push({ role:'style', desc:'a style / layout example ONLY — not content' });
   return refs;
 }
-function aipPrompt(rows, refs){
+function aipPrompt(rows, refs, via){
   const head = aipHeadline(rows.map(r => r.p));
   const st = (AIP_STYLES.find(s => s.k === aipCfg.style) || AIP_STYLES[0]).d;
   const L = [];
-  L.push(`Design ONE finished, print-ready Thai retail promotional poster for the store "รัตนมาร์ท" (Rattana Mart). Aspect ratio ${aipCfg.ratio}.`);
-  L.push('', 'REFERENCE IMAGES (attached after this text, in this order):');
+  L.push(`${via === 'app' ? 'Create an image: ' : ''}Design ONE finished, print-ready Thai retail promotional poster for the store "รัตนมาร์ท" (Rattana Mart). Aspect ratio ${aipCfg.ratio}.`);
+  L.push('', via === 'app' ? 'REFERENCE IMAGES (attached to this message, in this order — their file names start with 1, 2, 3 …):' : 'REFERENCE IMAGES (attached after this text, in this order):');
   refs.forEach((r, i) => L.push(`- Image ${i + 1}: ${r.desc}`));
   L.push('', 'HOW TO USE THE REFERENCES:');
   L.push('- Logo: put the Rattana Mart logo at the top-left corner, fully visible and faithful (same cart icon, colours and lettering). It is the ONLY store logo on the poster; product packaging keeps its own printed brand.');
@@ -7717,7 +7731,7 @@ function aipPrompt(rows, refs){
   if (String(aipCfg.extra || '').trim()) L.push('', 'EXTRA INSTRUCTIONS: ' + aipCfg.extra.trim());
   return L.join('\n');
 }
-function aipPromptPreview(){ const el = $('#aipPromptPrev'); if (!el) return; const rows = aipRows(); el.textContent = rows.length ? aipPrompt(rows, aipRefPlan(rows)) : '(ยังไม่ได้เลือกสินค้า)'; }
+function aipPromptPreview(){ const el = $('#aipPromptPrev'); if (!el) return; const rows = aipRows(); el.textContent = rows.length ? aipPrompt(rows, aipRefPlan(rows), aipCfg.via === 'api' ? 'api' : 'app') : '(ยังไม่ได้เลือกสินค้า)'; }
 async function aipBuildParts(rows){
   const refs = aipRefPlan(rows);
   const imgs = await Promise.all(refs.map(r => r.role === 'logo' ? aipLogoRef()
@@ -7785,17 +7799,9 @@ async function aipGenerate(n){
   if (!aipSel().length) { showToast('ยังไม่ได้เลือกสินค้า — ติ๊กในแท็บ "เลือกสินค้า" ก่อน', 'warning'); return; }
   aipBusy = true; aipSyncPanel();
   try {
-    await aipLoadOverrides();   // freshest Price Override before pricing
-    const rows = aipRows();
-    if (!rows.length) throw new Error('ยังไม่ได้เลือกสินค้า');
-    const pending = rows.filter(r => r.noData && !r.edited);
-    if (pending.length) throw new Error(`รอโหลดข้อมูลสินค้าให้เสร็จก่อน (ราคา S01–S03 / CS PALLET ยังไม่มา): ${pending.map(r => r.name).join(', ')}`);
-    const noPrice = rows.filter(r => !aipCleanTiers(r.tiers).length);
-    if (noPrice.length) throw new Error(`ยังไม่มีราคาของ: ${noPrice.map(r => r.name).join(', ')} — ใส่ราคาเองในตาราง`);
-    const noImg = rows.filter(r => !r.p.image);
-    if (noImg.length) throw new Error(`ไม่มีรูปสินค้า: ${noImg.map(r => r.name).join(', ')} — เอาออก หรือเพิ่มรูปใน Stocksync`);
+    const rows = await aipReadyRows();   // freshest Price Override + the no-price / no-photo / cached-data guards
     const built = await aipBuildParts(rows);
-    const expect = rows.map(r => ({ name: r.name, lines: aipLines(r), nums: aipCleanTiers(r.tiers) }));
+    const expect = aipExpect(rows);
     const jobs = [];
     for (let i = 0; i < n; i++) { const job = { id: ++aipSeq, parts: built.parts, prompt: built.prompt, expect, model: aipCfg.model, ratio: aipCfg.ratio, size: aipCfg.size, hist: [] }; aipResults.unshift(job); jobs.push(job); }
     await Promise.all(jobs.map(aipRun));
@@ -7817,11 +7823,101 @@ async function aipEditJob(job, instr){
   }
   catch (e) { job.img = prev.img; job.check = prev.check; job.status = 'done'; job.note = 'แก้ไม่สำเร็จ: ' + ((e && e.message) || e); aipRenderStage(); if (aipCfg.check && !job.check) aipCheck(job); }
 }
-function aipFixPrices(job){
-  const lines = job.expect.map(e => `• ${e.name}: ${e.lines.join(' / ')}`).join('\n');
-  aipEditJob(job, `Correct the product name labels and price boxes so they read EXACTLY as follows (fix any wrong digit, word or spelling; keep the same design and positions):\n${lines}`);
-}
+function aipFixPrices(job){ aipEditJob(job, aipFixText(job.expect)); }
 function aipUndo(job){ const h = job.hist.pop(); if (!h) return; job.img = h.img; job.check = h.check; job.note = ''; job.status = 'done'; aipRenderStage(); }
+// ── v7.29 — 🆓 FREE route: the user's own Gemini app (their Google AI Pro plan) instead of the paid API ──
+// The app still prices the products and writes the prompt; the user copies it, downloads the numbered reference photos,
+// generates in gemini.google.com, then brings the result back here to compare prices (auto-read only if a key exists —
+// a key WITHOUT billing is enough for the free text models). Nothing here calls the paid image API.
+async function aipReadyRows(){   // the same guards as ✨ เจนภาพ — never hand out a prompt with missing / cached prices
+  const ts = aipOvrTs;
+  await aipLoadOverrides();
+  if (aipOvrTs !== ts && isAiPromoMode()) { aipSyncPanel(); const b = $('#aipRows'); if (!b || !b.contains(document.activeElement)) aipRenderRows(); aipPromptPreview(); }   // prices may have changed
+  const rows = aipRows();
+  if (!rows.length) throw new Error('ยังไม่ได้เลือกสินค้า — ติ๊กในแท็บ "เลือกสินค้า" ก่อน');
+  const pending = rows.filter(r => r.noData && !r.edited);
+  if (pending.length) throw new Error(`รอโหลดข้อมูลสินค้าให้เสร็จก่อน (ราคา S01–S03 / CS PALLET ยังไม่มา): ${pending.map(r => r.name).join(', ')}`);
+  const noPrice = rows.filter(r => !aipCleanTiers(r.tiers).length);
+  if (noPrice.length) throw new Error(`ยังไม่มีราคาของ: ${noPrice.map(r => r.name).join(', ')} — ใส่ราคาเองในตาราง`);
+  const noImg = rows.filter(r => !r.p.image);
+  if (noImg.length) throw new Error(`ไม่มีรูปสินค้า: ${noImg.map(r => r.name).join(', ')} — เอาออก หรือเพิ่มรูปใน Stocksync`);
+  return rows;
+}
+function aipExpect(rows){ return rows.map(r => ({ name: r.name, lines: aipLines(r), nums: aipCleanTiers(r.tiers) })); }
+function aipFixText(expect){
+  const lines = expect.map(e => `• ${e.name}: ${e.lines.join(' / ')}`).join('\n');
+  return `Correct the product name labels and price boxes so they read EXACTLY as follows (fix any wrong digit, word or spelling; keep the same design and positions):\n${lines}`;
+}
+async function aipClip(text){
+  try { await navigator.clipboard.writeText(text); return true; } catch {}
+  try {   // fallback for browsers that block the async clipboard
+    const ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;left:-9999px;top:0';
+    document.body.appendChild(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); return ok;
+  } catch { return false; }
+}
+let aipAppLast = null;   // expect list of the last copied prompt — imported results are compared against it
+async function aipAppCopy(){
+  try {
+    const rows = await aipReadyRows();
+    const txt = aipPrompt(rows, aipRefPlan(rows), 'app');
+    aipAppLast = aipExpect(rows);
+    const ok = await aipClip(txt);
+    showToast(ok ? '📋 คัดลอกคำสั่งแล้ว — ไปวางในแชท Gemini (Ctrl+V)' : 'คัดลอกไม่ได้ — เปิด "ดูคำสั่ง" แล้วคัดลอกเอง', ok ? 'success' : 'warning');
+  } catch (e) { showToast((e && e.message) || String(e), 'warning'); }
+}
+function aipFileSafe(s){ return String(s || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60).replace(/[.\s]+$/, '') || 'image'; }   // no trailing dot ("…มล..jpg")
+async function aipAppDownload(){
+  try {
+    const rows = await aipReadyRows(), refs = aipRefPlan(rows);
+    showSpinner('กำลังเตรียมรูป…');
+    const imgs = await Promise.all(refs.map(r => r.role === 'logo' ? aipLogoRef()
+      : r.role === 'presenter' ? Promise.resolve(aipPresenter)
+      : r.role === 'style' ? Promise.resolve(aipStyleRef)
+      : aipImgB64(imgAtWidth(rows.find(x => x.p.sku === r.sku).p.image, 1024), 1024)));
+    hideSpinner();
+    const bad = refs.map((r, i) => (r.role === 'product' && !imgs[i]) ? rows.find(x => x.p.sku === r.sku).name : null).filter(Boolean);
+    if (bad.length) throw new Error(`โหลดรูปสินค้าไม่ได้: ${bad.join(', ')} — ลองใหม่ หรือเอาสินค้านั้นออก`);
+    if (refs.some((r, i) => !imgs[i])) throw new Error('โหลดโลโก้ไม่ได้ — ลองใหม่ หรืออัปโหลดโลโก้เองในแท็บ ตั้งค่า (AI โปรโมท)');   // file numbers must match the prompt's order
+    const label = r => r.role === 'logo' ? 'โลโก้รัตนมาร์ท' : r.role === 'presenter' ? 'พรีเซนเตอร์' : r.role === 'style' ? 'ตัวอย่างสไตล์'
+      : (row => aipCleanName(row ? (row.p.fullName || row.p.name) : r.sku))(rows.find(x => x.p.sku === r.sku));   // full product name — easy to recognise when attaching
+    let n = 0;
+    for (let i = 0; i < refs.length; i++) {
+      const im = imgs[i]; if (!im) continue;
+      const ext = /png/.test(im.mime) ? 'png' : 'jpg';
+      const blob = await (await fetch(aipRefURL(im))).blob();
+      const url = URL.createObjectURL(blob), a = document.createElement('a');
+      a.href = url; a.download = `${i + 1}-${aipFileSafe(label(refs[i]))}.${ext}`; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      n++; await new Promise(r => setTimeout(r, 350));
+    }
+    showToast(`⬇️ โหลด ${n} รูปแล้ว — แนบใน Gemini ตามลำดับเลข 1, 2, 3… (ถ้าเบราว์เซอร์ถาม "ดาวน์โหลดหลายไฟล์" ให้กดอนุญาต)`, 'success');
+  } catch (e) { hideSpinner(); showToast((e && e.message) || String(e), 'warning'); }
+}
+async function aipAppCopyFix(job){
+  let expect = job && job.expect;
+  if (!expect) { try { expect = aipExpect(await aipReadyRows()); } catch (e) { showToast((e && e.message) || String(e), 'warning'); return; } }
+  aipAppLast = expect;
+  const txt = aipFixText(expect), ok = await aipClip(txt);   // 5) failure → show the text so it can be copied by hand
+  if (!ok) { const pre = $('#aipPromptPrev'); if (pre) { pre.textContent = txt; const d = pre.closest('details'); if (d) d.open = true; } }
+  showToast(ok ? '📋 คัดลอกคำสั่งแก้ราคาแล้ว — วางต่อในแชท Gemini เดิม' : 'คัดลอกไม่ได้ — ข้อความอยู่ในช่อง "ดูคำสั่ง" ให้คัดลอกเอง', ok ? 'success' : 'warning');
+}
+async function aipAppImport(files){
+  const list = [...(files || [])].filter(f => /^image\//.test(f.type || ''));
+  if (!list.length) { if ((files || []).length) showToast('ไฟล์ที่เลือกไม่ใช่รูปภาพ (PNG/JPG/WEBP)', 'warning'); return; }
+  let expect = aipAppLast, why = '';
+  if (!expect) { try { expect = aipExpect(await aipReadyRows()); } catch (e) { expect = null; why = (e && e.message) || String(e); } }
+  let made = 0;
+  for (const f of list) {
+    const d = await new Promise(res => { const rd = new FileReader(); rd.onload = () => res(rd.result); rd.onerror = () => res(null); rd.readAsDataURL(f); });
+    const m = String(d || '').match(/^data:([^;]+);base64,(.*)$/); if (!m) continue;
+    const job = { id: ++aipSeq, status:'done', img: { mime: m[1], data: m[2] }, expect, model:'gemini-app', ratio: aipCfg.ratio, hist: [], imported: true, note: expect ? '' : 'ยังไม่มีรายการราคาให้เทียบ — ' + why };
+    aipResults.unshift(job); made++;
+    if (expect && aipKey() && aipCfg.check) aipCheck(job);   // a text model reads the numbers (free on a no-billing key) — honours the ✔ auto-check setting
+  }
+  aipRenderStage();
+  if (!made) { showToast('อ่านไฟล์รูปไม่ได้', 'warning'); return; }
+  showToast(!expect ? '📤 นำภาพเข้ามาแล้ว แต่ยังไม่มีรายการราคาให้เทียบ: ' + why : (aipKey() && aipCfg.check) ? '📤 นำภาพเข้ามาแล้ว — กำลังตรวจราคาให้' : '📤 นำภาพเข้ามาแล้ว — เทียบราคากับรายการข้างภาพ', expect ? 'success' : 'warning');
+}
 
 // ── automatic price check: a text-only Gemini model reads every number back from the poster ──
 function aipVer(id){ const m = String(id).match(/gemini-([\d.]+)/); return m ? parseFloat(m[1]) : 0; }
@@ -7878,6 +7974,13 @@ async function aipCheck(job){
 function aipSyncPanel(){
   if (!$('#aiPromoPanel')) return;
   const set = (id, v) => { const el = $(id); if (el && el !== document.activeElement) el.value = v; };
+  const app = aipCfg.via !== 'api';   // v7.29 — 🆓 Gemini app (default) vs 💳 API
+  document.querySelectorAll('#aipViaChips .pp-chip').forEach(b => b.classList.toggle('active', b.dataset.v === (app ? 'app' : 'api')));
+  ['#aipApiRow','#aipApiGo','#aipCost','#aipKeyState'].forEach(s => { const el = $(s); if (el) el.style.display = app ? 'none' : ''; });
+  if ($('#aipAppGo')) $('#aipAppGo').style.display = app ? '' : 'none';
+  const an = $('#aipAppN'); if (an) { const k = aipSel().length; an.textContent = k ? `(${1 + k + (aipPresenter ? 1 : 0) + (aipStyleRef ? 1 : 0)} ไฟล์)` : ''; }
+  const kh = $('#aipAppKeyHint'); if (kh) kh.textContent = !aipKey() ? 'ถ้าใส่คีย์ Gemini ในแท็บตั้งค่า (คีย์ฟรี ไม่ต้องผูกบัตร) แอปจะอ่านราคาในภาพให้อัตโนมัติ — ไม่ใส่ก็เทียบด้วยตาได้'
+    : aipCfg.check ? '✅ มีคีย์ — แอปอ่านราคาในภาพให้อัตโนมัติ (คีย์ที่ผูกบัตรจะคิดเงินการอ่านเล็กน้อย)' : 'มีคีย์ แต่ปิดการตรวจอัตโนมัติไว้ — เทียบราคาด้วยตา';
   const ms = $('#aipModel');
   if (ms) {
     const ids = AIP_MODELS.map(m => m.id);
@@ -7933,7 +8036,7 @@ function aipCheckHtml(j){
     : !c ? '<div class="aip-chk-h">👀 เทียบราคาในภาพกับรายการนี้</div>'
     : c.status === 'run' ? '<div class="aip-chk-h">🔎 กำลังตรวจราคาในภาพ…</div>'
     : c.status === 'ok' ? '<div class="aip-chk-h ok">✅ ตัวเลขราคาครบ (ตรวจอัตโนมัติ) — ดูตัวหนังสือด้วยตาอีกรอบ</div>'
-    : c.status === 'bad' ? '<div class="aip-chk-h bad">⚠️ ตัวเลขราคาไม่ตรง — กด “🔧 แก้ราคาให้ถูก”</div>'
+    : c.status === 'bad' ? `<div class="aip-chk-h bad">⚠️ ตัวเลขราคาไม่ตรง — ${j.imported ? 'กด “📋 คัดลอกคำสั่งแก้ราคา” แล้ววางต่อในแชท Gemini เดิม' : 'กด “🔧 แก้ราคาให้ถูก”'}</div>`
     : `<div class="aip-chk-h">▫️ ${escapeHtml(c.note || 'ตรวจราคาด้วยตา')}</div>`;
   const body = j.expect.map(e => `<div class="aip-exp"><b>${escapeHtml(e.name)}</b>${e.lines.map(l => {
     const it = fin ? c.items.find(x => x.name === e.name && x.line === l) : null;
@@ -7949,7 +8052,13 @@ function aipCardHtml(j, editVal){
   else if (j.status === 'error') main = `<div class="aip-err">⚠️ ${escapeHtml(j.err)}</div>`;
   else main = img;
   let acts = '';
-  if (j.status === 'done') acts = `<div class="aip-acts">
+  if (j.status === 'done' && j.imported) acts = `<div class="aip-acts">
+      <button class="btn btn-sm btn-primary" data-aip-act="png" data-id="${id}">⬇️ PNG</button>
+      <button class="btn btn-sm btn-primary" data-aip-act="jpeg" data-id="${id}">⬇️ JPEG</button>
+      ${j.expect ? `<button class="btn btn-sm btn-gold" data-aip-act="copyfix" data-id="${id}">📋 คัดลอกคำสั่งแก้ราคา</button>` : ''}
+      ${j.expect && aipKey() ? `<button class="btn btn-sm btn-outline" data-aip-act="recheck" data-id="${id}">🔎 ตรวจราคาอีกครั้ง</button>` : ''}
+      <button class="btn btn-sm btn-outline" data-aip-act="del" data-id="${id}">🗑</button></div>`;
+  else if (j.status === 'done') acts = `<div class="aip-acts">
       <button class="btn btn-sm btn-primary" data-aip-act="png" data-id="${id}">⬇️ PNG</button>
       <button class="btn btn-sm btn-primary" data-aip-act="jpeg" data-id="${id}">⬇️ JPEG</button>
       <button class="btn btn-sm btn-gold" data-aip-act="fix" data-id="${id}">🔧 แก้ราคาให้ถูก</button>
@@ -7959,7 +8068,7 @@ function aipCardHtml(j, editVal){
     <div class="aip-editrow"><input class="aip-edit" data-id="${id}" placeholder="✏️ สั่งแก้ เช่น ขยายหัวข้อ / เปลี่ยนพื้นหลังเป็นสีฟ้า" value="${escapeAttr(editVal || '')}"><button class="btn btn-sm btn-gold" data-aip-act="edit" data-id="${id}">สั่งแก้</button></div>`;
   else if (j.status === 'error') acts = `<div class="aip-acts"><button class="btn btn-sm btn-gold" data-aip-act="retry" data-id="${id}">🔄 ลองใหม่</button><button class="btn btn-sm btn-outline" data-aip-act="del" data-id="${id}">🗑 ลบ</button></div>`;
   return `<div class="aip-card" data-id="${id}"><div class="aip-imgwrap">${main}</div>
-    <div class="aip-side"><div class="aip-meta">ภาพ #${id} · ${escapeHtml(mdl ? mdl.n.split(' · ')[0] : j.model)} · ${escapeHtml(j.ratio)}${j.hist.length ? ` · แก้แล้ว ${j.hist.length} ครั้ง` : ''}</div>
+    <div class="aip-side"><div class="aip-meta">ภาพ #${id} · ${escapeHtml(j.imported ? 'จากแอป Gemini' : mdl ? mdl.n.split(' · ')[0] : j.model)} · ${escapeHtml(j.ratio)}${j.hist.length ? ` · แก้แล้ว ${j.hist.length} ครั้ง` : ''}</div>
     ${j.note ? `<div class="aip-note">${escapeHtml(j.note)}</div>` : ''}${aipCheckHtml(j)}${acts}</div></div>`;
 }
 function aipRenderStage(){
@@ -7967,7 +8076,9 @@ function aipRenderStage(){
   const vals = {}; stage.querySelectorAll('.aip-edit').forEach(i => { if (i.value) vals[i.dataset.id] = i.value; });   // keep half-typed edit requests across re-renders
   const ae = document.activeElement, fid = (ae && ae.classList && ae.classList.contains('aip-edit')) ? ae.dataset.id : null;
   if (!aipResults.length) {
-    stage.innerHTML = `<div class="empty-state"><div class="emoji">🪄</div><h3>ยังไม่มีภาพ</h3><div class="empty-sub">เลือกสินค้า (สูงสุด ${AIP_MAX} ตัว/ภาพ) → ตรวจราคาขั้นบันไดในตารางด้านบน → กด <b>✨ เจนภาพ</b><br>ภาพที่ได้จะขึ้นที่นี่ พร้อมตรวจราคาในภาพให้อัตโนมัติ · ภาพอยู่เฉพาะรอบนี้ — ดาวน์โหลดเก็บไว้</div></div>`;
+    stage.innerHTML = aipCfg.via === 'api'
+      ? `<div class="empty-state"><div class="emoji">🪄</div><h3>ยังไม่มีภาพ</h3><div class="empty-sub">เลือกสินค้า (สูงสุด ${AIP_MAX} ตัว/ภาพ) → ตรวจราคาขั้นบันไดในตารางด้านบน → กด <b>✨ เจนภาพ</b><br>ภาพที่ได้จะขึ้นที่นี่ พร้อมตรวจราคาในภาพให้อัตโนมัติ · ภาพอยู่เฉพาะรอบนี้ — ดาวน์โหลดเก็บไว้</div></div>`
+      : `<div class="empty-state"><div class="emoji">🆓</div><h3>เจนฟรีในแอป Gemini</h3><div class="empty-sub">ทำตามขั้นตอน 1–3 ด้านบน (คัดลอกคำสั่ง → โหลดรูป → เปิด Gemini แนบรูป+วางคำสั่ง)<br>ได้ภาพแล้วกด <b>📤 เอาภาพที่ได้มาตรวจราคา</b> ภาพจะมาขึ้นที่นี่พร้อมรายการราคาที่ถูกต้องไว้เทียบ</div></div>`;
     return;
   }
   stage.innerHTML = `<div class="aip-results">${aipResults.map(j => aipCardHtml(j, vals[j.id])).join('')}</div>`;
@@ -8003,7 +8114,7 @@ async function aipDownload(j, fmt){
 }
 async function exportAiPromo(format){
   const done = aipResults.filter(j => j.status === 'done' && j.img);
-  if (!done.length) { showToast('ยังไม่มีภาพที่สร้าง — กด “✨ เจนภาพ” ก่อน', 'warning'); return; }
+  if (!done.length) { showToast(aipCfg.via === 'api' ? 'ยังไม่มีภาพที่สร้าง — กด “✨ เจนภาพ” ก่อน' : 'ยังไม่มีภาพ — เจนในแอป Gemini แล้วกด “📤 เอาภาพที่ได้มาตรวจราคา” ก่อน', 'warning'); return; }
   try {
     if (format === 'pdf') {
       const { jsPDF } = window.jspdf; let pdf = null;
@@ -8024,6 +8135,7 @@ function aipSet(f, v){
   aipCfg[f] = v; aipSave();
   if (!isAiPromoMode()) return;
   aipSyncPanel();
+  if (f === 'via') aipRenderStage();
   if (f === 'headline' || f === 'fmt') { const b = $('#aipRows'); if (!b || !b.contains(document.activeElement)) aipRenderRows(); }
   aipPromptPreview();
 }
@@ -8073,6 +8185,7 @@ function aipInitUI(){
       if (act === 'cancel') { if (j.ctrl) j.ctrl.abort(); }
       else if (act === 'png' || act === 'jpeg') aipDownload(j, act).catch(err => showToast('ดาวน์โหลดไม่สำเร็จ: ' + (err.message || err), 'error'));
       else if (act === 'fix') aipFixPrices(j);
+      else if (act === 'copyfix') aipAppCopyFix(j);
       else if (act === 'recheck') aipCheck(j);
       else if (act === 'undo') aipUndo(j);
       else if (act === 'retry') aipRun(j);
