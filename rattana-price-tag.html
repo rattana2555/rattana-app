@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Design Hub v7.31</title>
+<title>Rattana Design Hub v7.32</title>
 <meta name="description" content="Rattana Design Hub — ออกแบบป้ายราคา โปรโมชั่น Flash Sale และแคตตาล็อก จาก Google Sheet พิมพ์ PDF/PNG/JPEG">
 <meta name="theme-color" content="#132248">
 <meta name="apple-mobile-web-app-title" content="Rattana Design Hub">
@@ -2331,6 +2331,7 @@ body.dark .pdf-stage{background-color:#0a1226}
 .aip-info{display:flex;flex-wrap:wrap;gap:5px}
 .aip-tag{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:999px;background:#eef2ff;color:#3730a3}
 .aip-tag.ovr{background:#fef3c7;color:#92400e}
+.aip-tag.fb{background:#fff7ed;color:#9a3412;border:1px dashed #fdba74}
 .aip-tag.edit{background:#fce7f3;color:#9d174d}
 .aip-tag.warn,.aip-warn{background:#fee2e2;color:#991b1b}
 .aip-warn{font-size:12px;font-weight:700;padding:5px 9px;border-radius:8px}
@@ -2421,7 +2422,7 @@ body.dark #appUpdate{background:#131c33;color:#e8eaf0}
   <header>
     <button class="icon-btn hamburger-btn" onclick="toggleDrawer(true)" title="เมนูฟีเจอร์" aria-label="เมนู">☰</button>
     <img class="logo-img" src="rattana-hub-icon-512.png?v=2" alt="Rattana Design Hub" width="44" height="44" style="object-fit:cover">
-    <div class="logo-text">RATTANA <span style="color:var(--gold)">DESIGN HUB</span><small>ออกแบบป้าย · โปรโมชั่น · แคตตาล็อก v7.31</small></div>
+    <div class="logo-text">RATTANA <span style="color:var(--gold)">DESIGN HUB</span><small>ออกแบบป้าย · โปรโมชั่น · แคตตาล็อก v7.32</small></div>
     <button class="icon-btn" id="btnInstallApp" onclick="installApp()" title="ติดตั้งแอปลงเครื่อง" style="display:none;background:var(--gold);color:#0d1b3e">📥</button>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="โหลดข้อมูลใหม่">⟳</button>
     <button class="icon-btn" onclick="toggleDark()" title="โหมดมืด">🌙</button>
@@ -7875,6 +7876,14 @@ function aipSyncPanel(){
     src.innerHTML = `<span>${escapeHtml(ov)}</span><span>· คลัง <b>${escapeHtml(wh)}</b> · สเต็ปลังตาม RANK (A: 1/10/เลท · B,C: 1/5/10 · อื่นๆ: 1/2/5)</span><button class="aip-reset" onclick="aipLoadOverrides(true).then(buildPdfPreview)">🔄 ดึงราคาใหม่</button>`;
   }
 }
+function aipRankTag(r){   // v7.32 — say WHERE the rank came from: the configured warehouse, or (like ROO) the first warehouse that has one
+  const wh = SHEET_CONFIG.warehouse || 'W1', rk = r.a.rank;
+  if (r.unit !== 'CS') return `<span class="aip-tag">ไม่มีราคาลัง → ราคาเดียว/${escapeHtml(r.uname)}</span>`;
+  const step = rk.r === 'A' ? '1/10/เลท' : (rk.r === 'B' || rk.r === 'C') ? '1/5/10' : '1/2/5';
+  if (!rk.r) return `<span class="aip-tag">ไม่มี RANK ทุกคลัง → สเต็ป ${step}</span>`;
+  if (rk.wh === wh) return `<span class="aip-tag">RANK ${escapeHtml(rk.r)} (${escapeHtml(wh)}) → สเต็ป ${step}</span>`;
+  return `<span class="aip-tag fb" title="เหมือนแอปสั่ง ROO: คลังที่ตั้งไว้ไม่มี RANK ของสินค้านี้ → ใช้ RANK ของคลังแรกที่มี (W1→W2→W3→W4→C4)">${escapeHtml(wh)} ไม่มี RANK → ใช้ ${escapeHtml(rk.r)} ของ ${escapeHtml(rk.wh)} · สเต็ป ${step}</span>`;
+}
 function aipRenderRows(){
   const box = $('#aipRows'); if (!box) return;
   const all = getSortedSelection(), rows = aipRows();
@@ -7889,7 +7898,7 @@ function aipRenderRows(){
       <div class="aip-fields">
         <div class="aip-f2"><input class="pp-txt" data-sku="${sk}" data-f="name" value="${escapeAttr(r.name)}" placeholder="ชื่อในภาพ" title="ชื่อสินค้าที่จะเขียนในภาพ"><input class="pp-txt aip-lbl" data-sku="${sk}" data-f="label" value="${escapeAttr(r.label)}" placeholder="ขนาดบรรจุ เช่น ลัง x 12 ขวด" title="ป้ายขนาดบรรจุ (เว้นว่าง = ไม่ใส่)"></div>
         <div class="aip-tiers">${tiers || '<span class="aip-warn">ไม่มีราคาในชีท — กด + ขั้น แล้วใส่ราคาเอง</span>'}<button class="aip-add" data-aipr="add" data-sku="${sk}">+ ขั้น</button>${r.edited ? `<button class="aip-reset" data-aipr="reset" data-sku="${sk}">↺ ราคาจากชีท</button>` : ''}</div>
-        <div class="aip-info"><span class="aip-tag">RANK ${escapeHtml(r.a.rank.r || '—')} · ${escapeHtml(r.a.rank.wh)}</span>${src}${r.edited ? '<span class="aip-tag edit">แก้ราคาเอง</span>' : ''}${r.noData ? '<span class="aip-tag warn">⏳ ยังไม่มีราคา S01–S03 (ข้อมูลจากแคช) — รอโหลดข้อมูลสักครู่ หรือกด 📥 โหลดข้อมูลสินค้า</span>' : ''}</div>
+        <div class="aip-info">${aipRankTag(r)}${src}${r.edited ? '<span class="aip-tag edit">แก้ราคาเอง</span>' : ''}${r.noData ? '<span class="aip-tag warn">⏳ ยังไม่มีราคา S01–S03 (ข้อมูลจากแคช) — รอโหลดข้อมูลสักครู่ หรือกด 📥 โหลดข้อมูลสินค้า</span>' : ''}</div>
       </div></div>`;
   }).join('');
 }
