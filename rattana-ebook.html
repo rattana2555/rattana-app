@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana E-Book v2.6</title>
+<title>Rattana E-Book v2.7</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <!-- ฟอนต์โหลดแบบไม่บล็อกหน้า (หนังสือขึ้นก่อน ฟอนต์ตามมา) -->
@@ -327,7 +327,7 @@ const DEFAULT_PAGES = [
 /* ════════ STATE ════════ */
 let currentUser=null;
 let PAGES=[], CHAPTERS=[], BOOK_MODE='manual', PDF_NAME='', IS_HOSTED=false;
-let pageEls=[], leafEls=[], SPREAD=false, currentIndex=0, N=0, addMode='url', HOSTED_LAZY=false, HIDE_PGNUM=false, PAGE_OFFSET=0;
+let pageEls=[], leafEls=[], SPREAD=false, currentIndex=0, N=0, addMode='url', HOSTED_LAZY=false, HIDE_PGNUM=false, PAGE_OFFSET=0, PAGE_OFFSETS=[];
 
 /* v2.6: เลิกจำ PDF ส่วนตัวในเครื่องแล้ว (เคยทำให้เปิดลิงก์แล้วเจอเล่มเก่า + ต้องแปลง PDF ใหม่ทุกครั้ง)
    ลบฐานข้อมูลเก่าที่ค้างในเครื่องทิ้ง เพื่อคืนพื้นที่ (บางเครื่องมี PDF 110MB ค้างอยู่) */
@@ -378,7 +378,7 @@ async function startReader(){
   const m=await fetchManifest();
   clearTimeout(spinT); hideSpinner();
   if(m && loadHostedBook(m)) return;
-  BOOK_MODE='manual'; PDF_NAME=''; IS_HOSTED=false; HOSTED_LAZY=false; HIDE_PGNUM=false; PAGE_OFFSET=0; loadBook(); buildBook(); jumpTo(0,false);
+  BOOK_MODE='manual'; PDF_NAME=''; IS_HOSTED=false; HOSTED_LAZY=false; HIDE_PGNUM=false; PAGE_OFFSET=0; PAGE_OFFSETS=[]; loadBook(); buildBook(); jumpTo(0,false);
 }
 /* manifest เล็ก (~2KB) ดึงสดเสมอเพื่อให้เห็นเล่มล่าสุด — ถ้าเน็ตหลุด/ช้าเกิน ใช้ตัวที่สำรองไว้ */
 async function fetchManifest(){
@@ -401,6 +401,7 @@ function loadHostedBook(m){
     pages.push({type:'image', img:dir+f, thumb:tdir?tdir+f:'', lazy:true}); }
   PAGES=pages; CHAPTERS=(m.chapters||[]).map(c=>({title:c.title, index:(c.page||1)-1}));
   HIDE_PGNUM=!!m.hideNum; PAGE_OFFSET=parseInt(m.offset)||0;
+  PAGE_OFFSETS=Array.isArray(m.offsets)?m.offsets.slice().sort((a,b)=>a.from-b.from):[];
   BOOK_MODE='pdf'; IS_HOSTED=true; HOSTED_LAZY=true; PDF_NAME=m.title||'หนังสือ';
   buildBook(); jumpTo(0,false);
   return true;
@@ -471,7 +472,7 @@ async function renderPdf(buf, name){
     }
     let chapters=[];
     try{ const outline=await pdf.getOutline(); if(outline&&outline.length) chapters=await outlineToChapters(pdf,outline); }catch(e){ console.warn('outline fail',e); }
-    PDF_NAME=name||'PDF'; BOOK_MODE='pdf'; IS_HOSTED=false; HOSTED_LAZY=false; HIDE_PGNUM=false; PAGE_OFFSET=0; CHAPTERS=chapters; PAGES=pages;
+    PDF_NAME=name||'PDF'; BOOK_MODE='pdf'; IS_HOSTED=false; HOSTED_LAZY=false; HIDE_PGNUM=false; PAGE_OFFSET=0; PAGE_OFFSETS=[]; CHAPTERS=chapters; PAGES=pages;
     buildBook(); jumpTo(0,false);
     showToast(`เปิดดู “${PDF_NAME}” ชั่วคราว · ${num} หน้า — กด ✎ เพื่อกลับเล่มที่แชร์`,'success');
   }catch(e){ console.error(e); showToast('เปิด PDF ไม่สำเร็จ: '+(e&&e.message||e),'error'); }
@@ -497,7 +498,7 @@ function esc(s){ return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&l
 function faceHTML(p,i){
   if(!p) return '<div class="pg pg-blank"></div>';
   const num=`<div class="pg-num">${i+1}</div>`;
-  if(p.type==='cover') return `<div class="pg pg-cover"><div class="brand">RATTANA</div><div class="h">${esc(p.heading)}</div><div class="rule"></div><div class="s">${esc(p.sub)}</div><div class="foot">แตะเพื่อเปิดอ่าน · v2.6</div></div>`;
+  if(p.type==='cover') return `<div class="pg pg-cover"><div class="brand">RATTANA</div><div class="h">${esc(p.heading)}</div><div class="rule"></div><div class="s">${esc(p.sub)}</div><div class="foot">แตะเพื่อเปิดอ่าน · v2.7</div></div>`;
   if(p.type==='back') return `<div class="pg pg-back"><div class="h">${esc(p.heading)}</div><div class="s">${esc(p.sub)}</div></div>${num}`;
   if(p.type==='toc') return `<div class="pg pg-toc"><div class="kicker">Table of Contents</div><h2>สารบัญ</h2><ul class="toc-list" id="tocInBook"></ul></div>${num}`;
   if(p.type==='image'){ const s=p.lazy?`data-full="${esc(p.img)}"${p.thumb?` data-thumb="${esc(p.thumb)}"`:''}`:`src="${esc(p.img)}"`;
@@ -524,7 +525,7 @@ function buildBook(){
       book.appendChild(el); pageEls.push(el); });
   }
   if(BOOK_MODE==='manual') CHAPTERS=deriveChapters();
-  document.getElementById('pgTot').textContent=Math.max(1,N-PAGE_OFFSET);
+  document.getElementById('pgTot').textContent=Math.max(1,N-offsetAt(N-1));
   const sl=document.getElementById('pgSlider'); sl.min=1; sl.max=Math.max(1,N);
   cullPages();
   buildTocLists();
@@ -534,7 +535,8 @@ function matchSpread(){ try{ return window.matchMedia(SPREAD_MQ).matches; }catch
 /* ════════ TOC + PAGE GRID ════════ */
 function tocEntries(){ return CHAPTERS; }
 /* เลขหน้าที่แสดง = ตรงกับที่พิมพ์ในเล่ม (offset) — หน้าเปิด/โปรโมชั่นไม่มีเลขพิมพ์ */
-function pageLabel(i){ const pr=i+1-PAGE_OFFSET; return pr>=1 ? String(pr) : (i===0?'ปก':'โปร'); }
+function offsetAt(i){ const img=i+1; let off=PAGE_OFFSET; for(const o of PAGE_OFFSETS){ if(img>=o.from) off=o.value; else break; } return off; }
+function pageLabel(i){ const pr=i+1-offsetAt(i); return pr>=1 ? String(pr) : (i===0?'ปก':'โปร'); }
 function tocRowsHTML(){
   const e=tocEntries();
   if(!e.length) return `<li class="toc-empty">PDF นี้ไม่มีสารบัญ (bookmark) — ใช้ “ไปหน้า” ด้านล่างแทน</li>`;
