@@ -1,0 +1,417 @@
+/**
+ * Rattana แจ้งสินค้าขาด → LINE  (ไฟล์ OOSApp.gs)  v1.0
+ * วางเป็นไฟล์ใหม่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
+ *
+ * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
+ * - ตั้งเวลาส่ง: trigger oosTick ทุก 10 นาที → ถึงเวลารอบไหน (เช่น 13:00 / 18:00) ส่งรอบนั้นวันละครั้ง
+ * - ส่ง push ไปที่ User ID ของแต่ละร้าน (แท็บ UID: User ID / รหัสร้านค้า) ร้านมีหลาย UID = ส่งทุกตัว
+ * - ใช้ CHANNEL_ACCESS_TOKEN (ไฟล์ webhook) และ rtnForwardCards_ (ไฟล์ E-Slip) ตัวเดิม
+ *
+ * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
+ */
+
+var OOS_VERSION = '1.0';
+var OOS_TZ = 'Asia/Bangkok';
+var OOS_QUEUE = 'คิวส่งแอป';
+var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
+  'สินค้าขาด', 'สินค้าเพิ่ม', 'สถานะ', 'UID ที่ส่ง', 'เวลาส่ง', 'รอบ', 'ผลลัพธ์',
+  'บันทึกโดย', 'อัปเดต', 'hash'];
+var OOS_C = {}; OOS_HEAD.forEach(function (h, i) { OOS_C[h] = i; });
+var OOS_ST = { WAIT: 'รอส่ง', SENT: 'ส่งแล้ว', NOUID: 'ไม่มี UID', FAIL: 'ล้มเหลว', CANCEL: 'ยกเลิก' };
+var OOS_MAX_MS = 5 * 60 * 1000;   // กันชน 6 นาทีของ Apps Script
+
+/* ───────────── ทางเข้าจาก doPost ───────────── */
+function oosRoute_(e) {
+  var body;
+  try { body = JSON.parse((e && e.postData && e.postData.contents) || '{}'); } catch (err) { return null; }
+  if (!body || body.app !== 'oos') return null;              // ไม่ใช่แอป → ให้ webhook LINE ทำงานต่อ
+  var out;
+  try {
+    var key = oosProps_().getProperty('OOS_KEY');
+    if (!key || String(body.key || '') !== key) throw new Error('รหัสแอปไม่ถูกต้อง');
+    out = oosHandle_(body);
+    out.ok = true;
+  } catch (err) {
+    out = { ok: false, error: String(err && err.message || err) };
+  }
+  out.v = OOS_VERSION;
+  return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function oosHandle_(b) {
+  switch (b.action) {
+    case 'state': return oosState_(b);
+    case 'save': return oosSave_(b);
+    case 'cancel': return oosSetStatus_(b.ids || [], OOS_ST.CANCEL);
+    case 'requeue': return oosSetStatus_(b.ids || [], OOS_ST.WAIT);
+    case 'sendNow': return oosSendPending_({ ids: b.ids || null, round: 'กดส่งเอง' + (b.by ? ' (' + b.by + ')' : '') });
+    case 'setSchedule': return oosSetSchedule_(b);
+    case 'testSend': return oosTestSend_(b);
+    default: throw new Error('ไม่รู้จักคำสั่ง ' + b.action);
+  }
+}
+
+/* ───────────── ตั้งค่า / trigger ───────────── */
+function oosProps_() { return PropertiesService.getScriptProperties(); }
+
+function oosSetup() {
+  var p = oosProps_();
+  if (!p.getProperty('OOS_KEY')) p.setProperty('OOS_KEY', Utilities.getUuid().replace(/-/g, '').slice(0, 12));
+  if (!p.getProperty('OOS_TIMES')) p.setProperty('OOS_TIMES', '13:00,18:00');
+  if (!p.getProperty('OOS_ENABLED')) p.setProperty('OOS_ENABLED', '1');
+  oosInstallTrigger_();
+  oosQueueSheet_();
+  Logger.log('รหัสแอป (ใส่ในหน้า ⚙️ ของแอป) = ' + p.getProperty('OOS_KEY'));
+  Logger.log('เวลาส่ง = ' + p.getProperty('OOS_TIMES') + ' · เปิดอยู่ = ' + p.getProperty('OOS_ENABLED'));
+}
+
+function oosInstallTrigger_() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'oosTick') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('oosTick').timeBased().everyMinutes(10).create();
+}
+
+function oosTriggerOk_() {
+  return ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'oosTick'; });
+}
+
+function oosTimes_() {
+  return String(oosProps_().getProperty('OOS_TIMES') || '13:00,18:00').split(',')
+    .map(function (s) { return s.trim(); })
+    .filter(function (s) { return /^\d{1,2}:\d{2}$/.test(s); })
+    .map(function (s) { var a = s.split(':'); return ('0' + a[0]).slice(-2) + ':' + a[1]; })
+    .sort();
+}
+
+function oosSetSchedule_(b) {
+  var p = oosProps_();
+  if (b.times) {
+    var t = (b.times || []).map(String).filter(function (s) { return /^\d{1,2}:\d{2}$/.test(s); });
+    if (!t.length) throw new Error('ต้องมีเวลาส่งอย่างน้อย 1 รอบ');
+    p.setProperty('OOS_TIMES', t.join(','));
+  }
+  if (b.enabled != null) p.setProperty('OOS_ENABLED', b.enabled ? '1' : '0');
+  if (!oosTriggerOk_()) oosInstallTrigger_();
+  return oosState_({});
+}
+
+/** trigger ทุก 10 นาที — ถึงเวลารอบไหนแล้วยังไม่ได้ส่งวันนี้ ก็ส่งรอบนั้น (ไม่ไล่ส่งย้อนเกิน 2 ชม.) */
+function oosTick() {
+  var p = oosProps_();
+  if (p.getProperty('OOS_ENABLED') !== '1') return;
+  var now = new Date();
+  var today = Utilities.formatDate(now, OOS_TZ, 'yyyy-MM-dd');
+  var hm = Utilities.formatDate(now, OOS_TZ, 'HH:mm');
+  var nowMin = oosMin_(hm);
+  var slots = oosTimes_();
+  for (var i = 0; i < slots.length; i++) {
+    var s = slots[i], sm = oosMin_(s);
+    if (nowMin < sm || nowMin - sm > 120) continue;
+    var doneKey = 'OOS_DONE_' + today + '_' + s;
+    if (p.getProperty(doneKey)) continue;
+    var r = oosSendPending_({ round: 'รอบ ' + s });
+    if (!r.timedOut) p.setProperty(doneKey, hm);
+    oosCleanDoneKeys_(today);
+    return;
+  }
+}
+
+function oosMin_(hm) { var a = hm.split(':'); return (+a[0]) * 60 + (+a[1]); }
+
+function oosCleanDoneKeys_(today) {
+  var p = oosProps_(), all = p.getProperties();
+  Object.keys(all).forEach(function (k) {
+    if (k.indexOf('OOS_DONE_') === 0 && k.slice(9, 19) < today) p.deleteProperty(k);
+  });
+}
+
+/* ───────────── ชีทคิว ───────────── */
+function oosQueueSheet_() {
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName(OOS_QUEUE);
+  if (!sh) {
+    sh = ss.insertSheet(OOS_QUEUE);
+    sh.getRange(1, 1, 1, OOS_HEAD.length).setValues([OOS_HEAD]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+    sh.getRange('A:Q').setNumberFormat('@');   // เก็บเป็นข้อความทั้งหมด กัน Sheets แปลงวันที่/รหัสร้าน
+  }
+  return sh;
+}
+
+function oosReadQueue_() {
+  var sh = oosQueueSheet_();
+  var n = sh.getLastRow() - 1;
+  if (n < 1) return { sh: sh, rows: [] };
+  var vals = sh.getRange(2, 1, n, OOS_HEAD.length).getDisplayValues();
+  return { sh: sh, rows: vals.map(function (r, i) { return { row: i + 2, v: r }; }) };
+}
+
+function oosRowObj_(r) {
+  var o = { row: r.row };
+  OOS_HEAD.forEach(function (h, i) { o[h] = r.v[i]; });
+  return {
+    id: o.id, date: o['วันส่ง'], cusId: o['รหัสร้านค้า'], cusName: o['ชื่อร้านค้า'], wh: o['คลัง'],
+    bills: o['บิล'], sale: o['เซลล์ผู้ดูแล'], short: o['สินค้าขาด'], add: o['สินค้าเพิ่ม'],
+    status: o['สถานะ'], uids: o['UID ที่ส่ง'], sentAt: o['เวลาส่ง'], round: o['รอบ'],
+    result: o['ผลลัพธ์'], by: o['บันทึกโดย'], updated: o['อัปเดต']
+  };
+}
+
+function oosNow_() { return Utilities.formatDate(new Date(), OOS_TZ, 'yyyy-MM-dd HH:mm:ss'); }
+function oosToday_() { return Utilities.formatDate(new Date(), OOS_TZ, 'yyyy-MM-dd'); }
+
+function oosHash_(it) {
+  var raw = [it.bills, it.sale, it.short, it.add].join('|');
+  return Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, raw, Utilities.Charset.UTF_8));
+}
+
+/** บันทึกเข้าคิว — คีย์ = วันส่ง|รหัสร้าน · ส่งแล้วและเนื้อหาเหมือนเดิม = ไม่ส่งซ้ำ · เนื้อหาเปลี่ยน = กลับเป็นรอส่ง */
+function oosSave_(b) {
+  var date = String(b.date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('วันส่งไม่ถูกต้อง');
+  var items = b.items || [];
+  if (!items.length) throw new Error('ไม่มีร้านที่จะบันทึก');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var q = oosReadQueue_(), sh = q.sh, idx = {};
+    q.rows.forEach(function (r) { idx[r.v[0]] = r; });
+    var now = oosNow_(), by = String(b.by || ''), added = 0, changed = 0, same = 0, appends = [];
+    items.forEach(function (it) {
+      var cusId = String(it.cusId || '').trim();
+      if (!cusId) return;
+      var id = date + '|' + cusId;
+      var h = oosHash_(it);
+      var rowVals = [id, date, cusId, String(it.cusName || ''), String(it.wh || ''), String(it.bills || ''),
+        String(it.sale || ''), String(it.short || '-'), String(it.add || '-')];
+      var ex = idx[id];
+      if (!ex) {
+        appends.push(rowVals.concat([OOS_ST.WAIT, '', '', '', '', by, now, h]));
+        added++;
+        return;
+      }
+      var st = ex.v[OOS_C['สถานะ']];
+      if (ex.v[OOS_C.hash] === h && st !== OOS_ST.CANCEL) { same++; return; }
+      var full = rowVals.concat([OOS_ST.WAIT, ex.v[OOS_C['UID ที่ส่ง']], ex.v[OOS_C['เวลาส่ง']],
+        ex.v[OOS_C['รอบ']], st === OOS_ST.SENT ? 'แก้ไขหลังส่ง — รอส่งใหม่' : '', by, now, h]);
+      sh.getRange(ex.row, 1, 1, OOS_HEAD.length).setValues([full]);
+      changed++;
+    });
+    if (appends.length) {
+      var start = sh.getLastRow() + 1;
+      sh.getRange(start, 1, appends.length, OOS_HEAD.length).setNumberFormat('@').setValues(appends);
+    }
+    return { added: added, changed: changed, same: same };
+  } finally { lock.releaseLock(); }
+}
+
+function oosSetStatus_(ids, status) {
+  if (!ids.length) throw new Error('ไม่ได้เลือกรายการ');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var q = oosReadQueue_(), set = {}, n = 0, now = oosNow_();
+    ids.forEach(function (id) { set[id] = 1; });
+    q.rows.forEach(function (r) {
+      if (!set[r.v[0]]) return;
+      q.sh.getRange(r.row, OOS_C['สถานะ'] + 1).setValue(status);
+      q.sh.getRange(r.row, OOS_C['อัปเดต'] + 1).setValue(now);
+      n++;
+    });
+    return { updated: n };
+  } finally { lock.releaseLock(); }
+}
+
+/* ───────────── UID ───────────── */
+function oosUidMap_() {
+  var sh = SpreadsheetApp.getActive().getSheetByName('UID');
+  var map = {};
+  if (!sh || sh.getLastRow() < 2) return map;
+  var vals = sh.getRange(1, 1, sh.getLastRow(), Math.max(3, sh.getLastColumn())).getDisplayValues();
+  var head = vals[0].map(function (s) { return String(s).trim(); });
+  var cU = head.indexOf('User ID'), cC = head.indexOf('รหัสร้านค้า');
+  if (cU < 0) cU = 0;
+  if (cC < 0) cC = 1;
+  for (var i = 1; i < vals.length; i++) {
+    var uid = String(vals[i][cU] || '').trim(), cus = String(vals[i][cC] || '').trim();
+    if (!/^U[0-9a-f]{32}$/i.test(uid) || !cus) continue;
+    (map[cus] = map[cus] || []);
+    if (map[cus].indexOf(uid) < 0) map[cus].push(uid);
+  }
+  return map;
+}
+
+/* ───────────── สถานะให้แอป ───────────── */
+function oosState_(b) {
+  var p = oosProps_();
+  var from = String(b.from || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) {
+    from = Utilities.formatDate(new Date(Date.now() - 7 * 864e5), OOS_TZ, 'yyyy-MM-dd');
+  }
+  var queue = oosReadQueue_().rows.map(oosRowObj_).filter(function (o) { return o.date >= from; });
+  var uidMap = oosUidMap_(), uidCount = {};
+  Object.keys(uidMap).forEach(function (k) { uidCount[k] = uidMap[k].length; });
+  var last = null;
+  try { last = JSON.parse(p.getProperty('OOS_LAST') || 'null'); } catch (e) {}
+  var today = oosToday_(), done = {};
+  oosTimes_().forEach(function (s) { done[s] = p.getProperty('OOS_DONE_' + today + '_' + s) || ''; });
+  return {
+    times: oosTimes_(), enabled: p.getProperty('OOS_ENABLED') === '1', triggerOk: oosTriggerOk_(),
+    last: last, doneToday: done, queue: queue, uidCount: uidCount, now: oosNow_()
+  };
+}
+
+/* ───────────── ส่ง ───────────── */
+/**
+ * ส่งรายการที่ยังไม่ได้ส่ง (รอส่ง / ไม่มี UID / ล้มเหลว) ที่วันส่ง >= วันนี้
+ * opt.ids = ส่งเฉพาะ id ที่เลือก (ไม่สนวันส่ง)
+ */
+function oosSendPending_(opt) {
+  opt = opt || {};
+  var t0 = Date.now();
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return { busy: true, sent: 0 };
+  var res = { sent: 0, failed: 0, noUid: 0, skipped: 0, timedOut: false, round: opt.round || '' };
+  try {
+    var q = oosReadQueue_(), sh = q.sh, today = oosToday_(), uidMap = oosUidMap_();
+    var only = null;
+    if (opt.ids && opt.ids.length) { only = {}; opt.ids.forEach(function (id) { only[id] = 1; }); }
+    var keepSend = SpreadsheetApp.getActive().getSheetByName('Keep Send');
+    for (var i = 0; i < q.rows.length; i++) {
+      var r = q.rows[i], o = oosRowObj_(r);
+      if (only) { if (!only[o.id]) continue; }
+      else if (o.date < today) continue;
+      if (o.status === OOS_ST.SENT || o.status === OOS_ST.CANCEL) { if (!only || o.status === OOS_ST.CANCEL) continue; }
+      if (Date.now() - t0 > OOS_MAX_MS) { res.timedOut = true; break; }
+
+      var uids = uidMap[o.cusId] || [];
+      var now = oosNow_(), status, result;
+      if (!uids.length) {
+        status = OOS_ST.NOUID; result = 'ไม่พบ User ID ของร้านในแท็บ UID'; res.noUid++;
+      } else {
+        var okN = 0, errs = [];
+        uids.forEach(function (uid) {
+          var rr = oosPush_(uid, o);
+          if (rr.ok) okN++; else errs.push(uid.slice(0, 8) + '…: ' + rr.error);
+        });
+        if (okN) {
+          status = OOS_ST.SENT; result = 'ส่งสำเร็จ ' + okN + '/' + uids.length + (errs.length ? ' · ' + errs.join(' | ') : '');
+          res.sent++;
+          if (keepSend) keepSend.appendRow([o.cusId, o.cusName, oosThaiDate_(o.date), o.short, o.add]);
+        } else {
+          status = OOS_ST.FAIL; result = errs.join(' | ').slice(0, 450); res.failed++;
+        }
+      }
+      sh.getRange(r.row, OOS_C['สถานะ'] + 1, 1, 5).setValues([[status, uids.join(' '),
+        status === OOS_ST.SENT ? now : o.sentAt, opt.round || '', result]]);
+      sh.getRange(r.row, OOS_C['อัปเดต'] + 1).setValue(now);
+    }
+  } finally { lock.releaseLock(); }
+  res.at = oosNow_();
+  oosProps_().setProperty('OOS_LAST', JSON.stringify(res));
+  return res;
+}
+
+function oosThaiDate_(iso) {
+  var a = String(iso).split('-');
+  return a.length === 3 ? (+a[2]) + '/' + (+a[1]) + '/' + a[0] : iso;
+}
+
+function oosPush_(uid, o) {
+  var msg = { type: 'flex', altText: ('แจ้งรายละเอียดสินค้า ร้าน ' + o.cusName).slice(0, 380), contents: oosFlex_(o) };
+  var payload = { to: uid, messages: [msg] };
+  try {
+    var res = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { Authorization: 'Bearer ' + CHANNEL_ACCESS_TOKEN },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+    var code = res.getResponseCode();
+    if (code === 200) {
+      try { rtnForwardCards_(uid, payload.messages, res); } catch (e) {}
+      return { ok: true };
+    }
+    var m = res.getContentText();
+    try { m = JSON.parse(m).message || m; } catch (e) {}
+    return { ok: false, error: code + ' ' + String(m).slice(0, 150) };
+  } catch (err) {
+    return { ok: false, error: String(err && err.message || err).slice(0, 150) };
+  }
+}
+
+function oosTestSend_(b) {
+  var uid = String(b.uid || '').trim();
+  if (!/^U[0-9a-f]{32}$/i.test(uid)) throw new Error('User ID ไม่ถูกต้อง');
+  var it = b.item || {};
+  var r = oosPush_(uid, {
+    cusId: it.cusId || '0000000000', cusName: it.cusName || 'ร้านทดสอบ', date: it.date || oosToday_(),
+    bills: it.bills || 'DC000000/00000', sale: it.sale || '-', short: it.short || '🔴ทดสอบ 1 ลังx12(CS)', add: it.add || '-'
+  });
+  if (!r.ok) throw new Error(r.error);
+  return { sent: 1 };
+}
+
+/* ───────────── Flex ───────────── */
+function oosCut_(s, n) {
+  s = String(s || '-').trim() || '-';
+  if (s.length <= n) return s;
+  var lines = s.split('\n'), out = [], len = 0;
+  for (var i = 0; i < lines.length; i++) {
+    if (len + lines[i].length + 1 > n) { out.push('…และอีก ' + (lines.length - i) + ' รายการ'); break; }
+    out.push(lines[i]); len += lines[i].length + 1;
+  }
+  return out.join('\n');
+}
+
+function oosInfoRow_(label, value) {
+  return {
+    type: 'box', layout: 'horizontal', spacing: 'sm', contents: [
+      { type: 'text', text: label, size: 'xs', color: '#8a8a8a', flex: 2 },
+      { type: 'text', text: String(value || '-'), size: 'xs', color: '#333333', flex: 5, wrap: true }
+    ]
+  };
+}
+
+function oosFlex_(o) {
+  var hasAdd = o.add && String(o.add).trim() && String(o.add).trim() !== '-';
+  var hasShort = o.short && String(o.short).trim() && String(o.short).trim() !== '-';
+  var body = [
+    { type: 'text', text: 'แจ้งรายละเอียดสินค้าเพิ่มเติม', weight: 'bold', size: 'lg', color: '#DC143C', wrap: true },
+    {
+      type: 'box', layout: 'horizontal', margin: 'md', contents: [
+        { type: 'text', text: 'ร้าน :', size: 'md', flex: 0, weight: 'bold', color: '#000080' },
+        { type: 'text', text: String(o.cusName || '-'), size: 'md', weight: 'bold', color: '#000080', margin: 'sm', wrap: true }
+      ]
+    },
+    {
+      type: 'box', layout: 'vertical', margin: 'md', spacing: 'xs', contents: [
+        oosInfoRow_('รหัสร้าน', o.cusId),
+        oosInfoRow_('วันที่', oosThaiDate_(o.date)),
+        oosInfoRow_('เลขบิล', String(o.bills || '-').split(/\s*,\s*/).join('\n')),
+        oosInfoRow_('เซลล์ผู้ดูแล', o.sale)
+      ]
+    },
+    { type: 'separator', margin: 'lg' }
+  ];
+  if (hasShort) {
+    body.push({ type: 'text', text: 'รายการสินค้าขาด', size: 'md', weight: 'bold', margin: 'lg', color: '#c0392b' });
+    body.push({ type: 'text', text: oosCut_(o.short, 1800), size: 'sm', color: '#555555', wrap: true, margin: 'sm' });
+  }
+  if (hasAdd) {
+    body.push({ type: 'text', text: 'รายการสินค้าทดแทน/เพิ่มเติม', size: 'md', weight: 'bold', margin: 'lg', color: '#1e8449' });
+    body.push({ type: 'text', text: oosCut_(o.add, 1800), size: 'sm', color: '#555555', wrap: true, margin: 'sm' });
+  }
+  return {
+    type: 'bubble',
+    body: { type: 'box', layout: 'vertical', contents: body },
+    footer: {
+      type: 'box', layout: 'vertical', contents: [
+        { type: 'text', text: 'Rattana_Official', color: '#BBBBBB', align: 'center', size: 'xs' }
+      ]
+    },
+    styles: { footer: { separator: true } }
+  };
+}

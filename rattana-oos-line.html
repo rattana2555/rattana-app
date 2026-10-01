@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Rattana แจ้งสินค้าขาด v1.0</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+:root{
+  --navy:#0d1b3e;--navy-mid:#1a2f5e;--navy-light:#243b73;--gold:#c9a84c;--gold-light:#e8c86a;
+  --success:#2ecc71;--danger:#e74c3c;--warning:#f39c12;--info:#3498db;--line:#06c755;
+  --bg:#f4f6fb;--text:#0d1b3e;--card-bg:#fff;--border:#dde3f0;--muted:#6b7896;--row-alt:#fafbfd;
+  --radius-sm:6px;--radius-md:12px;--radius-lg:16px;
+  --shadow-md:0 2px 8px rgba(0,0,0,.08);--shadow-lg:0 8px 24px rgba(13,27,62,.12);--shadow-gold:0 4px 12px rgba(201,168,76,.35);
+}
+body.dark{--bg:#0a1020;--text:#e8eaf0;--card-bg:#111c35;--border:#243b73;--muted:#8a98b8;--row-alt:#0f1830}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;font-size:14px;line-height:1.5;min-height:100dvh;overflow-x:hidden;background:var(--bg);color:var(--text);transition:background .25s,color .25s}
+button{font-family:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+input,select,textarea{font-family:inherit;font-size:16px}
+header{background:var(--navy);color:#fff;padding:10px 14px;position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:10px;padding-top:max(10px,env(safe-area-inset-top))}
+header img{height:36px;width:36px;border-radius:50%;background:#fff;object-fit:contain}
+.logo-text{font-weight:700;letter-spacing:.5px;font-size:17px;color:#fff;line-height:1.15}
+.logo-text span{color:var(--gold)}
+.logo-sub{font-size:11px;color:rgba(255,255,255,.6)}
+.hdr-right{margin-left:auto;display:flex;gap:6px;align-items:center}
+.icon-btn{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.2);width:38px;height:38px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:17px}
+.icon-btn:hover{background:rgba(255,255,255,.12)}
+.user-chip{font-size:12px;color:rgba(255,255,255,.85);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tab-nav{display:flex;background:var(--navy);border-bottom:3px solid var(--gold);padding:0 8px;gap:4px;overflow-x:auto;scrollbar-width:none;position:sticky;top:56px;z-index:99}
+.tab-nav::-webkit-scrollbar{display:none}
+.tab-btn{background:transparent;color:rgba(255,255,255,.65);padding:11px 16px;font-size:13.5px;font-weight:600;border-bottom:3px solid transparent;white-space:nowrap;flex-shrink:0;margin-bottom:-3px;border-radius:var(--radius-sm) var(--radius-sm) 0 0}
+.tab-btn:hover{color:#fff;background:rgba(255,255,255,.06)}
+.tab-btn.active{color:var(--navy);background:var(--gold);font-weight:700}
+.tab-btn .cnt{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:var(--danger);color:#fff;font-size:11px;margin-left:4px}
+.content{padding:12px;max-width:1100px;margin:0 auto;width:100%;padding-bottom:110px}
+@media(min-width:640px){.content{padding:16px;padding-bottom:110px}}
+.page{display:none}.page.active{display:block;animation:fadeIn .2s}
+.card{background:var(--card-bg);border-radius:var(--radius-md);border:1px solid var(--border);box-shadow:var(--shadow-md);margin-bottom:12px}
+.card-gold{border-top:3px solid var(--gold)}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border);background:linear-gradient(to right,rgba(201,168,76,.08),transparent);flex-wrap:wrap}
+.card-head h3{font-size:15px;font-weight:700}
+.card-body{padding:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 16px;border-radius:var(--radius-sm);font-size:13.5px;font-weight:600;border:1px solid transparent;min-height:42px;transition:opacity .15s,transform .1s}
+.btn:hover{opacity:.9}.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--navy);color:#fff}
+.btn-gold{background:var(--gold);color:var(--navy)}
+.btn-line{background:var(--line);color:#fff}
+.btn-outline{background:transparent;color:var(--text);border-color:var(--border)}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-sm{padding:5px 10px;font-size:12.5px;min-height:32px}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.badge{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:10px;font-size:11.5px;font-weight:600;white-space:nowrap}
+.b-ok{background:#e8f7ee;color:#1e8449}.b-warn{background:#fef3d7;color:#a87800}.b-danger{background:#ffd5d0;color:#c0392b}
+.b-info{background:#e3f0fd;color:#1a6fb8}.b-muted{background:#eef1f7;color:#6b7896}.b-gold{background:rgba(201,168,76,.18);color:#7a5d12;border:1px solid rgba(201,168,76,.4)}
+.b-line{background:#e6f9ee;color:#04883b}
+body.dark .b-ok{background:#1a3a25;color:#7be0a3}body.dark .b-warn{background:#3a2e15;color:#e8c86a}body.dark .b-danger{background:#3a1a17;color:#ff8a7e}
+body.dark .b-info{background:#14304d;color:#8cc4f5}body.dark .b-muted{background:#1b2742;color:#8a98b8}body.dark .b-gold{color:var(--gold-light)}body.dark .b-line{background:#103a22;color:#6ee59b}
+.input{height:44px;padding:0 12px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);outline:none;width:100%}
+.input:focus{border-color:var(--gold)}
+textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font-family:Consolas,monospace}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.field label{font-size:12px;font-weight:600;color:var(--muted)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{padding:6px 12px;border-radius:18px;border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:13px;font-weight:600;min-height:36px}
+.chip.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+body.dark .chip.on{background:var(--gold);color:var(--navy);border-color:var(--gold)}
+.chip small{opacity:.7;font-weight:500;margin-left:3px}
+.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px}
+@media(min-width:640px){.stat-grid{grid-template-columns:repeat(4,1fr)}}
+.stat-card{background:var(--card-bg);border-radius:var(--radius-md);padding:12px 14px;border:1px solid var(--border);border-top:3px solid var(--gold)}
+.stat-card .s-label{font-size:12px;color:var(--muted);font-weight:600}
+.stat-card .s-value{font-size:24px;font-weight:700;line-height:1.2}
+.stat-card.success{border-top-color:var(--line)}.stat-card.success .s-value{color:#04a046}
+.stat-card.danger{border-top-color:var(--danger)}.stat-card.danger .s-value{color:var(--danger)}
+.stat-card.info{border-top-color:var(--info)}.stat-card.info .s-value{color:var(--info)}
+.filter-bar{display:flex;flex-direction:column;gap:10px}
+.fb-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.fb-label{font-size:12px;font-weight:700;color:var(--muted);min-width:52px}
+.search{border-radius:22px;padding-left:38px;background:var(--card-bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%236b7896' stroke-width='2'%3E%3Ccircle cx='7' cy='7' r='5'/%3E%3Cpath d='m11 11 4 4'/%3E%3C/svg%3E") no-repeat 14px center}
+/* store cards */
+.store{background:var(--card-bg);border:1px solid var(--border);border-left:4px solid var(--border);border-radius:var(--radius-md);margin-bottom:10px;box-shadow:var(--shadow-md);overflow:hidden}
+.store.has-uid{border-left-color:var(--line)}
+.store.no-uid{border-left-color:var(--warning)}
+.store.off{opacity:.55}
+.st-head{display:flex;gap:10px;padding:10px 12px;align-items:flex-start;cursor:pointer}
+.ck{width:22px;height:22px;flex-shrink:0;margin-top:2px;accent-color:var(--navy)}
+.st-main{flex:1;min-width:0}
+.st-name{font-weight:700;font-size:15px;line-height:1.3}
+.st-meta{font-size:12px;color:var(--muted);margin-top:2px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.st-meta .sep{opacity:.4}
+.st-badges{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+.st-lines{padding:0 12px 10px 44px;font-size:13px}
+.ln{display:flex;gap:6px;padding:3px 0;border-top:1px dashed var(--border)}
+.ln:first-child{border-top:none}
+.ln .q{margin-left:auto;white-space:nowrap;font-weight:600;font-variant-numeric:tabular-nums}
+.ln.short .q{color:#c0392b}.ln.add .q{color:#1e8449}
+.ln .warn{color:var(--warning);font-size:11px}
+.st-foot{display:flex;gap:6px;padding:8px 12px;border-top:1px solid var(--border);background:var(--row-alt);justify-content:flex-end;flex-wrap:wrap}
+.empty{text-align:center;padding:42px 16px;color:var(--muted)}
+.empty .big{font-size:40px;margin-bottom:6px}
+.save-bar{position:fixed;left:0;right:0;bottom:0;background:var(--navy);color:#fff;padding:10px 14px;padding-bottom:max(10px,env(safe-area-inset-bottom));display:none;align-items:center;gap:10px;z-index:150;border-top:3px solid var(--gold);box-shadow:0 -4px 16px rgba(0,0,0,.2)}
+.save-bar.show{display:flex}
+.save-bar .info{flex:1;min-width:0;font-size:13px;line-height:1.3}
+.save-bar .info b{color:var(--gold);font-size:16px}
+/* queue */
+.q-row{display:flex;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);align-items:flex-start}
+.q-row:last-child{border-bottom:none}
+.q-row:nth-child(even){background:var(--row-alt)}
+.q-res{font-size:12px;color:var(--muted);margin-top:3px;word-break:break-word}
+/* schedule */
+.time-list{display:flex;flex-direction:column;gap:8px}
+.time-item{display:flex;gap:8px;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--row-alt)}
+.time-item input{max-width:150px;font-size:18px;font-weight:700}
+.time-item .st{margin-left:auto}
+.switch{position:relative;width:52px;height:30px;flex-shrink:0}
+.switch input{opacity:0;width:0;height:0}
+.switch span{position:absolute;inset:0;background:#c4cbdb;border-radius:30px;transition:.2s;cursor:pointer}
+.switch span::before{content:'';position:absolute;width:24px;height:24px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.switch input:checked+span{background:var(--line)}
+.switch input:checked+span::before{transform:translateX(22px)}
+.flow{display:grid;grid-template-columns:1fr;gap:8px;font-size:13px}
+.flow div{display:flex;gap:8px;align-items:flex-start}
+.flow .n{flex-shrink:0;width:22px;height:22px;border-radius:50%;background:var(--gold);color:var(--navy);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:12px}
+/* LINE preview */
+.line-bg{background:#8cabd9;padding:16px 12px;border-radius:var(--radius-md)}
+.bubble{background:#fff;color:#111;border-radius:16px;max-width:330px;margin:0 auto;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.15);font-size:14px}
+.bubble .bb{padding:16px}
+.bubble .t1{color:#DC143C;font-weight:700;font-size:17px}
+.bubble .shop{color:#000080;font-weight:700;margin-top:8px}
+.bubble .info{display:grid;grid-template-columns:72px 1fr;gap:2px 8px;font-size:12px;margin-top:8px}
+.bubble .info .k{color:#8a8a8a}.bubble .info .v{color:#333;white-space:pre-line;word-break:break-word}
+.bubble hr{border:none;border-top:1px solid #e6e6e6;margin:12px 0 4px}
+.bubble .h{font-weight:700;margin-top:10px}
+.bubble .h.r{color:#c0392b}.bubble .h.g{color:#1e8449}
+.bubble .ls{font-size:13px;color:#555;white-space:pre-line;margin-top:4px}
+.bubble .ft{border-top:1px solid #e6e6e6;text-align:center;color:#bbb;font-size:12px;padding:8px}
+/* modal / misc */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.65);z-index:9000;align-items:flex-start;justify-content:center;padding:16px;backdrop-filter:blur(4px);overflow-y:auto}
+.modal-overlay.open{display:flex}
+.modal{background:var(--card-bg);border-radius:var(--radius-lg);max-width:480px;width:100%;margin:auto;border-top:4px solid var(--gold);animation:slideUp .22s ease}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
+.modal-head h3{font-size:16px}
+.modal-close{background:transparent;font-size:24px;color:var(--muted);padding:2px 8px;line-height:1}
+.modal-body{padding:16px 18px}
+.modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.toast{position:fixed;bottom:max(84px,env(safe-area-inset-bottom));right:16px;padding:12px 18px;border-radius:var(--radius-md);color:#fff;z-index:9999;animation:slideIn .3s ease;font-weight:500;box-shadow:var(--shadow-lg);max-width:90vw;font-size:13.5px}
+.toast-success{background:#1e9e55}.toast-error{background:var(--danger)}.toast-warning{background:var(--warning);color:var(--navy)}.toast-info{background:var(--navy-mid);border-left:3px solid var(--gold)}
+#spinner{display:none;position:fixed;inset:0;background:rgba(13,27,62,.55);align-items:center;justify-content:center;z-index:99999;backdrop-filter:blur(3px)}
+#spinner .box{background:var(--card-bg);border-radius:var(--radius-lg);padding:28px 36px;text-align:center;border-top:4px solid var(--gold);min-width:230px}
+#spinner .ring{width:46px;height:46px;border:5px solid #dde3f0;border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+#backToTop{position:fixed;bottom:max(84px,calc(76px + env(safe-area-inset-bottom)));right:16px;background:var(--gold);color:var(--navy);border-radius:50%;width:46px;height:46px;display:none;align-items:center;justify-content:center;box-shadow:var(--shadow-gold);z-index:90;font-size:18px;font-weight:700}
+#backToTop.show{display:flex}
+#loginScreen{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:16px;background:linear-gradient(160deg,var(--navy),var(--navy-light))}
+.login-box{background:#fff;color:var(--navy);border-radius:var(--radius-lg);padding:30px 24px;text-align:center;max-width:360px;width:100%;border-top:4px solid var(--gold)}
+.login-box img{width:72px;height:72px;border-radius:50%;margin-bottom:10px}
+.login-box h1{font-size:21px}
+.login-err{color:var(--danger);font-size:13px;margin-top:12px;min-height:18px}
+.note{font-size:12.5px;color:var(--muted)}
+.mono{font-family:Consolas,monospace;font-size:12px}
+.hidden{display:none!important}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div id="spinner"><div class="box"><div class="ring"></div><p id="spinnerMsg">กำลังโหลด...</p></div></div>
+
+<!-- ───────── LOGIN ───────── -->
+<div id="loginScreen">
+  <div class="login-box">
+    <img src="roo-logo.png" alt="Rattana" onerror="this.style.display='none'">
+    <h1>Rattana <span style="color:var(--gold)">แจ้งสินค้าขาด</span></h1>
+    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.0</p>
+    <div id="g_id_onload" data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
+    <div style="display:flex;justify-content:center"><div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div></div>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ───────── APP ───────── -->
+<div id="appScreen" class="hidden">
+<header>
+  <img src="roo-logo.png" alt="" onerror="this.style.display='none'">
+  <div>
+    <div class="logo-text">Rattana <span>แจ้งสินค้าขาด</span></div>
+    <div class="logo-sub">v1.0 · ส่ง LINE ถึงร้านตาม User ID</div>
+  </div>
+  <div class="hdr-right">
+    <span class="user-chip" id="userChip"></span>
+    <button class="icon-btn" id="btnRefresh" title="โหลดใหม่" onclick="refreshAll()">⟳</button>
+    <button class="icon-btn" title="โหมดมืด" onclick="toggleDark()">◐</button>
+    <button class="icon-btn" title="ออกจากระบบ" onclick="logout()">⎋</button>
+  </div>
+</header>
+<nav class="tab-nav">
+  <button class="tab-btn active" data-tab="prep" onclick="showTab('prep')">📥 เตรียมส่ง</button>
+  <button class="tab-btn" data-tab="queue" onclick="showTab('queue')">📤 คิว / ผลส่ง <span class="cnt hidden" id="qCnt"></span></button>
+  <button class="tab-btn" data-tab="sched" onclick="showTab('sched')">⏰ ตั้งเวลาส่ง</button>
+  <button class="tab-btn" data-tab="cfg" onclick="showTab('cfg')">⚙️ ตั้งค่า</button>
+</nav>
+
+<main class="content">
+  <!-- ═════ เตรียมส่ง ═════ -->
+  <section class="page active" id="page-prep">
+    <div class="card card-gold">
+      <div class="card-head">
+        <h3>① ข้อมูลสินค้าขาด</h3>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="loadFromSource()">📄 ดึงจากชีทต้นฉบับ</button>
+          <button class="btn btn-outline btn-sm" onclick="openPaste()">📋 วางข้อมูลเอง</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="srcInfo" class="note">ยังไม่มีข้อมูล — กด <b>ดึงจากชีทต้นฉบับ</b> (แท็บ SQL_สินค้าขาด) หรือ <b>วางข้อมูลเอง</b> จาก Excel/SQL</div>
+        <div class="filter-bar mt" id="prepFilters" style="margin-top:12px;display:none">
+          <div class="fb-row"><span class="fb-label">วันที่</span><div class="chips" id="dateChips"></div></div>
+          <div class="fb-row"><span class="fb-label">คลัง</span><div class="chips" id="whChips"></div></div>
+          <div class="fb-row"><span class="fb-label">แสดง</span><div class="chips" id="showChips"></div></div>
+          <input class="input search" id="prepSearch" placeholder="ค้นหาชื่อร้าน / รหัสร้าน / สินค้า / เซลล์" oninput="debouncedRenderPrep()">
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-grid" id="prepStats" style="display:none"></div>
+
+    <div class="card hidden" id="prepListHead">
+      <div class="card-head">
+        <h3>② เลือกร้านที่จะส่ง</h3>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-outline btn-sm" onclick="selectAll(true)">☑ เลือกทั้งหมด</button>
+          <button class="btn btn-outline btn-sm" onclick="selectUidOnly()">🟢 เฉพาะร้านมี UID</button>
+          <button class="btn btn-outline btn-sm" onclick="selectAll(false)">☐ ไม่เลือก</button>
+        </div>
+      </div>
+    </div>
+    <div id="storeList"></div>
+  </section>
+
+  <!-- ═════ คิว ═════ -->
+  <section class="page" id="page-queue">
+    <div id="queueNoCfg" class="card hidden"><div class="empty"><div class="big">🔌</div>ยังไม่ได้เชื่อมหลังบ้าน (Apps Script)<br><button class="btn btn-gold mt" style="margin-top:12px" onclick="showTab('cfg')">ไปหน้า ⚙️ ตั้งค่า</button></div></div>
+    <div id="queueWrap">
+      <div class="stat-grid" id="qStats"></div>
+      <div class="card card-gold">
+        <div class="card-body filter-bar">
+          <div class="fb-row"><span class="fb-label">วันส่ง</span><div class="chips" id="qDateChips"></div></div>
+          <div class="fb-row"><span class="fb-label">สถานะ</span><div class="chips" id="qStChips"></div></div>
+          <input class="input search" id="qSearch" placeholder="ค้นหาชื่อร้าน / รหัส / บิล" oninput="renderQueue()">
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h3 id="qTitle">รายการในคิว</h3>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <label class="note" style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="ck" id="qAll" onchange="qSelectAll(this.checked)"> เลือกทั้งหมด</label>
+            <button class="btn btn-line btn-sm" onclick="qAction('sendNow')">📤 ส่งตอนนี้</button>
+            <button class="btn btn-outline btn-sm" onclick="qAction('requeue')">↺ กลับเป็นรอส่ง</button>
+            <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="qAction('cancel')">✕ ยกเลิก</button>
+          </div>
+        </div>
+        <div id="qList"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════ ตั้งเวลา ═════ -->
+  <section class="page" id="page-sched">
+    <div class="card card-gold">
+      <div class="card-head">
+        <h3>⏰ ส่งอัตโนมัติทุกวัน</h3>
+        <label class="switch"><input type="checkbox" id="schEnabled" onchange="schedDirty()"><span></span></label>
+      </div>
+      <div class="card-body">
+        <p class="note" style="margin-bottom:12px">ถึงเวลาแต่ละรอบ ระบบส่ง LINE ให้ร้านที่อยู่ในคิวแต่<b>ยังไม่ได้ส่ง</b> (วันส่งตั้งแต่วันนี้ขึ้นไป) — ร้านที่ส่งไปแล้วจะไม่ส่งซ้ำ เว้นแต่รายการถูกแก้ · ระบบเช็คทุก 10 นาที เวลาจริงอาจช้ากว่าที่ตั้งไม่เกิน 10 นาที</p>
+        <div class="time-list" id="timeList"></div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn btn-outline" onclick="addTime()">＋ เพิ่มรอบ</button>
+          <button class="btn btn-gold" id="btnSaveSched" onclick="saveSchedule()">💾 บันทึกเวลาส่ง</button>
+        </div>
+        <div id="schedInfo" class="note" style="margin-top:12px"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>🧪 ทดลองส่งเข้า LINE ตัวเอง</h3></div>
+      <div class="card-body">
+        <div class="field"><label>User ID ของคุณ (ขึ้นต้นด้วย U)</label><input class="input mono" id="testUid" placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"></div>
+        <p class="note" style="margin-bottom:10px">จะส่งข้อความตัวอย่างของร้านแรกที่เลือกไว้ในหน้า 📥 (ถ้าไม่มีจะใช้ข้อความทดสอบ) — ไม่ส่งถึงร้านจริง</p>
+        <button class="btn btn-line" onclick="testSend()">📨 ส่งทดสอบ</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>ขั้นตอนการทำงาน</h3></div>
+      <div class="card-body flow">
+        <div><span class="n">1</span><span>ดึงข้อมูลจากชีทต้นฉบับ หรือวางผล SQL ในหน้า 📥 — แอปรวมยอดต่อร้าน แปลงเป็น ลัง/แพ็ค/ชิ้น จาก PDDT</span></div>
+        <div><span class="n">2</span><span>เลือกร้าน → 💾 บันทึกเข้าคิว (ลงแท็บ "คิวส่งแอป" ในชีทส่ง)</span></div>
+        <div><span class="n">3</span><span>ถึงเวลารอบส่ง → ส่ง Flex ถึง User ID ของร้าน (แท็บ UID) + เก็บประวัติลง Keep Send</span></div>
+        <div><span class="n">4</span><span>ร้านที่ยังไม่มี UID จะค้างสถานะ "ไม่มี UID" — เพิ่ม UID แล้วรอบถัดไปจะส่งให้เอง</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════ ตั้งค่า ═════ -->
+  <section class="page" id="page-cfg">
+    <div class="card card-gold">
+      <div class="card-head"><h3>🔌 เชื่อมหลังบ้าน (Apps Script ของชีทส่ง)</h3></div>
+      <div class="card-body">
+        <div class="field"><label>URL เว็บแอป Apps Script (ลงท้าย /exec)</label><input class="input mono" id="cfgUrl" placeholder="https://script.google.com/macros/s/.../exec"></div>
+        <div class="field"><label>รหัสแอป (ได้จาก Log ตอนรัน oosSetup)</label><input class="input mono" id="cfgKey" placeholder="xxxxxxxxxxxx"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-gold" onclick="saveCfg()">💾 บันทึก + ทดสอบเชื่อมต่อ</button>
+        </div>
+        <div id="cfgInfo" class="note" style="margin-top:12px"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>📚 แหล่งข้อมูล</h3></div>
+      <div class="card-body note" style="line-height:1.8">
+        ชีทต้นฉบับ: <a href="https://docs.google.com/spreadsheets/d/1am0qlHQgBrlAJsNp0dco2KC-u7aeAY8CRHoh5rmOiPM/edit" target="_blank">SQL_สินค้าขาด / PDDT</a><br>
+        ชีทส่ง: <a href="https://docs.google.com/spreadsheets/d/1jA2IJUW-SMrfDEiBCudCo5Sx6IFaAr9yqxtUBppy1Fs/edit" target="_blank">UID / คิวส่งแอป / Keep Send</a><br>
+        <button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="clearPddtCache()">🗑 ล้างแคชหน่วยสินค้า (PDDT)</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="save-bar" id="saveBar">
+  <div class="info">เลือก <b id="sbN">0</b> ร้าน · <span id="sbSub"></span></div>
+  <button class="btn btn-gold" onclick="saveQueue()">💾 บันทึกเข้าคิว</button>
+</div>
+<button id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+</div>
+
+<!-- paste modal -->
+<div class="modal-overlay" id="pasteModal" onclick="if(event.target===this)closeModal('pasteModal')">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-head"><h3>📋 วางข้อมูลสินค้าขาด</h3><button class="modal-close" onclick="closeModal('pasteModal')">×</button></div>
+    <div class="modal-body">
+      <p class="note" style="margin-bottom:8px">ก๊อปจาก Excel/ผล SQL รวมหัวคอลัมน์ (DOC_DATE, DS_ID, … CUSTOMER_ID, CUSTOMER_NAME, PRODUCT_NAME, S_DIFF, F_DIFF) แล้ววางด้านล่าง</p>
+      <textarea class="input" id="pasteBox" rows="10" placeholder="DOC_DATE	DS_ID	BK_ID	WL_ID	SALEMAN_ID	SALEMAN_NAME	CUSTOMER_ID	..."></textarea>
+    </div>
+    <div class="modal-foot"><button class="btn btn-outline" onclick="closeModal('pasteModal')">ยกเลิก</button><button class="btn btn-gold" onclick="applyPaste()">ใช้ข้อมูลนี้</button></div>
+  </div>
+</div>
+<!-- preview modal -->
+<div class="modal-overlay" id="pvModal" onclick="if(event.target===this)closeModal('pvModal')">
+  <div class="modal">
+    <div class="modal-head"><h3>👁 ตัวอย่างข้อความ LINE</h3><button class="modal-close" onclick="closeModal('pvModal')">×</button></div>
+    <div class="modal-body"><div class="line-bg" id="pvBody"></div></div>
+  </div>
+</div>
+<!-- confirm modal -->
+<div class="modal-overlay" id="askModal">
+  <div class="modal">
+    <div class="modal-head"><h3 id="askTitle">ยืนยัน</h3></div>
+    <div class="modal-body" id="askBody"></div>
+    <div class="modal-foot"><button class="btn btn-outline" id="askNo">ยกเลิก</button><button class="btn btn-gold" id="askYes">ตกลง</button></div>
+  </div>
+</div>
+
+<script>
+const APP_VERSION = '1.0';
+const AUTH_CONFIG = {
+  clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
+  usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
+  usersSheetName: 'Rattana Users for apps',
+};
+const SRC_ID = '1am0qlHQgBrlAJsNp0dco2KC-u7aeAY8CRHoh5rmOiPM';   // ไฟล์ต้นฉบับ (SQL_สินค้าขาด, PDDT)
+const SEND_ID = '1jA2IJUW-SMrfDEiBCudCo5Sx6IFaAr9yqxtUBppy1Fs';  // ชีทส่ง (UID, คิวส่งแอป)
+const LS_CFG = 'oos_cfg_v1', LS_PDDT = 'oos_pddt_v1', PDDT_TTL = 12 * 3600e3;
+const ST = { WAIT: 'รอส่ง', SENT: 'ส่งแล้ว', NOUID: 'ไม่มี UID', FAIL: 'ล้มเหลว', CANCEL: 'ยกเลิก' };
+
+let currentUser = null;
+const S = {
+  raw: [], srcLabel: '', pddt: null, uid: {}, uidLoaded: false,
+  date: '', wh: new Set(), show: 'all', sel: new Set(), stores: [],
+  gas: null, qDate: 'all', qSt: 'all', qSel: new Set(), times: [],
+};
+
+/* ───────── helpers ───────── */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
+const showSpinner = (m = 'กำลังโหลด...') => { $('spinnerMsg').textContent = m; $('spinner').style.display = 'flex'; };
+const hideSpinner = () => $('spinner').style.display = 'none';
+function showToast(msg, type = 'info') {
+  const t = document.createElement('div'); t.className = `toast toast-${type}`; t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 3800);
+}
+function ask(title, html, yes = 'ตกลง') {
+  return new Promise(res => {
+    $('askTitle').textContent = title; $('askBody').innerHTML = html; $('askYes').textContent = yes;
+    $('askModal').classList.add('open');
+    const done = v => { $('askModal').classList.remove('open'); $('askYes').onclick = $('askNo').onclick = null; res(v); };
+    $('askYes').onclick = () => done(true); $('askNo').onclick = () => done(false);
+  });
+}
+const openModal = id => $(id).classList.add('open');
+const closeModal = id => $(id).classList.remove('open');
+let _deb; const debouncedRenderPrep = () => { clearTimeout(_deb); _deb = setTimeout(renderPrep, 200); };
+const normName = s => String(s || '').replace(/[​-‍﻿]/g, '').replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
+const num = s => { const n = parseFloat(String(s ?? '').replace(/,/g, '')); return isNaN(n) ? 0 : n; };
+// วันที่ "01/10/2026" หรือ "1/10/2026" → "2026-10-01"
+function toIso(s) {
+  s = String(s || '').trim();
+  let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) { let y = +m[3]; if (y > 2400) y -= 543; return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return m[0];
+  return '';
+}
+const isoLocal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const todayIso = () => isoLocal(new Date());
+const tomorrowIso = () => { const d = new Date(); d.setDate(d.getDate() + 1); return isoLocal(d); };
+function thDate(iso) { const [y, m, d] = String(iso).split('-'); return y ? `${d}/${m}/${+y + 543}` : '-'; }
+function thDateShort(iso) {
+  const [y, m, d] = String(iso).split('-'); if (!y) return iso;
+  const tag = iso === todayIso() ? 'วันนี้ ' : iso === tomorrowIso() ? 'พรุ่งนี้ ' : '';
+  return `${tag}${+d}/${+m}`;
+}
+function thDateTime(s) {   // "2026-10-01 13:02:11" → "01/10/2569 13.02"
+  const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${+m[1] + 543} ${m[4]}.${m[5]}` : (s || '-');
+}
+
+function parseCsv(text) {
+  if (!text) return [];
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === ',') { row.push(cell); cell = ''; }
+    else if (ch === '\r') { }
+    else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += ch;
+  }
+  if (cell.length || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+function rowsToObjs(rows) {
+  if (!rows.length) return [];
+  const clean = s => normName(s);
+  const h = rows[0].map(clean);
+  return rows.slice(1).filter(r => r.some(c => clean(c))).map(r => Object.fromEntries(h.map((k, i) => [k, clean(r[i])])));
+}
+async function gviz(id, sheet, tq = '') {
+  const url = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent(sheet)}` + (tq ? `&tq=${encodeURIComponent(tq)}` : '');
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`อ่านชีท ${sheet} ไม่ได้ (${res.status})`);
+  return parseCsv(await res.text());
+}
+
+/* ───────── auth ───────── */
+function decodeJwtPayload(token) {
+  const parts = String(token || '').split('.');
+  let b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+  b64 += '='.repeat((4 - b64.length % 4) % 4);
+  const bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return JSON.parse(new TextDecoder('utf-8').decode(bytes));
+}
+const normalizeEmail = s => String(s || '').replace(/[​‌‍﻿]/g, '').replace(/\s+/g, '').toLowerCase();
+async function handleGoogleLogin(r) {
+  showSpinner('กำลังตรวจสอบสิทธิ์...');
+  try {
+    const email = normalizeEmail(decodeJwtPayload(r.credential).email);
+    const users = rowsToObjs(await gviz(AUTH_CONFIG.usersSheetId, AUTH_CONFIG.usersSheetName));
+    const u = users.find(x => normalizeEmail(x['E-mail']) === email);
+    if (!u) { $('loginErr').textContent = 'ไม่พบอีเมลนี้ในระบบ — ติดต่อแอดมิน'; return; }
+    if (String(u['Status'] || '').trim().toLowerCase() !== 'active') { $('loginErr').textContent = 'บัญชีถูกระงับ — ติดต่อแอดมิน'; return; }
+    currentUser = { email, name: u['ชื่อ - สกุล'], nickname: u['ชื่อเล่น'], role: parseInt(u['User Role']) || 1, warehouse: u['W'] };
+    lsSet('rattanaUser', { data: currentUser, exp: Date.now() + 30 * 864e5 });
+    enterApp();
+  } catch (e) { $('loginErr').textContent = 'เกิดข้อผิดพลาด ลองใหม่อีกครั้ง'; }
+  finally { hideSpinner(); }
+}
+function checkSession() {
+  const s = lsGet('rattanaUser');
+  if (s && s.data && Date.now() < s.exp) { currentUser = s.data; enterApp(); }
+}
+function logout() { localStorage.removeItem('rattanaUser'); location.reload(); }
+const userName = () => currentUser ? (currentUser.nickname || currentUser.name || currentUser.email) : '';
+function enterApp() {
+  $('loginScreen').classList.add('hidden'); $('appScreen').classList.remove('hidden');
+  $('userChip').textContent = userName();
+  initApp();
+}
+
+/* ───────── config / GAS ───────── */
+const cfg = () => lsGet(LS_CFG) || {};
+async function gas(action, data = {}) {
+  const c = cfg();
+  if (!c.url) throw new Error('ยังไม่ได้ใส่ URL Apps Script (หน้า ⚙️ ตั้งค่า)');
+  const res = await fetch(c.url, { method: 'POST', body: JSON.stringify({ app: 'oos', key: c.key || '', action, by: userName(), ...data }) });
+  let j; try { j = await res.json(); } catch { throw new Error('หลังบ้านตอบกลับไม่ถูกต้อง — เช็คว่าเพิ่มบรรทัด oosRoute_ ใน doPost และ deploy เวอร์ชันใหม่แล้ว'); }
+  if (!j.ok) throw new Error(j.error || 'หลังบ้านผิดพลาด');
+  return j;
+}
+async function saveCfg() {
+  const url = $('cfgUrl').value.trim(), key = $('cfgKey').value.trim();
+  lsSet(LS_CFG, { url, key });
+  $('cfgInfo').innerHTML = 'กำลังทดสอบ...';
+  try {
+    const st = await gas('state');
+    $('cfgInfo').innerHTML = `<span class="badge b-ok">✓ เชื่อมต่อได้</span> หลังบ้าน v${esc(st.v)} · UID ${Object.keys(st.uidCount || {}).length} ร้าน · คิว ${st.queue.length} รายการ`;
+    applyState(st);
+  } catch (e) { $('cfgInfo').innerHTML = `<span class="badge b-danger">✕ ${esc(e.message)}</span>`; }
+}
+async function loadState(silent) {
+  if (!cfg().url) { S.gas = null; renderQueue(); renderSched(); return; }
+  try { applyState(await gas('state')); }
+  catch (e) { if (!silent) showToast(e.message, 'error'); }
+}
+function applyState(st) {
+  S.gas = st;
+  if (st.uidCount) { S.uid = st.uidCount; S.uidLoaded = true; }
+  S.times = (st.times || []).slice();
+  renderQueue(); renderSched(); if (S.raw.length) renderPrep();
+}
+
+/* ───────── UID (สำรอง: อ่านตรงจากชีท ใช้ได้ก่อนเชื่อม GAS) ───────── */
+async function loadUidDirect() {
+  try {
+    const objs = rowsToObjs(await gviz(SEND_ID, 'UID'));
+    const m = {};
+    objs.forEach(o => {
+      const uid = o['User ID'], c = o['รหัสร้านค้า'];
+      if (/^U[0-9a-f]{32}$/i.test(uid || '') && c) m[c] = (m[c] || 0) + 1;
+    });
+    if (!S.uidLoaded) { S.uid = m; S.uidLoaded = true; }
+  } catch (e) { console.warn('UID', e); }
+}
+
+/* ───────── PDDT (หน่วยสินค้า) ───────── */
+async function loadPddt(force) {
+  if (S.pddt && !force) return S.pddt;
+  const c = lsGet(LS_PDDT);
+  if (!force && c && Date.now() - c.ts < PDDT_TTL) { S.pddt = c.map; return S.pddt; }
+  const rows = await gviz(SRC_ID, 'PDDT', 'select A,F,H,I,L,N where A is not null');
+  const map = {};
+  rows.slice(1).forEach(r => {
+    const name = normName(r[0]); if (!name) return;
+    const e = [r[1] || '', r[2] || '', r[3] || '', num(r[4]), num(r[5])];   // unitCS, unitPA, unitEA, qtyCS, qtyPA
+    const ex = map[name];
+    // ชื่อซ้ำ: เลือกแถวที่เป็นลังจริง (QTY CS > 1)
+    if (!ex || (ex[3] <= 1 && e[3] > 1)) map[name] = e;
+  });
+  S.pddt = map;
+  lsSet(LS_PDDT, { ts: Date.now(), map });
+  return map;
+}
+function clearPddtCache() { localStorage.removeItem(LS_PDDT); S.pddt = null; showToast('ล้างแคชแล้ว — โหลดใหม่ตอนดึงข้อมูลครั้งถัดไป', 'success'); }
+
+// แปลงจำนวนชิ้น (EA) → "2 ลังx24(CS) 3 ชิ้นx1(EA)"
+function qtyText(name, ea) {
+  const p = S.pddt && S.pddt[normName(name)];
+  if (!p) return { text: `${ea} ชิ้น`, miss: true };
+  const [uCS, uPA, uEA, qCS, qPA] = p;
+  let rem = ea; const parts = [];
+  if (qCS > 0 && uCS) { const c = Math.floor(rem / qCS); if (c) { parts.push(`${c} ${uCS}`); rem -= c * qCS; } }
+  if (qPA > 0 && uPA) { const c = Math.floor(rem / qPA); if (c) { parts.push(`${c} ${uPA}`); rem -= c * qPA; } }
+  if (rem) parts.push(`${rem} ${uEA || 'ชิ้นx1(EA)'}`);
+  return { text: parts.join(' ') || `0 ${uCS}`, miss: false };
+}
+
+/* ───────── อ่านข้อมูล ───────── */
+const COLS = ['DOC_DATE', 'DS_ID', 'BK_ID', 'WL_ID', 'SALEMAN_ID', 'SALEMAN_NAME', 'CUSTOMER_ID', 'CUSTOMER_NAME', 'PRODUCT_NAME', 'S_DS', 'S_BK', 'S_DIFF', 'F_DS', 'F_BK', 'F_DIFF'];
+function normalizeRows(rows) {
+  if (!rows.length) return [];
+  let head = rows[0].map(h => normName(h).toUpperCase());
+  let body = rows.slice(1);
+  if (!head.includes('CUSTOMER_ID')) { head = COLS; body = rows; }   // ไม่มีหัว = ถือว่าเรียงตามมาตรฐาน
+  const ix = k => head.indexOf(k);
+  const need = ['DOC_DATE', 'CUSTOMER_ID', 'CUSTOMER_NAME', 'PRODUCT_NAME', 'S_DIFF'];
+  const miss = need.filter(k => ix(k) < 0);
+  if (miss.length) throw new Error('ไม่พบคอลัมน์ ' + miss.join(', '));
+  const g = (r, k) => ix(k) >= 0 ? normName(r[ix(k)]) : '';
+  return body.map(r => ({
+    date: toIso(g(r, 'DOC_DATE')), ds: g(r, 'DS_ID'), wh: g(r, 'WL_ID'), sale: g(r, 'SALEMAN_NAME'),
+    cusId: g(r, 'CUSTOMER_ID'), cusName: g(r, 'CUSTOMER_NAME'), prod: g(r, 'PRODUCT_NAME'),
+    diff: num(g(r, 'S_DIFF')) + num(g(r, 'F_DIFF')),
+  })).filter(r => r.date && r.cusId && r.prod);
+}
+async function loadFromSource() {
+  showSpinner('กำลังดึงข้อมูลจากชีทต้นฉบับ...');
+  try {
+    const [rows] = await Promise.all([gviz(SRC_ID, 'SQL_สินค้าขาด'), loadPddt(), S.uidLoaded ? null : loadUidDirect()]);
+    useRows(normalizeRows(rows), 'ชีทต้นฉบับ (SQL_สินค้าขาด)');
+  } catch (e) { showToast(e.message, 'error'); }
+  finally { hideSpinner(); }
+}
+function openPaste() { $('pasteBox').value = ''; openModal('pasteModal'); setTimeout(() => $('pasteBox').focus(), 50); }
+async function applyPaste() {
+  const txt = $('pasteBox').value;
+  if (!txt.trim()) return showToast('ยังไม่ได้วางข้อมูล', 'warning');
+  showSpinner('กำลังอ่านข้อมูล...');
+  try {
+    const rows = txt.replace(/\r/g, '').split('\n').filter(l => l.trim()).map(l => l.split('\t'));
+    await Promise.all([loadPddt(), S.uidLoaded ? null : loadUidDirect()]);
+    useRows(normalizeRows(rows), 'ข้อมูลที่วาง');
+    closeModal('pasteModal');
+  } catch (e) { showToast(e.message, 'error'); }
+  finally { hideSpinner(); }
+}
+function useRows(rows, label) {
+  if (!rows.length) return showToast('ไม่พบข้อมูลที่ใช้ได้', 'warning');
+  S.raw = rows; S.srcLabel = label;
+  const dates = [...new Set(rows.map(r => r.date))].sort();
+  S.date = dates.includes(tomorrowIso()) ? tomorrowIso() : dates[dates.length - 1];
+  S.wh = new Set(rows.map(r => r.wh).filter(Boolean));
+  S.sel = null;   // เลือกค่าเริ่มต้นใหม่
+  renderPrep();
+  showToast(`อ่านได้ ${rows.length.toLocaleString()} แถว`, 'success');
+}
+
+/* ───────── รวมยอดต่อร้าน ───────── */
+function buildStores() {
+  const rows = S.raw.filter(r => r.date === S.date && (!r.wh || S.wh.has(r.wh)));
+  const by = new Map();
+  rows.forEach(r => {
+    let s = by.get(r.cusId);
+    if (!s) { s = { cusId: r.cusId, cusName: r.cusName, wh: new Set(), bills: new Set(), sale: new Set(), prods: new Map() }; by.set(r.cusId, s); }
+    if (r.wh) s.wh.add(r.wh); if (r.ds) s.bills.add(r.ds); if (r.sale) s.sale.add(r.sale);
+    s.prods.set(r.prod, (s.prods.get(r.prod) || 0) + r.diff);
+  });
+  const out = [];
+  by.forEach(s => {
+    const lines = [];
+    s.prods.forEach((ea, prod) => {
+      if (!ea) return;
+      const q = qtyText(prod, Math.abs(ea));
+      lines.push({ type: ea < 0 ? 'short' : 'add', prod, ea, qty: q.text, miss: q.miss });
+    });
+    if (!lines.length) return;
+    lines.sort((a, b) => (a.type === b.type ? a.prod.localeCompare(b.prod, 'th') : a.type === 'short' ? -1 : 1));
+    const short = lines.filter(l => l.type === 'short').map(l => `🔴${l.prod} ${l.qty}`).join('\n');
+    const add = lines.filter(l => l.type === 'add').map(l => `🟢${l.prod} ${l.qty}`).join('\n');
+    out.push({
+      cusId: s.cusId, cusName: s.cusName, wh: [...s.wh].join(','), bills: [...s.bills].join(', '),
+      sale: [...s.sale].join(', '), lines, short: short || '-', add: add || '-',
+      uidN: S.uid[s.cusId] || 0, nShort: lines.filter(l => l.type === 'short').length, nAdd: lines.filter(l => l.type === 'add').length,
+    });
+  });
+  out.sort((a, b) => (!!b.uidN - !!a.uidN) || a.cusName.localeCompare(b.cusName, 'th'));   // ร้านมี UID ขึ้นก่อน
+  return out;
+}
+function queueOf(cusId) {
+  const q = S.gas && S.gas.queue; if (!q) return null;
+  return q.find(x => x.id === `${S.date}|${cusId}`) || null;
+}
+
+/* ───────── render: เตรียมส่ง ───────── */
+function stBadge(st) {
+  const m = { [ST.WAIT]: 'b-warn', [ST.SENT]: 'b-line', [ST.NOUID]: 'b-danger', [ST.FAIL]: 'b-danger', [ST.CANCEL]: 'b-muted' };
+  const ic = { [ST.WAIT]: '⏳', [ST.SENT]: '✓', [ST.NOUID]: '⚠', [ST.FAIL]: '✕', [ST.CANCEL]: '⊘' };
+  return `<span class="badge ${m[st] || 'b-muted'}">${ic[st] || ''} ${esc(st)}</span>`;
+}
+function renderPrep() {
+  if (!S.raw.length) return;
+  $('prepFilters').style.display = ''; $('prepStats').style.display = ''; $('prepListHead').classList.remove('hidden');
+  const dates = {}; S.raw.forEach(r => { dates[r.date] = dates[r.date] || new Set(); dates[r.date].add(r.cusId); });
+  $('srcInfo').innerHTML = `ที่มา: <b>${esc(S.srcLabel)}</b> · ${S.raw.length.toLocaleString()} แถว · หน่วยสินค้า PDDT ${S.pddt ? Object.keys(S.pddt).length.toLocaleString() : 0} รายการ · UID ${Object.keys(S.uid).length.toLocaleString()} ร้าน`;
+  $('dateChips').innerHTML = Object.keys(dates).sort().reverse().map(d =>
+    `<button class="chip ${d === S.date ? 'on' : ''}" onclick="S.date='${d}';S.sel=null;renderPrep()">${thDateShort(d)}<small>${dates[d].size} ร้าน</small></button>`).join('');
+  const whs = [...new Set(S.raw.filter(r => r.date === S.date).map(r => r.wh).filter(Boolean))].sort();
+  $('whChips').innerHTML = whs.map(w => `<button class="chip ${S.wh.has(w) ? 'on' : ''}" onclick="toggleWh('${w}')">${w}</button>`).join('') || '<span class="note">-</span>';
+  const shows = [['all', 'ทั้งหมด'], ['uid', '🟢 มี UID'], ['nouid', '⚠ ไม่มี UID'], ['new', 'ยังไม่เข้าคิว']];
+  $('showChips').innerHTML = shows.map(([k, l]) => `<button class="chip ${S.show === k ? 'on' : ''}" onclick="S.show='${k}';renderPrep()">${l}</button>`).join('');
+
+  S.stores = buildStores();
+  if (!S.sel) S.sel = new Set(S.stores.filter(s => s.uidN && !(queueOf(s.cusId) && queueOf(s.cusId).status === ST.SENT)).map(s => s.cusId));
+  const all = S.stores;
+  const withUid = all.filter(s => s.uidN).length;
+  $('prepStats').innerHTML = `
+    <div class="stat-card"><div class="s-label">ร้านที่มีรายการ</div><div class="s-value">${all.length}</div></div>
+    <div class="stat-card success"><div class="s-label">มี UID (ส่งได้)</div><div class="s-value">${withUid}</div></div>
+    <div class="stat-card danger"><div class="s-label">ไม่มี UID</div><div class="s-value">${all.length - withUid}</div></div>
+    <div class="stat-card info"><div class="s-label">รายการ ขาด / เพิ่ม</div><div class="s-value">${all.reduce((a, s) => a + s.nShort, 0)} <small style="font-size:14px;color:var(--muted)">/ ${all.reduce((a, s) => a + s.nAdd, 0)}</small></div></div>`;
+
+  const qq = normName($('prepSearch').value).toLowerCase();
+  const list = all.filter(s => {
+    if (S.show === 'uid' && !s.uidN) return false;
+    if (S.show === 'nouid' && s.uidN) return false;
+    if (S.show === 'new' && queueOf(s.cusId)) return false;
+    if (!qq) return true;
+    return (s.cusName + ' ' + s.cusId + ' ' + s.sale + ' ' + s.bills + ' ' + s.lines.map(l => l.prod).join(' ')).toLowerCase().includes(qq);
+  });
+  $('storeList').innerHTML = list.length ? list.map(storeCard).join('') :
+    `<div class="card"><div class="empty"><div class="big">🔍</div>ไม่พบร้านตามเงื่อนไข</div></div>`;
+  updateSaveBar();
+}
+function storeCard(s) {
+  const on = S.sel.has(s.cusId), q = queueOf(s.cusId);
+  const lines = s.lines.map(l => `<div class="ln ${l.type}"><span>${l.type === 'short' ? '🔴' : '🟢'}</span><span>${esc(l.prod)}${l.miss ? ' <span class="warn">(ไม่พบหน่วยใน PDDT)</span>' : ''}</span><span class="q">${esc(l.qty)}</span></div>`).join('');
+  return `<div class="store ${s.uidN ? 'has-uid' : 'no-uid'} ${on ? '' : 'off'}" id="st-${esc(s.cusId)}">
+    <div class="st-head" onclick="toggleSel('${esc(s.cusId)}', event)">
+      <input type="checkbox" class="ck" ${on ? 'checked' : ''} onclick="event.stopPropagation();toggleSel('${esc(s.cusId)}')">
+      <div class="st-main">
+        <div class="st-name">${esc(s.cusName)}</div>
+        <div class="st-meta"><span class="mono">${esc(s.cusId)}</span>${s.wh ? `<span class="sep">•</span>${esc(s.wh)}` : ''}<span class="sep">•</span>👤 ${esc(s.sale || '-')}</div>
+        <div class="st-meta">🧾 ${esc(s.bills || '-')}</div>
+        <div class="st-badges">
+          ${s.uidN ? `<span class="badge b-line">🟢 UID ${s.uidN > 1 ? s.uidN + ' บัญชี' : ''}</span>` : '<span class="badge b-warn">⚠ ไม่มี UID</span>'}
+          ${s.nShort ? `<span class="badge b-danger">ขาด ${s.nShort}</span>` : ''}${s.nAdd ? `<span class="badge b-ok">เพิ่ม ${s.nAdd}</span>` : ''}
+          ${q ? stBadge(q.status) : ''}
+        </div>
+      </div>
+    </div>
+    <div class="st-lines">${lines}</div>
+    <div class="st-foot"><button class="btn btn-outline btn-sm" onclick="preview('${esc(s.cusId)}')">👁 ตัวอย่าง LINE</button></div>
+  </div>`;
+}
+function toggleWh(w) { S.wh.has(w) ? S.wh.delete(w) : S.wh.add(w); S.sel = null; renderPrep(); }
+function toggleSel(id, ev) {
+  if (ev && ev.target.closest('button')) return;
+  S.sel.has(id) ? S.sel.delete(id) : S.sel.add(id);
+  const el = $('st-' + id);
+  if (el) { el.classList.toggle('off', !S.sel.has(id)); el.querySelector('.ck').checked = S.sel.has(id); }
+  updateSaveBar();
+}
+function selectAll(v) { S.sel = new Set(v ? S.stores.map(s => s.cusId) : []); renderPrep(); }
+function selectUidOnly() { S.sel = new Set(S.stores.filter(s => s.uidN).map(s => s.cusId)); renderPrep(); }
+function updateSaveBar() {
+  const sel = S.stores.filter(s => S.sel.has(s.cusId));
+  $('sbN').textContent = sel.length;
+  const nu = sel.filter(s => !s.uidN).length;
+  $('sbSub').innerHTML = `วันที่ ${thDate(S.date)}${nu ? ` · <span style="color:#ffb4a8">ไม่มี UID ${nu}</span>` : ''}`;
+  $('saveBar').classList.toggle('show', document.querySelector('#page-prep.active') && S.stores.length > 0);
+}
+async function saveQueue() {
+  const items = S.stores.filter(s => S.sel.has(s.cusId));
+  if (!items.length) return showToast('ยังไม่ได้เลือกร้าน', 'warning');
+  if (!cfg().url) { showToast('ยังไม่ได้เชื่อมหลังบ้าน — ใส่ URL ในหน้า ⚙️', 'warning'); return showTab('cfg'); }
+  const sched = S.gas ? (S.gas.enabled ? `ส่งอัตโนมัติรอบถัดไป (${(S.gas.times || []).join(' / ')})` : '<b style="color:var(--danger)">ปิดส่งอัตโนมัติอยู่</b> — ต้องกดส่งเองในหน้าคิว') : '';
+  const nu = items.filter(s => !s.uidN).length;
+  if (!await ask('บันทึกเข้าคิว', `บันทึก <b>${items.length}</b> ร้าน ของวันที่ <b>${thDate(S.date)}</b> เข้าคิว<br>${sched}${nu ? `<br><br>⚠ ไม่มี UID ${nu} ร้าน — จะค้างไว้จนกว่าจะเพิ่ม UID` : ''}<br><br><span class="note">ร้านที่ส่งไปแล้วและรายการไม่เปลี่ยน จะไม่ส่งซ้ำ</span>`, '💾 บันทึก')) return;
+  showSpinner('กำลังบันทึกเข้าคิว...');
+  try {
+    const r = await gas('save', {
+      date: S.date,
+      items: items.map(s => ({ cusId: s.cusId, cusName: s.cusName, wh: s.wh, bills: s.bills, sale: s.sale, short: s.short, add: s.add })),
+    });
+    showToast(`บันทึกแล้ว · ใหม่ ${r.added} · แก้ไข ${r.changed} · เหมือนเดิม ${r.same}`, 'success');
+    await loadState(true);
+  } catch (e) { showToast(e.message, 'error'); }
+  finally { hideSpinner(); }
+}
+
+/* ───────── LINE preview ───────── */
+function bubbleHtml(o) {
+  const has = s => s && String(s).trim() && String(s).trim() !== '-';
+  return `<div class="bubble"><div class="bb">
+    <div class="t1">แจ้งรายละเอียดสินค้าเพิ่มเติม</div>
+    <div class="shop">ร้าน : ${esc(o.cusName)}</div>
+    <div class="info"><span class="k">รหัสร้าน</span><span class="v">${esc(o.cusId)}</span>
+      <span class="k">วันที่</span><span class="v">${esc(thDate(o.date).replace(/^0/, ''))}</span>
+      <span class="k">เลขบิล</span><span class="v">${esc(String(o.bills || '-').split(/\s*,\s*/).join('\n'))}</span>
+      <span class="k">เซลล์ผู้ดูแล</span><span class="v">${esc(o.sale || '-')}</span></div>
+    <hr>
+    ${has(o.short) ? `<div class="h r">รายการสินค้าขาด</div><div class="ls">${esc(o.short)}</div>` : ''}
+    ${has(o.add) ? `<div class="h g">รายการสินค้าทดแทน/เพิ่มเติม</div><div class="ls">${esc(o.add)}</div>` : ''}
+  </div><div class="ft">Rattana_Official</div></div>`;
+}
+function preview(cusId) {
+  const s = S.stores.find(x => x.cusId === cusId); if (!s) return;
+  $('pvBody').innerHTML = bubbleHtml({ ...s, date: S.date }); openModal('pvModal');
+}
+function previewQ(id) {
+  const o = S.gas.queue.find(x => x.id === id); if (!o) return;
+  $('pvBody').innerHTML = bubbleHtml(o); openModal('pvModal');
+}
+
+/* ───────── render: คิว ───────── */
+function renderQueue() {
+  const has = !!cfg().url;
+  $('queueNoCfg').classList.toggle('hidden', has); $('queueWrap').classList.toggle('hidden', !has);
+  if (!has || !S.gas) { $('qCnt').classList.add('hidden'); return; }
+  const q = S.gas.queue || [];
+  const dates = [...new Set(q.map(x => x.date))].sort().reverse();
+  if (S.qDate !== 'all' && !dates.includes(S.qDate)) S.qDate = 'all';
+  $('qDateChips').innerHTML = [`<button class="chip ${S.qDate === 'all' ? 'on' : ''}" onclick="S.qDate='all';renderQueue()">ทั้งหมด</button>`]
+    .concat(dates.map(d => `<button class="chip ${S.qDate === d ? 'on' : ''}" onclick="S.qDate='${d}';renderQueue()">${thDateShort(d)}</button>`)).join('');
+  const inDate = q.filter(x => S.qDate === 'all' || x.date === S.qDate);
+  const cnt = st => inDate.filter(x => x.status === st).length;
+  const sts = ['all', ST.WAIT, ST.SENT, ST.NOUID, ST.FAIL, ST.CANCEL];
+  $('qStChips').innerHTML = sts.map(st => `<button class="chip ${S.qSt === st ? 'on' : ''}" onclick="S.qSt='${st}';renderQueue()">${st === 'all' ? 'ทั้งหมด' : st}<small>${st === 'all' ? inDate.length : cnt(st)}</small></button>`).join('');
+  $('qStats').innerHTML = `
+    <div class="stat-card"><div class="s-label">⏳ รอส่ง</div><div class="s-value">${cnt(ST.WAIT)}</div></div>
+    <div class="stat-card success"><div class="s-label">✓ ส่งแล้ว</div><div class="s-value">${cnt(ST.SENT)}</div></div>
+    <div class="stat-card danger"><div class="s-label">⚠ ไม่มี UID / ล้มเหลว</div><div class="s-value">${cnt(ST.NOUID) + cnt(ST.FAIL)}</div></div>
+    <div class="stat-card info"><div class="s-label">รอบส่งถัดไป</div><div class="s-value" style="font-size:20px">${nextSlotText()}</div></div>`;
+  const pend = q.filter(x => x.status === ST.WAIT && x.date >= todayIso()).length;
+  $('qCnt').textContent = pend; $('qCnt').classList.toggle('hidden', !pend);
+  const ss = normName($('qSearch').value).toLowerCase();
+  const list = inDate.filter(x => (S.qSt === 'all' || x.status === S.qSt) && (!ss || (x.cusName + ' ' + x.cusId + ' ' + x.bills).toLowerCase().includes(ss)))
+    .sort((a, b) => b.date.localeCompare(a.date) || (b.updated || '').localeCompare(a.updated || ''));
+  S.qSel = new Set([...S.qSel].filter(id => list.some(x => x.id === id)));
+  $('qAll').checked = list.length > 0 && S.qSel.size === list.length;
+  $('qTitle').textContent = `รายการในคิว (${list.length})`;
+  $('qList').innerHTML = list.length ? list.map(x => `
+    <div class="q-row">
+      <input type="checkbox" class="ck" ${S.qSel.has(x.id) ? 'checked' : ''} onchange="qToggle('${esc(x.id)}',this.checked)">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b>${esc(x.cusName)}</b>${stBadge(x.status)}</div>
+        <div class="st-meta"><span class="mono">${esc(x.cusId)}</span><span class="sep">•</span>วันที่ ${thDate(x.date)}${x.wh ? `<span class="sep">•</span>${esc(x.wh)}` : ''}<span class="sep">•</span>🧾 ${esc(x.bills || '-')}</div>
+        <div class="q-res">${x.sentAt ? `ส่งเมื่อ ${thDateTime(x.sentAt)}${x.round ? ' · ' + esc(x.round) : ''} · ` : ''}${esc(x.result || '')}${x.by ? ` · บันทึกโดย ${esc(x.by)}` : ''}</div>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="previewQ('${esc(x.id)}')">👁</button>
+    </div>`).join('') : `<div class="empty"><div class="big">📭</div>ไม่มีรายการ</div>`;
+}
+function qToggle(id, v) { v ? S.qSel.add(id) : S.qSel.delete(id); }
+function qSelectAll(v) {
+  const boxes = document.querySelectorAll('#qList .ck');
+  boxes.forEach(b => { b.checked = v; const id = b.getAttribute('onchange').match(/'([^']+)'/)[1]; v ? S.qSel.add(id) : S.qSel.delete(id); });
+}
+async function qAction(action) {
+  const ids = [...S.qSel];
+  if (!ids.length) return showToast('ยังไม่ได้เลือกรายการ', 'warning');
+  const label = { sendNow: '📤 ส่ง LINE ตอนนี้', requeue: '↺ กลับเป็นรอส่ง', cancel: '✕ ยกเลิก' }[action];
+  const sentN = action === 'sendNow' ? S.gas.queue.filter(x => S.qSel.has(x.id) && x.status === ST.SENT).length : 0;
+  if (!await ask(label, `${label} <b>${ids.length}</b> รายการ?${sentN ? `<br><br>⚠ ในนี้มี <b>${sentN}</b> ร้านที่ส่งไปแล้ว — จะส่งซ้ำ` : ''}`, label)) return;
+  showSpinner(action === 'sendNow' ? 'กำลังส่ง LINE...' : 'กำลังบันทึก...');
+  try {
+    const r = await gas(action, { ids });
+    if (action === 'sendNow') showToast(`ส่งสำเร็จ ${r.sent} · ล้มเหลว ${r.failed} · ไม่มี UID ${r.noUid}${r.timedOut ? ' · ยังเหลือ (หมดเวลา) กดส่งอีกครั้ง' : ''}`, r.failed || r.noUid ? 'warning' : 'success');
+    else showToast(`อัปเดต ${r.updated} รายการ`, 'success');
+    S.qSel.clear();
+    await loadState(true);
+  } catch (e) { showToast(e.message, 'error'); }
+  finally { hideSpinner(); }
+}
+function nextSlotText() {
+  if (!S.gas) return '-';
+  if (!S.gas.enabled) return 'ปิดอยู่';
+  const now = new Date(), hm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const t = (S.gas.times || []).find(t => t > hm && !(S.gas.doneToday || {})[t]);
+  return t ? `วันนี้ ${t.replace(':', '.')}` : (S.gas.times || [])[0] ? `พรุ่งนี้ ${S.gas.times[0].replace(':', '.')}` : '-';
+}
+
+/* ───────── render: ตั้งเวลา ───────── */
+let _schedDirty = false;
+function schedDirty() { _schedDirty = true; $('btnSaveSched').classList.add('btn-gold'); }
+function renderSched() {
+  if (!S.gas) {
+    $('timeList').innerHTML = '<div class="note">ยังไม่ได้เชื่อมหลังบ้าน — ไปหน้า ⚙️ ตั้งค่า</div>';
+    $('schedInfo').innerHTML = ''; return;
+  }
+  if (_schedDirty) return;
+  $('schEnabled').checked = !!S.gas.enabled;
+  drawTimes();
+  const l = S.gas.last;
+  $('schedInfo').innerHTML = [
+    S.gas.triggerOk ? '<span class="badge b-ok">✓ ตัวตั้งเวลาทำงานอยู่</span>' : '<span class="badge b-danger">✕ ยังไม่มีตัวตั้งเวลา — รัน oosSetup ใน Apps Script</span>',
+    l ? `ส่งล่าสุด ${thDateTime(l.at)} (${esc(l.round || '-')}) · สำเร็จ ${l.sent} · ล้มเหลว ${l.failed} · ไม่มี UID ${l.noUid}` : 'ยังไม่เคยส่ง',
+  ].join('<br>');
+}
+function drawTimes() {
+  const done = (S.gas && S.gas.doneToday) || {};
+  $('timeList').innerHTML = S.times.map((t, i) => `
+    <div class="time-item">
+      <span style="font-size:20px">${+t.slice(0, 2) < 12 ? '🌅' : +t.slice(0, 2) < 16 ? '☀️' : '🌇'}</span>
+      <input type="text" class="input" inputmode="numeric" maxlength="5" placeholder="13:00" value="${t}" onchange="setTime(${i},this)">
+      <span class="st">${done[t] ? `<span class="badge b-line">✓ วันนี้ส่งแล้ว ${done[t].replace(':', '.')}</span>` : '<span class="badge b-muted">วันนี้ยังไม่ถึงรอบ</span>'}</span>
+      <button class="btn btn-outline btn-sm" onclick="S.times.splice(${i},1);schedDirty();drawTimes()">✕</button>
+    </div>`).join('') || '<div class="note">ยังไม่มีรอบส่ง</div>';
+}
+// รับ "13:00" / "13.00" / "1300" → "13:00" (24 ชม.)
+function setTime(i, el) {
+  const m = el.value.trim().replace('.', ':').match(/^(\d{1,2}):?(\d{2})$/);
+  if (!m || +m[1] > 23 || +m[2] > 59) { showToast('ใส่เวลาแบบ 24 ชม. เช่น 13:00', 'warning'); el.value = S.times[i]; return; }
+  S.times[i] = el.value = `${m[1].padStart(2, '0')}:${m[2]}`;
+  schedDirty(); drawTimes();
+}
+function addTime() { S.times.push('18:00'); schedDirty(); drawTimes(); }
+async function saveSchedule() {
+  const times = [...new Set(S.times.filter(Boolean))].sort();
+  if (!times.length) return showToast('ต้องมีอย่างน้อย 1 รอบ', 'warning');
+  showSpinner('กำลังบันทึกเวลาส่ง...');
+  try {
+    _schedDirty = false;
+    applyState(await gas('setSchedule', { times, enabled: $('schEnabled').checked }));
+    showToast(`บันทึกแล้ว · ${$('schEnabled').checked ? 'ส่งอัตโนมัติ ' + times.join(' / ') : 'ปิดส่งอัตโนมัติ'}`, 'success');
+  } catch (e) { _schedDirty = true; showToast(e.message, 'error'); }
+  finally { hideSpinner(); }
+}
+async function testSend() {
+  const uid = $('testUid').value.trim();
+  if (!/^U[0-9a-f]{32}$/i.test(uid)) return showToast('User ID ไม่ถูกต้อง', 'warning');
+  lsSet('oos_test_uid', uid);
+  const s = S.stores.find(x => S.sel && S.sel.has(x.cusId));
+  showSpinner('กำลังส่งทดสอบ...');
+  try {
+    await gas('testSend', { uid, item: s ? { cusId: s.cusId, cusName: s.cusName, date: S.date, bills: s.bills, sale: s.sale, short: s.short, add: s.add } : null });
+    showToast('ส่งทดสอบแล้ว — เช็คใน LINE', 'success');
+  } catch (e) { showToast(e.message, 'error'); }
+  finally { hideSpinner(); }
+}
+
+/* ───────── nav / boot ───────── */
+function showTab(t) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+  document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + t));
+  updateSaveBar(); window.scrollTo({ top: 0 });
+}
+function toggleDark() { document.body.classList.toggle('dark'); lsSet('oos_dark', document.body.classList.contains('dark')); }
+async function refreshAll() {
+  const b = $('btnRefresh'); b.disabled = true;
+  showSpinner('กำลังโหลด...');
+  try { await loadState(); if (S.raw.length && S.srcLabel.startsWith('ชีท')) await loadFromSource(); else if (S.raw.length) renderPrep(); }
+  finally { hideSpinner(); b.disabled = false; }
+}
+function initApp() {
+  if (lsGet('oos_dark')) document.body.classList.add('dark');
+  const c = cfg(); $('cfgUrl').value = c.url || ''; $('cfgKey').value = c.key || '';
+  $('testUid').value = lsGet('oos_test_uid') || '';
+  renderQueue(); renderSched();
+  loadState(true);
+  setInterval(() => { if (!document.hidden && cfg().url) loadState(true); }, 60e3);
+}
+window.addEventListener('scroll', () => $('backToTop').classList.toggle('show', window.scrollY > 300));
+window.addEventListener('load', checkSession);
+</script>
+</body>
+</html>
