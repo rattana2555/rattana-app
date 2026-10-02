@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana แจ้งสินค้าขาด v1.20</title>
+<title>Rattana แจ้งสินค้าขาด v1.21</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -195,7 +195,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 <div id="loginScreen">
   <div class="login-box">
     <h1>Rattana <span style="color:var(--gold)">แจ้งสินค้าขาด</span></h1>
-    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.20</p>
+    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.21</p>
     <div id="g_id_onload" data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
     <div style="display:flex;justify-content:center"><div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div></div>
     <div class="login-err" id="loginErr"></div>
@@ -207,7 +207,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 <header>
   <div>
     <div class="logo-text">Rattana <span>แจ้งสินค้าขาด</span></div>
-    <div class="logo-sub">v1.20 · ส่ง LINE ถึงร้านตาม User ID</div>
+    <div class="logo-sub">v1.21 · ส่ง LINE ถึงร้านตาม User ID</div>
   </div>
   <div class="hdr-right">
     <span class="user-chip" id="userChip"></span>
@@ -364,7 +364,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 </div>
 
 <script>
-const APP_VERSION = '1.20';
+const APP_VERSION = '1.21';
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -723,9 +723,15 @@ async function gasRetry(action, data, tries = 3, ms = 30e3) {
     catch (e) { if (t >= tries - 1 || /ไม่รู้จักคำสั่ง|คีย์ไม่ถูกต้อง|รหัสแอป/.test(e.message)) throw e; await new Promise(r => setTimeout(r, 1500 * (t + 1))); }
   }
 }
+const CAN_GUNZIP = typeof DecompressionStream !== 'undefined';
+async function gunzipJson(b64) {
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  return JSON.parse(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text());
+}
 async function fetchOrderFile(progress) {
   let meta;
-  try { meta = await gasRetry('xlsxMeta', { file: ORDER_FILE }, 3, 60e3); }   // ครั้งแรกหลังไฟล์อัปเดต หลังบ้านอ่านไฟล์ ~12 วิ
+  // pack (หลังบ้าน v1.12) = หลังบ้านแกะ Excel ให้ เหลือเฉพาะคอลัมน์ที่ใช้ + gzip (~0.8MB แทน ~3.9MB)
+  try { meta = await gasRetry('xlsxMeta', { file: ORDER_FILE, pack: CAN_GUNZIP ? 1 : 0 }, 3, 60e3); }   // ครั้งแรกหลังไฟล์อัปเดต หลังบ้านแกะไฟล์ ~10–20 วิ (ปกติ oosTick อุ่นไว้แล้ว)
   catch (e) {
     if (/ไม่รู้จักคำสั่ง/.test(e.message)) return gas('xlsx', { file: ORDER_FILE });   // หลังบ้านรุ่นเก่า
     throw e;
@@ -762,13 +768,20 @@ async function loadFromXlsx(auto) {
   else showSpinner('กำลังดึงไฟล์ Excel ต้นฉบับ...');
   try {
     const prog = (d, n) => { $('srcInfo').innerHTML = `⏳ กำลังดึงข้อมูล… ${d}/${n}`; };
-    const [x] = await Promise.all([fetchOrderFile(prog), loadSheetJS(), S.uidLoaded ? null : loadUidDirect()]);
-    const wb = XLSX.read(x.b64, { type: 'base64', sheets: ['BVBK', 'DSDC'] });
-    const tab = n => {
-      if (!wb.Sheets[n]) throw new Error(`ไม่พบแท็บ ${n} ในไฟล์ ${x.name}`);
-      return XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' }).map(r => r.map(c => String(c)));
-    };
-    const r = computeFromOrder(tab('BVBK'), tab('DSDC'));
+    const [x] = await Promise.all([fetchOrderFile(prog), S.uidLoaded ? null : loadUidDirect()]);
+    let r;
+    if (x.pack) {   // หลังบ้านแกะให้แล้ว — ไม่ต้องโหลด SheetJS
+      const d = await gunzipJson(x.b64);
+      r = computeFromOrder(d.bk, d.ds);
+    } else {
+      await loadSheetJS();
+      const wb = XLSX.read(x.b64, { type: 'base64', sheets: ['BVBK', 'DSDC'] });
+      const tab = n => {
+        if (!wb.Sheets[n]) throw new Error(`ไม่พบแท็บ ${n} ในไฟล์ ${x.name}`);
+        return XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' }).map(r => r.map(c => String(c)));
+      };
+      r = computeFromOrder(tab('BVBK'), tab('DSDC'));
+    }
     S.cmpInfo = r.info;
     S.srcUpdated = thDateTime(x.updated);
     useRows(r.rows, `${x.name} · ไฟล์อัปเดต ${thDateTime(x.updated)}`);
