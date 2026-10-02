@@ -1,5 +1,5 @@
 /**
- * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.12
+ * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.13
  * อยู่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
  *
  * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.12';
+var OOS_VERSION = '1.13';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -51,6 +51,7 @@ function oosHandle_(b) {
     case 'setSchedule': return oosSetSchedule_(b);
     case 'testSend': return oosTestSend_(b);
     case 'xlsx': return oosXlsx_(b.file);
+    case 'autoPreview': return oosAutoQueue_(true);   // ดูว่ารอบหน้าจะเข้าคิวร้านไหน (ไม่บันทึก ไม่ส่ง)
     case 'xlsxMeta': return oosXlsxMeta_(b.file, b.pack);
     case 'xlsxPart': return oosXlsxPart_(b.ck, b.from, b.to);   // ck = คีย์แคช (ห้ามใช้ชื่อ key — ชนกับรหัสแอป)
     default: throw new Error('ไม่รู้จักคำสั่ง ' + b.action);
@@ -108,7 +109,6 @@ function oosSetSchedule_(b) {
 /** trigger ทุก 10 นาที — ถึงเวลารอบไหนแล้วยังไม่ได้ส่งวันนี้ ก็ส่งรอบนั้น (ไม่ไล่ส่งย้อนเกิน 2 ชม.) */
 function oosTick() {
   var p = oosProps_();
-  try { oosXlsxMeta_(OOS_ORDER_FILE, true); } catch (e) { }   // อุ่นแคชข้อมูลบิลไว้ก่อน — เปิดแอปแล้วไม่ต้องรอแกะไฟล์
   if (p.getProperty('OOS_ENABLED') !== '1') return;
   var now = new Date();
   var today = Utilities.formatDate(now, OOS_TZ, 'yyyy-MM-dd');
@@ -120,7 +120,13 @@ function oosTick() {
     if (nowMin < sm || nowMin - sm > 120) continue;
     var doneKey = 'OOS_DONE_' + today + '_' + s;
     if (p.getProperty(doneKey)) continue;
+    // v1.13: เตรียมรายการเองจาก Check Out.xlsx ก่อนส่ง (ไม่ต้องมีคนเปิดแอปกดบันทึก) · ปิดได้ด้วย OOS_AUTO=0
+    var auto = null;
+    if (p.getProperty('OOS_AUTO') !== '0') {
+      try { auto = oosAutoQueue_(false); } catch (e) { auto = { error: String(e && e.message || e) }; }
+    }
     var r = oosSendPending_({ round: 'รอบ ' + s });
+    if (auto) { r.auto = auto; p.setProperty('OOS_LAST', JSON.stringify(r)); }
     if (!r.timedOut) p.setProperty(doneKey, hm);
     oosCleanDoneKeys_(today);
     return;
@@ -199,7 +205,7 @@ function oosSave_(b) {
   try {
     var q = oosReadQueue_(), sh = q.sh, idx = {};
     q.rows.forEach(function (r) { idx[r.v[0]] = r; });
-    var now = oosNow_(), by = String(b.by || ''), added = 0, changed = 0, same = 0, appends = [];
+    var now = oosNow_(), by = String(b.by || ''), added = 0, changed = 0, same = 0, kept = 0, appends = [];
     items.forEach(function (it) {
       var cusId = String(it.cusId || '').trim();
       if (!cusId) return;
@@ -214,6 +220,10 @@ function oosSave_(b) {
         return;
       }
       var st = ex.v[OOS_C['สถานะ']];
+      if (b.auto) {   // อัตโนมัติ: ไม่ทับร้านที่มีคนกดยกเลิก · เทียบเฉพาะรายการสินค้า (ไม่สนลำดับ/บิลที่เพิ่ม) กันส่งซ้ำ
+        if (st === OOS_ST.CANCEL) { kept++; return; }
+        if (oosCanon_(ex.v[OOS_C['สินค้าขาด']], ex.v[OOS_C['สินค้าเพิ่ม']]) === oosCanon_(it.short, it.add)) { same++; return; }
+      }
       if (ex.v[OOS_C.hash] === h && st !== OOS_ST.CANCEL) { same++; return; }
       var full = rowVals.concat([OOS_ST.WAIT, ex.v[OOS_C['UID ที่ส่ง']], ex.v[OOS_C['เวลาส่ง']],
         ex.v[OOS_C['รอบ']], st === OOS_ST.SENT ? 'แก้ไขหลังส่ง — รอส่งใหม่' : '', by, now, h, String(it.orders || '')]);
@@ -224,8 +234,14 @@ function oosSave_(b) {
       var start = sh.getLastRow() + 1;
       sh.getRange(start, 1, appends.length, OOS_HEAD.length).setNumberFormat('@').setValues(appends);
     }
-    return { added: added, changed: changed, same: same };
+    return { added: added, changed: changed, same: same, kept: kept };
   } finally { lock.releaseLock(); }
+}
+
+/** รายการสินค้าแบบไม่สนลำดับบรรทัด — "🔴A 1\n🔴B 2" กับ "🔴B 2\n🔴A 1" = เหมือนกัน */
+function oosCanon_(short, add) {
+  var f = function (t) { return String(t || '-').split('\n').map(function (x) { return x.trim(); }).filter(String).sort().join('\n'); };
+  return f(short) + '||' + f(add);
 }
 
 function oosSetStatus_(ids, status) {
@@ -279,7 +295,7 @@ function oosState_(b) {
   var today = oosToday_(), done = {};
   oosTimes_().forEach(function (s) { done[s] = p.getProperty('OOS_DONE_' + today + '_' + s) || ''; });
   return {
-    times: oosTimes_(), enabled: p.getProperty('OOS_ENABLED') === '1', triggerOk: oosTriggerOk_(),
+    times: oosTimes_(), enabled: p.getProperty('OOS_ENABLED') === '1', auto: p.getProperty('OOS_AUTO') !== '0', triggerOk: oosTriggerOk_(),
     last: last, doneToday: done, queue: queue, uidCount: uidCount, now: oosNow_(),
     queueUrl: oosQueueSheet_().getParent().getUrl()
   };
@@ -512,6 +528,161 @@ function oosXlsx_(name) {
     updated: Utilities.formatDate(f.getLastUpdated(), OOS_TZ, 'yyyy-MM-dd HH:mm:ss'),
     b64: Utilities.base64Encode(f.getBlob().getBytes())
   };
+}
+
+/* ───────────── v1.13 ส่งอัตโนมัติทั้งหมด (หลังบ้านเตรียมรายการเอง) ─────────────
+ * ถึงรอบส่ง → อ่าน Check Out.xlsx (BVBK ใบจอง + DSDC บิล) → เทียบแบบเดียวกับแอป (computeFromOrder / buildStores)
+ * → เลือกวัน: มีบิลของพรุ่งนี้ = พรุ่งนี้ ไม่งั้นวันนี้ → เอาเฉพาะร้านที่มี UID และไม่ใช่ "บิลหลายวัน" → บันทึกเข้าคิว → ส่ง
+ * ร้านที่ส่งแล้วรายการเหมือนเดิม = ไม่ส่งซ้ำ · รายการเปลี่ยน = ส่งใหม่ · ร้านที่กดยกเลิก = ไม่แตะ
+ * ⚠ ตรรกะต้องตรงกับแอป (rattana-oos-line.html: computeFromOrder / buildStores / qtyText) — แก้ที่หนึ่งต้องแก้อีกที่ */
+function oosAutoQueue_(dry) {
+  var t0 = Date.now();
+  var pk = oosOrderPack_(oosXlsxFile_(OOS_ORDER_FILE).getBlob());
+  var c = oosCompute_(pk.bk, pk.ds);
+  var today = oosToday_(), tmr = Utilities.formatDate(new Date(Date.now() + 864e5), OOS_TZ, 'yyyy-MM-dd');
+  var has = {}; c.rows.forEach(function (r) { has[r.date] = 1; });
+  var date = has[tmr] ? tmr : has[today] ? today : '';
+  if (!date) return { date: '', stores: 0, note: 'ไม่มีบิลของวันนี้/พรุ่งนี้', ms: Date.now() - t0 };
+  var uidMap = oosUidMap_();
+  var all = oosBuildStores_(c.rows.filter(function (r) { return r.date === date; }), c.units);
+  var pick = all.filter(function (s) { return (uidMap[s.cusId] || []).length && !s.multi; });
+  var out = {
+    date: date, total: all.length, stores: pick.length,
+    multi: all.filter(function (s) { return s.multi; }).length,
+    noUid: all.filter(function (s) { return !(uidMap[s.cusId] || []).length; }).length
+  };
+  if (dry) { out.items = pick; out.ms = Date.now() - t0; return out; }
+  if (pick.length) {
+    var r = oosSave_({ date: date, items: pick, by: 'อัตโนมัติ', auto: true });
+    out.added = r.added; out.changed = r.changed; out.same = r.same; out.kept = r.kept;
+  }
+  out.ms = Date.now() - t0;
+  return out;
+}
+function oosNorm_(s) { return String(s == null ? '' : s).replace(/[​-‍﻿]/g, '').replace(/ /g, ' ').replace(/\s+/g, ' ').trim(); }
+function oosNum_(s) { var n = parseFloat(String(s == null ? '' : s).replace(/,/g, '')); return isNaN(n) ? 0 : n; }
+function oosUnitFactor_(u) { var m = String(u).match(/x(\d+)\(/); return m ? +m[1] : 1; }
+function oosToIso_(s) {
+  s = String(s || '').trim();
+  var m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/), y;
+  if (m) { y = +m[3]; if (y > 2400) y -= 543; return y + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2); }
+  m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (m) { y = +m[1]; if (y > 2400) y -= 543; return y + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2); }
+  if (/^\d{5}(\.\d+)?$/.test(s)) return new Date(Date.UTC(1899, 11, 30) + Math.floor(+s) * 864e5).toISOString().slice(0, 10);
+  return '';
+}
+/** = computeFromOrder ของแอป: จับกลุ่มใบจอง↔บิล (DI_REMARK ของบิลอ้าง BK/BV) → ส่วนต่างเป็นชิ้น (EA) ต่อสินค้า */
+function oosCompute_(bkTab, dsTab) {
+  var idx = function (head, k) {
+    var i = head.map(function (h) { return oosNorm_(h).toUpperCase(); }).indexOf(k);
+    if (i < 0) throw new Error('ไม่พบคอลัมน์ ' + k);
+    return i;
+  };
+  var cols = function (t) {
+    var o = {};
+    ['DI_DATE', 'DI_REF', 'AR_CODE', 'AR_NAME', 'SLMN_NAME', 'WL_CODE', 'SKU_NAME', 'TRD_UTQNAME', 'TRD_QTY', 'TRD_Q_FREE', 'DI_REMARK']
+      .forEach(function (k) { o[k] = idx(t[0], k); });
+    return o;
+  };
+  var cb = cols(bkTab), cd = cols(dsTab);
+  var P = {};
+  var find = function (x) { while (P[x] !== x) { P[x] = P[P[x]]; x = P[x]; } return x; };
+  var add = function (x) { if (!(x in P)) P[x] = x; };
+  var uni = function (a, b) { a = find(a); b = find(b); if (a !== b) P[a] = b; };
+  var units = {};
+  var line = function (r, c) {
+    var prod = oosNorm_(r[c.SKU_NAME]), u = oosNorm_(r[c.TRD_UTQNAME]), f = oosUnitFactor_(u);
+    (units[prod] = units[prod] || {})[f] = u;
+    return { prod: prod, ea: (oosNum_(r[c.TRD_QTY]) + oosNum_(r[c.TRD_Q_FREE])) * f };
+  };
+  var ds = [];
+  dsTab.slice(1).forEach(function (r) {
+    var refs = (String(r[cd.DI_REMARK]).match(/(?:BK|BV)\d+\/\d+/g) || []).filter(function (x, i, a) { return a.indexOf(x) === i; });
+    if (!refs.length) return;
+    refs.forEach(add); refs.slice(1).forEach(function (x) { uni(refs[0], x); });
+    ds.push({ r: r, refs: refs, date: oosToIso_(r[cd.DI_DATE]), ref: oosNorm_(r[cd.DI_REF]) });
+  });
+  var bkHave = {}, G = {}, order = [];
+  var grp = function (k) {
+    if (!G[k]) { G[k] = { bk: {}, ds: {}, bkK: [], dsK: [], dates: {}, dateK: [], missing: false, cus: '', name: '', sale: '', wh: '', orders: [] }; order.push(k); }
+    return G[k];
+  };
+  var put = function (g, which, l) {
+    var m = g[which], ks = g[which + 'K'];
+    if (!(l.prod in m)) { m[l.prod] = 0; ks.push(l.prod); }
+    m[l.prod] += l.ea;
+  };
+  bkTab.slice(1).forEach(function (r) {
+    var ref = oosNorm_(r[cb.DI_REF]); if (!(ref in P)) return;
+    bkHave[ref] = 1;
+    var g = grp(find(ref)); put(g, 'bk', line(r, cb));
+    g.cus = g.cus || oosNorm_(r[cb.AR_CODE]); g.name = g.name || oosNorm_(r[cb.AR_NAME]);
+    if (/\(ROO\)/.test(r[cb.SLMN_NAME]))   // เฉพาะเซลล์ ROO — เลขออเดอร์จาก DI_REMARK "billIdORD…"
+      (String(r[cb.DI_REMARK]).match(/ORD\d+/g) || []).forEach(function (x) { if (g.orders.indexOf(x) < 0) g.orders.push(x); });
+    g.sale = g.sale || oosNorm_(r[cb.SLMN_NAME]); g.wh = g.wh || oosNorm_(r[cb.WL_CODE]);
+  });
+  ds.forEach(function (d) {
+    var g = grp(find(d.refs[0])); put(g, 'ds', line(d.r, cd));
+    if (!g.dates[d.date]) { g.dates[d.date] = []; g.dateK.push(d.date); }
+    if (g.dates[d.date].indexOf(d.ref) < 0) g.dates[d.date].push(d.ref);
+    if (d.refs.some(function (x) { return !bkHave[x]; })) g.missing = true;
+    g.cus = g.cus || oosNorm_(d.r[cd.AR_CODE]); g.name = g.name || oosNorm_(d.r[cd.AR_NAME]);
+    g.sale = g.sale || oosNorm_(d.r[cd.SLMN_NAME]); g.wh = g.wh || oosNorm_(d.r[cd.WL_CODE]);
+  });
+  var rows = [];
+  order.forEach(function (k) {
+    var g = G[k];
+    if (!g.dateK.length || g.missing || !g.bkK.length) return;   // ใบจองเก่ากว่าที่ไฟล์เก็บไว้ — เทียบไม่ได้ ไม่เดา
+    var prods = g.bkK.concat(g.dsK.filter(function (p) { return !(p in g.bk); }));
+    var multi = g.dateK.length > 1;
+    g.dateK.forEach(function (date) {
+      prods.forEach(function (prod) {
+        var diff = (g.ds[prod] || 0) - (g.bk[prod] || 0);
+        if (diff) rows.push({ date: date, ds: g.dates[date].join(', '), wh: g.wh, sale: g.sale, cusId: g.cus, cusName: g.name,
+          prod: prod, diff: diff, multi: multi, orders: g.orders.join(', ') });
+      });
+    });
+  });
+  return { rows: rows, units: units };
+}
+/** = qtyText ของแอป (หน่วยจากใบจอง/บิล): ชิ้น → "2 ลังx24(CS) 3 ชิ้นx1(EA)" */
+function oosQtyText_(units, prod, ea) {
+  var u = units[prod];
+  if (!u) return ea + ' ชิ้น';
+  var fs = Object.keys(u).map(Number).sort(function (a, b) { return b - a; }), rem = ea, parts = [];
+  fs.forEach(function (f) { if (f <= 1) return; var c = Math.floor(rem / f); if (c) { parts.push(c + ' ' + u[f]); rem -= c * f; } });
+  if (rem) parts.push(rem + ' ' + (u[1] || 'ชิ้นx1(EA)'));
+  return parts.join(' ');
+}
+/** = buildStores ของแอป: รวมรายการต่อร้าน → ข้อความ สินค้าขาด/สินค้าเพิ่ม แบบเดียวกับที่แอปบันทึก */
+function oosBuildStores_(rows, units) {
+  var by = {}, keys = [];
+  var addU = function (a, v) { if (v && a.indexOf(v) < 0) a.push(v); };
+  rows.forEach(function (r) {
+    var s = by[r.cusId];
+    if (!s) { s = by[r.cusId] = { cusId: r.cusId, cusName: r.cusName, wh: [], bills: [], sale: [], prods: {}, prodK: [], multi: false, orders: [] }; keys.push(r.cusId); }
+    if (r.multi) s.multi = true;
+    if (r.orders) r.orders.split(', ').forEach(function (x) { addU(s.orders, x); });
+    addU(s.wh, r.wh); addU(s.bills, r.ds); addU(s.sale, r.sale);
+    if (!(r.prod in s.prods)) { s.prods[r.prod] = 0; s.prodK.push(r.prod); }
+    s.prods[r.prod] += r.diff;
+  });
+  var out = [];
+  keys.forEach(function (k) {
+    var s = by[k], lines = [];
+    s.prodK.forEach(function (prod) {
+      var ea = s.prods[prod]; if (!ea) return;
+      lines.push({ type: ea < 0 ? 'short' : 'add', prod: prod, qty: oosQtyText_(units, prod, Math.abs(ea)) });
+    });
+    if (!lines.length) return;
+    lines.sort(function (a, b) { return a.type === b.type ? a.prod.localeCompare(b.prod, 'th') : a.type === 'short' ? -1 : 1; });
+    var txt = function (t, ic) { return lines.filter(function (l) { return l.type === t; }).map(function (l) { return ic + l.prod + ' ' + l.qty; }).join('\n'); };
+    out.push({
+      cusId: s.cusId, cusName: s.cusName, wh: s.wh.join(','), bills: s.bills.join(', '), orders: s.orders.slice().sort().join(', '),
+      sale: s.sale.join(', '), short: txt('short', '🔴') || '-', add: txt('add', '🟢') || '-', multi: s.multi
+    });
+  });
+  return out;
 }
 
 /* ───────────── Flex (แบบ A กรมท่า-ทอง · v1.2) ───────────── */
