@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Design Hub v7.35</title>
+<title>Rattana Design Hub v7.36</title>
 <meta name="description" content="Rattana Design Hub — ออกแบบป้ายราคา โปรโมชั่น Flash Sale และแคตตาล็อก จาก Google Sheet พิมพ์ PDF/PNG/JPEG">
 <meta name="theme-color" content="#132248">
 <meta name="apple-mobile-web-app-title" content="Rattana Design Hub">
@@ -2438,7 +2438,7 @@ body.dark #appUpdate{background:#131c33;color:#e8eaf0}
   <header>
     <button class="icon-btn hamburger-btn" onclick="toggleDrawer(true)" title="เมนูฟีเจอร์" aria-label="เมนู">☰</button>
     <img class="logo-img" src="rattana-hub-icon-512.png?v=2" alt="Rattana Design Hub" width="44" height="44" style="object-fit:cover">
-    <div class="logo-text">RATTANA <span style="color:var(--gold)">DESIGN HUB</span><small>ออกแบบป้าย · โปรโมชั่น · แคตตาล็อก v7.35</small></div>
+    <div class="logo-text">RATTANA <span style="color:var(--gold)">DESIGN HUB</span><small>ออกแบบป้าย · โปรโมชั่น · แคตตาล็อก v7.36</small></div>
     <button class="icon-btn" id="btnInstallApp" onclick="installApp()" title="ติดตั้งแอปลงเครื่อง" style="display:none;background:var(--gold);color:#0d1b3e">📥</button>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="โหลดข้อมูลใหม่">⟳</button>
     <button class="icon-btn" onclick="toggleDark()" title="โหมดมืด">🌙</button>
@@ -3265,6 +3265,7 @@ body.dark #appUpdate{background:#131c33;color:#e8eaf0}
           <div class="pp-row"><label class="pp-lb">วิธีทำภาพ</label><div class="pp-chips" id="aipRouteChips"></div></div>
           <div class="aip-tpl-only">
             <div class="pp-row"><label class="pp-lb">เทมเพลต</label><div class="pp-chips" id="aipTplChips"></div></div>
+            <div class="pp-row"><label class="pp-lb">สไตล์ราคา</label><div class="pp-chips" id="aipTplPriceChips"></div></div>
             <div class="pp-row"><label class="pp-lb">จัดภาพ</label><div class="pp-chips" id="aipTplLayChips"></div>
               <label class="pp-ck"><input type="checkbox" id="aipTplCut" onchange="aipSet('tplCut', this.checked)"> ลบพื้นขาวรูปสินค้า</label></div>
             <div class="help-block" style="margin:2px 0 10px;padding:8px 10px">🎨 จัดภาพให้อัตโนมัติจากรูปสินค้าจริง + ราคาขั้นบันได — <b>ไม่ใช้ AI ไม่เสียเงิน ราคาตรง 100%</b> · แก้ชื่อ/ราคาในตารางด้านล่าง ภาพอัปเดตตามทันที</div>
@@ -7464,7 +7465,7 @@ const AIP_STYLES = [
 ];
 const AIP_FMTS = [ { k:'a', n:'5 ลัง ราคา 350 ฿' }, { k:'b', n:'5 ลัง 350.-' } ];
 const AIP_DEF = { ratio:'4:5', style:'auto', fmt:'a', headline:'', sub:'สินค้าราคายกลัง', badge:'ราคาพิเศษ ลูกค้ารัตนมาร์ท', extra:'', check:true,
-  route:'tpl', tpl:'yoklang-wood', tplLay:'one', tplCut:true };   // v7.33 — route 'tpl' = ready-made template (no AI) · 'ai' = Gemini app
+  route:'tpl', tpl:'yoklang-wood', tplLay:'one', tplCut:true, tplPrice:'navy' };   // v7.36 — user picked กรมท่า-ทอง   // v7.33 — route 'tpl' = ready-made template (no AI) · 'ai' = Gemini app
 let aipCfg = { ...AIP_DEF };
 let aipEdits = {};          // sku → { name, label, tiers:[{q,p}] } — session only (prices always start fresh from the sheets)
 let aipResults = [];        // session only — posters imported back from the Gemini app: { id, status:'done', img:{mime,data}, expect, check, note, ratio, imported }
@@ -7896,6 +7897,7 @@ function aipSyncPanel(){
   document.querySelectorAll('#aipRouteChips .pp-chip').forEach(b => b.classList.toggle('active', b.dataset.v === (aipIsTpl() ? 'tpl' : 'ai')));
   document.querySelectorAll('#aipTplChips .pp-chip').forEach(b => b.classList.toggle('active', b.dataset.v === aipTplCur().k));
   document.querySelectorAll('#aipTplLayChips .pp-chip').forEach(b => b.classList.toggle('active', b.dataset.v === aipCfg.tplLay));
+  document.querySelectorAll('#aipTplPriceChips .pp-chip').forEach(b => b.classList.toggle('active', b.dataset.v === aipTplPS().k));
   if ($('#aipTplCut')) $('#aipTplCut').checked = !!aipCfg.tplCut;
   const set = (id, v) => { const el = $(id); if (el && el !== document.activeElement) el.value = v; };
   const an = $('#aipAppN'); if (an) { const k = aipSel().length; an.textContent = k ? `(${1 + k + (aipPresenter ? 1 : 0) + (aipStyleRef ? 1 : 0)} ไฟล์)` : ''; }
@@ -8193,132 +8195,114 @@ function aipTplFitLines(x, text, maxW, fs, minFs, maxLines, weight){
 function aipTplFitFont(x, t, weight, fs, maxW, minFs, fam){ let f = fs; x.font = `${weight} ${f}px ${fam}`; while (f > minFs && x.measureText(t).width > maxW) { f -= 1; x.font = `${weight} ${f}px ${fam}`; } return f; }
 /** sticker-style price "฿880": white Poppins-900 digits with a thick red outline + dark drop, yellow ฿ */
 function aipTplPriceW(x, v, fs){ x.font = `900 ${fs}px ${AIP_TPL_FNUM}`; const a = x.measureText(fmtThaiBaht(v)).width; x.font = `900 ${Math.round(fs * 0.55)}px ${AIP_TPL_FNUM}`; return a + x.measureText('฿').width - fs * 0.02; }
-function aipTplPriceFx(x, v, cx, base, fs, align){
+/** v7.36 — price styles the user picks from (chips "สไตล์ราคา"); every style keeps the digits high-contrast and outline-free */
+const AIP_TPL_GOLD = (x, Y, f) => { const g = x.createLinearGradient(0, Y - f * 0.78, 0, Y + f * 0.04); g.addColorStop(0, '#fff3c4'); g.addColorStop(0.45, '#f2c94c'); g.addColorStop(1, '#b8860b'); return g; };
+const AIP_TPL_PS = {
+  red:     { n:'แดงคลาสสิก', frame:['#ffd84a','#f5b400'], band:['#163f7a','#0b2550'], pill:['#ffe45c','#ffc400'], pillTx:'#0d1b3e',
+             body:'#ffffff', num:{ fill:'#d0021b' }, bubble:'#e3001b', bubbleTx:'#fff', best:'rgba(227,0,27,0.10)' },
+  redfill: { n:'ป้ายแดง ตัวเลขขาว', frame:['#ffd84a','#f5b400'], band:['#163f7a','#0b2550'], pill:['#ffe45c','#ffc400'], pillTx:'#0d1b3e',
+             body:['#ef1a2d','#b5000e'], num:{ fill:'#ffffff', sym:'#ffe45c', drop:'rgba(80,0,8,0.45)' }, bubble:'#0d1b3e', bubbleTx:'#ffd84a', best:'rgba(255,255,255,0.16)' },
+  yellow:  { n:'เหลือง-กรมท่า', frame:['#163f7a','#0b2550'], band:['#163f7a','#0b2550'], pill:null, qtyTx:'#ffffff',
+             body:['#ffe45c','#ffc400'], num:{ fill:'#0d1b3e' }, bubble:'#e3001b', bubbleTx:'#fff', best:'rgba(255,255,255,0.35)' },
+  navy:    { n:'กรมท่า-ทอง พรีเมียม', frame:['#f6d77c','#b8860b'], band:['#0a1f45','#081833'], pill:null, qtyTx:'#f3d27a',
+             body:['#1d4f93','#0b2550'], num:{ fill:AIP_TPL_GOLD, drop:'rgba(0,0,0,0.35)' }, bubble:'#f2c94c', bubbleTx:'#0d1b3e', best:'rgba(242,201,76,0.16)' },
+  white:   { n:'ขาวมินิมอล', frame:['#ffffff','#e8edf5'], band:['#ffffff','#ffffff'], pill:null, qtyTx:'#475569', rule:'#e3001b',
+             body:'#ffffff', num:{ fill:'#0d1b3e', sym:'#e3001b' }, bubble:'#e3001b', bubbleTx:'#fff', best:'rgba(227,0,27,0.08)' },
+};
+function aipTplPS(){ const k = AIP_TPL_PS[aipCfg.tplPrice] ? aipCfg.tplPrice : 'navy'; return { k, ...AIP_TPL_PS[k] }; }
+function aipTplFill(x, v, y0, y1){ if (!Array.isArray(v)) return v; const g = x.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, v[0]); g.addColorStop(1, v[1]); return g; }
+/** "฿880" — small ฿ + big heavy Poppins number, no outline (style decides colour / gold gradient / soft drop) */
+function aipTplDigits(x, v, cx, base, fs, align, P, wt){
+  wt = wt || 900;
   const num = fmtThaiBaht(v), sf = Math.round(fs * 0.55);
-  const W = aipTplPriceW(x, v, fs), left = align === 'right' ? cx - W : cx - W / 2;
-  x.font = `900 ${sf}px ${AIP_TPL_FNUM}`; const sw = x.measureText('฿').width - fs * 0.02;
-  const draw = (t, X, Y, f, fill) => {
-    x.font = `900 ${f}px ${AIP_TPL_FNUM}`; x.textAlign = 'left'; x.textBaseline = 'alphabetic'; x.lineJoin = 'round';
-    x.fillStyle = '#7a0010'; x.fillText(t, X + f * 0.05, Y + f * 0.07);          // drop
-    x.lineWidth = f * 0.17; x.strokeStyle = '#d0021b'; x.strokeText(t, X, Y);        // red outline
-    x.lineWidth = f * 0.05; x.strokeStyle = '#ffffff'; x.strokeText(t, X, Y);
-    x.fillStyle = fill; x.fillText(t, X, Y);
+  x.font = `${wt} ${fs}px ${AIP_TPL_FNUM}`; const nw = x.measureText(num).width;
+  x.font = `${wt} ${sf}px ${AIP_TPL_FNUM}`; const sw = x.measureText('฿').width + fs * 0.03;
+  const left = align === 'right' ? cx - nw - sw : cx - (nw + sw) / 2;
+  const part = (t, X, Y, f, fill) => {
+    x.font = `${wt} ${f}px ${AIP_TPL_FNUM}`; x.textAlign = 'left'; x.textBaseline = 'alphabetic';
+    if (P.drop) { x.fillStyle = P.drop; x.fillText(t, X + f * 0.03, Y + f * 0.05); }
+    x.fillStyle = typeof fill === 'function' ? fill(x, Y, f) : fill; x.fillText(t, X, Y);
   };
-  draw('฿', left, base - fs * 0.04, sf, '#ffd23f');
-  draw(num, left + sw, base, fs, '#ffffff');
+  part('฿', left, base - fs * 0.05, sf, P.sym || P.fill);
+  part(num, left + sw, base, fs, P.fill);
 }
-function aipTplPriceFlat(x, v, X, base, fs, color){   // plain right-aligned price for narrow list rows
-  const num = fmtThaiBaht(v), sf = Math.round(fs * 0.55);
-  x.font = `800 ${fs}px ${AIP_TPL_FNUM}`; const nw = x.measureText(num).width;
-  x.font = `800 ${sf}px ${AIP_TPL_FNUM}`; const sw = x.measureText('฿').width + fs * 0.05;
-  x.textAlign = 'left'; x.textBaseline = 'alphabetic'; x.fillStyle = color;
-  x.fillText('฿', X - nw - sw, base - fs * 0.04);
-  x.font = `800 ${fs}px ${AIP_TPL_FNUM}`; x.fillText(num, X - nw, base);
-}
+function aipTplDigitsW(x, v, fs, wt){ wt = wt || 900; x.font = `${wt} ${fs}px ${AIP_TPL_FNUM}`; const a = x.measureText(fmtThaiBaht(v)).width; x.font = `${wt} ${Math.round(fs * 0.55)}px ${AIP_TPL_FNUM}`; return a + x.measureText('฿').width + fs * 0.03; }
 function aipTplQty(t, uname, last){ return `${t.q} ${uname}${last ? 'ขึ้นไป' : ''}`; }
 /** a ragged red brush stroke (deterministic per seed) behind the price */
-function aipTplBrush(x, cx, cy, w, h, seed){
-  let s = seed * 9301 + 49297; const rnd = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
-  const L = cx - w / 2, R = cx + w / 2, T = cy - h / 2, B = cy + h / 2, sk = h * 0.18;
-  const g = x.createLinearGradient(L, T, R, B); g.addColorStop(0, '#f2142b'); g.addColorStop(1, '#b8000f');
-  x.save(); x.fillStyle = g; x.beginPath();
-  x.moveTo(L + sk, T + rnd() * 4);
-  for (let t = 1; t <= 18; t++) x.lineTo(L + sk + (R - L - sk) * t / 18, T + (rnd() - 0.5) * h * 0.13);
-  for (let t = 0; t <= 6; t++) x.lineTo(R + (rnd() * 0.5) * h * 0.35 - (t % 2) * h * 0.12, T + h * t / 6);   // dry-brush tail
-  for (let t = 18; t >= 0; t--) x.lineTo(L + (R - L - sk) * t / 18, B + (rnd() - 0.5) * h * 0.13);
-  for (let t = 6; t >= 0; t--) x.lineTo(L - (rnd() * 0.5) * h * 0.3 + (t % 2) * h * 0.1 + sk * (1 - t / 6), T + h * t / 6);
-  x.closePath(); x.fill();
-  x.globalAlpha = 0.55; x.strokeStyle = '#ff4d5e'; x.lineWidth = 2;   // a few dry streaks
-  for (let t = 0; t < 3; t++) { const yy = T + h * (0.25 + 0.25 * t); x.beginPath(); x.moveTo(R - w * 0.05, yy); x.lineTo(R + h * (0.25 + rnd() * 0.25), yy + (rnd() - 0.5) * 6); x.stroke(); }
-  x.restore();
-}
-/** yellow "spark" strokes (attention lines) */
-function aipTplSpark(x, cx, cy, len, ang0, spread, n, lw){
-  x.save(); x.strokeStyle = '#ffc400'; x.lineCap = 'round'; x.lineWidth = lw;
-  for (let i = 0; i < n; i++) {
-    const a = ang0 + (i - (n - 1) / 2) * spread, r0 = len * 0.25;
-    x.beginPath(); x.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); x.lineTo(cx + Math.cos(a) * (r0 + len * (i === (n - 1) / 2 ? 1 : 0.75)), cy + Math.sin(a) * (r0 + len * (i === (n - 1) / 2 ? 1 : 0.75))); x.stroke();
-  }
-  x.restore();
-}
-/** the box each step-price block takes (before the user's move/scale) */
 function aipTplTilesBox(k, cx, top, bot, maxW){
   const gap = 20, tw = Math.min(k === 1 ? 320 : 290, (maxW - gap * (k - 1)) / k), total = tw * k + gap * (k - 1);
   return { x: cx - total / 2, y: top, w: total, h: bot - top, tw, gap };
 }
 /** reference-style tiles: thick yellow frame, navy band with a yellow quantity pill, red brush + sticker price, "คุ้มสุด" bubble */
-function aipTplTiles(x, tiers, uname, B){
+/** price tiles: frame → band with the quantity → body with the price; colours from the chosen style */
+function aipTplTiles(x, tiers, uname, B, S){
   const k = tiers.length, th = B.h, bw = 6, band = Math.round(Math.min(56, th * 0.27));
   let X = B.x;
   tiers.forEach((t, i) => {
     const last = k > 1 && i === k - 1, tw = B.tw, top = B.y;
-    x.save(); x.shadowColor = 'rgba(13,27,62,0.35)'; x.shadowBlur = 18; x.shadowOffsetY = 8;
-    aipTplRR(x, X, top, tw, th, 18);
-    const fr = x.createLinearGradient(0, top, 0, top + th); fr.addColorStop(0, '#ffd84a'); fr.addColorStop(1, '#f5b400');
-    x.fillStyle = fr; x.fill(); x.restore();
+    x.save(); x.shadowColor = 'rgba(13,27,62,0.32)'; x.shadowBlur = 18; x.shadowOffsetY = 8;
+    aipTplRR(x, X, top, tw, th, 18); x.fillStyle = aipTplFill(x, S.frame, top, top + th); x.fill(); x.restore();
     x.save(); aipTplRR(x, X + bw, top + bw, tw - bw * 2, th - bw * 2, 14); x.clip();
-    x.fillStyle = '#fff'; x.fillRect(X, top, tw, th);
-    const nb = x.createLinearGradient(0, top, 0, top + band); nb.addColorStop(0, '#163f7a'); nb.addColorStop(1, '#0b2550');
-    x.fillStyle = nb; x.fillRect(X, top, tw, band + bw);
-    aipTplBrush(x, X + tw / 2 - tw * 0.02, top + band + bw + (th - band - bw * 2) * 0.54, tw * 0.90, (th - band - bw * 2) * 0.80, i + 1);
+    x.fillStyle = aipTplFill(x, S.body, top + band, top + th); x.fillRect(X, top, tw, th);
+    x.fillStyle = aipTplFill(x, S.band, top, top + band + bw); x.fillRect(X, top, tw, band + bw);
+    if (S.rule) { x.fillStyle = S.rule; x.fillRect(X + tw * 0.3, top + band + bw - 2, tw * 0.4, 3); }
     x.restore();
-    // quantity pill (pokes above the frame like a tab)
+    // quantity: a yellow tab poking above the frame, or plain text in the band
     const q = aipTplQty(t, uname, last);
     let qf = Math.round(band * 0.62); x.font = `700 ${qf}px ${AIP_TPL_FTH}`;
     while (qf > 12 && x.measureText(q).width > tw * 0.74) { qf -= 1; x.font = `700 ${qf}px ${AIP_TPL_FTH}`; }
-    const pw = Math.min(tw * 0.86, x.measureText(q).width + qf * 1.6), ph = band + 8, py = top - 6;
-    x.save(); x.shadowColor = 'rgba(0,0,0,0.25)'; x.shadowBlur = 6; x.shadowOffsetY = 3;
-    aipTplRR(x, X + tw / 2 - pw / 2, py, pw, ph, ph / 2);
-    const pg = x.createLinearGradient(0, py, 0, py + ph); pg.addColorStop(0, '#ffe45c'); pg.addColorStop(1, '#ffc400');
-    x.fillStyle = pg; x.fill(); x.restore();
-    x.fillStyle = AIP_TPL_C.navyDk; x.textAlign = 'center'; x.textBaseline = 'alphabetic'; x.font = `700 ${qf}px ${AIP_TPL_FTH}`;
-    x.fillText(q, X + tw / 2, py + ph / 2 + qf * 0.36);
+    if (S.pill) {
+      const pw = Math.min(tw * 0.86, x.measureText(q).width + qf * 1.6), ph = band + 8, py = top - 6;
+      x.save(); x.shadowColor = 'rgba(0,0,0,0.25)'; x.shadowBlur = 6; x.shadowOffsetY = 3;
+      aipTplRR(x, X + tw / 2 - pw / 2, py, pw, ph, ph / 2); x.fillStyle = aipTplFill(x, S.pill, py, py + ph); x.fill(); x.restore();
+      x.fillStyle = S.pillTx; x.textAlign = 'center'; x.textBaseline = 'alphabetic'; x.font = `700 ${qf}px ${AIP_TPL_FTH}`;
+      x.fillText(q, X + tw / 2, py + ph / 2 + qf * 0.36);
+    } else {
+      x.fillStyle = S.qtyTx; x.textAlign = 'center'; x.textBaseline = 'alphabetic'; x.font = `700 ${qf}px ${AIP_TPL_FTH}`;
+      x.fillText(q, X + tw / 2, top + bw + band / 2 + qf * 0.36);
+    }
     // price
     const bodyTop = top + band + bw, bodyH = th - band - bw * 2;
-    let pf = Math.round(bodyH * 0.80);
-    while (pf > 16 && aipTplPriceW(x, t.p, pf) > tw * 0.84) pf -= 1;
-    aipTplPriceFx(x, t.p, X + tw / 2 - tw * 0.02, bodyTop + bodyH * 0.54 + pf * 0.36, pf, 'center');
-    const pw2 = aipTplPriceW(x, t.p, pf), spx = Math.min(X + tw / 2 - tw * 0.02 + pw2 / 2 + 2, X + tw - 30);
-    aipTplSpark(x, spx, bodyTop + bodyH * 0.24, 20, -0.75, 0.55, 3, 4);
-    if (last) {   // red speech bubble on the cheapest step
+    let pf = Math.round(bodyH * 0.74);
+    while (pf > 16 && aipTplDigitsW(x, t.p, pf) > tw * 0.84) pf -= 1;
+    aipTplDigits(x, t.p, X + tw / 2, bodyTop + bodyH * 0.52 + pf * 0.36, pf, 'center', S.num);
+    if (last) {   // speech bubble on the cheapest step
       const lbl = 'คุ้มสุด'; x.font = `800 26px ${AIP_TPL_FTH}`; const lw = x.measureText(lbl).width + 30, lh = 44;
       x.save(); x.translate(X + tw - lw * 0.42, top - 18); x.rotate(-0.08);
       x.shadowColor = 'rgba(0,0,0,0.3)'; x.shadowBlur = 8; x.shadowOffsetY = 3;
       x.beginPath(); aipTplRR(x, -lw / 2, -lh / 2, lw, lh, 18); x.moveTo(-lw * 0.18, lh / 2 - 2); x.lineTo(-lw * 0.30, lh / 2 + 14); x.lineTo(-lw * 0.02, lh / 2 - 2);
-      x.fillStyle = '#e3001b'; x.fill(); x.shadowColor = 'transparent';
+      x.fillStyle = S.bubble; x.fill(); x.shadowColor = 'transparent';
       aipTplRR(x, -lw / 2, -lh / 2, lw, lh, 18); x.lineWidth = 3; x.strokeStyle = '#fff'; x.stroke();
-      x.fillStyle = '#fff'; x.textAlign = 'center'; x.fillText(lbl, 0, 9); x.restore();
+      x.fillStyle = S.bubbleTx; x.textAlign = 'center'; x.fillText(lbl, 0, 9); x.restore();
     }
     X += tw + B.gap;
   });
 }
-/** narrow columns: one framed card, a yellow quantity pill + red price per row; the cheapest row sits on a red ribbon */
-function aipTplList(x, tiers, uname, B){
+/** narrow columns: one framed card, quantity pill/text + price per row; the cheapest row is tinted */
+function aipTplList(x, tiers, uname, B, S){
   const k = tiers.length, H = B.h, X = B.x, w = B.w, top = B.y, bw = 4;
-  x.save(); x.shadowColor = 'rgba(13,27,62,0.32)'; x.shadowBlur = 16; x.shadowOffsetY = 7;
-  aipTplRR(x, X, top, w, H, 14);
-  const fr = x.createLinearGradient(0, top, 0, top + H); fr.addColorStop(0, '#ffd84a'); fr.addColorStop(1, '#f5b400');
-  x.fillStyle = fr; x.fill(); x.restore();
-  x.save(); aipTplRR(x, X + bw, top + bw, w - bw * 2, H - bw * 2, 11); x.clip(); x.fillStyle = '#fff'; x.fillRect(X, top, w, H);
+  x.save(); x.shadowColor = 'rgba(13,27,62,0.30)'; x.shadowBlur = 16; x.shadowOffsetY = 7;
+  aipTplRR(x, X, top, w, H, 14); x.fillStyle = aipTplFill(x, S.frame, top, top + H); x.fill(); x.restore();
+  x.save(); aipTplRR(x, X + bw, top + bw, w - bw * 2, H - bw * 2, 11); x.clip(); x.fillStyle = aipTplFill(x, S.body, top, top + H); x.fillRect(X, top, w, H);
   const pad = 6, rh = (H - bw * 2 - pad * 2) / k;
-  if (k > 1) { const y0 = top + bw + pad + rh * (k - 1); const g = x.createLinearGradient(X, 0, X + w, 0); g.addColorStop(0, '#fff'); g.addColorStop(0.35, '#ffe1e4'); g.addColorStop(1, '#ffc9cf'); x.fillStyle = g; x.fillRect(X, y0 - 2, w, rh + 4); }
+  if (k > 1) { const y0 = top + bw + pad + rh * (k - 1); x.fillStyle = S.best; x.fillRect(X, y0 - 2, w, rh + 4); }
   x.restore();
+  const dark = S.k === 'redfill' || S.k === 'navy';
   tiers.forEach((t, i) => {
     const last = k > 1 && i === k - 1, y0 = top + bw + pad + rh * i, mid = y0 + rh / 2;
-    if (i) { x.fillStyle = 'rgba(13,27,62,0.10)'; x.fillRect(X + 14, y0, w - 28, 1.5); }
+    if (i) { x.fillStyle = dark ? 'rgba(255,255,255,0.18)' : 'rgba(13,27,62,0.10)'; x.fillRect(X + 14, y0, w - 28, 1.5); }
     let q = aipTplQty(t, uname, last);
-    let qf = Math.min(Math.round(rh * 0.40), 24), pf = Math.min(Math.round(rh * 0.66), 44);
+    let qf = Math.min(Math.round(rh * 0.40), 24), pf = Math.min(Math.round(rh * 0.68), 46);
     const qW = () => { x.font = `700 ${qf}px ${AIP_TPL_FTH}`; return x.measureText(q).width + qf * 1.2; };
-    const pW = () => { x.font = `800 ${pf}px ${AIP_TPL_FNUM}`; const a = x.measureText(fmtThaiBaht(t.p)).width; x.font = `800 ${Math.round(pf * 0.55)}px ${AIP_TPL_FNUM}`; return a + x.measureText('฿').width + pf * 0.05; };
-    while (qW() + pW() + 26 > w - bw * 2 - 12 && (qf > 11 || pf > 16)) { if (qf > 11) qf -= 1; if (pf > 16) pf -= 1; }
-    if (qW() + pW() + 26 > w - bw * 2 - 12 && last) q = `${t.q}+ ${uname}`;
+    while (qW() + aipTplDigitsW(x, t.p, pf, 800) + 26 > w - bw * 2 - 12 && (qf > 11 || pf > 16)) { if (qf > 11) qf -= 1; if (pf > 16) pf -= 1; }
+    if (qW() + aipTplDigitsW(x, t.p, pf, 800) + 26 > w - bw * 2 - 12 && last) q = `${t.q}+ ${uname}`;
     const pw = qW(), ph = Math.min(rh - 8, qf * 1.7), px = X + bw + 10;
     aipTplRR(x, px, mid - ph / 2, pw, ph, ph / 2);
-    const pg = x.createLinearGradient(0, mid - ph / 2, 0, mid + ph / 2); pg.addColorStop(0, '#ffe45c'); pg.addColorStop(1, '#ffc400');
-    x.fillStyle = pg; x.fill();
-    x.font = `700 ${qf}px ${AIP_TPL_FTH}`; x.textAlign = 'center'; x.textBaseline = 'alphabetic'; x.fillStyle = AIP_TPL_C.navyDk;
+    x.fillStyle = S.pill ? aipTplFill(x, S.pill, mid - ph / 2, mid + ph / 2) : aipTplFill(x, S.band, mid - ph / 2, mid + ph / 2); x.fill();
+    if (!S.pill && S.k === 'white') { x.lineWidth = 1.5; x.strokeStyle = '#cbd5e1'; x.stroke(); }
+    x.font = `700 ${qf}px ${AIP_TPL_FTH}`; x.textAlign = 'center'; x.textBaseline = 'alphabetic'; x.fillStyle = S.pill ? S.pillTx : S.qtyTx;
     x.fillText(q, px + pw / 2, mid + qf * 0.36);
-    aipTplPriceFlat(x, t.p, X + w - bw - 12, mid + pf * 0.36, pf, last ? '#d0021b' : '#c8102e');
+    aipTplDigits(x, t.p, X + w - bw - 12, mid + pf * 0.36, pf, 'right', S.num, 800);
   });
 }
 async function aipTplFonts(){
@@ -8413,11 +8397,6 @@ function aipTplPaint(c, g){
         x.font = `500 20px ${AIP_TPL_FTH}`; x.textAlign = 'center'; x.fillStyle = '#64748b'; x.fillText('ไม่มีรูปสินค้า', cx, imgBot - h / 2 + 7);
       });
     }
-    if (n === 1 && ph) {
-      const pe = els[els.length - 1], sx = pe.x, sy = pe.y, sw = pe.w;
-      el('sL' + i, { x: sx - 70, y: sy - 10, w: 70, h: 70 }, false, () => aipTplSpark(x, sx - 14, sy + 44, 46, Math.PI * 1.25, 0.5, 3, 7));
-      el('sR' + i, { x: sx + sw, y: sy + 30, w: 70, h: 70 }, false, () => aipTplSpark(x, sx + sw + 14, sy + 74, 46, -Math.PI * 0.2, 0.5, 3, 7));
-    }
     // step prices in front of the product
     const tiers = aipCleanTiers(r.tiers);
     if (!tiers.length) {
@@ -8428,10 +8407,10 @@ function aipTplPaint(c, g){
       });
     } else if (cw >= 520 || (cw >= 440 && tiers.length <= 2)) {
       const B = n === 1 ? aipTplTilesBox(tiers.length, cx, tpl.floor - 18, Z.y + Z.h + 16, cw) : aipTplTilesBox(tiers.length, cx, priceTop + 4, priceBot, cw);
-      el('$' + i, { x: B.x, y: B.y, w: B.w, h: B.h }, false, () => aipTplTiles(x, tiers, r.uname, B));
+      el('$' + i, { x: B.x, y: B.y, w: B.w, h: B.h }, false, () => aipTplTiles(x, tiers, r.uname, B, aipTplPS()));
     } else {
       const B = { x: cx - cw / 2, y: priceTop, w: cw, h: priceBot - priceTop };
-      el('$' + i, B, false, () => aipTplList(x, tiers, r.uname, B));
+      el('$' + i, B, false, () => aipTplList(x, tiers, r.uname, B, aipTplPS()));
     }
   });
   g.els = els;
@@ -8585,6 +8564,7 @@ function aipInitUI(){
   const fm = $('#aipFmt'); if (fm) fm.innerHTML = AIP_FMTS.map(f => `<option value="${f.k}">${escapeHtml(f.n)}</option>`).join('');
   const ro = $('#aipRouteChips'); if (ro) ro.innerHTML = [['tpl','🎨 เทมเพลตสำเร็จรูป (ไม่ใช้ AI)'], ['ai','🪄 เจนด้วย Gemini (ฟรีในแอป)']].map(([k, n]) => `<button type="button" class="pp-chip" data-v="${k}" onclick="aipSet('route','${k}')">${n}</button>`).join('');
   const tc = $('#aipTplChips'); if (tc) tc.innerHTML = AIP_TPLS.map(t => `<button type="button" class="pp-chip" data-v="${t.k}" onclick="aipSet('tpl','${t.k}')">${t.n}</button>`).join('');
+  const pc = $('#aipTplPriceChips'); if (pc) pc.innerHTML = Object.entries(AIP_TPL_PS).map(([k, v]) => `<button type="button" class="pp-chip" data-v="${k}" onclick="aipSet('tplPrice','${k}')">${v.n}</button>`).join('');
   const lc = $('#aipTplLayChips'); if (lc) lc.innerHTML = [['one', `รวมในภาพเดียว (1–${AIP_MAX} สินค้า)`], ['each', 'แยกภาพละ 1 สินค้า']].map(([k, n]) => `<button type="button" class="pp-chip" data-v="${k}" onclick="aipSet('tplLay','${k}')">${n}</button>`).join('');
   panel.addEventListener('input', e => { const el = e.target.closest('[data-aipf]'); if (el) aipSet(el.dataset.aipf, el.value); });
   const rows = $('#aipRows');
