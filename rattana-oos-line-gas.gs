@@ -1,5 +1,5 @@
 /**
- * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.10
+ * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.11
  * อยู่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
  *
  * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.10';
+var OOS_VERSION = '1.11';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -52,7 +52,7 @@ function oosHandle_(b) {
     case 'testSend': return oosTestSend_(b);
     case 'xlsx': return oosXlsx_(b.file);
     case 'xlsxMeta': return oosXlsxMeta_(b.file);
-    case 'xlsxPart': return oosXlsxPart_(b.key, b.from, b.to);
+    case 'xlsxPart': return oosXlsxPart_(b.ck, b.from, b.to);   // ck = คีย์แคช (ห้ามใช้ชื่อ key — ชนกับรหัสแอป)
     default: throw new Error('ไม่รู้จักคำสั่ง ' + b.action);
   }
 }
