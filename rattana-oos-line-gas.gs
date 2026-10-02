@@ -1,5 +1,5 @@
 /**
- * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.18
+ * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.19
  * อยู่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
  *
  * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.18';
+var OOS_VERSION = '1.19';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -32,7 +32,7 @@ function oosRoute_(e) {
   try {
     if (body.action === 'login') out = oosLogin_(body.credential);   // v1.18: ล็อกอิน Google แล้วได้รหัสแอปเอง ไม่ต้องพิมพ์
     else {
-      var key = oosProps_().getProperty('OOS_KEY');
+      var key = oosKey_();
       if (!key || String(body.key || '') !== key) throw new Error('รหัสแอปไม่ถูกต้อง');
       out = oosHandle_(body);
     }
@@ -66,7 +66,7 @@ function oosLogin_(cred) {
     return String(row[ie]).trim().toLowerCase() === email && (is < 0 || String(row[is]).trim().toLowerCase() === 'active');
   });
   if (!ok) throw new Error('อีเมลนี้ไม่มีสิทธิ์ใช้แอป');
-  return { key: oosProps_().getProperty('OOS_KEY'), email: email };
+  return { key: oosKey_(), email: email };
 }
 
 function oosHandle_(b) {
@@ -152,6 +152,7 @@ function oosCfg_() {
     if (k === 'เวลาส่ง') c.times = oosNormTimes_(val.split(/[,\s]+/));
     else if (k === 'ส่งอัตโนมัติ') c.enabled = !/ปิด|off|false|0/i.test(val);
     else if (k === 'เตรียมรายการเอง') c.auto = !/ปิด|off|false|0/i.test(val);
+    else if (k === 'รหัสแอป') c.key = val.replace(/\s/g, '');
     else if (k === 'บิลที่ส่ง') c.days = (/วันนี้|today/i.test(val) ? ['today'] : []).concat(/พรุ่งนี้|tomorrow/i.test(val) ? ['tomorrow'] : []);
   });
   if (!c.times.length) c.times = ['13:00', '18:00'];
@@ -166,17 +167,29 @@ function oosCfgWrite_(c, by) {
     ['ส่งอัตโนมัติ', c.enabled ? 'เปิด' : 'ปิด', 'ปิด = ไม่ส่งตามเวลา'],
     ['เตรียมรายการเอง', c.auto ? 'เปิด' : 'ปิด', 'เปิด = ดึง Check Out.xlsx แล้วส่งทุกร้านที่มี UID เอง'],
     ['บิลที่ส่ง', c.days.map(function (d) { return OOS_DAY_TH[d] || d; }).join(', '), 'วันนี้ / พรุ่งนี้'],
+    ['รหัสแอป', c.key || oosProps_().getProperty('OOS_KEY') || '', 'เปลี่ยนได้ — เครื่องที่ใช้รหัสเก่าต้องออกจากระบบแล้วเข้าใหม่'],
     ['บันทึกล่าสุด', oosNow_(), String(by || '')],
     ['', '', ''],
     [OOS_CFG_EXCL, 'ชื่อร้าน', 'เพิ่มเมื่อ']
   ].concat(c.exclude.map(function (e) { return [e.id, e.name || '', e.at || '']; }));
   sh.clearContents();
   sh.getRange(1, 1, Math.max(rows.length, 1), 3).setNumberFormat('@').setValues(rows);
-  sh.getRange(1, 1, 1, 3).setFontWeight('bold'); sh.getRange(8, 1, 1, 3).setFontWeight('bold');
+  sh.getRange(1, 1, 1, 3).setFontWeight('bold'); sh.getRange(9, 1, 1, 3).setFontWeight('bold');
   sh.setColumnWidth(1, 230); sh.setColumnWidth(2, 260); sh.setColumnWidth(3, 330);
   oosCfgCache_ = c;
+  try { CacheService.getScriptCache().remove('oos_key'); } catch (e) { }
 }
 function oosTimes_() { return oosCfg_().times; }
+/** v1.19: รหัสแอป — อ่านจากแท็บ "ตั้งค่า" (แถว รหัสแอป) · ว่าง/ไม่มีแถว = ค่าเดิมใน Script Properties
+ *  ⚠ ชีทนี้อย่าแชร์ให้คนนอก — ใครเห็นรหัสก็เรียกหลังบ้านได้ */
+function oosKey_() {
+  var cache = CacheService.getScriptCache(), k = cache.get('oos_key');   // จำไว้ 1 นาที — ไม่ต้องเปิดชีททุกคำขอ
+  if (k) return k;
+  try { k = oosCfg_().key || ''; } catch (e) { k = ''; }
+  k = k || oosProps_().getProperty('OOS_KEY') || '';
+  if (k) cache.put('oos_key', k, 60);
+  return k;
+}
 /** ร้านที่ไม่ส่ง (รหัส) */
 function oosExclude_() { return oosCfg_().exclude.map(function (e) { return e.id; }); }
 /** บิลวันไหนที่ส่งอัตโนมัติ: today / tomorrow */

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana แจ้งสินค้าขาด v1.30</title>
+<title>Rattana แจ้งสินค้าขาด v1.31</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -220,7 +220,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 <div id="loginScreen">
   <div class="login-box">
     <h1>Rattana <span style="color:var(--gold)">แจ้งสินค้าขาด</span></h1>
-    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.30</p>
+    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.31</p>
     <div id="g_id_onload" data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
     <div style="display:flex;justify-content:center"><div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div></div>
     <div class="login-err" id="loginErr"></div>
@@ -232,7 +232,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 <header>
   <div>
     <div class="logo-text">Rattana <span>แจ้งสินค้าขาด</span></div>
-    <div class="logo-sub">v1.30 · ส่ง LINE ถึงร้านตาม User ID</div>
+    <div class="logo-sub">v1.31 · ส่ง LINE ถึงร้านตาม User ID</div>
   </div>
   <div class="hdr-right">
     <span class="user-chip" id="userChip"></span>
@@ -396,7 +396,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 </div>
 
 <script>
-const APP_VERSION = '1.30';
+const APP_VERSION = '1.31';
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -543,7 +543,14 @@ async function gas(action, data = {}, ms = 90e3) {
   catch (e) { throw new Error(e.name === 'AbortError' ? `หลังบ้านไม่ตอบ (เกิน ${ms / 1000} วิ)` : 'เชื่อมต่อหลังบ้านไม่ได้'); }
   finally { clearTimeout(tm); }
   let j; try { j = await res.json(); } catch { throw new Error('หลังบ้านไม่ตอบ — ลองใหม่อีกครั้ง'); }
-  if (!j.ok) throw new Error(j.error || 'หลังบ้านผิดพลาด');
+  if (!j.ok) {
+    if (/รหัสแอปไม่ถูกต้อง/.test(j.error || '')) {   // v1.31: รหัสถูกเปลี่ยนในชีท → ล้างรหัสเก่า ให้ล็อกอินใหม่/ใส่รหัสใหม่
+      _cfgMem = null; try { localStorage.removeItem(LS_CFG); } catch { } idbSet(LS_CFG, null);
+      openModal('keyModal');
+      throw new Error('รหัสแอปถูกเปลี่ยน — ออกจากระบบแล้วเข้าใหม่ หรือใส่รหัสใหม่');
+    }
+    throw new Error(j.error || 'หลังบ้านผิดพลาด');
+  }
   return j;
 }
 /* v1.30: ล็อกอิน Google แล้วขอรหัสแอปจากหลังบ้าน (หลังบ้านตรวจ token + อีเมลในชีทผู้ใช้) — รหัสไม่ฝังในหน้าเว็บ */
