@@ -243,7 +243,7 @@ body.dark .chip.on{background:var(--gold);color:var(--navy);border-color:var(--g
 
   <!-- ═════ คิว ═════ -->
   <section class="page" id="page-queue">
-    <div id="queueNoCfg" class="card hidden"><div class="empty"><div class="big">🔌</div>ยังไม่ได้เชื่อมหลังบ้าน (Apps Script)<br><button class="btn btn-gold mt" style="margin-top:12px" onclick="showTab('cfg')">ไปหน้า ⚙️ ตั้งค่า</button></div></div>
+    <div id="queueNoCfg" class="card hidden"><div class="empty"><div class="big">🔌</div>ยังไม่ได้ใส่รหัสแอป — ขอรหัสจากผู้ดูแลแล้วใส่ในหน้า ⚙️<br><button class="btn btn-gold mt" style="margin-top:12px" onclick="showTab('cfg')">ไปหน้า ⚙️ ตั้งค่า</button></div></div>
     <div id="queueWrap">
       <div class="stat-grid" id="qStats"></div>
       <div class="card card-gold">
@@ -494,10 +494,12 @@ function enterApp() {
 }
 
 /* ───────── config / GAS ───────── */
-const cfg = () => lsGet(LS_CFG) || {};
+// หลังบ้าน = Apps Script ของชีทส่ง (deployment เว็บแอป) · รหัสแอปไม่ฝังในไฟล์ ให้แต่ละเครื่องกรอกเองในหน้า ⚙️
+const GAS_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbxTJ5hmoAow94ZyaTpneQxEORQQ5ttBLD7KU1O3X8xw3WajJaEvXUEhtHtp1-21mHo0/exec';
+const cfg = () => { const c = lsGet(LS_CFG) || {}; return { url: c.url || GAS_URL_DEFAULT, key: c.key || '' }; };
 async function gas(action, data = {}) {
   const c = cfg();
-  if (!c.url) throw new Error('ยังไม่ได้ใส่ URL Apps Script (หน้า ⚙️ ตั้งค่า)');
+  if (!c.key) throw new Error('ยังไม่ได้ใส่รหัสแอป (หน้า ⚙️ ตั้งค่า)');
   const res = await fetch(c.url, { method: 'POST', body: JSON.stringify({ app: 'oos', key: c.key || '', action, by: userName(), ...data }) });
   let j; try { j = await res.json(); } catch { throw new Error('หลังบ้านตอบกลับไม่ถูกต้อง — เช็คว่าเพิ่มบรรทัด oosRoute_ ใน doPost และ deploy เวอร์ชันใหม่แล้ว'); }
   if (!j.ok) throw new Error(j.error || 'หลังบ้านผิดพลาด');
@@ -514,7 +516,7 @@ async function saveCfg() {
   } catch (e) { $('cfgInfo').innerHTML = `<span class="badge b-danger">✕ ${esc(e.message)}</span>`; }
 }
 async function loadState(silent) {
-  if (!cfg().url) { S.gas = null; renderQueue(); renderSched(); return; }
+  if (!cfg().key) { S.gas = null; renderQueue(); renderSched(); return; }
   try { applyState(await gas('state')); }
   catch (e) { if (!silent) showToast(e.message, 'error'); }
 }
@@ -738,7 +740,7 @@ function updateSaveBar() {
 async function saveQueue() {
   const items = S.stores.filter(s => S.sel.has(s.cusId));
   if (!items.length) return showToast('ยังไม่ได้เลือกร้าน', 'warning');
-  if (!cfg().url) { showToast('ยังไม่ได้เชื่อมหลังบ้าน — ใส่ URL ในหน้า ⚙️', 'warning'); return showTab('cfg'); }
+  if (!cfg().key) { showToast('ยังไม่ได้ใส่รหัสแอป — ใส่ในหน้า ⚙️', 'warning'); return showTab('cfg'); }
   const sched = S.gas ? (S.gas.enabled ? `ส่งอัตโนมัติรอบถัดไป (${(S.gas.times || []).join(' / ')})` : '<b style="color:var(--danger)">ปิดส่งอัตโนมัติอยู่</b> — ต้องกดส่งเองในหน้าคิว') : '';
   const nu = items.filter(s => !s.uidN).length;
   if (!await ask('บันทึกเข้าคิว', `บันทึก <b>${items.length}</b> ร้าน ของวันที่ <b>${thDate(S.date)}</b> เข้าคิว<br>${sched}${nu ? `<br><br>⚠ ไม่มี UID ${nu} ร้าน — จะค้างไว้จนกว่าจะเพิ่ม UID` : ''}<br><br><span class="note">ร้านที่ส่งไปแล้วและรายการไม่เปลี่ยน จะไม่ส่งซ้ำ</span>`, '💾 บันทึก')) return;
@@ -780,7 +782,7 @@ function previewQ(id) {
 
 /* ───────── render: คิว ───────── */
 function renderQueue() {
-  const has = !!cfg().url;
+  const has = !!cfg().key;
   $('queueNoCfg').classList.toggle('hidden', has); $('queueWrap').classList.toggle('hidden', !has);
   if (!has || !S.gas) { $('qCnt').classList.add('hidden'); return; }
   const q = S.gas.queue || [];
@@ -923,7 +925,7 @@ function initApp() {
   $('testUid').value = lsGet('oos_test_uid') || '';
   renderQueue(); renderSched();
   loadState(true);
-  setInterval(() => { if (!document.hidden && cfg().url) loadState(true); }, 60e3);
+  setInterval(() => { if (!document.hidden && cfg().key) loadState(true); }, 60e3);
 }
 window.addEventListener('scroll', () => $('backToTop').classList.toggle('show', window.scrollY > 300));
 window.addEventListener('load', checkSession);
