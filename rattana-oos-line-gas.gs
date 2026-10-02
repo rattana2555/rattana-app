@@ -1,5 +1,5 @@
 /**
- * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.4
+ * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.5
  * อยู่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
  *
  * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.4';
+var OOS_VERSION = '1.5';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -342,7 +342,7 @@ function oosThaiDate_(iso) {
 }
 
 function oosPush_(uid, o) {
-  var msg = { type: 'flex', altText: ('แจ้งสินค้าขาด/ส่งแทน · ร้าน ' + o.cusName).slice(0, 380), contents: oosFlex_(o) };
+  var msg = { type: 'flex', altText: ('แจ้งสินค้าที่อาจไม่ได้รับ · ร้าน ' + o.cusName).slice(0, 380), contents: oosFlex_(o) };
   var payload = { to: uid, messages: [msg] };
   try {
     var res = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
@@ -487,8 +487,8 @@ function oosFlexBuild_(o, maxRows) {
       ]
     });
   }
-  if (shortItems.length) body = body.concat(oosSection_('สินค้าขาด', '#e74c3c', shortItems, maxRows));
-  if (addItems.length) body = body.concat(oosSection_('ส่งแทน / เพิ่ม', OOS_GREEN, addItems, maxRows));
+  if (shortItems.length) body = body.concat(oosSection_('อาจไม่ได้รับ', '#e74c3c', shortItems, maxRows));
+  if (addItems.length) body = body.concat(oosSection_('อาจได้รับเพิ่ม / ส่งแทน', OOS_GREEN, addItems, maxRows));
   return {
     type: 'bubble', size: 'giga',
     header: {
@@ -496,7 +496,7 @@ function oosFlexBuild_(o, maxRows) {
         {
           type: 'box', layout: 'vertical', backgroundColor: OOS_NAVY, paddingAll: '16px', paddingStart: '18px', contents: [
             { type: 'text', text: 'RATTANA · แจ้งรายละเอียดสินค้า', size: 'xs', color: OOS_GOLD, weight: 'bold' },
-            { type: 'text', text: 'สินค้าขาด / ส่งแทน', size: 'xl', color: '#ffffff', weight: 'bold', margin: 'xs' },
+            { type: 'text', text: 'สินค้าที่อาจไม่ได้รับ', size: 'xl', color: '#ffffff', weight: 'bold', margin: 'xs' },
             { type: 'text', text: 'วันที่ ' + oosThaiDateLong_(o.date), size: 'xs', color: '#c3c9d6', margin: 'xs' }
           ]
         },
@@ -506,6 +506,7 @@ function oosFlexBuild_(o, maxRows) {
     body: { type: 'box', layout: 'vertical', paddingStart: '18px', paddingEnd: '18px', contents: body },
     footer: {
       type: 'box', layout: 'vertical', paddingStart: '18px', paddingEnd: '18px', contents: [
+        { type: 'text', text: '* ข้อมูลเบื้องต้นจากการเปิดบิล สินค้าที่ได้รับจริงอาจขาดมากกว่านี้ หรือมีสินค้าอื่นส่งแทน', size: 'xxs', color: '#9a9a9a', wrap: true },
         { type: 'text', text: 'ขออภัยในความไม่สะดวก 🙏', size: 'xs', color: '#6b7896' },
         { type: 'text', text: 'สอบถามเพิ่มเติม ติดต่อเซลล์ผู้ดูแล หรือแชทนี้ได้เลย', size: 'xs', color: '#6b7896', wrap: true }
       ]
