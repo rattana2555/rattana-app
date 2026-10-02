@@ -1,11 +1,11 @@
 /**
- * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.9
+ * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.10
  * อยู่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
  *
  * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
  * - คิวเก็บใน "ชีทไฟล์แยก" (สร้างเองตอน oosSetup · id ใน Script Property OOS_QUEUE_ID)
  *   เพราะชีทส่งมีสูตรหนัก เพิ่มแท็บ/เขียนทีละแถวแล้วช้าเป็นนาที
- * - UID อ่านจากชีทส่ง · Keep Send เขียนครั้งเดียวต่อรอบ
+ * - UID อ่านจากชีทส่ง · ประวัติที่ส่งแล้วเก็บในชีทคิวที่เดียว (ไม่ลง Keep Send)
  * - ตั้งเวลาส่ง: trigger oosTick ทุก 10 นาที → ถึงเวลารอบไหน (เช่น 13:00 / 18:00) ส่งรอบนั้นวันละครั้ง
  * - ส่ง push ไปที่ User ID ของแต่ละร้าน (แท็บ UID: User ID / รหัสร้านค้า) ร้านมีหลาย UID = ส่งทุกตัว
  * - ใช้ CHANNEL_ACCESS_TOKEN (ไฟล์ webhook) และ rtnForwardCards_ (ไฟล์ E-Slip) ตัวเดิม
@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.9';
+var OOS_VERSION = '1.10';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -299,7 +299,6 @@ function oosSendPending_(opt) {
     var q = oosReadQueue_(), sh = q.sh, today = oosToday_(), uidMap = oosUidMap_();
     var only = null;
     if (opt.ids && opt.ids.length) { only = {}; opt.ids.forEach(function (id) { only[id] = 1; }); }
-    var keepRows = [];
     for (var i = 0; i < q.rows.length; i++) {
       var r = q.rows[i], o = oosRowObj_(r);
       if (only) { if (!only[o.id]) continue; }
@@ -320,7 +319,6 @@ function oosSendPending_(opt) {
         if (okN) {
           status = OOS_ST.SENT; result = 'ส่งสำเร็จ ' + okN + '/' + uids.length + (errs.length ? ' · ' + errs.join(' | ') : '');
           res.sent++;
-          keepRows.push([o.cusId, o.cusName, oosThaiDate_(o.date), o.short, o.add]);
         } else {
           status = OOS_ST.FAIL; result = errs.join(' | ').slice(0, 450); res.failed++;
         }
@@ -328,13 +326,6 @@ function oosSendPending_(opt) {
       sh.getRange(r.row, OOS_C['สถานะ'] + 1, 1, 5).setValues([[status, uids.join(' '),
         status === OOS_ST.SENT ? now : o.sentAt, opt.round || '', result]]);
       sh.getRange(r.row, OOS_C['อัปเดต'] + 1).setValue(now);
-    }
-    // ประวัติลง Keep Send ของชีทส่ง — เขียนก้อนเดียวต่อรอบ (ชีทนั้นช้า เขียนทีละแถวไม่ไหว)
-    if (keepRows.length) {
-      try {
-        var ks = SpreadsheetApp.getActive().getSheetByName('Keep Send');
-        if (ks) ks.getRange(ks.getLastRow() + 1, 1, keepRows.length, 5).setValues(keepRows);
-      } catch (e) { res.keepSendError = String(e && e.message || e); }
     }
   } finally { lock.releaseLock(); }
   res.at = oosNow_();
