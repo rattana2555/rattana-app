@@ -1,5 +1,5 @@
 /**
- * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.13
+ * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.14
  * อยู่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
  *
  * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.13';
+var OOS_VERSION = '1.14';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -208,7 +208,7 @@ function oosSave_(b) {
     var now = oosNow_(), by = String(b.by || ''), added = 0, changed = 0, same = 0, kept = 0, appends = [];
     items.forEach(function (it) {
       var cusId = String(it.cusId || '').trim();
-      if (!cusId) return;
+      if (!cusId || OOS_EXCLUDE.indexOf(cusId) >= 0) return;
       var id = date + '|' + cusId;
       var h = oosHash_(it);
       var rowVals = [id, date, cusId, String(it.cusName || ''), String(it.wh || ''), String(it.bills || ''),
@@ -419,6 +419,8 @@ function oosXlsxFile_(name) {
  */
 var OOS_PART = 90000;
 var OOS_ORDER_FILE = 'Check Out.xlsx';
+// รหัสร้านที่ไม่ส่ง LINE เลย (ทั้งอัตโนมัติและกดเอง) — 7500000000 = "ร้าน หน้าร้าน" รหัสรวมลูกค้าหน้าร้าน (user สั่งตัด 2 ต.ค. 2569)
+var OOS_EXCLUDE = ['7500000000'];
 var OOS_ORDER_COLS = ['DI_DATE', 'DI_REF', 'AR_CODE', 'AR_NAME', 'SLMN_NAME', 'WL_CODE', 'SKU_NAME', 'TRD_UTQNAME', 'TRD_QTY', 'TRD_Q_FREE', 'DI_REMARK'];
 function oosXlsxMeta_(name, pack) {
   pack = !!pack && name === OOS_ORDER_FILE;
@@ -545,7 +547,7 @@ function oosAutoQueue_(dry) {
   if (!date) return { date: '', stores: 0, note: 'ไม่มีบิลของวันนี้/พรุ่งนี้', ms: Date.now() - t0 };
   var uidMap = oosUidMap_();
   var all = oosBuildStores_(c.rows.filter(function (r) { return r.date === date; }), c.units);
-  var pick = all.filter(function (s) { return (uidMap[s.cusId] || []).length && !s.multi; });
+  var pick = all.filter(function (s) { return (uidMap[s.cusId] || []).length && !s.multi && OOS_EXCLUDE.indexOf(s.cusId) < 0; });
   var out = {
     date: date, total: all.length, stores: pick.length,
     multi: all.filter(function (s) { return s.multi; }).length,
