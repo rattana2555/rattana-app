@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Design Hub v7.41</title>
+<title>Rattana Design Hub v7.42</title>
 <meta name="description" content="Rattana Design Hub — ออกแบบป้ายราคา โปรโมชั่น Flash Sale และแคตตาล็อก จาก Google Sheet พิมพ์ PDF/PNG/JPEG">
 <meta name="theme-color" content="#132248">
 <meta name="apple-mobile-web-app-title" content="Rattana Design Hub">
@@ -342,6 +342,16 @@ body.dark .stat-card .s-value{color:var(--gold-light)}
 }
 .filter-bar > *{min-width:0;max-width:100%!important}
 .filter-bar .filter-actions{display:flex;gap:6px;justify-content:flex-end}
+/* v7.42 — RANK filter chips (warehouse from the setup tab) */
+.rank-filter{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.rank-filter .rf-lb{font-size:12px;font-weight:800;color:var(--navy);margin-right:2px;white-space:nowrap}
+.rank-filter .rf-chip{display:inline-flex;align-items:center;gap:5px;border:1.5px solid #d8def0;background:#fff;color:var(--navy);border-radius:999px;padding:4px 11px;font-size:12px;font-weight:700;cursor:pointer;line-height:1.3;font-family:inherit}
+.rank-filter .rf-chip small{font-size:10.5px;font-weight:700;color:#64748b;background:#f1f5f9;border-radius:999px;padding:0 6px}
+.rank-filter .rf-chip.active{background:var(--navy);border-color:var(--navy);color:#fff}
+.rank-filter .rf-chip.active small{background:rgba(255,255,255,.18);color:#fde68a}
+.rank-filter .rf-chip.zero{opacity:.45}
+.p-rank{display:inline-block;font-size:10px;font-weight:800;color:#92400e;background:#fef3c7;border-radius:999px;padding:0 6px;margin-left:4px;vertical-align:1px}
+body.dark .rank-filter .rf-chip:not(.active){background:transparent;color:inherit}
 @media(min-width:640px){
   .filter-bar{grid-template-columns:2fr 1fr 1fr auto auto;align-items:center}
   .filter-bar .filter-actions{display:contents}
@@ -2438,7 +2448,7 @@ body.dark #appUpdate{background:#131c33;color:#e8eaf0}
   <header>
     <button class="icon-btn hamburger-btn" onclick="toggleDrawer(true)" title="เมนูฟีเจอร์" aria-label="เมนู">☰</button>
     <img class="logo-img" src="rattana-hub-icon-512.png?v=2" alt="Rattana Design Hub" width="44" height="44" style="object-fit:cover">
-    <div class="logo-text">RATTANA <span style="color:var(--gold)">DESIGN HUB</span><small>ออกแบบป้าย · โปรโมชั่น · แคตตาล็อก v7.41</small></div>
+    <div class="logo-text">RATTANA <span style="color:var(--gold)">DESIGN HUB</span><small>ออกแบบป้าย · โปรโมชั่น · แคตตาล็อก v7.42</small></div>
     <button class="icon-btn" id="btnInstallApp" onclick="installApp()" title="ติดตั้งแอปลงเครื่อง" style="display:none;background:var(--gold);color:#0d1b3e">📥</button>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="โหลดข้อมูลใหม่">⟳</button>
     <button class="icon-btn" onclick="toggleDark()" title="โหมดมืด">🌙</button>
@@ -3045,6 +3055,7 @@ body.dark #appUpdate{background:#131c33;color:#e8eaf0}
           <button class="btn btn-sm btn-outline" onclick="selectAll(true)">✓ เลือก</button>
           <button class="btn btn-sm btn-outline" onclick="selectAll(false)">✗ ล้าง</button>
         </div>
+        <div class="rank-filter" id="rankFilter"></div>
       </div>
 
       <div class="card card-gold">
@@ -5133,7 +5144,25 @@ function catalogEligible(p) {
   }
   return (p.stk && p.stk[wh]) || (p.sold && p.sold[wh]);   // cat12: มีสต๊อก หรือ มียอดขาย ในคลังที่เลือก
 }
-function filterProducts() {
+// v7.42 — RANK filter (session only): keys A–F / NEW / NONE, read at the warehouse chosen in the setup tab
+const RANK_KEYS = ['A','B','C','D','E','F','NEW','NONE'];
+let rankFilter = new Set();
+function rankKeyOf(p){ const r = String(((p && p.rank) || {})[SHEET_CONFIG.warehouse || 'W1'] || '').trim().toUpperCase(); return r ? r : 'NONE'; }
+function toggleRankFilter(k){
+  if (k === 'ALL') rankFilter.clear();
+  else if (rankFilter.has(k)) rankFilter.delete(k); else rankFilter.add(k);
+  renderProducts();
+}
+function renderRankChips(){
+  const box = $('#rankFilter'); if (!box) return;
+  const counts = {}; filterProducts(true).forEach(p => { const k = rankKeyOf(p); counts[k] = (counts[k] || 0) + 1; });
+  const keys = RANK_KEYS.concat(Object.keys(counts).filter(k => !RANK_KEYS.includes(k)).sort());   // any unexpected rank letter still gets a chip
+  const lbl = k => k === 'NONE' ? 'ไม่มี RANK' : k;
+  box.innerHTML = `<span class="rf-lb">RANK · คลัง ${escapeHtml(SHEET_CONFIG.warehouse || 'W1')}</span>`
+    + `<button type="button" class="rf-chip${rankFilter.size ? '' : ' active'}" onclick="toggleRankFilter('ALL')">ทั้งหมด</button>`
+    + keys.map(k => `<button type="button" class="rf-chip${rankFilter.has(k) ? ' active' : ''}${counts[k] ? '' : ' zero'}" onclick="toggleRankFilter('${escapeAttr(k)}')">${escapeHtml(lbl(k))} <small>${(counts[k] || 0).toLocaleString('th-TH')}</small></button>`).join('');
+}
+function filterProducts(skipRank) {
   const q       = $('#searchBox').value.trim().toLowerCase();
   const cat     = $('#filterCat').value.trim().toLowerCase();
   const brand   = ($('#filterBrand')?.value || '').trim().toLowerCase();
@@ -5147,6 +5176,7 @@ function filterProducts() {
     if (brand  && !String(p.brand||'').toLowerCase().includes(brand))   return false;
     if (vendor && !String(p.vendor||'').toLowerCase().includes(vendor)) return false;
     if (type && (tplOverrides[p.sku] || p.tagType) !== type) return false;
+    if (!skipRank && rankFilter.size && !rankFilter.has(rankKeyOf(p))) return false;
     if (q) {
       const hay = (p.name + ' ' + p.sku + ' ' + p.barcode + ' ' + p.category + ' ' + p.brand + ' ' + p.vendor).toLowerCase();
       if (!hay.includes(q)) return false;
@@ -5162,6 +5192,7 @@ function renderProducts() {
     return;
   }
   const list = filterProducts();
+  renderRankChips();
   const capped = list.slice(0, RENDER_LIMIT);
   const overflow = list.length - capped.length;
   $('#prodCountInfo').textContent = `(แสดง ${capped.length} จาก ${products.length} รายการ · เลือกแล้ว ${selectedSkus.size})${overflow > 0 ? ' ⚠️ ค้นหาเพิ่มเพื่อดูที่เหลืออีก '+overflow : ''}`;
@@ -5182,7 +5213,7 @@ function renderProducts() {
         <div class="p-check">✓</div>
         <div class="p-img">${p.image ? `<img src="${escapeAttr(p.image)}" onerror="this.parentElement.innerHTML='📦'" alt="" loading="lazy">` : '📦'}</div>
         <div class="p-info">
-          <div class="p-sku">${escapeHtml(p.sku||'-')}</div>
+          <div class="p-sku">${escapeHtml(p.sku||'-')}${rankKeyOf(p) !== 'NONE' ? ` <span class="p-rank">RANK ${escapeHtml(rankKeyOf(p))}</span>` : ''}</div>
           <div class="p-name">${escapeHtml(p.name||'-')}</div>
           <div class="p-price-row">
             <span class="p-price">฿${fmtThaiBaht(p.price)}</span>
