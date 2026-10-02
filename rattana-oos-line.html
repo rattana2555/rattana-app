@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana แจ้งสินค้าขาด v1.32</title>
+<title>Rattana แจ้งสินค้าขาด v1.33</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -39,6 +39,14 @@ header{background:var(--navy);color:#fff;padding:10px 14px;position:sticky;top:0
 /* การ์ดร้านเป็น Grid เต็มจอ — มือถือ 1 คอลัมน์ · จอกว้างเพิ่มคอลัมน์เอง */
 #storeList{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px;align-items:start}
 #storeList>.card{grid-column:1/-1}
+.sec-head{grid-column:1/-1;display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;padding:10px 14px;border-radius:var(--radius-md);background:var(--card-bg);border:1px solid var(--border);border-left:6px solid var(--border);cursor:pointer;margin-top:4px;box-shadow:var(--shadow-md)}
+.sec-head .sec-t{font-weight:800;font-size:15px}
+.sec-head .sec-n{font-weight:700;font-size:13px;padding:1px 10px;border-radius:12px;background:var(--row-alt)}
+.sec-head .sec-x{margin-left:auto;font-size:12px;color:var(--muted);font-weight:600}
+.sec-head.wait{border-left-color:var(--info)}.sec-head.wait .sec-t{color:#1a6fb8}.sec-head.wait .sec-n{background:#e3f0fd;color:#1a6fb8}
+.sec-head.done{border-left-color:var(--line)}.sec-head.done .sec-t{color:#04883b}.sec-head.done .sec-n{background:#e6f9ee;color:#04883b}
+.sec-head.bad{border-left-color:var(--danger)}.sec-head.bad .sec-t{color:#c0392b}.sec-head.bad .sec-n{background:#ffd5d0;color:#c0392b}
+body.dark .sec-head.wait .sec-t{color:#8cc4f5}body.dark .sec-head.done .sec-t{color:#6ee59b}body.dark .sec-head.bad .sec-t{color:#ff8a7e}
 #storeList .store{margin-bottom:0}
 @media(max-width:400px){#storeList{grid-template-columns:1fr}}
 .page{display:none}.page.active{display:block;animation:fadeIn .2s}
@@ -222,7 +230,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 <div id="loginScreen">
   <div class="login-box">
     <h1>Rattana <span style="color:var(--gold)">แจ้งสินค้าขาด</span></h1>
-    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.32</p>
+    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.33</p>
     <div id="g_id_onload" data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
     <div style="display:flex;justify-content:center"><div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div></div>
     <div class="login-err" id="loginErr"></div>
@@ -234,7 +242,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 <header>
   <div>
     <div class="logo-text">Rattana <span>แจ้งสินค้าขาด</span></div>
-    <div class="logo-sub">v1.32 · ส่ง LINE ถึงร้านตาม User ID</div>
+    <div class="logo-sub">v1.33 · ส่ง LINE ถึงร้านตาม User ID</div>
   </div>
   <div class="hdr-right">
     <span class="user-chip" id="userChip"></span>
@@ -398,7 +406,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 </div>
 
 <script>
-const APP_VERSION = '1.32';
+const APP_VERSION = '1.33';
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -976,10 +984,29 @@ function renderPrep() {
     if (!qq) return true;
     return (s.cusName + ' ' + s.cusId + ' ' + s.sale + ' ' + s.bills + ' ' + s.lines.map(l => l.prod).join(' ')).toLowerCase().includes(qq);
   });
-  $('storeList').innerHTML = list.length ? list.map(storeCard).join('') :
-    `<div class="card"><div class="empty"><div class="big">🔍</div>ไม่พบร้านตามเงื่อนไข</div></div>`;
+  // v1.33: แยกเป็นส่วน รอส่ง / ส่งแล้ว / ส่งไม่ได้ — คนดูเห็นสถานะทันที
+  let html = '';
+  if (!list.length) html = `<div class="card"><div class="empty"><div class="big">🔍</div>ไม่พบร้านตามเงื่อนไข</div></div>`;
+  else if (!S.gas) html = list.map(storeCard).join('');
+  else {
+    const nr = nextRound(), grp = { send: [], sent: [], no: [] };
+    list.forEach(s => { const k = (autoPlan(s) || {}).k; (k === 'send' ? grp.send : k === 'sent' ? grp.sent : grp.no).push(s); });
+    const secs = [
+      ['send', 'wait', `⏰ รอส่ง${nr ? ` — รอบ ${nr.day === 'tomorrow' ? 'พรุ่งนี้ ' : ''}${nr.time}` : ''}`, 'ระบบจะส่ง LINE ให้เองเมื่อถึงเวลา'],
+      ['sent', 'done', '✓ ส่งแล้ว', 'ร้านได้รับ LINE แล้ว — รายการไม่เปลี่ยนจะไม่ส่งซ้ำ'],
+      ['no', 'bad', '✕ ส่งไม่ได้ / ต้องเลือกเอง', 'ไม่มี UID · บิลหลายวัน · ยกเลิกไว้ · บิลไม่อยู่ในรอบส่ง — ดูเหตุผลที่ป้ายของแต่ละร้าน'],
+    ];
+    secs.forEach(([k, cls, title, note]) => {
+      const arr = grp[k]; if (!arr.length) return;
+      const shut = S.secShut && S.secShut[k];
+      html += `<div class="sec-head ${cls}" onclick="toggleSec('${k}')"><span class="sec-t">${title}</span><span class="sec-n">${arr.length} ร้าน</span><span class="note">${note}</span><span class="sec-x">${shut ? '▸ แสดง' : '▾ ซ่อน'}</span></div>`;
+      if (!shut) html += arr.map(storeCard).join('');
+    });
+  }
+  $('storeList').innerHTML = html;
   updateSaveBar();
 }
+function toggleSec(k) { S.secShut = S.secShut || {}; S.secShut[k] = !S.secShut[k]; renderPrep(); }
 /* v1.32: รอบถัดไปจะส่งร้านไหน — ตรรกะเดียวกับหลังบ้าน (oosAutoQueue_ + oosSave_ แบบ auto + oosSendPending_) */
 function nextRound() {
   const g = S.gas; if (!g || !g.enabled) return null;
@@ -1007,7 +1034,7 @@ function autoPlan(s) {
   return { k: 'send', label: `⏰ จะส่ง ${at}${q ? ' (รายการเปลี่ยน ส่งใหม่)' : ''}` };
 }
 function planBadge(p) {
-  if (!p || p.k === 'sent') return '';
+  if (!p || p.k === 'sent' || /^ไม่มี UID/.test(p.label || '')) return '';   // ไม่มี UID มีป้าย ⚠ อยู่แล้ว
   const c = { send: 'b-info', manual: 'b-warn', skip: 'b-muted' }[p.k];
   return `<span class="badge ${c}">${esc(p.label)}</span>`;
 }
