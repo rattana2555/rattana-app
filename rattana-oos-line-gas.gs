@@ -1,5 +1,5 @@
 /**
- * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.8
+ * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.9
  * อยู่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
  *
  * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.8';
+var OOS_VERSION = '1.9';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -51,6 +51,8 @@ function oosHandle_(b) {
     case 'setSchedule': return oosSetSchedule_(b);
     case 'testSend': return oosTestSend_(b);
     case 'xlsx': return oosXlsx_(b.file);
+    case 'xlsxMeta': return oosXlsxMeta_(b.file);
+    case 'xlsxPart': return oosXlsxPart_(b.key, b.from, b.to);
     default: throw new Error('ไม่รู้จักคำสั่ง ' + b.action);
   }
 }
@@ -399,7 +401,44 @@ function oosXlsxFile_(name) {
   return best;
 }
 
-/** ส่งไฟล์ .xlsx ทั้งไฟล์ (base64) ให้แอปแกะเองด้วย SheetJS */
+/**
+ * ส่งไฟล์เป็นท่อน (v1.9) — ไฟล์ Check Out.xlsx โตถึง ~2.7MB (base64 ~3.6MB) ส่งก้อนเดียวช้า 40+ วิ แล้ว Google ตอบ 404
+ * xlsxMeta: อ่านไฟล์ครั้งเดียว → base64 → แบ่งท่อนละ 90,000 ตัว (CacheService รับ ≤100KB/ค่า) เก็บ 6 ชม.
+ *           คีย์ = id ไฟล์ + เวลาแก้ล่าสุด → ไฟล์ไม่เปลี่ยน = ใช้แคชเดิม ไม่อ่าน Drive ซ้ำ
+ * xlsxPart: ส่งท่อน [from, to) จากแคช — แอปดึงหลายคำขอพร้อมกัน
+ */
+var OOS_PART = 90000;
+function oosXlsxMeta_(name) {
+  var f = oosXlsxFile_(name);
+  var upd = f.getLastUpdated();
+  var key = 'x_' + f.getId().slice(-12) + '_' + upd.getTime();
+  var cache = CacheService.getScriptCache();
+  var n = +(cache.get(key + '_n') || 0);
+  if (!n) {
+    var b64 = Utilities.base64Encode(f.getBlob().getBytes());
+    n = Math.ceil(b64.length / OOS_PART);
+    var all = {};
+    for (var i = 0; i < n; i++) all[key + '_' + i] = b64.slice(i * OOS_PART, (i + 1) * OOS_PART);
+    var ks = Object.keys(all);
+    for (var j = 0; j < ks.length; j += 20) {          // putAll ทีละ 20 ท่อน
+      var sub = {}; ks.slice(j, j + 20).forEach(function (k) { sub[k] = all[k]; });
+      cache.putAll(sub, 21600);
+    }
+    cache.put(key + '_n', String(n), 21600);
+  }
+  return { name: f.getName(), updated: Utilities.formatDate(upd, OOS_TZ, 'yyyy-MM-dd HH:mm:ss'), key: key, n: n };
+}
+function oosXlsxPart_(key, from, to) {
+  if (!/^x_[\w-]+_\d+$/.test(String(key || ''))) throw new Error('คีย์ไม่ถูกต้อง');
+  from = Math.max(0, +from || 0); to = Math.max(from, +to || 0);
+  var ks = []; for (var i = from; i < to; i++) ks.push(key + '_' + i);
+  var got = CacheService.getScriptCache().getAll(ks);
+  var parts = ks.map(function (k) { return got[k]; });
+  if (parts.some(function (p) { return p == null; })) throw new Error('แคชหมดอายุ — โหลดใหม่');
+  return { from: from, data: parts.join('') };
+}
+
+/** ส่งไฟล์ .xlsx ทั้งไฟล์ (base64) ให้แอปแกะเองด้วย SheetJS — ตัวเก่า (ไฟล์เล็ก) */
 function oosXlsx_(name) {
   var f = oosXlsxFile_(name);
   return {
