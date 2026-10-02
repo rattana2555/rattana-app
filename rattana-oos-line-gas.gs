@@ -1,5 +1,5 @@
 /**
- * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.15
+ * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.16
  * อยู่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
  *
  * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.15';
+var OOS_VERSION = '1.16';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -102,6 +102,17 @@ function oosSetSchedule_(b) {
     p.setProperty('OOS_TIMES', t.join(','));
   }
   if (b.enabled != null) p.setProperty('OOS_ENABLED', b.enabled ? '1' : '0');
+  // v1.16: ตั้งค่าจากแอปได้ (ไม่ต้องแก้สคริปต์) — เตรียมรายการเอง / บิลวันไหน / ร้านที่ไม่ส่ง
+  if (b.auto != null) p.setProperty('OOS_AUTO', b.auto ? '1' : '0');
+  if (b.days) {
+    var dd = (b.days || []).map(String).filter(function (x) { return x === 'today' || x === 'tomorrow'; });
+    if (!dd.length) throw new Error('ต้องเลือกบิลอย่างน้อย 1 วัน');
+    p.setProperty('OOS_DAYS', dd.join(','));
+  }
+  if (b.exclude) {
+    p.setProperty('OOS_EXCLUDE', (b.exclude || []).map(function (x) { return String(x).replace(/\D/g, ''); })
+      .filter(function (x, i, a) { return x && a.indexOf(x) === i; }).join(','));
+  }
   if (!oosTriggerOk_()) oosInstallTrigger_();
   return oosState_({});
 }
@@ -205,10 +216,10 @@ function oosSave_(b) {
   try {
     var q = oosReadQueue_(), sh = q.sh, idx = {};
     q.rows.forEach(function (r) { idx[r.v[0]] = r; });
-    var now = oosNow_(), by = String(b.by || ''), added = 0, changed = 0, same = 0, kept = 0, appends = [];
+    var now = oosNow_(), by = String(b.by || ''), added = 0, changed = 0, same = 0, kept = 0, appends = [], excl = oosExclude_();
     items.forEach(function (it) {
       var cusId = String(it.cusId || '').trim();
-      if (!cusId || OOS_EXCLUDE.indexOf(cusId) >= 0) return;
+      if (!cusId || excl.indexOf(cusId) >= 0) return;
       var id = date + '|' + cusId;
       var h = oosHash_(it);
       var rowVals = [id, date, cusId, String(it.cusName || ''), String(it.wh || ''), String(it.bills || ''),
@@ -295,7 +306,7 @@ function oosState_(b) {
   var today = oosToday_(), done = {};
   oosTimes_().forEach(function (s) { done[s] = p.getProperty('OOS_DONE_' + today + '_' + s) || ''; });
   return {
-    times: oosTimes_(), enabled: p.getProperty('OOS_ENABLED') === '1', auto: p.getProperty('OOS_AUTO') !== '0', triggerOk: oosTriggerOk_(),
+    times: oosTimes_(), enabled: p.getProperty('OOS_ENABLED') === '1', auto: p.getProperty('OOS_AUTO') !== '0', days: oosDays_(), exclude: oosExclude_(), triggerOk: oosTriggerOk_(),
     last: last, doneToday: done, queue: queue, uidCount: uidCount, now: oosNow_(),
     queueUrl: oosQueueSheet_().getParent().getUrl()
   };
@@ -420,7 +431,16 @@ function oosXlsxFile_(name) {
 var OOS_PART = 90000;
 var OOS_ORDER_FILE = 'Check Out.xlsx';
 // รหัสร้านที่ไม่ส่ง LINE เลย (ทั้งอัตโนมัติและกดเอง) — 7500000000 = "ร้าน หน้าร้าน" รหัสรวมลูกค้าหน้าร้าน (user สั่งตัด 2 ต.ค. 2569)
-var OOS_EXCLUDE = ['7500000000'];
+var OOS_EXCLUDE_DEFAULT = '7500000000';
+/** ร้านที่ไม่ส่ง (ตั้งในแอป หน้า ⏰ · Script Property OOS_EXCLUDE) */
+function oosExclude_() {
+  var v = oosProps_().getProperty('OOS_EXCLUDE');
+  return String(v == null ? OOS_EXCLUDE_DEFAULT : v).split(',').map(function (x) { return x.trim(); }).filter(String);
+}
+/** บิลวันไหนที่ส่งอัตโนมัติ: today / tomorrow (ตั้งในแอป · Script Property OOS_DAYS) */
+function oosDays_() {
+  return String(oosProps_().getProperty('OOS_DAYS') || 'today,tomorrow').split(',').filter(function (x) { return x === 'today' || x === 'tomorrow'; });
+}
 var OOS_ORDER_COLS = ['DI_DATE', 'DI_REF', 'AR_CODE', 'AR_NAME', 'SLMN_NAME', 'WL_CODE', 'SKU_NAME', 'TRD_UTQNAME', 'TRD_QTY', 'TRD_Q_FREE', 'DI_REMARK'];
 function oosXlsxMeta_(name, pack) {
   pack = !!pack && name === OOS_ORDER_FILE;
@@ -544,13 +564,14 @@ function oosAutoQueue_(dry) {
   var c = oosCompute_(pk.bk, pk.ds);
   var today = oosToday_(), tmr = Utilities.formatDate(new Date(Date.now() + 864e5), OOS_TZ, 'yyyy-MM-dd');
   var has = {}; c.rows.forEach(function (r) { has[r.date] = 1; });
-  var dates = [today, tmr].filter(function (d) { return has[d]; });
+  var want = oosDays_(), excl = oosExclude_();
+  var dates = [want.indexOf('today') >= 0 ? today : '', want.indexOf('tomorrow') >= 0 ? tmr : ''].filter(function (d) { return d && has[d]; });
   var out = { date: dates.join(','), total: 0, stores: 0, multi: 0, noUid: 0, added: 0, changed: 0, same: 0, kept: 0, days: [] };
   if (!dates.length) { out.note = 'ไม่มีบิลของวันนี้/พรุ่งนี้'; out.ms = Date.now() - t0; return out; }
   var uidMap = oosUidMap_();
   dates.forEach(function (date) {
     var all = oosBuildStores_(c.rows.filter(function (r) { return r.date === date; }), c.units);
-    var pick = all.filter(function (s) { return (uidMap[s.cusId] || []).length && !s.multi && OOS_EXCLUDE.indexOf(s.cusId) < 0; });
+    var pick = all.filter(function (s) { return (uidMap[s.cusId] || []).length && !s.multi && excl.indexOf(s.cusId) < 0; });
     var d = {
       date: date, total: all.length, stores: pick.length,
       multi: all.filter(function (s) { return s.multi; }).length,
