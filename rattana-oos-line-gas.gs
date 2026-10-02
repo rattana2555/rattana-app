@@ -1,5 +1,5 @@
 /**
- * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.14
+ * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.15
  * อยู่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
  *
  * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.14';
+var OOS_VERSION = '1.15';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -534,7 +534,8 @@ function oosXlsx_(name) {
 
 /* ───────────── v1.13 ส่งอัตโนมัติทั้งหมด (หลังบ้านเตรียมรายการเอง) ─────────────
  * ถึงรอบส่ง → อ่าน Check Out.xlsx (BVBK ใบจอง + DSDC บิล) → เทียบแบบเดียวกับแอป (computeFromOrder / buildStores)
- * → เลือกวัน: มีบิลของพรุ่งนี้ = พรุ่งนี้ ไม่งั้นวันนี้ → เอาเฉพาะร้านที่มี UID และไม่ใช่ "บิลหลายวัน" → บันทึกเข้าคิว → ส่ง
+ * → v1.15: บิล "วันนี้ + พรุ่งนี้" (วันละคิวแยก · คีย์ วันส่ง|ร้าน) → เอาเฉพาะร้านที่มี UID และไม่ใช่ "บิลหลายวัน" → บันทึกเข้าคิว → ส่ง
+ *   บิลวันก่อนหน้าไม่ส่ง (user สั่ง 2 ต.ค. 2569)
  * ร้านที่ส่งแล้วรายการเหมือนเดิม = ไม่ส่งซ้ำ · รายการเปลี่ยน = ส่งใหม่ · ร้านที่กดยกเลิก = ไม่แตะ
  * ⚠ ตรรกะต้องตรงกับแอป (rattana-oos-line.html: computeFromOrder / buildStores / qtyText) — แก้ที่หนึ่งต้องแก้อีกที่ */
 function oosAutoQueue_(dry) {
@@ -543,21 +544,26 @@ function oosAutoQueue_(dry) {
   var c = oosCompute_(pk.bk, pk.ds);
   var today = oosToday_(), tmr = Utilities.formatDate(new Date(Date.now() + 864e5), OOS_TZ, 'yyyy-MM-dd');
   var has = {}; c.rows.forEach(function (r) { has[r.date] = 1; });
-  var date = has[tmr] ? tmr : has[today] ? today : '';
-  if (!date) return { date: '', stores: 0, note: 'ไม่มีบิลของวันนี้/พรุ่งนี้', ms: Date.now() - t0 };
+  var dates = [today, tmr].filter(function (d) { return has[d]; });
+  var out = { date: dates.join(','), total: 0, stores: 0, multi: 0, noUid: 0, added: 0, changed: 0, same: 0, kept: 0, days: [] };
+  if (!dates.length) { out.note = 'ไม่มีบิลของวันนี้/พรุ่งนี้'; out.ms = Date.now() - t0; return out; }
   var uidMap = oosUidMap_();
-  var all = oosBuildStores_(c.rows.filter(function (r) { return r.date === date; }), c.units);
-  var pick = all.filter(function (s) { return (uidMap[s.cusId] || []).length && !s.multi && OOS_EXCLUDE.indexOf(s.cusId) < 0; });
-  var out = {
-    date: date, total: all.length, stores: pick.length,
-    multi: all.filter(function (s) { return s.multi; }).length,
-    noUid: all.filter(function (s) { return !(uidMap[s.cusId] || []).length; }).length
-  };
-  if (dry) { out.items = pick; out.ms = Date.now() - t0; return out; }
-  if (pick.length) {
-    var r = oosSave_({ date: date, items: pick, by: 'อัตโนมัติ', auto: true });
-    out.added = r.added; out.changed = r.changed; out.same = r.same; out.kept = r.kept;
-  }
+  dates.forEach(function (date) {
+    var all = oosBuildStores_(c.rows.filter(function (r) { return r.date === date; }), c.units);
+    var pick = all.filter(function (s) { return (uidMap[s.cusId] || []).length && !s.multi && OOS_EXCLUDE.indexOf(s.cusId) < 0; });
+    var d = {
+      date: date, total: all.length, stores: pick.length,
+      multi: all.filter(function (s) { return s.multi; }).length,
+      noUid: all.filter(function (s) { return !(uidMap[s.cusId] || []).length; }).length
+    };
+    if (dry) d.items = pick;
+    else if (pick.length) {
+      var r = oosSave_({ date: date, items: pick, by: 'อัตโนมัติ', auto: true });
+      d.added = r.added; d.changed = r.changed; d.same = r.same; d.kept = r.kept;
+    }
+    ['total', 'stores', 'multi', 'noUid', 'added', 'changed', 'same', 'kept'].forEach(function (k) { out[k] += d[k] || 0; });
+    out.days.push(d);
+  });
   out.ms = Date.now() - t0;
   return out;
 }
