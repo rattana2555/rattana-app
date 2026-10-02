@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana แจ้งสินค้าขาด v1.29</title>
+<title>Rattana แจ้งสินค้าขาด v1.30</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -220,7 +220,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 <div id="loginScreen">
   <div class="login-box">
     <h1>Rattana <span style="color:var(--gold)">แจ้งสินค้าขาด</span></h1>
-    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.29</p>
+    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.30</p>
     <div id="g_id_onload" data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
     <div style="display:flex;justify-content:center"><div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div></div>
     <div class="login-err" id="loginErr"></div>
@@ -232,7 +232,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 <header>
   <div>
     <div class="logo-text">Rattana <span>แจ้งสินค้าขาด</span></div>
-    <div class="logo-sub">v1.29 · ส่ง LINE ถึงร้านตาม User ID</div>
+    <div class="logo-sub">v1.30 · ส่ง LINE ถึงร้านตาม User ID</div>
   </div>
   <div class="hdr-right">
     <span class="user-chip" id="userChip"></span>
@@ -365,7 +365,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
   <div class="modal" style="max-width:400px">
     <div class="modal-head"><h3>🔑 ใส่รหัสแอป</h3><button class="modal-close" onclick="closeModal('keyModal')">×</button></div>
     <div class="modal-body">
-      <p class="note" style="margin-bottom:10px">ใส่ครั้งเดียวต่อเครื่อง — ขอรหัสจากผู้ดูแลระบบ</p>
+      <p class="note" style="margin-bottom:10px">ไม่ต้องพิมพ์ก็ได้ — กด <a href="#" onclick="logout();return false">ออกจากระบบ</a> แล้วเข้าสู่ระบบด้วย Google ใหม่ แอปจะใส่รหัสให้เอง<br>หรือพิมพ์รหัสที่ได้จากผู้ดูแลระบบ (ครั้งเดียวต่อเครื่อง)</p>
       <input type="hidden" id="cfgUrl">
       <input class="input mono" id="cfgKey" placeholder="รหัสแอป" autocomplete="off" onkeydown="if(event.key==='Enter')saveCfg()">
       <div id="cfgInfo" class="note" style="margin-top:10px"></div>
@@ -396,7 +396,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 </div>
 
 <script>
-const APP_VERSION = '1.29';
+const APP_VERSION = '1.30';
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -512,6 +512,7 @@ async function handleGoogleLogin(r) {
     if (String(u['Status'] || '').trim().toLowerCase() !== 'active') { $('loginErr').textContent = 'บัญชีถูกระงับ — ติดต่อแอดมิน'; return; }
     currentUser = { email, name: u['ชื่อ - สกุล'], nickname: u['ชื่อเล่น'], role: parseInt(u['User Role']) || 1, warehouse: u['W'] };
     lsSet('rattanaUser', { data: currentUser, exp: Date.now() + 30 * 864e5 });
+    if (!cfg().key) await keyFromLogin(r.credential);   // v1.30: ได้รหัสแอปจากการล็อกอิน ไม่ต้องพิมพ์
     enterApp();
   } catch (e) { $('loginErr').textContent = 'เกิดข้อผิดพลาด ลองใหม่อีกครั้ง'; }
   finally { hideSpinner(); }
@@ -544,6 +545,22 @@ async function gas(action, data = {}, ms = 90e3) {
   let j; try { j = await res.json(); } catch { throw new Error('หลังบ้านไม่ตอบ — ลองใหม่อีกครั้ง'); }
   if (!j.ok) throw new Error(j.error || 'หลังบ้านผิดพลาด');
   return j;
+}
+/* v1.30: ล็อกอิน Google แล้วขอรหัสแอปจากหลังบ้าน (หลังบ้านตรวจ token + อีเมลในชีทผู้ใช้) — รหัสไม่ฝังในหน้าเว็บ */
+async function keyFromLogin(credential) {
+  try {
+    const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 30e3);
+    let j;
+    try {
+      const res = await fetch(cfg().url, { method: 'POST', signal: ctl.signal, body: JSON.stringify({ app: 'oos', action: 'login', credential }) });
+      j = await res.json();
+    } finally { clearTimeout(tm); }
+    if (!j || !j.ok || !j.key) return false;
+    _cfgMem = { url: cfg().url, key: j.key };
+    try { localStorage.setItem(LS_CFG, JSON.stringify(_cfgMem)); } catch { }
+    await idbSet(LS_CFG, _cfgMem);
+    return true;
+  } catch { return false; }   // ไม่ได้ = ค่อยใส่รหัสเองแบบเดิม
 }
 async function saveCfg() {
   const url = $('cfgUrl').value.trim(), key = $('cfgKey').value.replace(/[\s​-‍﻿]/g, '');

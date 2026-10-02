@@ -1,5 +1,5 @@
 /**
- * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.17
+ * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.18
  * อยู่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
  *
  * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.17';
+var OOS_VERSION = '1.18';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -30,15 +30,43 @@ function oosRoute_(e) {
   if (!body || body.app !== 'oos') return null;              // ไม่ใช่แอป → ให้ webhook LINE ทำงานต่อ
   var out;
   try {
-    var key = oosProps_().getProperty('OOS_KEY');
-    if (!key || String(body.key || '') !== key) throw new Error('รหัสแอปไม่ถูกต้อง');
-    out = oosHandle_(body);
+    if (body.action === 'login') out = oosLogin_(body.credential);   // v1.18: ล็อกอิน Google แล้วได้รหัสแอปเอง ไม่ต้องพิมพ์
+    else {
+      var key = oosProps_().getProperty('OOS_KEY');
+      if (!key || String(body.key || '') !== key) throw new Error('รหัสแอปไม่ถูกต้อง');
+      out = oosHandle_(body);
+    }
     out.ok = true;
   } catch (err) {
     out = { ok: false, error: String(err && err.message || err) };
   }
   out.v = OOS_VERSION;
   return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
+}
+
+/** v1.18: แลก Google ID token (ตอนกดเข้าสู่ระบบในแอป) → รหัสแอป · ต้องเป็นอีเมลที่ Status = active ในชีทผู้ใช้กลาง
+ *  token ตรวจกับ Google (aud = client ของแอป · อีเมลยืนยันแล้ว · ยังไม่หมดอายุ) — รหัสแอปไม่ต้องฝังในหน้าเว็บ */
+var OOS_CLIENT_ID = '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com';
+var OOS_USERS_ID = '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ', OOS_USERS_TAB = 'Rattana Users for apps';
+function oosLogin_(cred) {
+  if (!cred) throw new Error('ไม่มีข้อมูลเข้าสู่ระบบ');
+  var r = UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(cred), { muteHttpExceptions: true });
+  if (r.getResponseCode() !== 200) throw new Error('ยืนยันตัวตนไม่ผ่าน — ออกจากระบบแล้วเข้าใหม่');
+  var t = JSON.parse(r.getContentText());
+  if (t.aud !== OOS_CLIENT_ID || String(t.email_verified) !== 'true') throw new Error('ยืนยันตัวตนไม่ผ่าน');
+  var email = String(t.email || '').trim().toLowerCase();
+  var v = SpreadsheetApp.openById(OOS_USERS_ID).getSheetByName(OOS_USERS_TAB).getDataRange().getDisplayValues();
+  var hr = -1, ie = -1, is = -1;
+  for (var i = 0; i < Math.min(v.length, 10) && hr < 0; i++) {
+    var h = v[i].map(function (x) { return String(x).trim(); });
+    if (h.indexOf('E-mail') >= 0) { hr = i; ie = h.indexOf('E-mail'); is = h.indexOf('Status'); }
+  }
+  if (hr < 0) throw new Error('อ่านชีทผู้ใช้ไม่ได้');
+  var ok = v.slice(hr + 1).some(function (row) {
+    return String(row[ie]).trim().toLowerCase() === email && (is < 0 || String(row[is]).trim().toLowerCase() === 'active');
+  });
+  if (!ok) throw new Error('อีเมลนี้ไม่มีสิทธิ์ใช้แอป');
+  return { key: oosProps_().getProperty('OOS_KEY'), email: email };
 }
 
 function oosHandle_(b) {
