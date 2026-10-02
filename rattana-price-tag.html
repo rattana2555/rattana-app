@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Design Hub v7.40</title>
+<title>Rattana Design Hub v7.41</title>
 <meta name="description" content="Rattana Design Hub — ออกแบบป้ายราคา โปรโมชั่น Flash Sale และแคตตาล็อก จาก Google Sheet พิมพ์ PDF/PNG/JPEG">
 <meta name="theme-color" content="#132248">
 <meta name="apple-mobile-web-app-title" content="Rattana Design Hub">
@@ -2438,7 +2438,7 @@ body.dark #appUpdate{background:#131c33;color:#e8eaf0}
   <header>
     <button class="icon-btn hamburger-btn" onclick="toggleDrawer(true)" title="เมนูฟีเจอร์" aria-label="เมนู">☰</button>
     <img class="logo-img" src="rattana-hub-icon-512.png?v=2" alt="Rattana Design Hub" width="44" height="44" style="object-fit:cover">
-    <div class="logo-text">RATTANA <span style="color:var(--gold)">DESIGN HUB</span><small>ออกแบบป้าย · โปรโมชั่น · แคตตาล็อก v7.40</small></div>
+    <div class="logo-text">RATTANA <span style="color:var(--gold)">DESIGN HUB</span><small>ออกแบบป้าย · โปรโมชั่น · แคตตาล็อก v7.41</small></div>
     <button class="icon-btn" id="btnInstallApp" onclick="installApp()" title="ติดตั้งแอปลงเครื่อง" style="display:none;background:var(--gold);color:#0d1b3e">📥</button>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="โหลดข้อมูลใหม่">⟳</button>
     <button class="icon-btn" onclick="toggleDark()" title="โหมดมืด">🌙</button>
@@ -3269,6 +3269,8 @@ body.dark #appUpdate{background:#131c33;color:#e8eaf0}
             <div class="pp-row"><label class="pp-lb">สไตล์ราคา</label><div class="pp-chips" id="aipTplPriceChips"></div></div>
             <div class="pp-row"><label class="pp-lb">จัดภาพ</label><div class="pp-chips" id="aipTplLayChips"></div>
               <label class="pp-ck"><input type="checkbox" id="aipTplCut" onchange="aipSet('tplCut', this.checked)"> ลบพื้นขาวรูปสินค้า</label></div>
+            <div class="pp-row"><label class="pp-ck"><input type="checkbox" id="aipTplNoteOn" onchange="aipSet('tplNoteOn', this.checked)"> ข้อความหมายเหตุ (มุมขวาล่าง)</label>
+              <input class="pp-txt" id="aipTplNote" data-aipf="tplNote" placeholder="เช่น ** ราคานี้สำหรับสั่งซื้อผ่านระบบออนไลน์ (ROO) **" style="flex:1 1 280px"></div>
             <div class="help-block" style="margin:2px 0 10px;padding:8px 10px">🎨 จัดภาพให้อัตโนมัติจากรูปสินค้าจริง + ราคาขั้นบันได — <b>ไม่ใช้ AI ไม่เสียเงิน ราคาตรง 100%</b> · แก้ชื่อ/ราคาในตารางด้านล่าง ภาพอัปเดตตามทันที</div>
           </div>
           <div class="aip-ai-only">
@@ -7468,7 +7470,8 @@ const AIP_STYLES = [
 ];
 const AIP_FMTS = [ { k:'a', n:'5 ลัง ราคา 350 ฿' }, { k:'b', n:'5 ลัง 350.-' } ];
 const AIP_DEF = { ratio:'4:5', style:'auto', fmt:'a', headline:'', sub:'สินค้าราคายกลัง', badge:'ราคาพิเศษ ลูกค้ารัตนมาร์ท', extra:'', check:true,
-  route:'tpl', tpl:'yoklang-wood', tplLay:'each', tplCut:true, tplPrice:'creamNavy' };   // v7.38 — user: เขียว → กรม   // v7.36 — user picked กรมท่า-ทอง   // v7.33 — route 'tpl' = ready-made template (no AI) · 'ai' = Gemini app
+  route:'tpl', tpl:'yoklang-wood', tplLay:'each', tplCut:true, tplPrice:'creamNavy',
+  tplNoteOn:true, tplNote:'** ราคานี้สำหรับสั่งซื้อผ่านระบบออนไลน์ (ROO) **' };   // v7.41 — bottom-right note   // v7.38 — user: เขียว → กรม   // v7.36 — user picked กรมท่า-ทอง   // v7.33 — route 'tpl' = ready-made template (no AI) · 'ai' = Gemini app
 let aipCfg = { ...AIP_DEF };
 let aipEdits = {};          // sku → { name, label, tiers:[{q,p}] } — session only (prices always start fresh from the sheets)
 let aipResults = [];        // session only — posters imported back from the Gemini app: { id, status:'done', img:{mime,data}, expect, check, note, ratio, imported }
@@ -7908,6 +7911,8 @@ function aipSyncPanel(){
   document.querySelectorAll('#aipTplLayChips .pp-chip').forEach(b => b.classList.toggle('active', b.dataset.v === aipCfg.tplLay));
   document.querySelectorAll('#aipTplPriceChips .pp-chip').forEach(b => b.classList.toggle('active', b.dataset.v === aipTplPS().k));
   if ($('#aipTplCut')) $('#aipTplCut').checked = !!aipCfg.tplCut;
+  if ($('#aipTplNoteOn')) $('#aipTplNoteOn').checked = !!aipCfg.tplNoteOn;
+  { const nt = $('#aipTplNote'); if (nt) { if (nt !== document.activeElement) nt.value = aipCfg.tplNote || ''; nt.disabled = !aipCfg.tplNoteOn; } }
   const set = (id, v) => { const el = $(id); if (el && el !== document.activeElement) el.value = v; };
   const an = $('#aipAppN'); if (an) { const k = aipSel().length; an.textContent = k ? `(${1 + k + (aipPresenter ? 1 : 0) + (aipStyleRef ? 1 : 0)} ไฟล์)` : ''; }
   const kh = $('#aipAppKeyHint'); if (kh) kh.textContent = !aipKey() ? 'ถ้าใส่คีย์ Gemini ในแท็บตั้งค่า (คีย์ฟรี ไม่ต้องผูกบัตร) แอปจะอ่านราคาในภาพให้อัตโนมัติ — ไม่ใส่ก็เทียบด้วยตาได้'
@@ -8442,6 +8447,20 @@ function aipTplPaint(c, g){
       el('$' + i, B, false, () => aipTplList(x, tiers, r.uname, B, aipTplPS()));
     }
   });
+  // v7.41 — bottom-right note above the template's footer (never over its printed contact text); movable like everything else
+  const note = String(aipCfg.tplNote || '').trim();
+  if (aipCfg.tplNoteOn && note) {
+    let nf = 21; x.font = `600 ${nf}px ${AIP_TPL_FTH}`;
+    while (nf > 12 && x.measureText(note).width > Z.w * 0.62) { nf -= 1; x.font = `600 ${nf}px ${AIP_TPL_FTH}`; }
+    const nw = x.measureText(note).width + nf * 1.4, nh = nf + 14, nx = Z.x + Z.w - nw, ny = Z.y + Z.h + 24;
+    el('note', { x: nx, y: ny, w: nw, h: nh }, false, () => {
+      x.save(); x.shadowColor = 'rgba(0,0,0,0.25)'; x.shadowBlur = 6; x.shadowOffsetY = 2;
+      aipTplRR(x, nx, ny, nw, nh, nh / 2); x.fillStyle = 'rgba(13,27,62,0.86)'; x.fill(); x.restore();
+      aipTplRR(x, nx + 1, ny + 1, nw - 2, nh - 2, nh / 2 - 1); x.lineWidth = 1.5; x.strokeStyle = 'rgba(233,194,90,0.9)'; x.stroke();
+      x.font = `600 ${nf}px ${AIP_TPL_FTH}`; x.textAlign = 'center'; x.textBaseline = 'alphabetic'; x.fillStyle = '#ffffff';
+      x.fillText(note, nx + nw / 2, ny + nh / 2 + nf * 0.36);
+    });
+  }
   g.els = els;
   return c;
 }
