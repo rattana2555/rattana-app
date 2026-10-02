@@ -1,5 +1,5 @@
 /**
- * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.7
+ * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.8
  * อยู่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
  *
  * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.7';
+var OOS_VERSION = '1.8';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -491,8 +491,8 @@ function oosFlexBuild_(o, maxRows) {
     };
   };
   var info = [];
-  if (o.sale && String(o.sale).trim() && String(o.sale).trim() !== '-') info.push(kv('เซลล์', String(o.sale).replace(/\s*\(ROO\)\s*$/, '')));
   if (o.orders && String(o.orders).trim()) info.push(kv('เลขออเดอร์', String(o.orders).split(/\s*,\s*/).join('\n')));   // ออเดอร์ ROO (billIdORD…)
+  if (o.sale && String(o.sale).trim() && String(o.sale).trim() !== '-') info.push(kv('เซลล์', String(o.sale).replace(/\s*\(ROO\)\s*$/, '')));
   if (info.length) {
     body.push({ type: 'box', layout: 'vertical', margin: 'md', backgroundColor: '#f5f7fb', cornerRadius: '10px', paddingAll: '10px', spacing: 'xs', contents: info });
   }
