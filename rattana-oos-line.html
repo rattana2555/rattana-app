@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana แจ้งสินค้าขาด v1.35</title>
+<title>Rattana แจ้งสินค้าขาด v1.36</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -114,6 +114,8 @@ body.dark .chip.on{background:var(--gold);color:var(--navy);border-color:var(--g
 .ms.ok{border-color:rgba(4,160,70,.35)}.ms.ok b{color:#04a046}
 .ms.bad{border-color:rgba(192,57,43,.35)}.ms.bad b{color:var(--danger)}
 .ms.info{border-color:rgba(52,120,220,.35)}.ms.info b{color:var(--info)}
+.bill-date{display:inline-block;padding:0 7px;border-radius:8px;background:var(--navy);color:#fff;font-size:11px;font-weight:700;margin-right:4px}
+.ms.next small{font-weight:600;opacity:.85}
 .ms.next{cursor:pointer;background:#fef3d7;color:#7a5d00;border-color:#f1c40f}.ms.next b{color:#9a7400}
 body.dark .ms.next{background:#3a2e15;color:#f5d76e}body.dark .ms.next b{color:#f5d76e}
 .pb-filters{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;padding:8px 12px}
@@ -236,7 +238,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 <div id="loginScreen">
   <div class="login-box">
     <h1>Rattana <span style="color:var(--gold)">แจ้งสินค้าขาด</span></h1>
-    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.35</p>
+    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.36</p>
     <div id="g_id_onload" data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
     <div style="display:flex;justify-content:center"><div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div></div>
     <div class="login-err" id="loginErr"></div>
@@ -248,7 +250,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 <header>
   <div>
     <div class="logo-text">Rattana <span>แจ้งสินค้าขาด</span></div>
-    <div class="logo-sub">v1.35 · ส่ง LINE ถึงร้านตาม User ID</div>
+    <div class="logo-sub">v1.36 · ส่ง LINE ถึงร้านตาม User ID</div>
   </div>
   <div class="hdr-right">
     <span class="user-chip" id="userChip"></span>
@@ -412,7 +414,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 </div>
 
 <script>
-const APP_VERSION = '1.35';
+const APP_VERSION = '1.36';
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -905,7 +907,7 @@ function useRows(rows, label) {
   if (!rows.length) return showToast('ไม่พบข้อมูลที่ใช้ได้', 'warning');
   S.raw = rows; S.srcLabel = label;
   const dates = [...new Set(rows.map(r => r.date))].sort();
-  S.date = dates.includes(tomorrowIso()) ? tomorrowIso() : dates[dates.length - 1];
+  S.date = dates.includes(todayIso()) ? todayIso() : dates[dates.length - 1];   // v1.36: หน้าแสดงทุกวันที่จะส่ง (viewDates) — S.date เหลือไว้เป็นค่าสำรอง
   S.wh = new Set(rows.map(r => r.wh).filter(Boolean));
   S.sel = null;   // เลือกค่าเริ่มต้นใหม่
   renderPrep();
@@ -913,12 +915,24 @@ function useRows(rows, label) {
 }
 
 /* ───────── รวมยอดต่อร้าน ───────── */
+/* v1.36: ไม่กรองวันที่แล้ว — แสดงบิลทุกวันที่รอบส่งจะส่ง (วันนี้ + พรุ่งนี้ ตามที่ตั้งในหน้า ⏰) รวมกัน · 1 การ์ด = 1 ร้าน ต่อ 1 วันที่บิล */
+function viewDates() {
+  const nr = nextRound(), base = nr && nr.day === 'tomorrow' ? tomorrowIso() : todayIso();
+  const d1 = new Date(base + 'T00:00:00'); d1.setDate(d1.getDate() + 1);
+  const days = (S.gas && S.gas.days) || ['today', 'tomorrow'];
+  const want = [days.includes('today') ? base : '', days.includes('tomorrow') ? isoLocal(d1) : ''].filter(Boolean);
+  const have = new Set(S.raw.map(r => r.date));
+  const v = want.filter(d => have.has(d));
+  return v.length ? v : [S.date];
+}
 function buildStores() {
-  const rows = S.raw.filter(r => r.date === S.date && (!r.wh || S.wh.has(r.wh)) && !EXCLUDE_CUS.has(r.cusId));
+  const vd = new Set(viewDates());
+  const rows = S.raw.filter(r => vd.has(r.date) && (!r.wh || S.wh.has(r.wh)) && !EXCLUDE_CUS.has(r.cusId));
   const by = new Map();
   rows.forEach(r => {
-    let s = by.get(r.cusId);
-    if (!s) { s = { cusId: r.cusId, cusName: r.cusName, wh: new Set(), bills: new Set(), sale: new Set(), prods: new Map(), multi: false, orders: new Set() }; by.set(r.cusId, s); }
+    const key = `${r.date}|${r.cusId}`;
+    let s = by.get(key);
+    if (!s) { s = { key, date: r.date, cusId: r.cusId, cusName: r.cusName, wh: new Set(), bills: new Set(), sale: new Set(), prods: new Map(), multi: false, orders: new Set() }; by.set(key, s); }
     if (r.multi) s.multi = true;
     if (r.orders) r.orders.split(', ').forEach(x => s.orders.add(x));
     if (r.wh) s.wh.add(r.wh); if (r.ds) s.bills.add(r.ds); if (r.sale) s.sale.add(r.sale);
@@ -937,18 +951,19 @@ function buildStores() {
     const short = lines.filter(l => l.type === 'short').map(l => `🔴${l.prod} ${l.qty}`).join('\n');
     const add = lines.filter(l => l.type === 'add').map(l => `🟢${l.prod} ${l.qty}`).join('\n');
     out.push({
-      cusId: s.cusId, cusName: s.cusName, wh: [...s.wh].join(','), bills: [...s.bills].join(', '), orders: [...s.orders].sort().join(', '),
+      key: s.key, date: s.date, cusId: s.cusId, cusName: s.cusName, wh: [...s.wh].join(','), bills: [...s.bills].join(', '), orders: [...s.orders].sort().join(', '),
       sale: [...s.sale].join(', '), lines, short: short || '-', add: add || '-', multi: s.multi,
       uidN: S.uid[s.cusId] || 0, nShort: lines.filter(l => l.type === 'short').length, nAdd: lines.filter(l => l.type === 'add').length,
     });
   });
-  out.sort((a, b) => (!!b.uidN - !!a.uidN) || a.cusName.localeCompare(b.cusName, 'th'));   // ร้านมี UID ขึ้นก่อน
+  out.sort((a, b) => a.date.localeCompare(b.date) || (!!b.uidN - !!a.uidN) || a.cusName.localeCompare(b.cusName, 'th'));   // วันที่บิล → ร้านมี UID ขึ้นก่อน
   return out;
 }
-function queueOf(cusId) {
+function queueOf(cusId, date) {
   const q = S.gas && S.gas.queue; if (!q) return null;
-  return q.find(x => x.id === `${S.date}|${cusId}`) || null;
+  return q.find(x => x.id === `${date || S.date}|${cusId}`) || null;
 }
+const queueOfS = s => queueOf(s.cusId, s.date);
 
 /* ───────── render: เตรียมส่ง ───────── */
 function stBadge(st) {
@@ -961,16 +976,19 @@ function renderPrep() {
   $('prepFilters').style.display = ''; $('prepStats').style.display = ''; $('prepListHead').classList.remove('hidden');
   const dates = {}; S.raw.forEach(r => { dates[r.date] = dates[r.date] || new Set(); dates[r.date].add(r.cusId); });
   $('srcInfo').innerHTML = `📊 ดึงข้อมูลล่าสุด <b>${esc(S.srcUpdated || '-')}</b>`;
-  $('dateChips').innerHTML = Object.keys(dates).sort().reverse().map(d =>
+  // v1.36: ไม่มีตัวกรองวันที่ — บอกแค่ว่ากำลังแสดงบิลวันไหน
+  const vds = viewDates();
+  $('dateChips').innerHTML = vds.map(d => `<span class="chip on" style="cursor:default">บิล${thDateShort(d)}<small>${(dates[d] || new Set()).size} ร้าน</small></span>`).join('');
+  if (0) Object.keys(dates).sort().reverse().map(d =>
     `<button class="chip ${d === S.date ? 'on' : ''}" onclick="S.date='${d}';S.sel=null;renderPrep()">${thDateShort(d)}<small>${dates[d].size} ร้าน</small></button>`).join('');
-  const whs = [...new Set(S.raw.filter(r => r.date === S.date).map(r => r.wh).filter(Boolean))].sort();
+  const whs = [...new Set(S.raw.filter(r => vds.includes(r.date)).map(r => r.wh).filter(Boolean))].sort();
   $('whChips').innerHTML = whs.map(w => `<button class="chip ${S.wh.has(w) ? 'on' : ''}" onclick="toggleWh('${w}')">${w}</button>`).join('') || '<span class="note">-</span>';
   const shows = [['all', 'ทั้งหมด'], ['uid', '🟢 มี UID'], ['nouid', '⚠ ไม่มี UID'], ['next', '⏰ จะส่งรอบถัดไป'], ['new', 'ยังไม่เข้าคิว']];
   $('showChips').innerHTML = shows.map(([k, l]) => `<button class="chip ${S.show === k ? 'on' : ''}" onclick="S.show='${k}';renderPrep()">${l}</button>`).join('');
 
   S.stores = buildStores();
-  if (!S.sel) S.sel = new Set(S.stores.filter(s => S.gas ? (autoPlan(s) || {}).k === 'send' : (s.uidN && !s.multi)).map(s => s.cusId));   // ติ๊กเริ่มต้น = เฉพาะร้านที่รอส่ง
-  S.stores.forEach(s => { if (isSent(s)) S.sel.delete(s.cusId); });   // v1.35: ส่งแล้ว = เลือกไม่ได้
+  if (!S.sel) S.sel = new Set(S.stores.filter(s => S.gas ? (autoPlan(s) || {}).k === 'send' : (s.uidN && !s.multi)).map(s => s.key));   // ติ๊กเริ่มต้น = เฉพาะร้านที่รอส่ง
+  S.stores.forEach(s => { if (isSent(s)) S.sel.delete(s.key); });   // v1.35: ส่งแล้ว = เลือกไม่ได้
   const all = S.stores;
   const withUid = all.filter(s => s.uidN).length;
   $('prepStats').innerHTML = `
@@ -979,14 +997,16 @@ function renderPrep() {
     <span class="ms bad">ไม่มี UID <b>${all.length - withUid}</b></span>
     <span class="ms info">ขาด <b>${all.reduce((a, s) => a + s.nShort, 0)}</b> · เพิ่ม <b>${all.reduce((a, s) => a + s.nAdd, 0)}</b></span>
     ${(() => { const nr = nextRound(); if (!nr) return S.gas ? '<span class="ms bad">ปิดส่งอัตโนมัติ</span>' : '';
-      const n = all.filter(s => (autoPlan(s) || {}).k === 'send').length, sent = all.filter(s => (autoPlan(s) || {}).k === 'sent').length;
-      return `<span class="ms next" title="กดเพื่อดูเฉพาะร้านที่จะส่ง" onclick="S.show='next';renderPrep()">⏰ รอบ ${nr.day === 'tomorrow' ? 'พรุ่งนี้ ' : ''}${nr.time} จะส่ง <b>${n}</b> ร้าน</span>${sent ? `<span class="ms ok">ส่งแล้ว <b>${sent}</b></span>` : ''}`; })()}`;
+      const sendS = all.filter(s => (autoPlan(s) || {}).k === 'send'), n = sendS.length, sent = all.filter(s => (autoPlan(s) || {}).k === 'sent').length;
+      const per = viewDates().map(d => [d, sendS.filter(s => s.date === d).length]).filter(x => x[1]);
+      const det = per.length > 1 ? ` <small>(${per.map(([d, c]) => `${thDateShort(d).replace(/^(วันนี้|พรุ่งนี้) /, '')}: ${c}`).join(' · ')})</small>` : '';
+      return `<span class="ms next" title="กดเพื่อดูเฉพาะร้านที่จะส่ง" onclick="S.show='next';renderPrep()">⏰ รอบ ${nr.day === 'tomorrow' ? 'พรุ่งนี้ ' : ''}${nr.time} จะส่ง <b>${n}</b> ร้าน${det}</span>${sent ? `<span class="ms ok">ส่งแล้ว <b>${sent}</b></span>` : ''}`; })()}`;
 
   const qq = normName($('prepSearch').value).toLowerCase();
   const list = all.filter(s => {
     if (S.show === 'uid' && !s.uidN) return false;
     if (S.show === 'nouid' && s.uidN) return false;
-    if (S.show === 'new' && queueOf(s.cusId)) return false;
+    if (S.show === 'new' && queueOfS(s)) return false;
     if (S.show === 'next' && (autoPlan(s) || {}).k !== 'send') return false;
     if (!qq) return true;
     return (s.cusName + ' ' + s.cusId + ' ' + s.sale + ' ' + s.bills + ' ' + s.lines.map(l => l.prod).join(' ')).toLowerCase().includes(qq);
@@ -1025,7 +1045,7 @@ function nextRound() {
 const canonItems = (a, b) => [a, b].map(t => String(t || '-').split('\n').map(x => x.trim()).filter(Boolean).sort().join('\n')).join('||');
 function autoPlan(s) {
   const g = S.gas; if (!g) return null;
-  const q = queueOf(s.cusId);
+  const q = queueOfS(s);
   if (q && q.status === ST.SENT && canonItems(q.short, q.add) === canonItems(s.short, s.add)) return { k: 'sent' };
   const nr = nextRound(), at = nr ? `${nr.day === 'tomorrow' ? 'พรุ่งนี้ ' : ''}${nr.time}` : '';
   if (q && q.status === ST.CANCEL) return { k: 'skip', label: '⊘ ยกเลิกไว้ — ไม่ส่ง' };
@@ -1035,7 +1055,7 @@ function autoPlan(s) {
   const base = nr.day === 'today' ? todayIso() : tomorrowIso();
   const d1 = new Date(base + 'T00:00:00'); d1.setDate(d1.getDate() + 1);
   const days = g.days || ['today', 'tomorrow'];
-  if (!((days.includes('today') && S.date === base) || (days.includes('tomorrow') && S.date === isoLocal(d1)))) return { k: 'skip', label: 'บิลวันนี้ไม่อยู่ในรอบส่ง' };
+  if (!((days.includes('today') && s.date === base) || (days.includes('tomorrow') && s.date === isoLocal(d1)))) return { k: 'skip', label: 'บิลวันนี้ไม่อยู่ในรอบส่ง' };
   if (!s.uidN) return { k: 'skip', label: 'ไม่มี UID — ไม่ส่ง' };
   if (s.multi) return { k: 'manual', label: 'บิลหลายวัน — ต้องเลือกส่งเอง' };
   return { k: 'send', label: `⏰ จะส่ง ${at}${q ? ' (รายการเปลี่ยน ส่งใหม่)' : ''}` };
@@ -1046,16 +1066,16 @@ function planBadge(p) {
   return `<span class="badge ${c}">${esc(p.label)}</span>`;
 }
 function storeCard(s) {
-  const on = S.sel.has(s.cusId), q = queueOf(s.cusId), pk = (autoPlan(s) || {}).k;
+  const on = S.sel.has(s.key), q = queueOfS(s), pk = (autoPlan(s) || {}).k, kid = esc(s.key);
   const pl = !S.gas ? '' : pk === 'send' ? 'pl-wait' : pk === 'sent' ? 'pl-done' : 'pl-bad';   // v1.34 กรอบ: เหลือง=รอส่ง เขียว=ส่งแล้ว แดง=ส่งไม่ได้
   const lines = s.lines.map(l => `<div class="ln ${l.type}"><span>${l.type === 'short' ? '🔴' : '🟢'}</span><span>${esc(l.prod)}${l.miss ? ' <span class="warn">(ไม่พบหน่วยใน PDDT)</span>' : ''}</span><span class="q">${esc(l.qty)}</span></div>`).join('');
-  return `<div class="store ${s.uidN ? 'has-uid' : 'no-uid'} ${pl} ${on && pk !== 'sent' ? '' : 'off'}" id="st-${esc(s.cusId)}">
-    <div class="st-head" ${pk === 'sent' ? '' : `onclick="toggleSel('${esc(s.cusId)}', event)"`}>
-      ${pk === 'sent' ? '<span class="ck-done" title="ส่งแล้ว">✓</span>' : `<input type="checkbox" class="ck" ${on ? 'checked' : ''} onclick="event.stopPropagation();toggleSel('${esc(s.cusId)}')">`}
+  return `<div class="store ${s.uidN ? 'has-uid' : 'no-uid'} ${pl} ${on && pk !== 'sent' ? '' : 'off'}" id="st-${kid}">
+    <div class="st-head" ${pk === 'sent' ? '' : `onclick="toggleSel('${kid}', event)"`}>
+      ${pk === 'sent' ? '<span class="ck-done" title="ส่งแล้ว">✓</span>' : `<input type="checkbox" class="ck" ${on ? 'checked' : ''} onclick="event.stopPropagation();toggleSel('${kid}')">`}
       <div class="st-main">
         <div class="st-name">${esc(s.cusName)}</div>
         <div class="st-meta"><span class="mono">${esc(s.cusId)}</span>${s.wh ? `<span class="sep">•</span>${esc(s.wh)}` : ''}<span class="sep">•</span>👤 ${esc(s.sale || '-')}</div>
-        <div class="st-meta">🧾 ${esc(s.bills || '-')}</div>
+        <div class="st-meta"><span class="bill-date">บิล ${esc(thDateShort(s.date))}</span> 🧾 ${esc(s.bills || '-')}</div>
         ${s.orders ? `<div class="st-meta">🛒 ออเดอร์ ROO: <b>${esc(s.orders)}</b></div>` : ''}
         <div class="st-badges">
           ${s.uidN ? `<span class="badge b-line">🟢 UID ${s.uidN > 1 ? s.uidN + ' บัญชี' : ''}</span>` : '<span class="badge b-warn">⚠ ไม่มี UID</span>'}
@@ -1066,41 +1086,45 @@ function storeCard(s) {
       </div>
     </div>
     <div class="st-lines">${lines}</div>
-    <div class="st-foot"><button class="btn btn-outline btn-sm" onclick="preview('${esc(s.cusId)}')">👁 ตัวอย่าง LINE</button></div>
+    <div class="st-foot"><button class="btn btn-outline btn-sm" onclick="preview('${kid}')">👁 ตัวอย่าง LINE</button></div>
   </div>`;
 }
 function toggleWh(w) { S.wh.has(w) ? S.wh.delete(w) : S.wh.add(w); S.sel = null; renderPrep(); }
 function toggleSel(id, ev) {
   if (ev && ev.target.closest('button')) return;
-  const st = S.stores.find(x => x.cusId === id); if (st && isSent(st)) return;   // ส่งแล้ว ติ๊กไม่ได้
+  const st = S.stores.find(x => x.key === id); if (st && isSent(st)) return;   // ส่งแล้ว ติ๊กไม่ได้
   S.sel.has(id) ? S.sel.delete(id) : S.sel.add(id);
   const el = $('st-' + id);
   if (el) { el.classList.toggle('off', !S.sel.has(id)); el.querySelector('.ck').checked = S.sel.has(id); }
   updateSaveBar();
 }
-function selectAll(v) { S.sel = new Set(v ? S.stores.filter(s => !isSent(s)).map(s => s.cusId) : []); renderPrep(); }
-function selectUidOnly() { S.sel = new Set(S.stores.filter(s => s.uidN && !s.multi && !isSent(s)).map(s => s.cusId)); renderPrep(); }
+function selectAll(v) { S.sel = new Set(v ? S.stores.filter(s => !isSent(s)).map(s => s.key) : []); renderPrep(); }
+function selectUidOnly() { S.sel = new Set(S.stores.filter(s => s.uidN && !s.multi && !isSent(s)).map(s => s.key)); renderPrep(); }
 const isSent = s => (autoPlan(s) || {}).k === 'sent';
 function updateSaveBar() {
-  const sel = S.stores.filter(s => S.sel.has(s.cusId));
+  const sel = S.stores.filter(s => S.sel.has(s.key));
   $('sbN').textContent = sel.length;
   const nu = sel.filter(s => !s.uidN).length;
   $('sbSub').innerHTML = nu ? ` · <span style="color:var(--danger)">ไม่มี UID ${nu}</span>` : '';
   $('saveBar').classList.toggle('hidden', !(S.stores.length > 0));
 }
 async function saveQueue() {
-  const items = S.stores.filter(s => S.sel.has(s.cusId));
+  const items = S.stores.filter(s => S.sel.has(s.key));
   if (!items.length) return showToast('ยังไม่ได้เลือกร้าน', 'warning');
   if (!cfg().key) return openModal('keyModal');
   const sched = S.gas ? (S.gas.enabled ? `ส่งอัตโนมัติรอบถัดไป (${(S.gas.times || []).join(' / ')})` : '<b style="color:var(--danger)">ปิดส่งอัตโนมัติอยู่</b> — ต้องกดส่งเองในหน้าคิว') : '';
   const nu = items.filter(s => !s.uidN).length;
-  if (!await ask('บันทึกเข้าคิว', `บันทึก <b>${items.length}</b> ร้าน ของวันที่ <b>${thDate(S.date)}</b> เข้าคิว<br>${sched}${nu ? `<br><br>⚠ ไม่มี UID ${nu} ร้าน — จะค้างไว้จนกว่าจะเพิ่ม UID` : ''}<br><br><span class="note">ร้านที่ส่งไปแล้วและรายการไม่เปลี่ยน จะไม่ส่งซ้ำ</span>`, '💾 บันทึก')) return;
+  if (!await ask('บันทึกเข้าคิว', `บันทึก <b>${items.length}</b> ร้าน (บิล ${[...new Set(items.map(s => thDateShort(s.date)))].join(' + ')}) เข้าคิว<br>${sched}${nu ? `<br><br>⚠ ไม่มี UID ${nu} ร้าน — จะค้างไว้จนกว่าจะเพิ่ม UID` : ''}<br><br><span class="note">ร้านที่ส่งไปแล้วและรายการไม่เปลี่ยน จะไม่ส่งซ้ำ</span>`, '💾 บันทึก')) return;
   showSpinner('กำลังบันทึกเข้าคิว...');
   try {
-    const r = await gas('save', {
-      date: S.date,
-      items: items.map(s => ({ cusId: s.cusId, cusName: s.cusName, wh: s.wh, bills: s.bills, sale: s.sale, short: s.short, add: s.add, orders: s.orders })),
-    });
+    const r = { added: 0, changed: 0, same: 0 };
+    for (const d of [...new Set(items.map(s => s.date))]) {   // คิวแยกตามวันที่บิล
+      const x = await gas('save', {
+        date: d,
+        items: items.filter(s => s.date === d).map(s => ({ cusId: s.cusId, cusName: s.cusName, wh: s.wh, bills: s.bills, sale: s.sale, short: s.short, add: s.add, orders: s.orders })),
+      });
+      r.added += x.added; r.changed += x.changed; r.same += x.same;
+    }
     showToast(`บันทึกแล้ว · ใหม่ ${r.added} · แก้ไข ${r.changed} · เหมือนเดิม ${r.same}`, 'success');
     await loadState(true);
   } catch (e) { showToast(e.message, 'error'); }
@@ -1133,9 +1157,9 @@ function bubbleHtml(o) {
       ${sec('สินค้าขาด', 'r', flexLines(o.short))}${flexLines(o.short).length ? '<div style="font-size:11px;color:#9a9a9a;margin-top:6px">* อาจมีสินค้าขาดเพิ่มเติมจากรายการนี้</div>' : ''}${sec('อาจได้รับเพิ่ม / ส่งแทน', 'g', flexLines(o.add))}${flexLines(o.add).length ? '<div style="font-size:11px;color:#9a9a9a;margin-top:6px">* รายการส่งแทน / เพิ่ม อาจได้รับหรือไม่ได้รับ ขึ้นอยู่กับสินค้าที่มีในวันจัดส่ง</div>' : ''}</div>
     <div class="ft">ขออภัยในความไม่สะดวก 🙏<br>สอบถามเพิ่มเติม ติดต่อเซลล์ผู้ดูแล หรือแชทนี้ได้เลย</div></div>`;
 }
-function preview(cusId) {
-  const s = S.stores.find(x => x.cusId === cusId); if (!s) return;
-  $('pvBody').innerHTML = bubbleHtml({ ...s, date: S.date }); openModal('pvModal');
+function preview(key) {
+  const s = S.stores.find(x => x.key === key); if (!s) return;
+  $('pvBody').innerHTML = bubbleHtml({ ...s }); openModal('pvModal');
 }
 function previewQ(id) {
   const o = S.gas.queue.find(x => x.id === id); if (!o) return;
@@ -1304,10 +1328,10 @@ async function testSend() {
   const uid = $('testUid').value.trim();
   if (!/^U[0-9a-f]{32}$/i.test(uid)) return showToast('User ID ไม่ถูกต้อง', 'warning');
   lsSet('oos_test_uid', uid);
-  const s = S.stores.find(x => S.sel && S.sel.has(x.cusId));
+  const s = S.stores.find(x => S.sel && S.sel.has(x.key));
   showSpinner('กำลังส่งทดสอบ...');
   try {
-    await gas('testSend', { uid, item: s ? { cusId: s.cusId, cusName: s.cusName, date: S.date, bills: s.bills, sale: s.sale, short: s.short, add: s.add, orders: s.orders } : null });
+    await gas('testSend', { uid, item: s ? { cusId: s.cusId, cusName: s.cusName, date: s.date, bills: s.bills, sale: s.sale, short: s.short, add: s.add, orders: s.orders } : null });
     showToast('ส่งทดสอบแล้ว — เช็คใน LINE', 'success');
   } catch (e) { showToast(e.message, 'error'); }
   finally { hideSpinner(); }
