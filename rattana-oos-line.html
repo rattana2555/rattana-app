@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana แจ้งสินค้าขาด v1.31</title>
+<title>Rattana แจ้งสินค้าขาด v1.32</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -100,6 +100,8 @@ body.dark .chip.on{background:var(--gold);color:var(--navy);border-color:var(--g
 .ms.ok{border-color:rgba(4,160,70,.35)}.ms.ok b{color:#04a046}
 .ms.bad{border-color:rgba(192,57,43,.35)}.ms.bad b{color:var(--danger)}
 .ms.info{border-color:rgba(52,120,220,.35)}.ms.info b{color:var(--info)}
+.ms.next{cursor:pointer;background:var(--navy);color:#fff;border-color:var(--navy)}.ms.next b{color:var(--gold)}
+body.dark .ms.next{background:var(--gold);color:var(--navy)}body.dark .ms.next b{color:var(--navy)}
 .pb-filters{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;padding:8px 12px}
 .fb-grp{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .pb-filters .fb-label{min-width:0}
@@ -220,7 +222,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 <div id="loginScreen">
   <div class="login-box">
     <h1>Rattana <span style="color:var(--gold)">แจ้งสินค้าขาด</span></h1>
-    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.31</p>
+    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.32</p>
     <div id="g_id_onload" data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
     <div style="display:flex;justify-content:center"><div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div></div>
     <div class="login-err" id="loginErr"></div>
@@ -232,7 +234,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 <header>
   <div>
     <div class="logo-text">Rattana <span>แจ้งสินค้าขาด</span></div>
-    <div class="logo-sub">v1.31 · ส่ง LINE ถึงร้านตาม User ID</div>
+    <div class="logo-sub">v1.32 · ส่ง LINE ถึงร้านตาม User ID</div>
   </div>
   <div class="hdr-right">
     <span class="user-chip" id="userChip"></span>
@@ -396,7 +398,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 </div>
 
 <script>
-const APP_VERSION = '1.31';
+const APP_VERSION = '1.32';
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -949,7 +951,7 @@ function renderPrep() {
     `<button class="chip ${d === S.date ? 'on' : ''}" onclick="S.date='${d}';S.sel=null;renderPrep()">${thDateShort(d)}<small>${dates[d].size} ร้าน</small></button>`).join('');
   const whs = [...new Set(S.raw.filter(r => r.date === S.date).map(r => r.wh).filter(Boolean))].sort();
   $('whChips').innerHTML = whs.map(w => `<button class="chip ${S.wh.has(w) ? 'on' : ''}" onclick="toggleWh('${w}')">${w}</button>`).join('') || '<span class="note">-</span>';
-  const shows = [['all', 'ทั้งหมด'], ['uid', '🟢 มี UID'], ['nouid', '⚠ ไม่มี UID'], ['new', 'ยังไม่เข้าคิว']];
+  const shows = [['all', 'ทั้งหมด'], ['uid', '🟢 มี UID'], ['nouid', '⚠ ไม่มี UID'], ['next', '⏰ จะส่งรอบถัดไป'], ['new', 'ยังไม่เข้าคิว']];
   $('showChips').innerHTML = shows.map(([k, l]) => `<button class="chip ${S.show === k ? 'on' : ''}" onclick="S.show='${k}';renderPrep()">${l}</button>`).join('');
 
   S.stores = buildStores();
@@ -960,19 +962,54 @@ function renderPrep() {
     <span class="ms">ร้าน <b>${all.length}</b></span>
     <span class="ms ok">มี UID <b>${withUid}</b></span>
     <span class="ms bad">ไม่มี UID <b>${all.length - withUid}</b></span>
-    <span class="ms info">ขาด <b>${all.reduce((a, s) => a + s.nShort, 0)}</b> · เพิ่ม <b>${all.reduce((a, s) => a + s.nAdd, 0)}</b></span>`;
+    <span class="ms info">ขาด <b>${all.reduce((a, s) => a + s.nShort, 0)}</b> · เพิ่ม <b>${all.reduce((a, s) => a + s.nAdd, 0)}</b></span>
+    ${(() => { const nr = nextRound(); if (!nr) return S.gas ? '<span class="ms bad">ปิดส่งอัตโนมัติ</span>' : '';
+      const n = all.filter(s => (autoPlan(s) || {}).k === 'send').length, sent = all.filter(s => (autoPlan(s) || {}).k === 'sent').length;
+      return `<span class="ms next" title="กดเพื่อดูเฉพาะร้านที่จะส่ง" onclick="S.show='next';renderPrep()">⏰ รอบ ${nr.day === 'tomorrow' ? 'พรุ่งนี้ ' : ''}${nr.time} จะส่ง <b>${n}</b> ร้าน</span>${sent ? `<span class="ms ok">ส่งแล้ว <b>${sent}</b></span>` : ''}`; })()}`;
 
   const qq = normName($('prepSearch').value).toLowerCase();
   const list = all.filter(s => {
     if (S.show === 'uid' && !s.uidN) return false;
     if (S.show === 'nouid' && s.uidN) return false;
     if (S.show === 'new' && queueOf(s.cusId)) return false;
+    if (S.show === 'next' && (autoPlan(s) || {}).k !== 'send') return false;
     if (!qq) return true;
     return (s.cusName + ' ' + s.cusId + ' ' + s.sale + ' ' + s.bills + ' ' + s.lines.map(l => l.prod).join(' ')).toLowerCase().includes(qq);
   });
   $('storeList').innerHTML = list.length ? list.map(storeCard).join('') :
     `<div class="card"><div class="empty"><div class="big">🔍</div>ไม่พบร้านตามเงื่อนไข</div></div>`;
   updateSaveBar();
+}
+/* v1.32: รอบถัดไปจะส่งร้านไหน — ตรรกะเดียวกับหลังบ้าน (oosAutoQueue_ + oosSave_ แบบ auto + oosSendPending_) */
+function nextRound() {
+  const g = S.gas; if (!g || !g.enabled) return null;
+  const now = new Date(), hm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const ts = (g.times || []).slice().sort(), done = g.doneToday || {};
+  const t = ts.find(x => x >= hm && !done[x]);
+  return t ? { time: t, day: 'today' } : ts.length ? { time: ts[0], day: 'tomorrow' } : null;
+}
+const canonItems = (a, b) => [a, b].map(t => String(t || '-').split('\n').map(x => x.trim()).filter(Boolean).sort().join('\n')).join('||');
+function autoPlan(s) {
+  const g = S.gas; if (!g) return null;
+  const q = queueOf(s.cusId);
+  if (q && q.status === ST.SENT && canonItems(q.short, q.add) === canonItems(s.short, s.add)) return { k: 'sent' };
+  const nr = nextRound(), at = nr ? `${nr.day === 'tomorrow' ? 'พรุ่งนี้ ' : ''}${nr.time}` : '';
+  if (q && q.status === ST.CANCEL) return { k: 'skip', label: '⊘ ยกเลิกไว้ — ไม่ส่ง' };
+  if (!nr) return { k: 'skip', label: 'ปิดส่งอัตโนมัติอยู่' };
+  if (q && q.status !== ST.SENT) return s.uidN ? { k: 'send', label: `⏰ จะส่ง ${at}` } : { k: 'skip', label: 'ไม่มี UID — ส่งไม่ได้' };
+  if (!g.auto) return { k: 'manual', label: 'ต้องกดบันทึกเข้าคิวเอง' };
+  const base = nr.day === 'today' ? todayIso() : tomorrowIso();
+  const d1 = new Date(base + 'T00:00:00'); d1.setDate(d1.getDate() + 1);
+  const days = g.days || ['today', 'tomorrow'];
+  if (!((days.includes('today') && S.date === base) || (days.includes('tomorrow') && S.date === isoLocal(d1)))) return { k: 'skip', label: 'บิลวันนี้ไม่อยู่ในรอบส่ง' };
+  if (!s.uidN) return { k: 'skip', label: 'ไม่มี UID — ไม่ส่ง' };
+  if (s.multi) return { k: 'manual', label: 'บิลหลายวัน — ต้องเลือกส่งเอง' };
+  return { k: 'send', label: `⏰ จะส่ง ${at}${q ? ' (รายการเปลี่ยน ส่งใหม่)' : ''}` };
+}
+function planBadge(p) {
+  if (!p || p.k === 'sent') return '';
+  const c = { send: 'b-info', manual: 'b-warn', skip: 'b-muted' }[p.k];
+  return `<span class="badge ${c}">${esc(p.label)}</span>`;
 }
 function storeCard(s) {
   const on = S.sel.has(s.cusId), q = queueOf(s.cusId);
@@ -989,7 +1026,7 @@ function storeCard(s) {
           ${s.uidN ? `<span class="badge b-line">🟢 UID ${s.uidN > 1 ? s.uidN + ' บัญชี' : ''}</span>` : '<span class="badge b-warn">⚠ ไม่มี UID</span>'}
           ${s.nShort ? `<span class="badge b-danger">ขาด ${s.nShort}</span>` : ''}${s.nAdd ? `<span class="badge b-ok">เพิ่ม ${s.nAdd}</span>` : ''}
           ${s.multi ? '<span class="badge b-warn" title="ใบจองนี้เปิดบิลหลายวัน — ใบจองอาจถูกแก้หลังเปิดบิลไปบางส่วน ตัวเลขอาจไม่ตรง">⚠ บิลหลายวัน ตรวจก่อนส่ง</span>' : ''}
-          ${q ? stBadge(q.status) : ''}
+          ${q && q.status === ST.SENT ? stBadge(q.status) : ''}${planBadge(autoPlan(s))}
         </div>
       </div>
     </div>
