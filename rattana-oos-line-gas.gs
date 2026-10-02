@@ -1,5 +1,5 @@
 /**
- * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.3
+ * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.4
  * อยู่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
  *
  * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.3';
+var OOS_VERSION = '1.4';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -50,7 +50,7 @@ function oosHandle_(b) {
     case 'sendNow': return oosSendPending_({ ids: b.ids || null, round: 'กดส่งเอง' + (b.by ? ' (' + b.by + ')' : '') });
     case 'setSchedule': return oosSetSchedule_(b);
     case 'testSend': return oosTestSend_(b);
-    case 'xlsx': return oosXlsx_();
+    case 'xlsx': return oosXlsx_(b.file);
     default: throw new Error('ไม่รู้จักคำสั่ง ' + b.action);
   }
 }
@@ -380,20 +380,24 @@ function oosTestSend_(b) {
 /* ───────────── ไฟล์ Excel ต้นฉบับ (Power Query จาก SQL) ───────────── */
 var OOS_XLSX_FOLDER = '1CFKu6FnpGxa35bYf6s-hUbK_apTmeunp';   // โฟลเดอร์ "Order scanner"
 var OOS_XLSX_NAME = 'สินค้าขาด ส่งไลน์.xlsx';
+// ไฟล์ที่แอปขอได้ (กันขออ่านไฟล์อื่นในโฟลเดอร์) — Check Out.xlsx = BVBK ใบจอง + DSDC บิล (task RefreshExcelSQL รีเฟรชทุก 1 ชม.)
+var OOS_XLSX_ALLOW = [OOS_XLSX_NAME, 'Check Out.xlsx'];
 
-function oosXlsxFile_() {
-  var it = DriveApp.getFolderById(OOS_XLSX_FOLDER).getFilesByName(OOS_XLSX_NAME), best = null;
+function oosXlsxFile_(name) {
+  name = name || OOS_XLSX_NAME;
+  if (OOS_XLSX_ALLOW.indexOf(name) < 0) throw new Error('ไม่อนุญาตให้อ่านไฟล์ ' + name);
+  var it = DriveApp.getFolderById(OOS_XLSX_FOLDER).getFilesByName(name), best = null;
   while (it.hasNext()) {
     var f = it.next();
     if (!best || f.getLastUpdated() > best.getLastUpdated()) best = f;
   }
-  if (!best) throw new Error('ไม่พบไฟล์ ' + OOS_XLSX_NAME + ' ในโฟลเดอร์ Order scanner');
+  if (!best) throw new Error('ไม่พบไฟล์ ' + name + ' ในโฟลเดอร์ Order scanner');
   return best;
 }
 
 /** ส่งไฟล์ .xlsx ทั้งไฟล์ (base64) ให้แอปแกะเองด้วย SheetJS */
-function oosXlsx_() {
-  var f = oosXlsxFile_();
+function oosXlsx_(name) {
+  var f = oosXlsxFile_(name);
   return {
     name: f.getName(),
     updated: Utilities.formatDate(f.getLastUpdated(), OOS_TZ, 'yyyy-MM-dd HH:mm:ss'),

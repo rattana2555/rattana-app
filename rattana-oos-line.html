@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana แจ้งสินค้าขาด v1.7</title>
+<title>Rattana แจ้งสินค้าขาด v1.8</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -182,7 +182,7 @@ body.dark .chip.on{background:var(--gold);color:var(--navy);border-color:var(--g
 <div id="loginScreen">
   <div class="login-box">
     <h1>Rattana <span style="color:var(--gold)">แจ้งสินค้าขาด</span></h1>
-    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.7</p>
+    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.8</p>
     <div id="g_id_onload" data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
     <div style="display:flex;justify-content:center"><div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div></div>
     <div class="login-err" id="loginErr"></div>
@@ -194,7 +194,7 @@ body.dark .chip.on{background:var(--gold);color:var(--navy);border-color:var(--g
 <header>
   <div>
     <div class="logo-text">Rattana <span>แจ้งสินค้าขาด</span></div>
-    <div class="logo-sub">v1.7 · ส่ง LINE ถึงร้านตาม User ID</div>
+    <div class="logo-sub">v1.8 · ส่ง LINE ถึงร้านตาม User ID</div>
   </div>
   <div class="hdr-right">
     <span class="user-chip" id="userChip"></span>
@@ -221,7 +221,7 @@ body.dark .chip.on{background:var(--gold);color:var(--navy);border-color:var(--g
         </div>
       </div>
       <div class="card-body">
-        <div id="srcInfo" class="note">⏳ กำลังดึงข้อมูลจาก Excel ต้นฉบับ (สินค้าขาด ส่งไลน์.xlsx)…</div>
+        <div id="srcInfo" class="note">⏳ กำลังดึงใบจอง + บิลจาก Check Out.xlsx…</div>
         <div class="filter-bar mt" id="prepFilters" style="margin-top:12px;display:none">
           <div class="fb-row"><span class="fb-label">วันที่</span><div class="chips" id="dateChips"></div></div>
           <div class="fb-row"><span class="fb-label">คลัง</span><div class="chips" id="whChips"></div></div>
@@ -359,7 +359,7 @@ body.dark .chip.on{background:var(--gold);color:var(--navy);border-color:var(--g
 </div>
 
 <script>
-const APP_VERSION = '1.7';
+const APP_VERSION = '1.8';
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -406,7 +406,8 @@ function toIso(s) {
   s = String(s || '').trim();
   let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if (m) { let y = +m[3]; if (y > 2400) y -= 543; return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
-  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return m[0];
+  m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (m) { let y = +m[1]; if (y > 2400) y -= 543; return `${y}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`; }
   if (/^\d{5}(\.\d+)?$/.test(s)) return new Date(Date.UTC(1899, 11, 30) + Math.floor(+s) * 864e5).toISOString().slice(0, 10);   // วันที่แบบตัวเลขของ Excel
   return '';
 }
@@ -590,6 +591,15 @@ function clearPddtCache() { idbDel(LS_PDDT); S.pddt = null; showToast('ล้า
 
 // แปลงจำนวนชิ้น (EA) → "2 ลังx24(CS) 3 ชิ้นx1(EA)"
 function qtyText(name, ea) {
+  // หน่วยจากใบจอง/บิลเอง (เช่น ลังx24(CS)) — แตกเป็นหน่วยใหญ่ก่อน เศษเป็นชิ้น
+  const u = S.units && S.units[normName(name)];
+  if (u) {
+    const fs = Object.keys(u).map(Number).sort((a, b) => b - a);
+    let rem = ea; const parts = [];
+    for (const f of fs) { if (f <= 1) continue; const c = Math.floor(rem / f); if (c) { parts.push(`${c} ${u[f]}`); rem -= c * f; } }
+    if (rem) parts.push(`${rem} ${u[1] || 'ชิ้นx1(EA)'}`);
+    return { text: parts.join(' '), miss: false };
+  }
   const p = S.pddt && S.pddt[normName(name)];
   if (!p) return { text: `${ea} ชิ้น`, miss: true };
   const [uCS, uPA, uEA, qCS, qPA] = p;
@@ -618,7 +628,67 @@ function normalizeRows(rows) {
     diff: num(g(r, 'S_DIFF')) + num(g(r, 'F_DIFF')),
   })).filter(r => r.date && r.cusId && r.prod);
 }
-// ไฟล์ "สินค้าขาด ส่งไลน์.xlsx" (โฟลเดอร์ Order scanner · Power Query จาก SQL) — หลังบ้านส่งไฟล์มา แอปแกะเองด้วย SheetJS
+/* ───────── เทียบใบจอง ↔ บิล จาก Check Out.xlsx ─────────
+ * BVBK = ใบจอง (DI_REF) · DSDC = บิล (DI_REMARK อ้างเลขใบจอง "…#BK04690930/016:…" หรือ "BK026909/00382")
+ * บิล 1 ใบอ้างได้หลายใบจอง / ใบจอง 1 ใบแตกได้หลายบิล → รวมเป็นกลุ่มเดียว (union-find) แล้วเทียบยอดชิ้นต่อสินค้า
+ * (แทน Query1 ของ "สินค้าขาด ส่งไลน์.xlsx" ที่นับขาดซ้ำ 2-3 เท่าเมื่อใบจองแตกหลายบิล) */
+const ORDER_FILE = 'Check Out.xlsx';
+const unitFactor = u => { const m = String(u).match(/x(\d+)\(/); return m ? +m[1] : 1; };
+function computeFromOrder(bkTab, dsTab) {
+  const idx = (head, k) => { const i = head.map(h => normName(h).toUpperCase()).indexOf(k); if (i < 0) throw new Error('ไม่พบคอลัมน์ ' + k); return i; };
+  const cols = t => { const h = t[0]; const o = {}; ['DI_DATE', 'DI_REF', 'AR_CODE', 'AR_NAME', 'SLMN_NAME', 'WL_CODE', 'SKU_NAME', 'TRD_UTQNAME', 'TRD_QTY', 'TRD_Q_FREE', 'DI_REMARK'].forEach(k => o[k] = idx(h, k)); return o; };
+  const cb = cols(bkTab), cd = cols(dsTab);
+  const P = new Map();
+  const find = x => { while (P.get(x) !== x) { P.set(x, P.get(P.get(x))); x = P.get(x); } return x; };
+  const add = x => { if (!P.has(x)) P.set(x, x); };
+  const uni = (a, b) => { a = find(a); b = find(b); if (a !== b) P.set(a, b); };
+  const units = {};
+  const line = (r, c) => {
+    const prod = normName(r[c.SKU_NAME]), u = normName(r[c.TRD_UTQNAME]), f = unitFactor(u);
+    (units[prod] = units[prod] || {})[f] = u;
+    return { prod, ea: (num(r[c.TRD_QTY]) + num(r[c.TRD_Q_FREE])) * f };
+  };
+  const ds = [];
+  dsTab.slice(1).forEach(r => {
+    const refs = [...new Set(String(r[cd.DI_REMARK]).match(/(?:BK|BV)\d+\/\d+/g) || [])];
+    if (!refs.length) return;                       // บิลไม่มีเลขใบจอง (ขายหน้าร้าน/พิมพ์ข้อความเอง) — ไม่มีอะไรให้เทียบ
+    refs.forEach(add); refs.slice(1).forEach(x => uni(refs[0], x));
+    ds.push({ r, refs, date: toIso(r[cd.DI_DATE]), ref: normName(r[cd.DI_REF]) });
+  });
+  const bkHave = new Set();
+  const G = new Map();
+  const grp = k => { if (!G.has(k)) G.set(k, { bk: new Map(), ds: new Map(), dates: new Map(), missing: false, cus: '', name: '', sale: '', wh: '' }); return G.get(k); };
+  const put = (m, l) => m.set(l.prod, (m.get(l.prod) || 0) + l.ea);
+  bkTab.slice(1).forEach(r => {
+    const ref = normName(r[cb.DI_REF]); if (!P.has(ref)) return;
+    bkHave.add(ref);
+    const g = grp(find(ref)); put(g.bk, line(r, cb));
+    g.cus = g.cus || normName(r[cb.AR_CODE]); g.name = g.name || normName(r[cb.AR_NAME]);
+    g.sale = g.sale || normName(r[cb.SLMN_NAME]); g.wh = g.wh || normName(r[cb.WL_CODE]);
+  });
+  ds.forEach(d => {
+    const g = grp(find(d.refs[0])); put(g.ds, line(d.r, cd));
+    (g.dates.get(d.date) || g.dates.set(d.date, new Set()).get(d.date)).add(d.ref);
+    if (d.refs.some(x => !bkHave.has(x))) g.missing = true;
+    g.cus = g.cus || normName(d.r[cd.AR_CODE]); g.name = g.name || normName(d.r[cd.AR_NAME]);
+    g.sale = g.sale || normName(d.r[cd.SLMN_NAME]); g.wh = g.wh || normName(d.r[cd.WL_CODE]);
+  });
+  const rows = []; let skipped = 0;
+  G.forEach(g => {
+    if (!g.dates.size) return;
+    if (g.missing || !g.bk.size) { skipped++; return; }   // ใบจองเก่ากว่าที่ไฟล์เก็บไว้ — เทียบไม่ได้ ไม่เดา
+    const prods = new Set([...g.bk.keys(), ...g.ds.keys()]);
+    const multi = g.dates.size > 1;
+    g.dates.forEach((refs, date) => prods.forEach(prod => {
+      const diff = (g.ds.get(prod) || 0) - (g.bk.get(prod) || 0);
+      if (diff) rows.push({ date, ds: [...refs].join(', '), wh: g.wh, sale: g.sale, cusId: g.cus, cusName: g.name, prod, diff, multi });
+    }));
+  });
+  S.units = units;
+  return { rows, info: { groups: G.size, skipped } };
+}
+
+// ไฟล์ Excel ในโฟลเดอร์ Order scanner — หลังบ้านส่งไฟล์มา แอปแกะเองด้วย SheetJS
 let _xlsxLib = null;
 function loadSheetJS() {
   if (window.XLSX) return Promise.resolve();
@@ -638,15 +708,15 @@ async function loadFromXlsx(auto) {
   if (auto) $('srcInfo').innerHTML = '⏳ กำลังดึงข้อมูลจาก Excel ต้นฉบับ…';
   else showSpinner('กำลังดึงไฟล์ Excel ต้นฉบับ...');
   try {
-    const [x] = await Promise.all([gas('xlsx'), loadSheetJS(), loadPddt(), S.uidLoaded ? null : loadUidDirect()]);
-    const wb = XLSX.read(x.b64, { type: 'base64' });
-    const name = wb.SheetNames.find(n => {
-      const r = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, range: 0 })[0] || [];
-      return r.map(c => String(c).toUpperCase().trim()).includes('CUSTOMER_ID');
-    });
-    if (!name) throw new Error('ไม่พบแท็บที่มีคอลัมน์ CUSTOMER_ID ในไฟล์ ' + x.name);
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: true, defval: '' }).map(r => r.map(c => String(c)));
-    useRows(normalizeRows(rows), `${x.name} · ไฟล์อัปเดต ${thDateTime(x.updated)}`);
+    const [x] = await Promise.all([gas('xlsx', { file: ORDER_FILE }), loadSheetJS(), S.uidLoaded ? null : loadUidDirect()]);
+    const wb = XLSX.read(x.b64, { type: 'base64', sheets: ['BVBK', 'DSDC'] });
+    const tab = n => {
+      if (!wb.Sheets[n]) throw new Error(`ไม่พบแท็บ ${n} ในไฟล์ ${x.name}`);
+      return XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' }).map(r => r.map(c => String(c)));
+    };
+    const r = computeFromOrder(tab('BVBK'), tab('DSDC'));
+    S.cmpInfo = r.info;
+    useRows(r.rows, `${x.name} · ไฟล์อัปเดต ${thDateTime(x.updated)}`);
   } catch (e) {
     $('srcInfo').innerHTML = `<span class="badge b-danger">✕ ดึง Excel ไม่ได้: ${esc(e.message)}</span> — กด 🔄 ดึงใหม่`;
     showToast(e.message, 'error');
@@ -670,7 +740,8 @@ function buildStores() {
   const by = new Map();
   rows.forEach(r => {
     let s = by.get(r.cusId);
-    if (!s) { s = { cusId: r.cusId, cusName: r.cusName, wh: new Set(), bills: new Set(), sale: new Set(), prods: new Map() }; by.set(r.cusId, s); }
+    if (!s) { s = { cusId: r.cusId, cusName: r.cusName, wh: new Set(), bills: new Set(), sale: new Set(), prods: new Map(), multi: false }; by.set(r.cusId, s); }
+    if (r.multi) s.multi = true;
     if (r.wh) s.wh.add(r.wh); if (r.ds) s.bills.add(r.ds); if (r.sale) s.sale.add(r.sale);
     s.prods.set(r.prod, (s.prods.get(r.prod) || 0) + r.diff);
   });
@@ -688,7 +759,7 @@ function buildStores() {
     const add = lines.filter(l => l.type === 'add').map(l => `🟢${l.prod} ${l.qty}`).join('\n');
     out.push({
       cusId: s.cusId, cusName: s.cusName, wh: [...s.wh].join(','), bills: [...s.bills].join(', '),
-      sale: [...s.sale].join(', '), lines, short: short || '-', add: add || '-',
+      sale: [...s.sale].join(', '), lines, short: short || '-', add: add || '-', multi: s.multi,
       uidN: S.uid[s.cusId] || 0, nShort: lines.filter(l => l.type === 'short').length, nAdd: lines.filter(l => l.type === 'add').length,
     });
   });
@@ -710,7 +781,7 @@ function renderPrep() {
   if (!S.raw.length) return;
   $('prepFilters').style.display = ''; $('prepStats').style.display = ''; $('prepListHead').classList.remove('hidden');
   const dates = {}; S.raw.forEach(r => { dates[r.date] = dates[r.date] || new Set(); dates[r.date].add(r.cusId); });
-  $('srcInfo').innerHTML = `ที่มา: <b>${esc(S.srcLabel)}</b> · ${S.raw.length.toLocaleString()} แถว · หน่วยสินค้า PDDT ${S.pddt ? Object.keys(S.pddt).length.toLocaleString() : 0} รายการ · UID ${Object.keys(S.uid).length.toLocaleString()} ร้าน`;
+  $('srcInfo').innerHTML = `ที่มา: <b>${esc(S.srcLabel)}</b> · ${S.raw.length.toLocaleString()} แถว · เทียบใบจอง↔บิล ${S.cmpInfo ? S.cmpInfo.groups.toLocaleString() : 0} กลุ่ม${S.cmpInfo && S.cmpInfo.skipped ? ` (ข้าม ${S.cmpInfo.skipped} กลุ่ม — ใบจองเก่าเกินไฟล์)` : ''} · UID ${Object.keys(S.uid).length.toLocaleString()} ร้าน`;
   $('dateChips').innerHTML = Object.keys(dates).sort().reverse().map(d =>
     `<button class="chip ${d === S.date ? 'on' : ''}" onclick="S.date='${d}';S.sel=null;renderPrep()">${thDateShort(d)}<small>${dates[d].size} ร้าน</small></button>`).join('');
   const whs = [...new Set(S.raw.filter(r => r.date === S.date).map(r => r.wh).filter(Boolean))].sort();
@@ -719,7 +790,7 @@ function renderPrep() {
   $('showChips').innerHTML = shows.map(([k, l]) => `<button class="chip ${S.show === k ? 'on' : ''}" onclick="S.show='${k}';renderPrep()">${l}</button>`).join('');
 
   S.stores = buildStores();
-  if (!S.sel) S.sel = new Set(S.stores.filter(s => s.uidN && !(queueOf(s.cusId) && queueOf(s.cusId).status === ST.SENT)).map(s => s.cusId));
+  if (!S.sel) S.sel = new Set(S.stores.filter(s => s.uidN && !s.multi && !(queueOf(s.cusId) && queueOf(s.cusId).status === ST.SENT)).map(s => s.cusId));
   const all = S.stores;
   const withUid = all.filter(s => s.uidN).length;
   $('prepStats').innerHTML = `
@@ -753,6 +824,7 @@ function storeCard(s) {
         <div class="st-badges">
           ${s.uidN ? `<span class="badge b-line">🟢 UID ${s.uidN > 1 ? s.uidN + ' บัญชี' : ''}</span>` : '<span class="badge b-warn">⚠ ไม่มี UID</span>'}
           ${s.nShort ? `<span class="badge b-danger">ขาด ${s.nShort}</span>` : ''}${s.nAdd ? `<span class="badge b-ok">เพิ่ม ${s.nAdd}</span>` : ''}
+          ${s.multi ? '<span class="badge b-warn" title="ใบจองนี้เปิดบิลหลายวัน — ใบจองอาจถูกแก้หลังเปิดบิลไปบางส่วน ตัวเลขอาจไม่ตรง">⚠ บิลหลายวัน ตรวจก่อนส่ง</span>' : ''}
           ${q ? stBadge(q.status) : ''}
         </div>
       </div>
@@ -770,7 +842,7 @@ function toggleSel(id, ev) {
   updateSaveBar();
 }
 function selectAll(v) { S.sel = new Set(v ? S.stores.map(s => s.cusId) : []); renderPrep(); }
-function selectUidOnly() { S.sel = new Set(S.stores.filter(s => s.uidN).map(s => s.cusId)); renderPrep(); }
+function selectUidOnly() { S.sel = new Set(S.stores.filter(s => s.uidN && !s.multi).map(s => s.cusId)); renderPrep(); }
 function updateSaveBar() {
   const sel = S.stores.filter(s => S.sel.has(s.cusId));
   $('sbN').textContent = sel.length;
