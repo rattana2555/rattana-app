@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana Design Hub v7.39</title>
+<title>Rattana Design Hub v7.40</title>
 <meta name="description" content="Rattana Design Hub — ออกแบบป้ายราคา โปรโมชั่น Flash Sale และแคตตาล็อก จาก Google Sheet พิมพ์ PDF/PNG/JPEG">
 <meta name="theme-color" content="#132248">
 <meta name="apple-mobile-web-app-title" content="Rattana Design Hub">
@@ -2438,7 +2438,7 @@ body.dark #appUpdate{background:#131c33;color:#e8eaf0}
   <header>
     <button class="icon-btn hamburger-btn" onclick="toggleDrawer(true)" title="เมนูฟีเจอร์" aria-label="เมนู">☰</button>
     <img class="logo-img" src="rattana-hub-icon-512.png?v=2" alt="Rattana Design Hub" width="44" height="44" style="object-fit:cover">
-    <div class="logo-text">RATTANA <span style="color:var(--gold)">DESIGN HUB</span><small>ออกแบบป้าย · โปรโมชั่น · แคตตาล็อก v7.39</small></div>
+    <div class="logo-text">RATTANA <span style="color:var(--gold)">DESIGN HUB</span><small>ออกแบบป้าย · โปรโมชั่น · แคตตาล็อก v7.40</small></div>
     <button class="icon-btn" id="btnInstallApp" onclick="installApp()" title="ติดตั้งแอปลงเครื่อง" style="display:none;background:var(--gold);color:#0d1b3e">📥</button>
     <button class="icon-btn" id="btnRefresh" onclick="refreshData()" title="โหลดข้อมูลใหม่">⟳</button>
     <button class="icon-btn" onclick="toggleDark()" title="โหมดมืด">🌙</button>
@@ -8244,9 +8244,9 @@ function aipTplDigits(x, v, cx, base, fs, align, P, wt){
 function aipTplDigitsW(x, v, fs, wt){ wt = wt || 900; x.font = `${wt} ${fs}px ${AIP_TPL_FNUM}`; const a = x.measureText(fmtThaiBaht(v)).width; x.font = `${wt} ${Math.round(fs * 0.55)}px ${AIP_TPL_FNUM}`; return a + x.measureText('฿').width + fs * 0.03; }
 function aipTplQty(t, uname, last){ return `${t.q} ${uname}${last ? 'ขึ้นไป' : ''}`; }
 /** a ragged red brush stroke (deterministic per seed) behind the price */
-function aipTplTilesBox(k, cx, top, bot, maxW){
+function aipTplTilesBox(k, cx, top, bot, maxW, refH){
   const gap = 20, tw = Math.min(k === 1 ? 320 : 290, (maxW - gap * (k - 1)) / k), total = tw * k + gap * (k - 1);
-  return { x: cx - total / 2, y: top, w: total, h: bot - top, tw, gap };
+  return { x: cx - total / 2, y: top, w: total, h: bot - top, tw, gap, refH: refH || (bot - top) };
 }
 /** reference-style tiles: thick yellow frame, navy band with a yellow quantity pill, red brush + sticker price, "คุ้มสุด" bubble */
 /** a small two-tone leaf (cream style corners) */
@@ -8260,7 +8260,7 @@ function aipTplLeaf(x, cx, cy, len, ang, col){
 }
 /** price tiles: frame → band with the quantity → body with the price; colours from the chosen style */
 function aipTplTiles(x, tiers, uname, B, S){
-  const k = tiers.length, th = B.h, bw = S.tab ? 7 : 6, band = Math.round(Math.min(56, th * 0.27));
+  const k = tiers.length, th = B.h, bw = S.tab ? 7 : 6, rh = B.refH || th, band = Math.round(Math.min(56, rh * 0.27));
   let X = B.x;
   tiers.forEach((t, i) => {
     const last = k > 1 && i === k - 1, tw = B.tw, top = B.y;
@@ -8269,7 +8269,7 @@ function aipTplTiles(x, tiers, uname, B, S){
     x.save(); aipTplRR(x, X + bw, top + bw, tw - bw * 2, th - bw * 2, 14); x.clip();
     x.fillStyle = aipTplFill(x, S.body, top + band, top + th); x.fillRect(X, top, tw, th);
     if (S.band) { x.fillStyle = aipTplFill(x, S.band, top, top + band + bw); x.fillRect(X, top, tw, band + bw); }
-    if (S.leaves) { aipTplLeaf(x, X + bw + 4, top + th - bw - 6, 30, -0.75, S.leaves); aipTplLeaf(x, X + tw - bw - 4, top + th - bw - 6, 30, Math.PI + 0.75, S.leaves); }
+    if (S.leaves) { aipTplLeaf(x, X + bw + 3, top + th - bw - 5, 24, -0.4, S.leaves); aipTplLeaf(x, X + tw - bw - 3, top + th - bw - 5, 24, Math.PI + 0.4, S.leaves); }
     if (S.rule) { x.fillStyle = S.rule; x.fillRect(X + tw * 0.3, top + band + bw - 2, tw * 0.4, 3); }
     x.restore();
     if (S.frameIn) { aipTplRR(x, X + bw + 1, top + bw + 1, tw - bw * 2 - 2, th - bw * 2 - 2, 13); x.lineWidth = 1.5; x.strokeStyle = S.frameIn; x.stroke(); }
@@ -8291,7 +8291,8 @@ function aipTplTiles(x, tiers, uname, B, S){
     }
     // price
     const bodyTop = top + band + bw - (S.tab ? 4 : 0), bodyH = th - band - bw * 2 + (S.tab ? 4 : 0);
-    let pf = Math.round(bodyH * (S.tab ? 0.76 : 0.74));
+    const bodyRef = rh - band - bw * 2 + (S.tab ? 4 : 0);   // v7.40 — digit size from the reference height, capped by the real body
+    let pf = Math.min(Math.round(bodyRef * (S.tab ? 0.76 : 0.74)), Math.round(bodyH * 0.92));
     while (pf > 16 && aipTplDigitsW(x, t.p, pf) > tw * (S.leaves ? 0.76 : 0.84)) pf -= 1;
     aipTplDigits(x, t.p, X + tw / 2, bodyTop + bodyH * (S.tab ? 0.50 : 0.52) + pf * 0.36, pf, 'center', S.num);
     if (last) {   // speech bubble on the cheapest step
@@ -8363,7 +8364,7 @@ function aipTplPaint(c, g){
   const x0 = Z.x + (Z.w - (cw * n + gap * (n - 1))) / 2;
   const priceTop = tpl.floor + 12, priceBot = Z.y + Z.h - 2;
   // names — same font size + same top line in every column, so the row stays level (symmetry)
-  const nameFs = [0, 46, 34, 29, 25, 22][n] || 22;
+  const nameFs = [0, 42, 34, 29, 25, 22][n] || 22;
   const blocks = rows.map(r => aipTplFitLines(x, r.name, cw - 12, nameFs, Math.round(nameFs * 0.62), 2, 800));
   const fsAll = Math.min(...blocks.map(b => b.fs));
   const fitted = rows.map(r => aipTplFitLines(x, r.name, cw - 12, fsAll, fsAll, 2, 800));
@@ -8378,7 +8379,7 @@ function aipTplPaint(c, g){
   const lh = Math.round(fsAll * 1.34), maxLines = Math.max(...fitted.map(b => b.lines.length));
   const hasLbl = rows.some(r => r.label), lf = Math.round(fsAll * 0.66), lblH = lf + 18;
   const nameTop = Z.y + 4, nameH = maxLines * lh + (hasLbl ? lblH + 10 : 0);
-  const imgTop = nameTop + nameH + (n === 1 ? 8 : 14), imgBot = n === 1 ? tpl.floor - 6 : tpl.floor;   // one product: stands right on the tall price tiles
+  const imgTop = nameTop + nameH + (n === 1 ? 4 : 14), imgBot = n === 1 ? tpl.floor + 48 : tpl.floor;   // one product: stands right on the price tiles (v7.40 — tiles are shorter → bigger photo)
   rows.forEach((r, i) => {
     const cx = x0 + i * (cw + gap) + cw / 2;
     // product name — deep navy on a soft white glow
@@ -8403,7 +8404,7 @@ function aipTplPaint(c, g){
       });
     }
     // product photo standing on the table (soft contact shadow); an uncut photo sits on a clean white card
-    const ph = photos[i], boxW = cw * (n === 1 ? 0.62 : 0.9), boxH = Math.max(60, imgBot - imgTop);
+    const ph = photos[i], boxW = cw * (n === 1 ? 0.78 : 0.9), boxH = Math.max(60, imgBot - imgTop);
     if (ph) {
       const card = !ph.cut, padC = card ? 14 : 0;
       const s0 = Math.min((boxW - padC * 2) / ph.width, (boxH - padC * 2) / ph.height), w = ph.width * s0, h = ph.height * s0;
@@ -8434,7 +8435,7 @@ function aipTplPaint(c, g){
         x.font = `600 28px ${AIP_TPL_FTH}`; x.textAlign = 'center'; x.fillStyle = '#fff'; x.fillText('สอบถามราคา', cx, B.y + B.h / 2 + 10);
       });
     } else if (cw >= 520 || (cw >= 440 && tiers.length <= 2)) {
-      const B = n === 1 ? aipTplTilesBox(tiers.length, cx, tpl.floor - 18, Z.y + Z.h + 16, cw) : aipTplTilesBox(tiers.length, cx, priceTop + 4, priceBot, cw);
+      const B = n === 1 ? aipTplTilesBox(tiers.length, cx, tpl.floor + 12, Z.y + Z.h + 16, cw, 186) : aipTplTilesBox(tiers.length, cx, priceTop + 4, priceBot, cw);
       el('$' + i, { x: B.x, y: B.y, w: B.w, h: B.h }, false, () => aipTplTiles(x, tiers, r.uname, B, aipTplPS()));
     } else {
       const B = { x: cx - cw / 2, y: priceTop, w: cw, h: priceBot - priceTop };
