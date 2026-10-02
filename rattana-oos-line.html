@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana แจ้งสินค้าขาด v1.3</title>
+<title>Rattana แจ้งสินค้าขาด v1.4</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -175,7 +175,7 @@ body.dark .chip.on{background:var(--gold);color:var(--navy);border-color:var(--g
   <div class="login-box">
     <img src="roo-logo.png" alt="Rattana" onerror="this.style.display='none'">
     <h1>Rattana <span style="color:var(--gold)">แจ้งสินค้าขาด</span></h1>
-    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.3</p>
+    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.4</p>
     <div id="g_id_onload" data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
     <div style="display:flex;justify-content:center"><div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div></div>
     <div class="login-err" id="loginErr"></div>
@@ -188,7 +188,7 @@ body.dark .chip.on{background:var(--gold);color:var(--navy);border-color:var(--g
   <img src="roo-logo.png" alt="" onerror="this.style.display='none'">
   <div>
     <div class="logo-text">Rattana <span>แจ้งสินค้าขาด</span></div>
-    <div class="logo-sub">v1.3 · ส่ง LINE ถึงร้านตาม User ID</div>
+    <div class="logo-sub">v1.4 · ส่ง LINE ถึงร้านตาม User ID</div>
   </div>
   <div class="hdr-right">
     <span class="user-chip" id="userChip"></span>
@@ -364,7 +364,7 @@ body.dark .chip.on{background:var(--gold);color:var(--navy);border-color:var(--g
 </div>
 
 <script>
-const APP_VERSION = '1.3';
+const APP_VERSION = '1.4';
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -510,12 +510,18 @@ async function saveCfg() {
   const url = $('cfgUrl').value.trim(), key = $('cfgKey').value.replace(/[\s​-‍﻿]/g, '');
   if (!key) { $('cfgInfo').innerHTML = '<span class="badge b-danger">✕ ยังไม่ได้ใส่รหัสแอป</span>'; return; }
   _cfgMem = { url, key };
-  const stored = lsSet(LS_CFG, _cfgMem) && (lsGet(LS_CFG) || {}).key === key;
+  // เก็บ 2 ทาง: localStorage (อาจเต็ม — แอปอื่นบนโดเมนเดียวกันใช้พื้นที่ร่วม) + IndexedDB (พื้นที่ใหญ่กว่า)
+  let lsErr = '';
+  try { localStorage.setItem(LS_CFG, JSON.stringify(_cfgMem)); if ((lsGet(LS_CFG) || {}).key !== key) lsErr = 'อ่านกลับไม่ตรง'; }
+  catch (e) { lsErr = e && e.name || 'error'; }
+  await idbSet(LS_CFG, _cfgMem);
+  const idbOk = ((await idbGet(LS_CFG)) || {}).key === key;
+  const stored = !lsErr || idbOk;
   $('cfgInfo').innerHTML = 'กำลังทดสอบ...';
   try {
     const st = await gas('state');
     $('cfgInfo').innerHTML = `<span class="badge b-ok">✓ เชื่อมต่อได้</span> หลังบ้าน v${esc(st.v)} · UID ${Object.keys(st.uidCount || {}).length} ร้าน · คิว ${st.queue.length} รายการ`
-      + (stored ? '' : '<br><span class="badge b-warn">⚠ เบราว์เซอร์นี้จำค่าไม่ได้ — ต้องใส่รหัสใหม่ทุกครั้งที่เปิดแอป</span>');
+      + (stored ? '' : `<br><span class="badge b-warn">⚠ เบราว์เซอร์นี้จำค่าไม่ได้ (${esc(lsErr)}) — ต้องใส่รหัสใหม่ทุกครั้งที่เปิดแอป</span>`);
     applyState(st);
   } catch (e) { $('cfgInfo').innerHTML = `<span class="badge b-danger">✕ ${esc(e.message)}</span>`; }
 }
@@ -943,9 +949,10 @@ async function refreshAll() {
   try { await loadState(); if (S.raw.length && S.srcLabel.startsWith('ชีท')) await loadFromSource(); else if (S.raw.length) renderPrep(); }
   finally { hideSpinner(); b.disabled = false; }
 }
-function initApp() {
-  try { localStorage.removeItem(LS_PDDT); } catch { }   // แคช PDDT รุ่นเก่า (≤v1.3) ที่ทำ localStorage เต็ม
+async function initApp() {
+  try { localStorage.removeItem(LS_PDDT); } catch { }   // แคช PDDT รุ่นเก่า (≤v1.2) ที่ทำ localStorage เต็ม
   if (lsGet('oos_dark')) document.body.classList.add('dark');
+  if (!(lsGet(LS_CFG) || {}).key) _cfgMem = (await idbGet(LS_CFG)) || null;   // localStorage เก็บไม่ได้ → ใช้ค่าจาก IndexedDB
   const c = cfg(); $('cfgUrl').value = c.url || ''; $('cfgKey').value = c.key || '';
   $('testUid').value = lsGet('oos_test_uid') || '';
   renderQueue(); renderSched();
