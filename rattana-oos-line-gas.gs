@@ -1,5 +1,5 @@
 /**
- * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.2
+ * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.3
  * อยู่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
  *
  * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.2';
+var OOS_VERSION = '1.3';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -50,6 +50,7 @@ function oosHandle_(b) {
     case 'sendNow': return oosSendPending_({ ids: b.ids || null, round: 'กดส่งเอง' + (b.by ? ' (' + b.by + ')' : '') });
     case 'setSchedule': return oosSetSchedule_(b);
     case 'testSend': return oosTestSend_(b);
+    case 'xlsx': return oosXlsx_();
     default: throw new Error('ไม่รู้จักคำสั่ง ' + b.action);
   }
 }
@@ -65,6 +66,8 @@ function oosSetup() {
   Logger.log('รหัสแอป (ใส่ในหน้า ⚙️ ของแอป) = ' + p.getProperty('OOS_KEY'));
   var sh = oosQueueSheet_();
   Logger.log('ชีทคิว = ' + sh.getParent().getUrl());
+  var x = oosXlsxFile_();   // ขอสิทธิ์ Drive ไปด้วย
+  Logger.log('ไฟล์ต้นฉบับ = ' + x.getName() + ' (แก้ล่าสุด ' + x.getLastUpdated() + ')');
   oosInstallTrigger_();
   Logger.log('เวลาส่ง = ' + p.getProperty('OOS_TIMES') + ' · เปิดอยู่ = ' + p.getProperty('OOS_ENABLED') + ' · ติดตั้งตัวตั้งเวลาแล้ว');
 }
@@ -372,6 +375,30 @@ function oosTestSend_(b) {
   });
   if (!r.ok) throw new Error(r.error);
   return { sent: 1 };
+}
+
+/* ───────────── ไฟล์ Excel ต้นฉบับ (Power Query จาก SQL) ───────────── */
+var OOS_XLSX_FOLDER = '1CFKu6FnpGxa35bYf6s-hUbK_apTmeunp';   // โฟลเดอร์ "Order scanner"
+var OOS_XLSX_NAME = 'สินค้าขาด ส่งไลน์.xlsx';
+
+function oosXlsxFile_() {
+  var it = DriveApp.getFolderById(OOS_XLSX_FOLDER).getFilesByName(OOS_XLSX_NAME), best = null;
+  while (it.hasNext()) {
+    var f = it.next();
+    if (!best || f.getLastUpdated() > best.getLastUpdated()) best = f;
+  }
+  if (!best) throw new Error('ไม่พบไฟล์ ' + OOS_XLSX_NAME + ' ในโฟลเดอร์ Order scanner');
+  return best;
+}
+
+/** ส่งไฟล์ .xlsx ทั้งไฟล์ (base64) ให้แอปแกะเองด้วย SheetJS */
+function oosXlsx_() {
+  var f = oosXlsxFile_();
+  return {
+    name: f.getName(),
+    updated: Utilities.formatDate(f.getLastUpdated(), OOS_TZ, 'yyyy-MM-dd HH:mm:ss'),
+    b64: Utilities.base64Encode(f.getBlob().getBytes())
+  };
 }
 
 /* ───────────── Flex (แบบ A กรมท่า-ทอง · v1.2) ───────────── */
