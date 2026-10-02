@@ -1,5 +1,5 @@
 /**
- * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.1
+ * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.2
  * อยู่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
  *
  * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.1';
+var OOS_VERSION = '1.2';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -339,7 +339,7 @@ function oosThaiDate_(iso) {
 }
 
 function oosPush_(uid, o) {
-  var msg = { type: 'flex', altText: ('แจ้งรายละเอียดสินค้า ร้าน ' + o.cusName).slice(0, 380), contents: oosFlex_(o) };
+  var msg = { type: 'flex', altText: ('แจ้งสินค้าขาด/ส่งแทน · ร้าน ' + o.cusName).slice(0, 380), contents: oosFlex_(o) };
   var payload = { to: uid, messages: [msg] };
   try {
     var res = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
@@ -374,64 +374,111 @@ function oosTestSend_(b) {
   return { sent: 1 };
 }
 
-/* ───────────── Flex ───────────── */
-function oosCut_(s, n) {
-  s = String(s || '-').trim() || '-';
-  if (s.length <= n) return s;
-  var lines = s.split('\n'), out = [], len = 0;
-  for (var i = 0; i < lines.length; i++) {
-    if (len + lines[i].length + 1 > n) { out.push('…และอีก ' + (lines.length - i) + ' รายการ'); break; }
-    out.push(lines[i]); len += lines[i].length + 1;
-  }
-  return out.join('\n');
+/* ───────────── Flex (แบบ A กรมท่า-ทอง · v1.2) ───────────── */
+var OOS_NAVY = '#0d1b3e', OOS_GOLD = '#c9a84c', OOS_RED = '#c0392b', OOS_GREEN = '#1e8449', OOS_MAX_ROWS = 40;
+var OOS_TH_MON = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+
+/** "2026-10-01" → "1 ต.ค. 2569" */
+function oosThaiDateLong_(iso) {
+  var a = String(iso).split('-');
+  return a.length === 3 ? (+a[2]) + ' ' + OOS_TH_MON[(+a[1]) - 1] + ' ' + ((+a[0]) + 543) : String(iso);
 }
 
-function oosInfoRow_(label, value) {
+/** "🔴แม่ประนอม 980ก. 2 ลังx12(CS) 3 ชิ้นx1(EA)" → { name, qty:'2 ลัง 3 ชิ้น', sub:'x12' } */
+function oosParseLine_(line) {
+  var s = String(line).replace(/^[\s\u{1F534}\u{1F7E2}\u2B55\uFE0F]+/u, '').trim();
+  var re = /(\d+)\s+([^\s\d]+?)x(\d+)\((\w+)\)/g, m, parts = [], first = -1;
+  while ((m = re.exec(s))) { if (first < 0) first = m.index; parts.push(m); }
+  if (!parts.length) return { name: s, qty: '', sub: '' };
   return {
-    type: 'box', layout: 'horizontal', spacing: 'sm', contents: [
-      { type: 'text', text: label, size: 'xs', color: '#8a8a8a', flex: 2 },
-      { type: 'text', text: String(value || '-'), size: 'xs', color: '#333333', flex: 5, wrap: true }
-    ]
+    name: s.slice(0, first).trim() || s,
+    qty: parts.map(function (p) { return p[1] + ' ' + p[2]; }).join(' '),
+    sub: parts.filter(function (p) { return +p[3] > 1; }).map(function (p) { return 'x' + p[3]; }).join(' ')
   };
 }
 
+function oosLines_(txt) {
+  var t = String(txt || '').trim();
+  if (!t || t === '-') return [];
+  return t.split('\n').map(function (l) { return l.trim(); }).filter(Boolean).map(oosParseLine_);
+}
+
+function oosSection_(label, color, items, maxRows) {
+  var out = [{
+    type: 'box', layout: 'horizontal', margin: 'xl', spacing: 'md', alignItems: 'center', contents: [
+      {
+        type: 'box', layout: 'vertical', flex: 0, backgroundColor: color, cornerRadius: '14px',
+        paddingStart: '12px', paddingEnd: '12px', paddingTop: '3px', paddingBottom: '3px',
+        contents: [{ type: 'text', text: label, color: '#ffffff', size: 'sm', weight: 'bold' }]
+      },
+      { type: 'text', text: items.length + ' รายการ', size: 'xs', color: '#8a8a8a', flex: 1 }
+    ]
+  }];
+  var shown = items.slice(0, maxRows);
+  shown.forEach(function (it, i) {
+    if (i) out.push({ type: 'separator', margin: 'md', color: '#eef0f4' });
+    var right = [{ type: 'text', text: it.qty || '-', size: 'md', weight: 'bold', color: color === OOS_GREEN ? OOS_GREEN : OOS_RED, align: 'end' }];
+    if (it.sub) right.push({ type: 'text', text: it.sub, size: 'xxs', color: '#9a9a9a', align: 'end' });
+    out.push({
+      type: 'box', layout: 'horizontal', margin: 'md', spacing: 'md', alignItems: 'center', contents: [
+        { type: 'text', text: it.name, size: 'sm', color: '#222222', wrap: true, flex: 1 },
+        { type: 'box', layout: 'vertical', flex: 0, contents: right }
+      ]
+    });
+  });
+  if (items.length > shown.length) {
+    out.push({ type: 'text', text: '…และอีก ' + (items.length - shown.length) + ' รายการ', size: 'xs', color: '#8a8a8a', margin: 'md' });
+  }
+  return out;
+}
+
+/** LINE จำกัด JSON ของ bubble ~30KB → ลดจำนวนแถวที่โชว์ลงจนกว่าจะพอดี */
 function oosFlex_(o) {
-  var hasAdd = o.add && String(o.add).trim() && String(o.add).trim() !== '-';
-  var hasShort = o.short && String(o.short).trim() && String(o.short).trim() !== '-';
+  for (var n = OOS_MAX_ROWS; n > 5; n -= 5) {
+    var f = oosFlexBuild_(o, n);
+    if (Utilities.newBlob(JSON.stringify(f)).getBytes().length < 28000) return f;
+  }
+  return oosFlexBuild_(o, 5);
+}
+
+function oosFlexBuild_(o, maxRows) {
+  var shortItems = oosLines_(o.short), addItems = oosLines_(o.add);
   var body = [
-    { type: 'text', text: 'แจ้งรายละเอียดสินค้าเพิ่มเติม', weight: 'bold', size: 'lg', color: '#DC143C', wrap: true },
-    {
-      type: 'box', layout: 'horizontal', margin: 'md', contents: [
-        { type: 'text', text: 'ร้าน :', size: 'md', flex: 0, weight: 'bold', color: '#000080' },
-        { type: 'text', text: String(o.cusName || '-'), size: 'md', weight: 'bold', color: '#000080', margin: 'sm', wrap: true }
-      ]
-    },
-    {
-      type: 'box', layout: 'vertical', margin: 'md', spacing: 'xs', contents: [
-        oosInfoRow_('รหัสร้าน', o.cusId),
-        oosInfoRow_('วันที่', oosThaiDate_(o.date)),
-        oosInfoRow_('เลขบิล', String(o.bills || '-').split(/\s*,\s*/).join('\n')),
-        oosInfoRow_('เซลล์ผู้ดูแล', o.sale)
-      ]
-    },
-    { type: 'separator', margin: 'lg' }
+    { type: 'text', text: String(o.cusName || '-'), size: 'lg', weight: 'bold', color: OOS_NAVY, wrap: true },
+    { type: 'text', text: 'รหัสร้าน ' + (o.cusId || '-'), size: 'xs', color: '#8a8a8a' }
   ];
-  if (hasShort) {
-    body.push({ type: 'text', text: 'รายการสินค้าขาด', size: 'md', weight: 'bold', margin: 'lg', color: '#c0392b' });
-    body.push({ type: 'text', text: oosCut_(o.short, 1800), size: 'sm', color: '#555555', wrap: true, margin: 'sm' });
+  if (o.sale && String(o.sale).trim() && String(o.sale).trim() !== '-') {
+    body.push({
+      type: 'box', layout: 'horizontal', margin: 'md', backgroundColor: '#f5f7fb', cornerRadius: '10px',
+      paddingAll: '10px', spacing: 'md', contents: [
+        { type: 'text', text: 'เซลล์', size: 'xs', color: '#8a8a8a', flex: 0 },
+        { type: 'text', text: String(o.sale).replace(/\s*\(ROO\)\s*$/, ''), size: 'xs', color: '#222222', weight: 'bold', wrap: true, flex: 1 }
+      ]
+    });
   }
-  if (hasAdd) {
-    body.push({ type: 'text', text: 'รายการสินค้าทดแทน/เพิ่มเติม', size: 'md', weight: 'bold', margin: 'lg', color: '#1e8449' });
-    body.push({ type: 'text', text: oosCut_(o.add, 1800), size: 'sm', color: '#555555', wrap: true, margin: 'sm' });
-  }
+  if (shortItems.length) body = body.concat(oosSection_('สินค้าขาด', '#e74c3c', shortItems, maxRows));
+  if (addItems.length) body = body.concat(oosSection_('ส่งแทน / เพิ่ม', OOS_GREEN, addItems, maxRows));
   return {
-    type: 'bubble',
-    body: { type: 'box', layout: 'vertical', contents: body },
-    footer: {
-      type: 'box', layout: 'vertical', contents: [
-        { type: 'text', text: 'Rattana_Official', color: '#BBBBBB', align: 'center', size: 'xs' }
+    type: 'bubble', size: 'giga',
+    header: {
+      type: 'box', layout: 'vertical', paddingAll: '0px', contents: [
+        {
+          type: 'box', layout: 'vertical', backgroundColor: OOS_NAVY, paddingAll: '16px', paddingStart: '18px', contents: [
+            { type: 'text', text: 'RATTANA · แจ้งรายละเอียดสินค้า', size: 'xs', color: OOS_GOLD, weight: 'bold' },
+            { type: 'text', text: 'สินค้าขาด / ส่งแทน', size: 'xl', color: '#ffffff', weight: 'bold', margin: 'xs' },
+            { type: 'text', text: 'วันที่ ' + oosThaiDateLong_(o.date), size: 'xs', color: '#c3c9d6', margin: 'xs' }
+          ]
+        },
+        { type: 'box', layout: 'vertical', height: '4px', backgroundColor: OOS_GOLD, contents: [] }
       ]
     },
-    styles: { footer: { separator: true } }
+    body: { type: 'box', layout: 'vertical', paddingStart: '18px', paddingEnd: '18px', contents: body },
+    footer: {
+      type: 'box', layout: 'vertical', paddingStart: '18px', paddingEnd: '18px', contents: [
+        { type: 'text', text: 'ขออภัยในความไม่สะดวก 🙏', size: 'xs', color: '#6b7896' },
+        { type: 'text', text: 'สอบถามเพิ่มเติม ติดต่อเซลล์ผู้ดูแล หรือแชทนี้ได้เลย', size: 'xs', color: '#6b7896', wrap: true }
+      ]
+    },
+    styles: { footer: { separator: true, separatorColor: '#eef0f4' } }
   };
 }
