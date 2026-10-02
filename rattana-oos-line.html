@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana แจ้งสินค้าขาด v1.21</title>
+<title>Rattana แจ้งสินค้าขาด v1.22</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -195,7 +195,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 <div id="loginScreen">
   <div class="login-box">
     <h1>Rattana <span style="color:var(--gold)">แจ้งสินค้าขาด</span></h1>
-    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.21</p>
+    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.22</p>
     <div id="g_id_onload" data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
     <div style="display:flex;justify-content:center"><div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div></div>
     <div class="login-err" id="loginErr"></div>
@@ -207,7 +207,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 <header>
   <div>
     <div class="logo-text">Rattana <span>แจ้งสินค้าขาด</span></div>
-    <div class="logo-sub">v1.21 · ส่ง LINE ถึงร้านตาม User ID</div>
+    <div class="logo-sub">v1.22 · ส่ง LINE ถึงร้านตาม User ID</div>
   </div>
   <div class="hdr-right">
     <span class="user-chip" id="userChip"></span>
@@ -364,7 +364,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 </div>
 
 <script>
-const APP_VERSION = '1.21';
+const APP_VERSION = '1.22';
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -758,6 +758,31 @@ async function fetchOrderFile(progress) {
   idbSet('oos_order_file', { key: meta.key, b64 });
   return { ...meta, b64 };
 }
+/* v1.22: อ่าน Check Out.xlsx ตรงผ่าน gviz แบบแอป Check Out — Google แปลง Excel ให้ฝั่งเซิร์ฟเวอร์ ส่งเฉพาะแท็บที่ขอ (~3 วิ)
+ * ไม่ผ่าน Apps Script (ส่งไฟล์ใหญ่ผ่าน GAS ช้า/404 เป็นช่วง ๆ) · ไฟล์ต้องแชร์ "ทุกคนที่มีลิงก์" (แอป Check Out ใช้อยู่แล้ว)
+ * Google หน่วง (429/432/500/503) ตอนหลายเครื่องยิงพร้อมกัน → ลองใหม่ถอยเวลา · อ่านไม่ได้ = ถอยไปทางหลังบ้านแบบเดิม */
+const ORDER_FILE_ID = '1S_HTxQ71AWHym1X_-CBwe-tzfCEPqY4T';   // Check Out.xlsx (โฟลเดอร์ Order scanner)
+async function gvizTab(sheet) {
+  const base = `https://docs.google.com/spreadsheets/d/${ORDER_FILE_ID}/gviz/tq?tqx=out:json&headers=1&sheet=${encodeURIComponent(sheet)}`;
+  const WAIT = [0, 900, 1800, 3200];
+  let err = '';
+  for (let a = 0; a < WAIT.length; a++) {
+    if (WAIT[a]) await new Promise(r => setTimeout(r, WAIT[a]));
+    try {
+      const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 30e3);
+      let t;
+      try { const res = await fetch(base + '&_cb=' + Date.now(), { signal: ctl.signal }); if (!res.ok) throw new Error('HTTP ' + res.status); t = await res.text(); }
+      finally { clearTimeout(tm); }
+      const j = JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1));
+      if (j.status !== 'ok') throw new Error((j.errors || []).map(e => e.detailed_message || e.message).join(' ') || j.status);
+      const head = j.table.cols.map(c => String(c.label || '').trim());
+      if (!head.includes('DI_REF')) throw new Error(`แท็บ ${sheet} ไม่มีหัวคอลัมน์`);   // ชื่อแท็บผิด gviz คืนชีทแรกมาแทน
+      return [head, ...j.table.rows.map(r => (r.c || []).map(c => c == null || c.v == null ? '' : String(c.v)))];
+    } catch (e) { err = e.name === 'AbortError' ? 'เกิน 30 วิ' : e.message; }
+  }
+  throw new Error(`อ่านแท็บ ${sheet} ไม่ได้ (${err})`);
+}
+const nowStamp = () => { const d = new Date(), p = x => String(x).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; };
 // ดึงให้เองตอนเปิดแอป (auto = ไม่บังหน้าจอด้วย spinner แสดงสถานะในกล่องแทน)
 let _xlsxBusy = false;
 async function loadFromXlsx(auto) {
@@ -767,10 +792,21 @@ async function loadFromXlsx(auto) {
   if (auto) $('srcInfo').innerHTML = '⏳ กำลังดึงข้อมูลจาก Excel ต้นฉบับ…';
   else showSpinner('กำลังดึงไฟล์ Excel ต้นฉบับ...');
   try {
-    const prog = (d, n) => { $('srcInfo').innerHTML = `⏳ กำลังดึงข้อมูล… ${d}/${n}`; };
-    const [x] = await Promise.all([fetchOrderFile(prog), S.uidLoaded ? null : loadUidDirect()]);
-    let r;
-    if (x.pack) {   // หลังบ้านแกะให้แล้ว — ไม่ต้องโหลด SheetJS
+    const uid = S.uidLoaded ? null : loadUidDirect();
+    let r, x;
+    try {   // ทางหลัก: gviz ตรง (ราว 3 วิ)
+      const [bk, ds] = await Promise.all([gvizTab('BVBK'), gvizTab('DSDC')]);
+      r = computeFromOrder(bk, ds);
+      x = { name: ORDER_FILE, updated: nowStamp(), via: 'gviz' };
+    } catch (ge) {   // สำรอง: ผ่านหลังบ้าน (ช้ากว่า)
+      console.warn('gviz', ge);
+      if (auto) $('srcInfo').innerHTML = '⏳ ทางหลักไม่ตอบ — กำลังดึงผ่านหลังบ้าน…';
+      const prog = (d, n) => { $('srcInfo').innerHTML = `⏳ กำลังดึงข้อมูล… ${d}/${n}`; };
+      x = await fetchOrderFile(prog);
+    }
+    await uid;
+    if (r) { /* ได้จาก gviz แล้ว */ }
+    else if (x.pack) {   // หลังบ้านแกะให้แล้ว — ไม่ต้องโหลด SheetJS
       const d = await gunzipJson(x.b64);
       r = computeFromOrder(d.bk, d.ds);
     } else {
@@ -783,8 +819,8 @@ async function loadFromXlsx(auto) {
       r = computeFromOrder(tab('BVBK'), tab('DSDC'));
     }
     S.cmpInfo = r.info;
-    S.srcUpdated = thDateTime(x.updated);
-    useRows(r.rows, `${x.name} · ไฟล์อัปเดต ${thDateTime(x.updated)}`);
+    S.srcUpdated = thDateTime(x.updated);   // gviz = เวลาที่ดึง (ไฟล์รีเฟรชทุก 1 ชม.)
+    useRows(r.rows, `${x.name} · ${x.via === 'gviz' ? 'ดึงเมื่อ' : 'ไฟล์อัปเดต'} ${thDateTime(x.updated)}`);
   } catch (e) {
     $('srcInfo').innerHTML = `<span class="badge b-danger">✕ ดึง Excel ไม่ได้: ${esc(e.message)}</span> — กด 🔄 ดึงใหม่`;
     showToast(e.message, 'error');
@@ -850,7 +886,7 @@ function renderPrep() {
   if (!S.raw.length) return;
   $('prepFilters').style.display = ''; $('prepStats').style.display = ''; $('prepListHead').classList.remove('hidden');
   const dates = {}; S.raw.forEach(r => { dates[r.date] = dates[r.date] || new Set(); dates[r.date].add(r.cusId); });
-  $('srcInfo').innerHTML = `📊 ข้อมูลอัปเดต <b>${esc(S.srcUpdated || '-')}</b>`;
+  $('srcInfo').innerHTML = `📊 ดึงข้อมูลล่าสุด <b>${esc(S.srcUpdated || '-')}</b>`;
   $('dateChips').innerHTML = Object.keys(dates).sort().reverse().map(d =>
     `<button class="chip ${d === S.date ? 'on' : ''}" onclick="S.date='${d}';S.sel=null;renderPrep()">${thDateShort(d)}<small>${dates[d].size} ร้าน</small></button>`).join('');
   const whs = [...new Set(S.raw.filter(r => r.date === S.date).map(r => r.wh).filter(Boolean))].sort();
