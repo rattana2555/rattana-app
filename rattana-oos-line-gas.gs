@@ -1,5 +1,5 @@
 /**
- * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.19
+ * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.20
  * อยู่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
  *
  * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.19';
+var OOS_VERSION = '1.20';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -150,8 +150,8 @@ function oosCfg_() {
     if (k === OOS_CFG_EXCL) { inEx = true; return; }
     if (inEx) { var id = k.replace(/\D/g, ''); if (id) c.exclude.push({ id: id, name: val, at: String(r[2] || '') }); return; }
     if (k === 'เวลาส่ง') c.times = oosNormTimes_(val.split(/[,\s]+/));
-    else if (k === 'ส่งอัตโนมัติ') c.enabled = !/ปิด|off|false|0/i.test(val);
-    else if (k === 'เตรียมรายการเอง') c.auto = !/ปิด|off|false|0/i.test(val);
+    else if (k === 'ส่งอัตโนมัติ') c.enabled = !oosIsOff_(val);
+    else if (k === 'เตรียมรายการเอง') c.auto = !oosIsOff_(val);
     else if (k === 'รหัสแอป') c.key = val.replace(/\s/g, '');
     else if (k === 'บิลที่ส่ง') c.days = (/วันนี้|today/i.test(val) ? ['today'] : []).concat(/พรุ่งนี้|tomorrow/i.test(val) ? ['tomorrow'] : []);
   });
@@ -179,6 +179,8 @@ function oosCfgWrite_(c, by) {
   oosCfgCache_ = c;
   try { CacheService.getScriptCache().remove('oos_key'); } catch (e) { }
 }
+/** ค่า เปิด/ปิด ในชีท — ⚠ ห้ามใช้ /ปิด/ หาในข้อความ เพราะคำว่า "เปิด" มี "ปิด" อยู่ข้างใน (บั๊ก v1.17–1.19) */
+function oosIsOff_(v) { return /^(ปิด|off|false|0|no|ไม่)$/i.test(String(v).trim()); }
 function oosTimes_() { return oosCfg_().times; }
 /** v1.19: รหัสแอป — อ่านจากแท็บ "ตั้งค่า" (แถว รหัสแอป) · ว่าง/ไม่มีแถว = ค่าเดิมใน Script Properties
  *  ⚠ ชีทนี้อย่าแชร์ให้คนนอก — ใครเห็นรหัสก็เรียกหลังบ้านได้ */
