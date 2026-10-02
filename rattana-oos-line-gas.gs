@@ -1,5 +1,5 @@
 /**
- * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.16
+ * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.17
  * อยู่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
  *
  * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.16';
+var OOS_VERSION = '1.17';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -86,33 +86,100 @@ function oosTriggerOk_() {
   return ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'oosTick'; });
 }
 
-function oosTimes_() {
-  return String(oosProps_().getProperty('OOS_TIMES') || '13:00,18:00').split(',')
-    .map(function (s) { return s.trim(); })
-    .filter(function (s) { return /^\d{1,2}:\d{2}$/.test(s); })
-    .map(function (s) { var a = s.split(':'); return ('0' + a[0]).slice(-2) + ':' + a[1]; })
-    .sort();
+/* ───────────── ตั้งค่า (v1.17: เก็บในแท็บ "ตั้งค่า" ของชีทคิว — ไฟล์เดียวกับประวัติส่ง) ─────────────
+ * แก้จากแอป (หน้า ⏰) หรือแก้ในชีทตรง ๆ ก็ได้ — ระบบอ่านจากชีททุกครั้ง
+ * แถวบน: เวลาส่ง / ส่งอัตโนมัติ / เตรียมรายการเอง / บิลที่ส่ง · ใต้หัว "ร้านที่ไม่ส่ง LINE" = รายการร้าน (รหัส, ชื่อ, เพิ่มเมื่อ)
+ * ยังไม่มีแท็บ = สร้างจากค่าเดิมใน Script Properties ให้เอง */
+var OOS_CFG_TAB = 'ตั้งค่า', OOS_CFG_EXCL = 'ร้านที่ไม่ส่ง LINE (รหัสร้าน)', oosCfgCache_ = null;
+var OOS_DAY_TH = { today: 'วันนี้', tomorrow: 'พรุ่งนี้' };
+function oosNormTimes_(arr) {
+  return arr.map(function (s) { return String(s).trim(); })
+    .filter(function (s) { return /^\d{1,2}[:.]\d{2}$/.test(s); })
+    .map(function (s) { var a = s.split(/[:.]/); return ('0' + a[0]).slice(-2) + ':' + a[1]; })
+    .filter(function (s, i, a) { return a.indexOf(s) === i; }).sort();
 }
+function oosCfgSheet_() { return oosQueueSheet_().getParent().getSheetByName(OOS_CFG_TAB); }
+function oosCfg_() {
+  if (oosCfgCache_) return oosCfgCache_;
+  var sh = oosCfgSheet_();
+  if (!sh) {   // ครั้งแรก — ย้ายค่าจาก Script Properties ลงชีท
+    var p = oosProps_(), ex = p.getProperty('OOS_EXCLUDE');
+    var c0 = {
+      times: oosNormTimes_(String(p.getProperty('OOS_TIMES') || '13:00,18:00').split(',')),
+      enabled: p.getProperty('OOS_ENABLED') === '1', auto: p.getProperty('OOS_AUTO') !== '0',
+      days: String(p.getProperty('OOS_DAYS') || 'today,tomorrow').split(','),
+      exclude: String(ex == null ? '7500000000' : ex).split(',').filter(String).map(function (id) {
+        return { id: id, name: id === '7500000000' ? 'ร้าน หน้าร้าน' : '', at: '' };
+      })
+    };
+    oosCfgWrite_(c0, 'ย้ายจากค่าเดิม');
+    return oosCfgCache_ = c0;
+  }
+  var v = sh.getDataRange().getDisplayValues(), c = { times: [], enabled: true, auto: true, days: [], exclude: [] }, inEx = false;
+  v.forEach(function (r) {
+    var k = String(r[0]).trim(), val = String(r[1]).trim();
+    if (!k) return;
+    if (k === OOS_CFG_EXCL) { inEx = true; return; }
+    if (inEx) { var id = k.replace(/\D/g, ''); if (id) c.exclude.push({ id: id, name: val, at: String(r[2] || '') }); return; }
+    if (k === 'เวลาส่ง') c.times = oosNormTimes_(val.split(/[,\s]+/));
+    else if (k === 'ส่งอัตโนมัติ') c.enabled = !/ปิด|off|false|0/i.test(val);
+    else if (k === 'เตรียมรายการเอง') c.auto = !/ปิด|off|false|0/i.test(val);
+    else if (k === 'บิลที่ส่ง') c.days = (/วันนี้|today/i.test(val) ? ['today'] : []).concat(/พรุ่งนี้|tomorrow/i.test(val) ? ['tomorrow'] : []);
+  });
+  if (!c.times.length) c.times = ['13:00', '18:00'];
+  if (!c.days.length) c.days = ['today', 'tomorrow'];
+  return oosCfgCache_ = c;
+}
+function oosCfgWrite_(c, by) {
+  var ss = oosQueueSheet_().getParent(), sh = ss.getSheetByName(OOS_CFG_TAB) || ss.insertSheet(OOS_CFG_TAB);
+  var rows = [
+    ['ตั้งค่า', 'ค่า', 'หมายเหตุ'],
+    ['เวลาส่ง', c.times.join(', '), 'เช่น 13:00, 18:30'],
+    ['ส่งอัตโนมัติ', c.enabled ? 'เปิด' : 'ปิด', 'ปิด = ไม่ส่งตามเวลา'],
+    ['เตรียมรายการเอง', c.auto ? 'เปิด' : 'ปิด', 'เปิด = ดึง Check Out.xlsx แล้วส่งทุกร้านที่มี UID เอง'],
+    ['บิลที่ส่ง', c.days.map(function (d) { return OOS_DAY_TH[d] || d; }).join(', '), 'วันนี้ / พรุ่งนี้'],
+    ['บันทึกล่าสุด', oosNow_(), String(by || '')],
+    ['', '', ''],
+    [OOS_CFG_EXCL, 'ชื่อร้าน', 'เพิ่มเมื่อ']
+  ].concat(c.exclude.map(function (e) { return [e.id, e.name || '', e.at || '']; }));
+  sh.clearContents();
+  sh.getRange(1, 1, Math.max(rows.length, 1), 3).setNumberFormat('@').setValues(rows);
+  sh.getRange(1, 1, 1, 3).setFontWeight('bold'); sh.getRange(8, 1, 1, 3).setFontWeight('bold');
+  sh.setColumnWidth(1, 230); sh.setColumnWidth(2, 260); sh.setColumnWidth(3, 330);
+  oosCfgCache_ = c;
+}
+function oosTimes_() { return oosCfg_().times; }
+/** ร้านที่ไม่ส่ง (รหัส) */
+function oosExclude_() { return oosCfg_().exclude.map(function (e) { return e.id; }); }
+/** บิลวันไหนที่ส่งอัตโนมัติ: today / tomorrow */
+function oosDays_() { return oosCfg_().days; }
 
 function oosSetSchedule_(b) {
-  var p = oosProps_();
+  var c = JSON.parse(JSON.stringify(oosCfg_()));
   if (b.times) {
-    var t = (b.times || []).map(String).filter(function (s) { return /^\d{1,2}:\d{2}$/.test(s); });
-    if (!t.length) throw new Error('ต้องมีเวลาส่งอย่างน้อย 1 รอบ');
-    p.setProperty('OOS_TIMES', t.join(','));
+    c.times = oosNormTimes_(b.times || []);
+    if (!c.times.length) throw new Error('ต้องมีเวลาส่งอย่างน้อย 1 รอบ');
   }
-  if (b.enabled != null) p.setProperty('OOS_ENABLED', b.enabled ? '1' : '0');
-  // v1.16: ตั้งค่าจากแอปได้ (ไม่ต้องแก้สคริปต์) — เตรียมรายการเอง / บิลวันไหน / ร้านที่ไม่ส่ง
-  if (b.auto != null) p.setProperty('OOS_AUTO', b.auto ? '1' : '0');
+  if (b.enabled != null) c.enabled = !!b.enabled;
+  if (b.auto != null) c.auto = !!b.auto;
   if (b.days) {
-    var dd = (b.days || []).map(String).filter(function (x) { return x === 'today' || x === 'tomorrow'; });
-    if (!dd.length) throw new Error('ต้องเลือกบิลอย่างน้อย 1 วัน');
-    p.setProperty('OOS_DAYS', dd.join(','));
+    c.days = (b.days || []).map(String).filter(function (x) { return x === 'today' || x === 'tomorrow'; });
+    if (!c.days.length) throw new Error('ต้องเลือกบิลอย่างน้อย 1 วัน');
   }
-  if (b.exclude) {
-    p.setProperty('OOS_EXCLUDE', (b.exclude || []).map(function (x) { return String(x).replace(/\D/g, ''); })
-      .filter(function (x, i, a) { return x && a.indexOf(x) === i; }).join(','));
+  if (b.exclude) {   // [รหัส] หรือ [{id, name}] — เก็บชื่อ/เวลาเพิ่มเดิมไว้
+    var old = {}; c.exclude.forEach(function (e) { old[e.id] = e; });
+    var names = b.excludeNames || {}, now = oosNow_(), seen = {};
+    c.exclude = (b.exclude || []).map(function (x) {
+      var id = String(x && x.id || x).replace(/\D/g, ''); if (!id || seen[id]) return null; seen[id] = 1;
+      var o = old[id] || {};
+      return { id: id, name: String((x && x.name) || names[id] || o.name || ''), at: o.at || (now + (b.by ? ' · ' + b.by : '')) };
+    }).filter(Boolean);
   }
+  oosCfgWrite_(c, b.by);
+  var p = oosProps_();   // สำรองไว้ใน Script Properties ด้วย
+  p.setProperty('OOS_TIMES', c.times.join(',')); p.setProperty('OOS_ENABLED', c.enabled ? '1' : '0');
+  p.setProperty('OOS_AUTO', c.auto ? '1' : '0'); p.setProperty('OOS_DAYS', c.days.join(','));
+  p.setProperty('OOS_EXCLUDE', c.exclude.map(function (e) { return e.id; }).join(','));
   if (!oosTriggerOk_()) oosInstallTrigger_();
   return oosState_({});
 }
@@ -120,7 +187,7 @@ function oosSetSchedule_(b) {
 /** trigger ทุก 10 นาที — ถึงเวลารอบไหนแล้วยังไม่ได้ส่งวันนี้ ก็ส่งรอบนั้น (ไม่ไล่ส่งย้อนเกิน 2 ชม.) */
 function oosTick() {
   var p = oosProps_();
-  if (p.getProperty('OOS_ENABLED') !== '1') return;
+  if (!oosCfg_().enabled) return;
   var now = new Date();
   var today = Utilities.formatDate(now, OOS_TZ, 'yyyy-MM-dd');
   var hm = Utilities.formatDate(now, OOS_TZ, 'HH:mm');
@@ -133,7 +200,7 @@ function oosTick() {
     if (p.getProperty(doneKey)) continue;
     // v1.13: เตรียมรายการเองจาก Check Out.xlsx ก่อนส่ง (ไม่ต้องมีคนเปิดแอปกดบันทึก) · ปิดได้ด้วย OOS_AUTO=0
     var auto = null;
-    if (p.getProperty('OOS_AUTO') !== '0') {
+    if (oosCfg_().auto) {
       try { auto = oosAutoQueue_(false); } catch (e) { auto = { error: String(e && e.message || e) }; }
     }
     var r = oosSendPending_({ round: 'รอบ ' + s });
@@ -306,7 +373,7 @@ function oosState_(b) {
   var today = oosToday_(), done = {};
   oosTimes_().forEach(function (s) { done[s] = p.getProperty('OOS_DONE_' + today + '_' + s) || ''; });
   return {
-    times: oosTimes_(), enabled: p.getProperty('OOS_ENABLED') === '1', auto: p.getProperty('OOS_AUTO') !== '0', days: oosDays_(), exclude: oosExclude_(), triggerOk: oosTriggerOk_(),
+    times: oosTimes_(), enabled: oosCfg_().enabled, auto: oosCfg_().auto, days: oosDays_(), exclude: oosExclude_(), excludeInfo: oosCfg_().exclude, cfgUrl: oosQueueSheet_().getParent().getUrl() + '#gid=' + (oosCfgSheet_() ? oosCfgSheet_().getSheetId() : ''), triggerOk: oosTriggerOk_(),
     last: last, doneToday: done, queue: queue, uidCount: uidCount, now: oosNow_(),
     queueUrl: oosQueueSheet_().getParent().getUrl()
   };
@@ -430,17 +497,6 @@ function oosXlsxFile_(name) {
  */
 var OOS_PART = 90000;
 var OOS_ORDER_FILE = 'Check Out.xlsx';
-// รหัสร้านที่ไม่ส่ง LINE เลย (ทั้งอัตโนมัติและกดเอง) — 7500000000 = "ร้าน หน้าร้าน" รหัสรวมลูกค้าหน้าร้าน (user สั่งตัด 2 ต.ค. 2569)
-var OOS_EXCLUDE_DEFAULT = '7500000000';
-/** ร้านที่ไม่ส่ง (ตั้งในแอป หน้า ⏰ · Script Property OOS_EXCLUDE) */
-function oosExclude_() {
-  var v = oosProps_().getProperty('OOS_EXCLUDE');
-  return String(v == null ? OOS_EXCLUDE_DEFAULT : v).split(',').map(function (x) { return x.trim(); }).filter(String);
-}
-/** บิลวันไหนที่ส่งอัตโนมัติ: today / tomorrow (ตั้งในแอป · Script Property OOS_DAYS) */
-function oosDays_() {
-  return String(oosProps_().getProperty('OOS_DAYS') || 'today,tomorrow').split(',').filter(function (x) { return x === 'today' || x === 'tomorrow'; });
-}
 var OOS_ORDER_COLS = ['DI_DATE', 'DI_REF', 'AR_CODE', 'AR_NAME', 'SLMN_NAME', 'WL_CODE', 'SKU_NAME', 'TRD_UTQNAME', 'TRD_QTY', 'TRD_Q_FREE', 'DI_REMARK'];
 function oosXlsxMeta_(name, pack) {
   pack = !!pack && name === OOS_ORDER_FILE;

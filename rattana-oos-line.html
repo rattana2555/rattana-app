@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Rattana แจ้งสินค้าขาด v1.28</title>
+<title>Rattana แจ้งสินค้าขาด v1.29</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -220,7 +220,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 <div id="loginScreen">
   <div class="login-box">
     <h1>Rattana <span style="color:var(--gold)">แจ้งสินค้าขาด</span></h1>
-    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.28</p>
+    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.29</p>
     <div id="g_id_onload" data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
     <div style="display:flex;justify-content:center"><div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div></div>
     <div class="login-err" id="loginErr"></div>
@@ -232,7 +232,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 <header>
   <div>
     <div class="logo-text">Rattana <span>แจ้งสินค้าขาด</span></div>
-    <div class="logo-sub">v1.28 · ส่ง LINE ถึงร้านตาม User ID</div>
+    <div class="logo-sub">v1.29 · ส่ง LINE ถึงร้านตาม User ID</div>
   </div>
   <div class="hdr-right">
     <span class="user-chip" id="userChip"></span>
@@ -326,7 +326,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
         </div>
         <div class="sch-sec">🧾 ส่งของบิลวันไหน</div>
         <div class="chips" id="schDays"></div>
-        <div class="sch-sec">🚫 ร้านที่ไม่ส่ง LINE</div>
+        <div class="sch-sec">🚫 ร้านที่ไม่ส่ง LINE <span class="note" id="schCfgLink" style="font-weight:500"></span></div>
         <div id="schExcl" class="excl-list"></div>
         <div style="display:flex;gap:6px;margin-top:6px;max-width:420px">
           <input class="input" id="schExclIn" placeholder="รหัสร้าน เช่น 7500000000" inputmode="numeric" style="height:38px" onkeydown="if(event.key==='Enter')addExcl()">
@@ -396,7 +396,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 </div>
 
 <script>
-const APP_VERSION = '1.28';
+const APP_VERSION = '1.29';
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -1125,6 +1125,7 @@ function renderSched() {
   S.schDays = new Set(S.gas.days || ['today', 'tomorrow']);
   S.schExcl = (S.gas.exclude || [...EXCLUDE_CUS]).slice();
   drawTimes(); drawSchOpts();
+  $('schCfgLink').innerHTML = S.gas.cfgUrl ? `· เก็บในชีท <a href="${esc(S.gas.cfgUrl)}" target="_blank" rel="noopener">แท็บ "ตั้งค่า"</a>` : '';
   const l = S.gas.last;
   $('schedInfo').innerHTML = [
     S.gas.triggerOk ? '<span class="badge b-ok">✓ ตัวตั้งเวลาทำงานอยู่</span>' : '<span class="badge b-danger">✕ ยังไม่มีตัวตั้งเวลา — รัน oosSetup ใน Apps Script</span>',
@@ -1170,7 +1171,8 @@ function addTime() { openTimePicker(-1); }
 function drawSchOpts() {
   const days = [['today', 'วันนี้'], ['tomorrow', 'พรุ่งนี้']];
   $('schDays').innerHTML = days.map(([k, l]) => `<button class="chip ${S.schDays.has(k) ? 'on' : ''}" onclick="toggleSchDay('${k}')">${S.schDays.has(k) ? '✓ ' : ''}บิล${l}</button>`).join('');
-  const nameOf = id => (S.raw.find(r => r.cusId === id) || {}).cusName || '';
+  const info = {}; (S.gas.excludeInfo || []).forEach(e => { info[e.id] = e.name; });
+  const nameOf = id => (S.raw.find(r => r.cusId === id) || {}).cusName || info[id] || '';
   $('schExcl').innerHTML = S.schExcl.length ? S.schExcl.map((id, i) =>
     `<div class="excl-item"><b class="mono">${esc(id)}</b><span class="note">${esc(nameOf(id))}</span><button class="x" title="เอาออก" onclick="S.schExcl.splice(${i},1);schedDirty();drawSchOpts()">✕</button></div>`).join('')
     : '<div class="note">— ส่งทุกร้าน —</div>';
@@ -1192,7 +1194,8 @@ async function saveSchedule() {
   showSpinner('กำลังบันทึกเวลาส่ง...');
   try {
     _schedDirty = false;
-    const st = await gas('setSchedule', { times, enabled: $('schEnabled').checked, auto: $('schAuto').checked, days: [...S.schDays], exclude: S.schExcl });
+    const st = await gas('setSchedule', { times, enabled: $('schEnabled').checked, auto: $('schAuto').checked, days: [...S.schDays], exclude: S.schExcl,
+      excludeNames: Object.fromEntries(S.schExcl.map(id => [id, (S.raw.find(r => r.cusId === id) || {}).cusName || ''])) });
     applyState(st);
     if (!st.days) showToast('บันทึกเวลาแล้ว — แต่หลังบ้านยังเป็นรุ่นเก่า ค่าวันที่/ร้านที่ไม่ส่ง ยังไม่ถูกบันทึก', 'warning');
     else showToast(`บันทึกแล้ว · ${$('schEnabled').checked ? 'ส่งอัตโนมัติ ' + times.join(' / ') : 'ปิดส่งอัตโนมัติ'}`, 'success');
