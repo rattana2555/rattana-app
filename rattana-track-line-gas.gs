@@ -136,9 +136,32 @@ function trkSetup() {
   Logger.log('รหัสแอป = ' + trkKey_());
   Logger.log('ชีทคิว = ' + sh.getParent().getUrl());
   Logger.log('ร้านที่มี UID = ' + n + ' ร้าน');
-  Logger.log('โหมดทดสอบ = ' + (trkCfg_().testUid || '(ไม่ได้ตั้ง — จะส่งร้านจริง)'));
+  Logger.log('โหมดทดสอบ = ' + (trkCfg_().testUid || '(ยังไม่ได้ตั้ง)'));
+  Logger.log('ส่งอัตโนมัติ = ปิด · ยังไม่ติดตั้งตัวตั้งเวลา — ไม่มีอะไรส่งออกจนกว่าจะสั่งเอง');
+  Logger.log('ขั้นต่อไป: ใส่ UID ตัวเองในแท็บ "ตั้งค่า" ช่องโหมดทดสอบ → ลอง trkTestSend("Uxxxx…")');
+  Logger.log('พร้อมส่งจริงแล้วค่อยรัน trkEnableAuto() เพื่อเปิดการส่งอัตโนมัติ');
+}
+
+/** เปิดการส่งอัตโนมัติ — ต้องเรียกเองเท่านั้น ไม่มีอะไรเปิดให้โดยอัตโนมัติ */
+function trkEnableAuto() {
+  var c = trkCfg_();
+  if (c.testUid) {
+    Logger.log('⚠️ โหมดทดสอบยังเปิดอยู่ (' + c.testUid + ') — ข้อความจะวิ่งไปที่ UID นั้นคนเดียว ร้านไม่ได้รับ');
+  }
+  c.enabled = true; c.auto = true;
+  trkCfgWrite_(c, 'trkEnableAuto');
   trkInstallTrigger_();
-  Logger.log('ติดตั้งตัวตั้งเวลาแล้ว (ทุก 10 นาที) · ส่งอัตโนมัติ = ' + (trkCfg_().enabled ? 'เปิด' : 'ปิด'));
+  Logger.log('เปิดการส่งอัตโนมัติแล้ว + ติดตั้งตัวตั้งเวลาทุก 10 นาที');
+}
+
+/** ปิดทุกอย่าง + ลบตัวตั้งเวลา (ปุ่มฉุกเฉิน) */
+function trkStopAll() {
+  var c = trkCfg_(); c.enabled = false; c.auto = false;
+  trkCfgWrite_(c, 'trkStopAll');
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'trkTick') ScriptApp.deleteTrigger(t);
+  });
+  Logger.log('ปิดการส่งและลบตัวตั้งเวลาแล้ว');
 }
 
 function trkInstallTrigger_() {
@@ -159,7 +182,15 @@ function trkIsOff_(v) { return /^(ปิด|off|false|0|no|ไม่)$/i.test(St
 function trkCfg_() {
   if (trkCfgCache_) return trkCfgCache_;
   var ss = trkQueueSheet_().getParent(), sh = ss.getSheetByName(TRK_CFG_TAB);
-  if (!sh) { trkCfgWrite_({ enabled: true, auto: true, days: ['today'], exclude: [{ id: '7500000000', name: 'ร้าน หน้าร้าน' }], key: trkProps_().getProperty('TRK_KEY') || '' }, 'ตั้งค่าเริ่มต้น'); sh = ss.getSheetByName(TRK_CFG_TAB); }
+  // ★ ครั้งแรกต้องปิดการส่งไว้เสมอ — ให้คนตั้งใจเปิดเอง หลังทดสอบแล้ว
+  if (!sh) {
+    trkCfgWrite_({
+      enabled: false, auto: false, days: ['today'],
+      exclude: [{ id: '7500000000', name: 'ร้าน หน้าร้าน' }],
+      key: trkProps_().getProperty('TRK_KEY') || '', testUid: ''
+    }, 'ตั้งค่าเริ่มต้น');
+    sh = ss.getSheetByName(TRK_CFG_TAB);
+  }
   var vals = sh.getDataRange().getDisplayValues();
   var c = { enabled: false, auto: true, days: ['today'], exclude: [], key: '', testUid: '' }, inEx = false;
   vals.forEach(function (r) {
