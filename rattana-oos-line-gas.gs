@@ -1,5 +1,5 @@
 /**
- * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.20
+ * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.21
  * อยู่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
  *
  * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.20';
+var OOS_VERSION = '1.21';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -326,6 +326,7 @@ function oosSave_(b) {
   try {
     var q = oosReadQueue_(), sh = q.sh, idx = {};
     q.rows.forEach(function (r) { idx[r.v[0]] = r; });
+    var sentBy = oosSentByCus_(q.rows);   // v1.21: ร้านที่ส่งแล้ว → กันส่งซ้ำตามเลขบิล
     var now = oosNow_(), by = String(b.by || ''), added = 0, changed = 0, same = 0, kept = 0, appends = [], excl = oosExclude_();
     items.forEach(function (it) {
       var cusId = String(it.cusId || '').trim();
@@ -336,6 +337,9 @@ function oosSave_(b) {
         String(it.sale || ''), String(it.short || '-'), String(it.add || '-')];
       var ex = idx[id];
       if (!ex) {
+        // v1.21: วันที่บิลถูกแก้ (คีย์วันที่เปลี่ยน) แต่เลขบิลเดิมเคยส่งแล้ว + สินค้าตรงกัน = ไม่ส่งซ้ำ · สินค้าไม่ตรง = ส่งใหม่
+        var prev = oosSentByBill_(sentBy[cusId], it.bills);
+        if (prev && prev.canon === oosCanon_(it.short, it.add)) { same++; return; }
         appends.push(rowVals.concat([OOS_ST.WAIT, '', '', '', '', by, now, h, String(it.orders || '')]));
         added++;
         return;
@@ -363,6 +367,32 @@ function oosSave_(b) {
 function oosCanon_(short, add) {
   var f = function (t) { return String(t || '-').split('\n').map(function (x) { return x.trim(); }).filter(String).sort().join('\n'); };
   return f(short) + '||' + f(add);
+}
+
+/** v1.21: เลขบิลจากช่อง "บิล" (คั่นด้วย , หรือเว้นวรรค) */
+function oosBillList_(t) {
+  return String(t || '').split(/[,\s]+/).map(function (x) { return x.trim(); }).filter(function (x) { return x && x !== '-'; });
+}
+/** v1.21: รหัสร้าน → แถวที่ส่งแล้ว [{bills, canon, at}] */
+function oosSentByCus_(rows) {
+  var m = {};
+  rows.forEach(function (r) {
+    if (r.v[OOS_C['สถานะ']] !== OOS_ST.SENT) return;
+    var c = String(r.v[OOS_C['รหัสร้านค้า']] || '').trim();
+    (m[c] = m[c] || []).push({ bills: oosBillList_(r.v[OOS_C['บิล']]),
+      canon: oosCanon_(r.v[OOS_C['สินค้าขาด']], r.v[OOS_C['สินค้าเพิ่ม']]), at: r.row });
+  });
+  return m;
+}
+/** v1.21: แถวที่ส่งแล้วล่าสุด (แถวล่างสุด) ที่มีเลขบิลซ้ำกับรอบนี้อย่างน้อย 1 ใบ · ไม่มี = null */
+function oosSentByBill_(list, bills) {
+  var mine = oosBillList_(bills), best = null;
+  if (!list || !mine.length) return null;
+  list.forEach(function (p) {
+    if (!p.bills.some(function (b) { return mine.indexOf(b) >= 0; })) return;
+    if (!best || p.at > best.at) best = p;
+  });
+  return best;
 }
 
 function oosSetStatus_(ids, status) {
