@@ -2,21 +2,29 @@
  * Rattana Track → LINE  (TrackApp)
  * ส่งลิงก์ติดตามสถานะจัดส่งให้ร้าน ตอนคนขับรับใบคุม (ออกวิ่ง)
  *
- * วางไฟล์นี้ในโปรเจกต์ Apps Script ตัวเดียวกับแอปแจ้งสินค้าขาด
- * (script 1U8A9nbVhJQQJelMUPS4OLMkwugcbFpMpq7hW7k0bL2kftOEod2B6UBYC — เปิดด้วย /u/0/ = rattana.phai)
- * เพราะใช้ CHANNEL_ACCESS_TOKEN ตัวเดิม และแท็บ UID ของชีทที่ผูกอยู่
+ * ★ โปรเจกต์ Apps Script เดี่ยว (แยกจากแอปแจ้งสินค้าขาด) — ไม่ต้องผูกกับชีทใด
  *
- * ★ ต้องเพิ่ม 1 บรรทัดใน doPost ของ bot.gs (ต่อจากบรรทัด oosRoute_):
- *     var trk = trkRoute_(e); if (trk) return trk;
+ * ติดตั้งครั้งแรก:
+ *   1. สร้างโปรเจกต์ใหม่ที่ script.google.com → วางไฟล์นี้
+ *   2. ตั้ง Script Property  TRK_TOKEN = Channel Access Token ของ Rattana_Official
+ *      (คัดลอกจากโปรเจกต์เดิม ตัวแปร CHANNEL_ACCESS_TOKEN ในไฟล์ bot.gs)
+ *   3. รัน trkSetup  → ได้ชีทคิว + รหัสแอป + ตัวตั้งเวลา
+ *   4. Deploy → New deployment → Web app (Execute as: Me · Who has access: Anyone)
+ *      เอา URL /exec ไปใส่ในแอป
  *
  * ข้อมูล: ไฟล์ D-MAN ผ่าน gviz (ชื่อแท็บไทยใช้ไม่ได้ → ใช้ gid)
  *   ใบคุม          gid 1833308111  บิลทั้งหมดที่จัดเข้าเที่ยวแล้ว
  *   ทะเบียนใบคุม   gid 993727140   คนขับ / ทะเบียน / วันเวลาปิดงาน
+ * UID ของร้าน: แท็บ UID ในชีทของแอปแจ้งสินค้าขาด (เก็บจาก webhook ตอนร้านเพิ่มเพื่อน)
  * ส่งเมื่อ: ทริปมีชื่อคนขับแล้ว (รับใบคุม) และยังไม่ปิดงาน
  */
 
 var TRK_VERSION = '1.0';
 var TRK_TZ = 'Asia/Bangkok';
+
+/** ชีทที่มีแท็บ UID (User ID ↔ รหัสร้านค้า) — ของแอปแจ้งสินค้าขาด อ่านอย่างเดียว */
+var TRK_UID_SHEET_ID = '1jA2IJUW-SMrfDEiBCudCo5Sx6IFaAr9yqxtUBppy1Fs';
+var TRK_UID_TAB = 'UID';
 
 var TRK_SHEET_ID = '1HoyuILDm8aOrUaLjo1YFbfZOoEiejaxRhh1ahR79Oeo';
 var TRK_GID_ORDER = '1833308111';    // ใบคุม
@@ -30,7 +38,19 @@ var TRK_C = {}; TRK_HEAD.forEach(function (h, i) { TRK_C[h] = i; });
 var TRK_ST = { WAIT: 'รอส่ง', SENT: 'ส่งแล้ว', NOUID: 'ไม่มี UID', FAIL: 'ล้มเหลว', CANCEL: 'ยกเลิก' };
 var TRK_MAX_MS = 5 * 60 * 1000;
 
-/* ───────────── ทางเข้าจาก doPost ───────────── */
+/* ───────────── ทางเข้า (โปรเจกต์เดี่ยว — มี doPost ของตัวเอง) ───────────── */
+function doPost(e) {
+  var r = trkRoute_(e);
+  if (r) return r;
+  return ContentService.createTextOutput(JSON.stringify({ ok: false, error: 'ไม่ใช่คำขอของแอปนี้' }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({ ok: true, v: TRK_VERSION, app: 'track' }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
 function trkRoute_(e) {
   var body;
   try { body = JSON.parse((e && e.postData && e.postData.contents) || '{}'); } catch (err) { return null; }
@@ -97,15 +117,28 @@ function trkHandle_(b) {
 /* ───────────── ตั้งค่า / trigger ───────────── */
 function trkProps_() { return PropertiesService.getScriptProperties(); }
 
+/** Channel Access Token ของ Rattana_Official — เก็บใน Script Property ไม่ฝังในโค้ด */
+function trkToken_() {
+  var t = trkProps_().getProperty('TRK_TOKEN') || '';
+  if (!t) throw new Error('ยังไม่ได้ตั้ง Script Property ชื่อ TRK_TOKEN (Channel Access Token)');
+  return t;
+}
+
 function trkSetup() {
   var p = trkProps_();
   if (!p.getProperty('TRK_KEY')) p.setProperty('TRK_KEY', Utilities.getUuid().replace(/-/g, '').slice(0, 12));
+  if (!p.getProperty('TRK_TOKEN')) Logger.log('⚠️ ยังไม่ได้ตั้ง TRK_TOKEN — ไปที่ ⚙️ Project Settings → Script Properties แล้วเพิ่ม TRK_TOKEN = Channel Access Token');
   var sh = trkQueueSheet_();
   trkCfg_();
+  // ขอสิทธิ์อ่านชีท UID ตั้งแต่ตอนติดตั้ง จะได้ไม่ไปพังตอน trigger ทำงาน
+  var n = 0;
+  try { n = Object.keys(trkUidMap_()).length; } catch (e) { Logger.log('⚠️ อ่านแท็บ UID ไม่ได้: ' + e.message); }
   Logger.log('รหัสแอป = ' + trkKey_());
   Logger.log('ชีทคิว = ' + sh.getParent().getUrl());
+  Logger.log('ร้านที่มี UID = ' + n + ' ร้าน');
+  Logger.log('โหมดทดสอบ = ' + (trkCfg_().testUid || '(ไม่ได้ตั้ง — จะส่งร้านจริง)'));
   trkInstallTrigger_();
-  Logger.log('ติดตั้งตัวตั้งเวลาแล้ว (ทุก 10 นาที)');
+  Logger.log('ติดตั้งตัวตั้งเวลาแล้ว (ทุก 10 นาที) · ส่งอัตโนมัติ = ' + (trkCfg_().enabled ? 'เปิด' : 'ปิด'));
 }
 
 function trkInstallTrigger_() {
@@ -249,7 +282,7 @@ function trkTomorrow_() {
 
 /* ───────────── UID (แท็บ UID ของชีทที่ผูกกับโปรเจกต์) ───────────── */
 function trkUidMap_() {
-  var sh = SpreadsheetApp.getActive().getSheetByName('UID');
+  var sh = SpreadsheetApp.openById(TRK_UID_SHEET_ID).getSheetByName(TRK_UID_TAB);
   var map = {};
   if (!sh || sh.getLastRow() < 2) return map;
   var vals = sh.getRange(1, 1, sh.getLastRow(), Math.max(3, sh.getLastColumn())).getDisplayValues();
@@ -510,7 +543,7 @@ function trkPush_(uid, o, isTest) {
     var res = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
       method: 'post',
       contentType: 'application/json',
-      headers: { Authorization: 'Bearer ' + CHANNEL_ACCESS_TOKEN },
+      headers: { Authorization: 'Bearer ' + trkToken_() },
       payload: JSON.stringify({ to: uid, messages: [msg] }),
       muteHttpExceptions: true
     });

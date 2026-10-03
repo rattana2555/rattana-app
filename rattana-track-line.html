@@ -173,6 +173,13 @@ body.dark .sec-nouid{background:#3a1a1a;color:#ff9d92}
   <div class="content" style="max-width:760px">
     <div class="card card-gold" style="margin-top:8px">
       <div class="setrow">
+        <div class="t"><b>ที่อยู่หลังบ้าน (GAS)</b><div>URL เว็บแอปของโปรเจกต์ Apps Script แอปนี้ ลงท้าย /exec</div></div>
+        <div style="display:flex;gap:6px;width:280px">
+          <input class="input" id="cfgUrl" readonly style="font-size:11px">
+          <button class="btn btn-outline btn-sm" onclick="askUrl()">แก้</button>
+        </div>
+      </div>
+      <div class="setrow">
         <div class="t"><b>ส่งอัตโนมัติ</b><div>ปิด = ต้องมากดส่งเองจากหน้ารายการ</div></div>
         <label class="sw"><input type="checkbox" id="cfgEnabled"><span></span></label>
       </div>
@@ -209,19 +216,32 @@ body.dark .sec-nouid{background:#3a1a1a;color:#ff9d92}
 
 <script>
 /* ════════ CONFIG ════════ */
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbxTJ5hmoAow94ZyaTpneQxEORQQ5ttBLD7KU1O3X8xw3WajJaEvXUEhtHtp1-21mHo0/exec';
-const LS_KEY = 'trk_key', LS_USER = 'trk_user';
+/* โปรเจกต์ GAS ของแอปนี้แยกต่างหาก — ใส่ URL /exec ของ deployment ครั้งแรก แล้วจำไว้ในเครื่อง */
+const LS_URL = 'trk_url', LS_KEY = 'trk_key', LS_USER = 'trk_user';
+let GAS_URL = '';
 
 let S = { key:'', user:null, stores:[], sel:{}, state:null };
 
 /* ════════ BOOT ════════ */
 window.onload = () => {
   applyDark(localStorage.getItem('rattana_dark')==='1');
+  try { GAS_URL = localStorage.getItem(LS_URL) || ''; } catch(e){}
   try { S.key = localStorage.getItem(LS_KEY) || ''; } catch(e){}
   try { S.user = JSON.parse(localStorage.getItem(LS_USER)||'null'); } catch(e){}
+  document.getElementById('cfgUrl').value = GAS_URL;
+  if (!GAS_URL) { askUrl(); return; }
   if (S.key && S.user) boot();
   else document.getElementById('loginModal').classList.add('open');
 };
+
+function askUrl(){
+  const u = prompt('ใส่ URL ของเว็บแอป (ลงท้าย /exec) จากโปรเจกต์ Apps Script ของแอปนี้:', GAS_URL||'');
+  if(!u || !/\/exec\s*$/.test(u.trim())) { toast('ต้องเป็น URL ที่ลงท้ายด้วย /exec','error'); return; }
+  GAS_URL = u.trim();
+  localStorage.setItem(LS_URL, GAS_URL);
+  document.getElementById('cfgUrl').value = GAS_URL;
+  location.reload();
+}
 
 async function boot(){
   document.getElementById('loginModal').classList.remove('open');
