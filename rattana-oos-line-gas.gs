@@ -1,5 +1,5 @@
 /**
- * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.21
+ * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.22
  * อยู่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
  *
  * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
@@ -13,12 +13,13 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.21';
+var OOS_VERSION = '1.22';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
   'สินค้าขาด', 'สินค้าเพิ่ม', 'สถานะ', 'UID ที่ส่ง', 'เวลาส่ง', 'รอบ', 'ผลลัพธ์',
-  'บันทึกโดย', 'อัปเดต', 'hash', 'ออเดอร์'];   // ออเดอร์ = billIdORD… จาก DI_REMARK ใบจอง (ออเดอร์ ROO)
+  'บันทึกโดย', 'อัปเดต', 'hash', 'ออเดอร์', 'ส่งก่อนหน้า'];   // ออเดอร์ = billIdORD… จาก DI_REMARK ใบจอง (ออเดอร์ ROO)
+// ส่งก่อนหน้า (v1.22) = รายการที่ร้านได้รับครั้งก่อน {"s":สินค้าขาด,"a":สินค้าเพิ่ม} → ส่งใหม่เฉพาะรายการที่เปลี่ยน
 var OOS_C = {}; OOS_HEAD.forEach(function (h, i) { OOS_C[h] = i; });
 var OOS_ST = { WAIT: 'รอส่ง', SENT: 'ส่งแล้ว', NOUID: 'ไม่มี UID', FAIL: 'ล้มเหลว', CANCEL: 'ยกเลิก' };
 var OOS_MAX_MS = 5 * 60 * 1000;   // กันชน 6 นาทีของ Apps Script
@@ -303,7 +304,7 @@ function oosRowObj_(r) {
     id: o.id, date: o['วันส่ง'], cusId: o['รหัสร้านค้า'], cusName: o['ชื่อร้านค้า'], wh: o['คลัง'],
     bills: o['บิล'], sale: o['เซลล์ผู้ดูแล'], short: o['สินค้าขาด'], add: o['สินค้าเพิ่ม'],
     status: o['สถานะ'], uids: o['UID ที่ส่ง'], sentAt: o['เวลาส่ง'], round: o['รอบ'],
-    result: o['ผลลัพธ์'], by: o['บันทึกโดย'], updated: o['อัปเดต'], orders: o['ออเดอร์']
+    result: o['ผลลัพธ์'], by: o['บันทึกโดย'], updated: o['อัปเดต'], orders: o['ออเดอร์'], prev: o['ส่งก่อนหน้า']
   };
 }
 
@@ -340,7 +341,9 @@ function oosSave_(b) {
         // v1.21: วันที่บิลถูกแก้ (คีย์วันที่เปลี่ยน) แต่เลขบิลเดิมเคยส่งแล้ว + สินค้าตรงกัน = ไม่ส่งซ้ำ · สินค้าไม่ตรง = ส่งใหม่
         var prev = oosSentByBill_(sentBy[cusId], it.bills);
         if (prev && prev.canon === oosCanon_(it.short, it.add)) { same++; return; }
-        appends.push(rowVals.concat([OOS_ST.WAIT, '', '', '', '', by, now, h, String(it.orders || '')]));
+        // v1.22: เลขบิลเคยส่งแล้วแต่สินค้าเปลี่ยน → จำของที่ส่งไปแล้ว ไว้ส่งเฉพาะรายการที่เปลี่ยน
+        appends.push(rowVals.concat([OOS_ST.WAIT, '', '', '', '', by, now, h, String(it.orders || ''),
+          prev ? JSON.stringify({ s: prev.short, a: prev.add }) : '']));
         added++;
         return;
       }
@@ -350,8 +353,10 @@ function oosSave_(b) {
         if (oosCanon_(ex.v[OOS_C['สินค้าขาด']], ex.v[OOS_C['สินค้าเพิ่ม']]) === oosCanon_(it.short, it.add)) { same++; return; }
       }
       if (ex.v[OOS_C.hash] === h && st !== OOS_ST.CANCEL) { same++; return; }
+      // v1.22: ส่งไปแล้ว → จำรายการที่ส่ง (ส่งก่อนหน้า) · ยังไม่ได้ส่ง → คงค่าเดิมไว้ (ของที่ร้านได้รับจริงครั้งล่าสุด)
+      var prevSent = st === OOS_ST.SENT ? JSON.stringify({ s: ex.v[OOS_C['สินค้าขาด']], a: ex.v[OOS_C['สินค้าเพิ่ม']] }) : (ex.v[OOS_C['ส่งก่อนหน้า']] || '');
       var full = rowVals.concat([OOS_ST.WAIT, ex.v[OOS_C['UID ที่ส่ง']], ex.v[OOS_C['เวลาส่ง']],
-        ex.v[OOS_C['รอบ']], st === OOS_ST.SENT ? 'แก้ไขหลังส่ง — รอส่งใหม่' : '', by, now, h, String(it.orders || '')]);
+        ex.v[OOS_C['รอบ']], st === OOS_ST.SENT ? 'แก้ไขหลังส่ง — รอส่งเฉพาะที่เปลี่ยน' : '', by, now, h, String(it.orders || ''), prevSent]);
       sh.getRange(ex.row, 1, 1, OOS_HEAD.length).setValues([full]);
       changed++;
     });
@@ -379,7 +384,7 @@ function oosSentByCus_(rows) {
   rows.forEach(function (r) {
     if (r.v[OOS_C['สถานะ']] !== OOS_ST.SENT) return;
     var c = String(r.v[OOS_C['รหัสร้านค้า']] || '').trim();
-    (m[c] = m[c] || []).push({ bills: oosBillList_(r.v[OOS_C['บิล']]),
+    (m[c] = m[c] || []).push({ bills: oosBillList_(r.v[OOS_C['บิล']]), short: r.v[OOS_C['สินค้าขาด']], add: r.v[OOS_C['สินค้าเพิ่ม']],
       canon: oosCanon_(r.v[OOS_C['สินค้าขาด']], r.v[OOS_C['สินค้าเพิ่ม']]), at: r.row });
   });
   return m;
@@ -476,12 +481,19 @@ function oosSendPending_(opt) {
 
       var uids = uidMap[o.cusId] || [];
       var now = oosNow_(), status, result;
+      var od = oosDeltaObj_(o);   // v1.22: เคยส่งแล้ว → ส่งเฉพาะรายการที่เปลี่ยน
+      if (od && od.empty) {
+        status = OOS_ST.SENT; result = 'ไม่มีรายการใหม่หรือเปลี่ยน — ไม่ต้องส่งซ้ำ'; res.skipped++;
+        sh.getRange(r.row, OOS_C['สถานะ'] + 1, 1, 5).setValues([[status, o.uids, o.sentAt, opt.round || '', result]]);
+        sh.getRange(r.row, OOS_C['อัปเดต'] + 1).setValue(now);
+        continue;
+      }
       if (!uids.length) {
         status = OOS_ST.NOUID; result = 'ไม่พบ User ID ของร้านในแท็บ UID'; res.noUid++;
       } else {
         var okN = 0, errs = [];
         uids.forEach(function (uid) {
-          var rr = oosPush_(uid, o);
+          var rr = oosPush_(uid, od || o);
           if (rr.ok) okN++; else errs.push(uid.slice(0, 8) + '…: ' + rr.error);
         });
         if (okN) {
@@ -507,7 +519,7 @@ function oosThaiDate_(iso) {
 }
 
 function oosPush_(uid, o) {
-  var msg = { type: 'flex', altText: ('แจ้งสินค้าขาด · ร้าน ' + o.cusName).slice(0, 380), contents: oosFlex_(o) };
+  var msg = { type: 'flex', altText: ((o.update ? 'อัปเดตสินค้าขาด · ร้าน ' : 'แจ้งสินค้าขาด · ร้าน ') + o.cusName).slice(0, 380), contents: oosFlex_(o) };
   var payload = { to: uid, messages: [msg] };
   try {
     var res = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
@@ -888,6 +900,7 @@ function oosSection_(label, color, items, maxRows) {
     if (i) out.push({ type: 'separator', margin: 'md', color: '#eef0f4' });
     var right = [{ type: 'text', text: it.qty || '-', size: 'md', weight: 'bold', color: color === OOS_GREEN ? OOS_GREEN : OOS_RED, align: 'end' }];
     if (it.sub) right.push({ type: 'text', text: it.sub, size: 'xxs', color: '#9a9a9a', align: 'end' });
+    if (it.was) right.push({ type: 'text', text: 'เดิม ' + it.was, size: 'xxs', color: '#e67e22', weight: 'bold', align: 'end' });
     out.push({
       type: 'box', layout: 'horizontal', margin: 'md', spacing: 'md', alignItems: 'center', contents: [
         { type: 'text', text: it.name, size: 'sm', color: '#222222', wrap: true, flex: 1 },
@@ -901,6 +914,33 @@ function oosSection_(label, color, items, maxRows) {
   return out;
 }
 
+/** v1.22: รายการที่เปลี่ยนจากครั้งก่อน (ส่งก่อนหน้า) — ของใหม่ + จำนวนเปลี่ยน (แนบ "เดิม") · ของที่ไม่ขาดแล้วไม่แจ้ง
+ *  คืน null = ไม่เคยส่ง (ส่งเต็ม) · {empty:true} = ไม่มีอะไรเปลี่ยน */
+function oosDeltaObj_(o) {
+  var p = null;
+  try { p = o.prev ? JSON.parse(o.prev) : null; } catch (e) { p = null; }
+  if (!p) return null;
+  var key = function (line) { var t = String(line).trim(); return t.slice(0, 2) + '|' + oosParseLine_(t).name; };
+  var old = {};
+  [p.s, p.a].forEach(function (txt) {
+    String(txt || '').split('\n').forEach(function (l) { l = l.trim(); if (l && l !== '-') old[key(l)] = oosParseLine_(l).qty; });
+  });
+  var was = {}, pick = function (txt) {
+    return String(txt || '').split('\n').map(function (l) { return l.trim(); }).filter(function (l) {
+      if (!l || l === '-') return false;
+      var k = key(l), q = oosParseLine_(l).qty;
+      if (!(k in old)) return true;
+      if (old[k] !== q) { was[oosParseLine_(l).name] = old[k]; return true; }
+      return false;
+    }).join('\n');
+  };
+  var s = pick(o.short), a = pick(o.add);
+  if (!s && !a) return { empty: true };
+  var d = {}; Object.keys(o).forEach(function (k) { d[k] = o[k]; });
+  d.short = s || '-'; d.add = a || '-'; d.update = true; d.was = was;
+  return d;
+}
+
 /** LINE จำกัด JSON ของ bubble ~30KB → ลดจำนวนแถวที่โชว์ลงจนกว่าจะพอดี */
 function oosFlex_(o) {
   for (var n = OOS_MAX_ROWS; n > 5; n -= 5) {
@@ -912,6 +952,7 @@ function oosFlex_(o) {
 
 function oosFlexBuild_(o, maxRows) {
   var shortItems = oosLines_(o.short), addItems = oosLines_(o.add);
+  if (o.was) shortItems.concat(addItems).forEach(function (it) { if (o.was[it.name]) it.was = o.was[it.name]; });
   var body = [
     { type: 'text', text: String(o.cusName || '-'), size: 'lg', weight: 'bold', color: OOS_NAVY, wrap: true },
     { type: 'text', text: 'รหัสร้าน ' + (o.cusId || '-'), size: 'xs', color: '#8a8a8a' }
@@ -945,9 +986,11 @@ function oosFlexBuild_(o, maxRows) {
         {
           type: 'box', layout: 'vertical', backgroundColor: OOS_NAVY, paddingAll: '16px', paddingStart: '18px', contents: [
             { type: 'text', text: 'RATTANA · แจ้งรายละเอียดสินค้า', size: 'xs', color: OOS_GOLD, weight: 'bold' },
-            { type: 'text', text: 'สินค้าขาด / ส่งแทน', size: 'xl', color: '#ffffff', weight: 'bold', margin: 'xs' },
+            { type: 'text', text: o.update ? 'อัปเดต สินค้าขาด / ส่งแทน' : 'สินค้าขาด / ส่งแทน', size: 'xl', color: '#ffffff', weight: 'bold', margin: 'xs', wrap: true },
             { type: 'text', text: 'วันที่ ' + oosThaiDateLong_(o.date), size: 'xs', color: '#c3c9d6', margin: 'xs' }
-          ]
+          ].concat(o.update ? [
+            { type: 'text', text: 'แจ้งเฉพาะรายการที่เพิ่ม / เปลี่ยนจากข้อความก่อนหน้า', size: 'xs', color: OOS_GOLD, margin: 'sm', wrap: true }
+          ] : [])
         },
         { type: 'box', layout: 'vertical', height: '4px', backgroundColor: OOS_GOLD, contents: [] }
       ]
