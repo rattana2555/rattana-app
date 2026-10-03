@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rattana Track → LINE v1.0</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+:root{
+  --navy:#0d1b3e;--navy-mid:#1a2f5e;--navy-light:#243b73;
+  --gold:#c9a84c;--gold-light:#e8c86a;
+  --success:#2ecc71;--danger:#e74c3c;--warning:#f39c12;--info:#3498db;
+  --bg:#f4f6fb;--text:#0d1b3e;--card-bg:#fff;--border:#dde3f0;--muted:#6b7896;--row-alt:#fafbfd;
+  --radius-sm:6px;--radius-md:12px;--radius-lg:16px;--radius-xl:20px;
+  --shadow-md:0 2px 8px rgba(0,0,0,.08);--shadow-lg:0 8px 24px rgba(13,27,62,.12);--shadow-gold:0 4px 12px rgba(201,168,76,.35);
+}
+body.dark{--bg:#0a1020;--text:#e8eaf0;--card-bg:#111c35;--border:#243b73;--muted:#8a98b8;--row-alt:#0f1830}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;min-height:100dvh;background:var(--bg);color:var(--text);transition:background .25s,color .25s}
+button{font-family:inherit;cursor:pointer;border:none;-webkit-tap-highlight-color:transparent}
+input,select{font-family:inherit;font-size:15px}
+
+header{background:var(--navy);color:#fff;padding:12px 16px;position:sticky;top:0;z-index:200;display:flex;align-items:center;gap:10px;border-bottom:3px solid var(--gold);padding-top:max(12px,env(safe-area-inset-top))}
+.logo-text{font-weight:700;font-size:17px;flex:1}
+.logo-text span{color:var(--gold)}
+.ver-badge{font-size:11px;font-weight:600;color:var(--navy)!important;background:var(--gold);padding:2px 7px;border-radius:10px;vertical-align:middle}
+.icon-btn{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.2);width:38px;height:38px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.icon-btn:hover{background:rgba(255,255,255,.12)}
+
+.tab-nav{display:flex;background:var(--navy);border-bottom:3px solid var(--gold);padding:0 8px;overflow-x:auto;scrollbar-width:none}
+.tab-nav::-webkit-scrollbar{display:none}
+.tab-btn{background:transparent;color:rgba(255,255,255,.6);padding:10px 18px;font-size:13px;font-weight:600;border-bottom:3px solid transparent;white-space:nowrap;flex-shrink:0;transition:all .18s;margin-bottom:-3px;border-radius:var(--radius-sm) var(--radius-sm) 0 0}
+.tab-btn.active{color:var(--navy);background:var(--gold);font-weight:700}
+.tab-pane{display:none}.tab-pane.active{display:block}
+
+.content{padding:12px;max-width:1500px;margin:0 auto;padding-bottom:40px}
+.card{background:var(--card-bg);border-radius:var(--radius-md);border:1px solid var(--border);box-shadow:var(--shadow-md)}
+.card-gold{border-top:3px solid var(--gold)}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;border:1px solid transparent;min-height:42px;transition:opacity .15s,transform .1s}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-navy{background:var(--navy);color:#fff}
+.btn-gold{background:var(--gold);color:var(--navy)}
+.btn-green{background:var(--success);color:#fff}
+.btn-outline{background:transparent;color:var(--text);border-color:var(--border)}
+.btn-sm{padding:5px 11px;font-size:12px;min-height:32px}
+.btn-block{width:100%}
+
+.input{height:42px;padding:0 13px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);font-size:15px;outline:none;width:100%}
+.input:focus{border-color:var(--gold)}
+
+.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+@media(min-width:720px){.stat-grid{grid-template-columns:repeat(4,1fr)}}
+.stat-card{background:var(--card-bg);border-radius:var(--radius-md);padding:13px 16px;border:1px solid var(--border);border-top:3px solid var(--gold);text-align:center}
+.stat-card .s-val{font-size:22px;font-weight:700}
+.stat-card .s-lbl{font-size:11px;color:var(--muted);margin-top:3px}
+
+.sec{margin-top:16px}
+.sec-head{display:flex;align-items:center;gap:9px;padding:9px 13px;border-radius:var(--radius-sm);font-weight:700;font-size:14px;cursor:pointer;user-select:none}
+.sec-wait{background:#fef3d7;color:#a87800}
+.sec-sent{background:#e8f7ee;color:#1e8449}
+.sec-nouid{background:#fdecea;color:#c0392b}
+body.dark .sec-wait{background:#3a2e15;color:#e8c86a}
+body.dark .sec-sent{background:#1a3a25;color:#7be0a3}
+body.dark .sec-nouid{background:#3a1a1a;color:#ff9d92}
+.sec-body{margin-top:10px}
+.sec.collapsed .sec-body{display:none}
+
+.store-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:10px}
+.store{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px 13px;box-shadow:var(--shadow-md);border-left:4px solid var(--border)}
+.store.w{border-left-color:var(--warning)}
+.store.s{border-left-color:var(--success);opacity:.72}
+.store.n{border-left-color:var(--danger)}
+.store-top{display:flex;align-items:flex-start;gap:9px}
+.store-name{font-weight:700;font-size:14px;line-height:1.35;flex:1;min-width:0}
+.store-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.chk{width:20px;height:20px;flex-shrink:0;accent-color:var(--gold);cursor:pointer;margin-top:2px}
+.store-meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.mchip{font-size:11px;padding:3px 9px;border-radius:10px;background:var(--row-alt);border:1px solid var(--border);color:var(--muted)}
+.mchip b{color:var(--text);font-weight:600}
+.bill-line{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-bottom:1px dashed var(--border)}
+.bill-line:last-child{border-bottom:none}
+.bill-no{font-family:'Courier New',monospace;font-weight:600}
+.store-foot{display:flex;gap:6px;margin-top:9px}
+
+#spinner{display:none;position:fixed;inset:0;background:rgba(13,27,62,.6);align-items:center;justify-content:center;z-index:99999;backdrop-filter:blur(3px)}
+#spinner.show{display:flex}
+.spinner-box{background:var(--card-bg);border-radius:var(--radius-lg);padding:28px 38px;text-align:center;border-top:4px solid var(--gold)}
+.spinner-ring{width:44px;height:44px;border:5px solid #dde3f0;border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.toast{position:fixed;bottom:max(22px,env(safe-area-inset-bottom));right:16px;padding:12px 20px;border-radius:var(--radius-md);color:#fff;z-index:99998;font-weight:500;box-shadow:var(--shadow-lg);max-width:90vw;font-size:13px;animation:slideIn .3s ease}
+.toast-success{background:var(--success)}.toast-error{background:var(--danger)}.toast-warning{background:var(--warning);color:var(--navy)}.toast-info{background:var(--navy-mid);border-left:3px solid var(--gold)}
+@keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:none;opacity:1}}
+
+#loginModal{display:none;position:fixed;inset:0;background:rgba(13,27,62,.85);z-index:9000;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)}
+#loginModal.open{display:flex}
+.login-box{background:var(--card-bg);border-radius:var(--radius-xl);padding:34px 28px;max-width:340px;width:100%;text-align:center;border-top:4px solid var(--gold)}
+
+.hidden{display:none!important}
+.empty-state{text-align:center;padding:46px 24px;color:var(--muted)}
+.empty-state .icon{font-size:48px;margin-bottom:12px}
+.empty-state h3{font-size:16px;color:var(--text)}
+
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+.row-lbl{font-size:12px;color:var(--muted);font-weight:600}
+.sw{position:relative;display:inline-block;width:46px;height:26px;flex-shrink:0}
+.sw input{opacity:0;width:0;height:0}
+.sw span{position:absolute;inset:0;background:var(--border);border-radius:26px;transition:.2s;cursor:pointer}
+.sw span::before{content:'';position:absolute;height:20px;width:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+.sw input:checked+span{background:var(--success)}
+.sw input:checked+span::before{transform:translateX(20px)}
+.setrow{display:flex;align-items:center;gap:12px;padding:13px 15px;border-bottom:1px solid var(--border)}
+.setrow:last-child{border-bottom:none}
+.setrow .t{flex:1}
+.setrow .t b{font-size:14px}
+.setrow .t div{font-size:12px;color:var(--muted);margin-top:2px}
+</style>
+</head>
+<body>
+
+<div id="spinner"><div class="spinner-box"><div class="spinner-ring"></div><p id="spinnerMsg">กำลังโหลด...</p></div></div>
+
+<div id="loginModal">
+  <div class="login-box">
+    <div style="font-size:42px;margin-bottom:10px">🚚</div>
+    <h2 style="font-size:19px;font-weight:700">Track <span style="color:var(--gold)">→ LINE</span></h2>
+    <p style="font-size:13px;color:var(--muted);margin:8px 0 22px">ส่งลิงก์ติดตามสถานะให้ร้าน</p>
+    <div id="g_id_onload" data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com"
+      data-callback="onGoogleLogin" data-auto_prompt="false"></div>
+    <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with" data-locale="th"></div>
+    <p id="loginErr" style="color:var(--danger);font-size:12px;margin-top:12px;display:none"></p>
+    <p style="font-size:11px;color:var(--muted);margin-top:18px">v1.0</p>
+  </div>
+</div>
+
+<header>
+  <div class="logo-text">Track <span>→ LINE</span> <span class="ver-badge">v1.0</span></div>
+  <button class="icon-btn" onclick="loadList()" title="ดึงใหม่">🔄</button>
+  <button class="icon-btn" id="darkBtn" onclick="toggleDark()">🌙</button>
+  <button class="icon-btn" onclick="logout()" title="ออกจากระบบ">👤</button>
+</header>
+
+<div class="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('list',this)">📋 รายการส่ง</button>
+  <button class="tab-btn" onclick="switchTab('set',this)">⚙️ ตั้งค่า</button>
+</div>
+
+<!-- ═══ รายการส่ง ═══ -->
+<div id="tab-list" class="tab-pane active">
+  <div class="content">
+    <div id="testBanner" class="hidden" style="background:#fdecea;border:1.5px solid #e74c3c;color:#c0392b;border-radius:var(--radius-md);padding:11px 14px;margin-bottom:12px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:9px">
+      <span style="font-size:19px">🧪</span>
+      <span id="testBannerTxt"></span>
+    </div>
+    <div class="stat-grid" id="stats"></div>
+
+    <div class="toolbar">
+      <button class="btn btn-gold" id="btnSend" onclick="sendSelected()">📤 ส่ง LINE ที่เลือก</button>
+      <button class="btn btn-outline btn-sm" onclick="selAll(true)">เลือกทั้งหมด</button>
+      <button class="btn btn-outline btn-sm" onclick="selAll(false)">ล้าง</button>
+      <span style="margin-left:auto;font-size:12px;color:var(--muted)" id="srcInfo"></span>
+    </div>
+
+    <div id="sections"></div>
+  </div>
+</div>
+
+<!-- ═══ ตั้งค่า ═══ -->
+<div id="tab-set" class="tab-pane">
+  <div class="content" style="max-width:760px">
+    <div class="card card-gold" style="margin-top:8px">
+      <div class="setrow">
+        <div class="t"><b>ที่อยู่หลังบ้าน (GAS)</b><div>URL เว็บแอปของโปรเจกต์ Apps Script แอปนี้ ลงท้าย /exec</div></div>
+        <div style="display:flex;gap:6px;width:280px">
+          <input class="input" id="cfgUrl" readonly style="font-size:11px">
+          <button class="btn btn-outline btn-sm" onclick="askUrl()">แก้</button>
+        </div>
+      </div>
+      <div class="setrow">
+        <div class="t"><b>ส่งอัตโนมัติ</b><div>ปิด = ต้องมากดส่งเองจากหน้ารายการ</div></div>
+        <label class="sw"><input type="checkbox" id="cfgEnabled"><span></span></label>
+      </div>
+      <div class="setrow">
+        <div class="t"><b>เตรียมรายการเอง</b><div>ระบบหาทริปที่คนขับรับแล้วเข้าคิวให้เอง ทุก 10 นาที</div></div>
+        <label class="sw"><input type="checkbox" id="cfgAuto"><span></span></label>
+      </div>
+      <div class="setrow">
+        <div class="t"><b>บิลที่ส่ง</b><div>ดูจากวันที่ส่งสินค้าของบิล</div></div>
+        <select class="input" id="cfgDays" style="width:190px">
+          <option value="today">วันนี้</option>
+          <option value="today,tomorrow">วันนี้ + พรุ่งนี้</option>
+          <option value="tomorrow">พรุ่งนี้</option>
+        </select>
+      </div>
+      <div class="setrow">
+        <div class="t"><b>ร้านที่ไม่ส่ง LINE</b><div>ใส่รหัสร้าน คั่นด้วยเครื่องหมายจุลภาค</div></div>
+        <input class="input" id="cfgExcl" style="width:230px" placeholder="7500000000">
+      </div>
+      <div class="setrow" style="background:#fdecea33">
+        <div class="t"><b>🧪 โหมดทดสอบ</b><div><b style="color:var(--danger)">มีค่าอยู่ = ทุกข้อความวิ่งมาที่ UID นี้คนเดียว ร้านจริงไม่ได้รับอะไรเลย</b><br>ใส่ User ID ของตัวเอง · ลบให้ว่าง = ส่งร้านจริง</div></div>
+        <input class="input" id="cfgTestUid" style="width:230px;font-family:'Courier New',monospace;font-size:12px" placeholder="U1234…">
+      </div>
+      <div style="padding:14px 15px">
+        <button class="btn btn-gold btn-block" onclick="saveCfg()">💾 บันทึกการตั้งค่า</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px;padding:14px 16px">
+      <div style="font-size:12px;color:var(--muted);line-height:1.9" id="sysInfo"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ════════ CONFIG ════════ */
+/* โปรเจกต์ GAS ของแอปนี้แยกต่างหาก — ใส่ URL /exec ของ deployment ครั้งแรก แล้วจำไว้ในเครื่อง */
+const LS_URL = 'trk_url', LS_KEY = 'trk_key', LS_USER = 'trk_user';
+const GAS_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycby4O2Xw8zHG8a0YVWMBsLK1zwyRJXXb2HdUR7DVyl-B1CejDW1a7lXfNVdlFIOfFjlWhQ/exec';
+let GAS_URL = '';
+
+let S = { key:'', user:null, stores:[], sel:{}, state:null };
+
+/* ════════ BOOT ════════ */
+window.onload = () => {
+  applyDark(localStorage.getItem('rattana_dark')==='1');
+  try { GAS_URL = localStorage.getItem(LS_URL) || GAS_URL_DEFAULT; } catch(e){ GAS_URL = GAS_URL_DEFAULT; }
+  try { S.key = localStorage.getItem(LS_KEY) || ''; } catch(e){}
+  try { S.user = JSON.parse(localStorage.getItem(LS_USER)||'null'); } catch(e){}
+  document.getElementById('cfgUrl').value = GAS_URL;
+  if (S.key && S.user) boot();
+  else document.getElementById('loginModal').classList.add('open');
+};
+
+function askUrl(){
+  const u = prompt('ใส่ URL ของเว็บแอป (ลงท้าย /exec) จากโปรเจกต์ Apps Script ของแอปนี้:', GAS_URL||'');
+  if(!u || !/\/exec\s*$/.test(u.trim())) { toast('ต้องเป็น URL ที่ลงท้ายด้วย /exec','error'); return; }
+  GAS_URL = u.trim();
+  localStorage.setItem(LS_URL, GAS_URL);
+  document.getElementById('cfgUrl').value = GAS_URL;
+  location.reload();
+}
+
+async function boot(){
+  document.getElementById('loginModal').classList.remove('open');
+  await loadState();
+  await loadList();
+}
+
+/* ════════ AUTH ════════ */
+async function onGoogleLogin(r){
+  showSpinner('กำลังตรวจสอบ...');
+  try{
+    const out = await gas({ action:'login', credential:r.credential }, true);
+    S.key = out.key;
+    S.user = { email: out.email, name: out.name || out.email };
+    localStorage.setItem(LS_KEY, S.key);
+    localStorage.setItem(LS_USER, JSON.stringify(S.user));
+    toast(`ยินดีต้อนรับ ${S.user.name} 👋`,'success');
+    await boot();
+  }catch(e){
+    const el=document.getElementById('loginErr'); el.textContent=e.message; el.style.display='block';
+  }finally{ hideSpinner(); }
+}
+function logout(){
+  if(!confirm('ออกจากระบบ?'))return;
+  localStorage.removeItem(LS_KEY); localStorage.removeItem(LS_USER);
+  location.reload();
+}
+
+/* ════════ GAS ════════ */
+async function gas(data, noKey){
+  const body = Object.assign({ app:'track' }, data);
+  if(!noKey) body.key = S.key;
+  const res = await fetch(GAS_URL, { method:'POST', body: JSON.stringify(body) });
+  const txt = await res.text();
+  let out;
+  try { out = JSON.parse(txt); } catch(e){ throw new Error('ตอบกลับไม่ถูกต้อง: '+txt.slice(0,120)); }
+  if(!out.ok) throw new Error(out.error||'ไม่สำเร็จ');
+  return out;
+}
+
+/* ════════ STATE ════════ */
+async function loadState(){
+  try{
+    S.state = await gas({ action:'state' });
+    const c = S.state.cfg;
+    document.getElementById('cfgEnabled').checked = !!c.enabled;
+    document.getElementById('cfgAuto').checked = !!c.auto;
+    document.getElementById('cfgDays').value = (c.days||['today']).join(',');
+    document.getElementById('cfgExcl').value = (c.exclude||[]).map(e=>e.id).join(', ');
+    document.getElementById('cfgTestUid').value = c.testUid||'';
+    const tb=document.getElementById('testBanner');
+    tb.classList.toggle('hidden', !c.testUid);
+    if(c.testUid) document.getElementById('testBannerTxt').textContent =
+      `โหมดทดสอบเปิดอยู่ — ข้อความทั้งหมดจะวิ่งไปที่ ${c.testUid.slice(0,10)}… คนเดียว ร้านจริงไม่ได้รับ`;
+    document.getElementById('sysInfo').innerHTML = `
+      ตัวตั้งเวลา: <b>${S.state.trigger?'✅ ทำงานอยู่ (ทุก 10 นาที)':'⚠️ ยังไม่ติดตั้ง — รัน trkSetup ใน Apps Script'}</b><br>
+      ชีทคิว: <a href="${S.state.queueUrl}" target="_blank" style="color:var(--gold)">เปิดชีท</a><br>
+      แอปติดตามของลูกค้า: <a href="${S.state.appUrl}" target="_blank" style="color:var(--gold)">${S.state.appUrl}</a><br>
+      เข้าสู่ระบบ: ${S.user?S.user.name:'-'}`;
+  }catch(e){
+    if(/รหัสแอป/.test(e.message)){ localStorage.removeItem(LS_KEY); location.reload(); return; }
+    toast(e.message,'error');
+  }
+}
+
+async function saveCfg(){
+  showSpinner('กำลังบันทึก...');
+  try{
+    await gas({ action:'setSchedule',
+      enabled: document.getElementById('cfgEnabled').checked,
+      auto: document.getElementById('cfgAuto').checked,
+      days: document.getElementById('cfgDays').value.split(','),
+      exclude: document.getElementById('cfgExcl').value.split(/[,\s]+/).filter(x=>/^\d{6,}$/.test(x)).map(id=>({id:id,name:''})),
+      testUid: document.getElementById('cfgTestUid').value.trim(),
+      who: S.user ? S.user.name : ''
+    });
+    toast('บันทึกแล้ว ✓','success');
+    await loadState();
+  }catch(e){ toast(e.message,'error'); }
+  finally{ hideSpinner(); }
+}
+
+/* ════════ LIST ════════ */
+async function loadList(){
+  if(!S.key) return;
+  showSpinner('กำลังดึงรายการ...');
+  try{
+    const out = await gas({ action:'list' });
+    S.stores = out.stores||[];
+    S.sel = {};
+    S.stores.forEach(s=>{ if(!s.status && s.hasUid) S.sel[s.id]=true; });
+    document.getElementById('srcInfo').textContent = 'ดึงเมื่อ '+(out.at||'').slice(11,16);
+    render();
+  }catch(e){ toast(e.message,'error'); }
+  finally{ hideSpinner(); }
+}
+
+function groupOf(s){
+  if(s.status==='ส่งแล้ว') return 'sent';
+  if(!s.hasUid) return 'nouid';
+  return 'wait';
+}
+
+function render(){
+  const g = { wait:[], sent:[], nouid:[] };
+  S.stores.forEach(s=>g[groupOf(s)].push(s));
+
+  const baht = S.stores.reduce((a,s)=>a+(s.total||0),0);
+  document.getElementById('stats').innerHTML = [
+    {l:'ร้านทั้งหมด', v:S.stores.length, c:'var(--gold)'},
+    {l:'รอส่ง',      v:g.wait.length,   c:'var(--warning)'},
+    {l:'ส่งแล้ว',     v:g.sent.length,   c:'var(--success)'},
+    {l:'ไม่มี UID',   v:g.nouid.length,  c:'var(--danger)'},
+  ].map(s=>`<div class="stat-card" style="border-top-color:${s.c}"><div class="s-val" style="color:${s.c}">${s.v}</div><div class="s-lbl">${s.l}</div></div>`).join('');
+
+  const secs = [
+    { k:'wait',  cls:'sec-wait',  icon:'⏰', title:'รอส่ง',    list:g.wait },
+    { k:'nouid', cls:'sec-nouid', icon:'📵', title:'ไม่มี UID — ต้องส่งเอง', list:g.nouid },
+    { k:'sent',  cls:'sec-sent',  icon:'✓',  title:'ส่งแล้ว',   list:g.sent },
+  ];
+  document.getElementById('sections').innerHTML = S.stores.length ? secs.map(sec=>{
+    if(!sec.list.length) return '';
+    const copyBtn = sec.k==='nouid'
+      ? `<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();copyAll()">📋 คัดลอกลิงก์ทั้งหมด</button>` : '';
+    return `<div class="sec" id="sec-${sec.k}">
+      <div class="sec-head ${sec.cls}" onclick="document.getElementById('sec-${sec.k}').classList.toggle('collapsed')">
+        <span>${sec.icon}</span><span>${sec.title}</span>
+        <span style="opacity:.75">${sec.list.length} ร้าน</span>
+        <span style="margin-left:auto;display:flex;gap:6px">${copyBtn}</span>
+      </div>
+      <div class="sec-body"><div class="store-grid">${sec.list.map(s=>storeCard(s,sec.k)).join('')}</div></div>
+    </div>`;
+  }).join('') : `<div class="empty-state"><div class="icon">📭</div><h3>ยังไม่มีทริปที่คนขับรับงาน</h3><p>ระบบจะขึ้นให้เองเมื่อคนขับรับใบคุม</p></div>`;
+
+  updateSendBtn();
+}
+
+function storeCard(s,g){
+  const can = g==='wait';
+  return `<div class="store ${g==='wait'?'w':g==='sent'?'s':'n'}">
+    <div class="store-top">
+      ${can?`<input type="checkbox" class="chk" ${S.sel[s.id]?'checked':''} onchange="toggleSel('${s.id}',this.checked)">`:'<span style="width:20px"></span>'}
+      <div class="store-name">${esc(s.cusName)}
+        <div class="store-sub">รหัส ${s.cusId} · ทริป ${esc(s.trip)}</div>
+      </div>
+    </div>
+    <div class="store-meta">
+      <span class="mchip">🧑‍✈️ <b>${esc(s.driver||'-')}</b></span>
+      ${s.plate?`<span class="mchip">🚛 <b>${esc(s.plate)}</b></span>`:''}
+      <span class="mchip">💰 <b>฿${money(s.total)}</b></span>
+    </div>
+    <div style="margin-top:9px">
+      ${(s.items||[]).map(i=>`<div class="bill-line"><span class="bill-no">${esc(i.doc)}</span><span>฿${money(i.amount)}</span></div>`).join('')}
+    </div>
+    ${s.status==='ส่งแล้ว'?`<div style="font-size:11px;color:var(--success);margin-top:8px;font-weight:600">✓ ส่งแล้ว ${(s.sentAt||'').slice(11,16)}</div>`:''}
+    ${s.status==='ล้มเหลว'?`<div style="font-size:11px;color:var(--danger);margin-top:8px">⚠ ${esc(s.result||'')}</div>`:''}
+    <div class="store-foot">
+      <button class="btn btn-outline btn-sm" onclick="copyStore('${s.id}')">📋 คัดลอกลิงก์</button>
+      ${can?`<button class="btn btn-gold btn-sm" onclick="sendOne('${s.id}')">📤 ส่งร้านนี้</button>`:''}
+    </div>
+  </div>`;
+}
+
+function toggleSel(id,on){ if(on)S.sel[id]=true; else delete S.sel[id]; updateSendBtn(); }
+function selAll(on){
+  S.sel={};
+  if(on) S.stores.forEach(s=>{ if(groupOf(s)==='wait') S.sel[s.id]=true; });
+  render();
+}
+function selIds(){ return Object.keys(S.sel); }
+function updateSendBtn(){
+  const n=selIds().length;
+  const b=document.getElementById('btnSend');
+  b.textContent = n? `📤 ส่ง LINE ${n} ร้าน` : '📤 ส่ง LINE ที่เลือก';
+  b.disabled = !n;
+}
+
+/* ════════ SEND ════════ */
+async function sendSelected(){ await doSend(selIds()); }
+async function sendOne(id){ await doSend([id]); }
+
+async function doSend(ids){
+  if(!ids.length){ toast('ยังไม่ได้เลือกร้าน','warning'); return; }
+  const t = S.state && S.state.cfg && S.state.cfg.testUid;
+  const msg = t
+    ? `🧪 โหมดทดสอบ\n\nจะส่ง ${ids.length} ข้อความมาที่ UID ของคุณคนเดียว\nร้านจริงไม่ได้รับอะไรเลย\n\nดำเนินการ?`
+    : `⚠️ ส่งจริงถึงร้าน\n\nส่ง LINE ให้ ${ids.length} ร้าน\nร้านจะได้รับลิงก์ติดตามสถานะพร้อมชื่อคนขับและทะเบียนรถ\n\nยืนยัน?`;
+  if(!confirm(msg)) return;
+  showSpinner(`กำลังส่ง ${ids.length} ร้าน...`);
+  try{
+    const sel = S.stores.filter(s=>ids.indexOf(s.id)>=0);
+    await gas({ action:'save', stores: sel.map(s=>({
+      id:s.id, date:s.date, trip:s.trip, cusId:s.cusId, cusName:s.cusName,
+      driver:s.driver, plate:s.plate, total:s.total, items:s.items
+    })) });
+    const r = await gas({ action:'sendNow', ids: ids, who: S.user?S.user.name:'' });
+    toast(`ส่งสำเร็จ ${r.sent} ร้าน${r.failed?` · ล้มเหลว ${r.failed}`:''}${r.noUid?` · ไม่มี UID ${r.noUid}`:''}`, r.failed?'warning':'success');
+    await loadList();
+  }catch(e){ toast(e.message,'error'); }
+  finally{ hideSpinner(); }
+}
+
+/* ════════ COPY ════════ */
+function copyStore(id){
+  const s = S.stores.find(x=>x.id===id); if(!s)return;
+  copy(storeText(s), 'คัดลอกลิงก์ร้าน '+s.cusName);
+}
+function copyAll(){
+  const list = S.stores.filter(s=>groupOf(s)==='nouid');
+  if(!list.length){ toast('ไม่มีร้านในกลุ่มนี้','info'); return; }
+  copy(list.map(storeText).join('\n\n──────────\n\n'), `คัดลอก ${list.length} ร้าน`);
+}
+function storeText(s){
+  const L = [`🚚 สินค้ากำลังจัดส่ง — ${s.cusName}`,
+    `คนขับ ${s.driver||'-'}${s.plate?' · ทะเบียน '+s.plate:''}`];
+  (s.items||[]).forEach(i=>L.push(`${i.doc}  ฿${money(i.amount)}`, i.link));
+  L.push('ติดตามสถานะได้จากลิงก์ด้านบน');
+  return L.join('\n');
+}
+function copy(t,msg){
+  navigator.clipboard.writeText(t).then(()=>toast(msg+' ✓','success'))
+    .catch(()=>prompt('คัดลอกข้อความนี้:',t));
+}
+
+/* ════════ UTILS ════════ */
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function money(n){ return (Number(n)||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function switchTab(id,btn){
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  if(btn)btn.classList.add('active');
+}
+function applyDark(on){document.body.classList.toggle('dark',on);document.getElementById('darkBtn').textContent=on?'☀️':'🌙';}
+function toggleDark(){const on=!document.body.classList.contains('dark');applyDark(on);localStorage.setItem('rattana_dark',on?'1':'0');}
+function showSpinner(m){document.getElementById('spinnerMsg').textContent=m||'กำลังโหลด...';document.getElementById('spinner').classList.add('show');}
+function hideSpinner(){document.getElementById('spinner').classList.remove('show');}
+function toast(msg,type){
+  const t=document.createElement('div');t.className='toast toast-'+(type||'info');t.textContent=msg;
+  document.body.appendChild(t);setTimeout(()=>t.remove(),4000);
+}
+</script>
+</body>
+</html>
