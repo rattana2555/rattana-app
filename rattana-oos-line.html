@@ -9,7 +9,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="rattana-oos-line-icon-192.png">
 <link rel="apple-touch-icon" href="rattana-oos-line-icon-180.png">
 <link rel="manifest" href="rattana-oos-line.webmanifest">
-<title>Rattana แจ้งสินค้าขาด v1.37</title>
+<title>Rattana แจ้งสินค้าขาด v1.38</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -121,6 +121,7 @@ body.dark .chip.on{background:var(--gold);color:var(--navy);border-color:var(--g
 .ms.ok{border-color:rgba(4,160,70,.35)}.ms.ok b{color:#04a046}
 .ms.bad{border-color:rgba(192,57,43,.35)}.ms.bad b{color:var(--danger)}
 .ms.info{border-color:rgba(52,120,220,.35)}.ms.info b{color:var(--info)}
+.chip.chip-send{border-color:#f1c40f;background:#fef3d7;color:#7a5d00}.chip.chip-send.on{background:#f1c40f;color:#0d1b3e;border-color:#f1c40f}
 .bill-date{display:inline-block;padding:0 7px;border-radius:8px;background:var(--navy);color:#fff;font-size:11px;font-weight:700;margin-right:4px}
 .ms.next small{font-weight:600;opacity:.85}
 .ms.next{cursor:pointer;background:#fef3d7;color:#7a5d00;border-color:#f1c40f}.ms.next b{color:#9a7400}
@@ -246,7 +247,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
   <div class="login-box">
     <img src="rattana-oos-line-icon-192.png" alt="" class="login-logo">
     <h1>Rattana <span style="color:var(--gold)">แจ้งสินค้าขาด</span></h1>
-    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.37</p>
+    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.38</p>
     <div id="g_id_onload" data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
     <div style="display:flex;justify-content:center"><div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div></div>
     <div class="login-err" id="loginErr"></div>
@@ -259,7 +260,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
   <img src="rattana-oos-line-icon.svg" alt="" class="hdr-logo">
   <div>
     <div class="logo-text">Rattana <span>แจ้งสินค้าขาด</span></div>
-    <div class="logo-sub">v1.37 · ส่ง LINE ถึงร้านตาม User ID</div>
+    <div class="logo-sub">v1.38 · ส่ง LINE ถึงร้านตาม User ID</div>
   </div>
   <div class="hdr-right">
     <span class="user-chip" id="userChip"></span>
@@ -423,7 +424,7 @@ body.dark .tp-btn.on{background:var(--gold);border-color:var(--gold);color:var(-
 </div>
 
 <script>
-const APP_VERSION = '1.37';
+const APP_VERSION = '1.38';
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -925,7 +926,8 @@ function useRows(rows, label) {
 
 /* ───────── รวมยอดต่อร้าน ───────── */
 /* v1.36: ไม่กรองวันที่แล้ว — แสดงบิลทุกวันที่รอบส่งจะส่ง (วันนี้ + พรุ่งนี้ ตามที่ตั้งในหน้า ⏰) รวมกัน · 1 การ์ด = 1 ร้าน ต่อ 1 วันที่บิล */
-function viewDates() {
+/* v1.38: ค่าเริ่ม = "จะส่ง" (บิลทุกวันที่รอบถัดไปจะส่ง) · กดชิปวันที่ = ดูบิลวันนั้นวันเดียว */
+function sendDates() {
   const nr = nextRound(), base = nr && nr.day === 'tomorrow' ? tomorrowIso() : todayIso();
   const d1 = new Date(base + 'T00:00:00'); d1.setDate(d1.getDate() + 1);
   const days = (S.gas && S.gas.days) || ['today', 'tomorrow'];
@@ -934,6 +936,11 @@ function viewDates() {
   const v = want.filter(d => have.has(d));
   return v.length ? v : [S.date];
 }
+function viewDates() {
+  if (S.view && S.view !== 'send' && S.raw.some(r => r.date === S.view)) return [S.view];
+  return sendDates();
+}
+function setView(v) { S.view = v; S.sel = null; renderPrep(); }
 function buildStores() {
   const vd = new Set(viewDates());
   const rows = S.raw.filter(r => vd.has(r.date) && (!r.wh || S.wh.has(r.wh)) && !EXCLUDE_CUS.has(r.cusId));
@@ -986,10 +993,11 @@ function renderPrep() {
   const dates = {}; S.raw.forEach(r => { dates[r.date] = dates[r.date] || new Set(); dates[r.date].add(r.cusId); });
   $('srcInfo').innerHTML = `📊 ดึงข้อมูลล่าสุด <b>${esc(S.srcUpdated || '-')}</b>`;
   // v1.36: ไม่มีตัวกรองวันที่ — บอกแค่ว่ากำลังแสดงบิลวันไหน
-  const vds = viewDates();
-  $('dateChips').innerHTML = vds.map(d => `<span class="chip on" style="cursor:default">บิล${thDateShort(d)}<small>${(dates[d] || new Set()).size} ร้าน</small></span>`).join('');
-  if (0) Object.keys(dates).sort().reverse().map(d =>
-    `<button class="chip ${d === S.date ? 'on' : ''}" onclick="S.date='${d}';S.sel=null;renderPrep()">${thDateShort(d)}<small>${dates[d].size} ร้าน</small></button>`).join('');
+  const vds = viewDates(), sds = sendDates(), isSend = !S.view || S.view === 'send' || !dates[S.view];
+  const sendLbl = sds.map(d => thDateShort(d).replace(/^(วันนี้|พรุ่งนี้) /, '')).join(' + ');
+  $('dateChips').innerHTML = `<button class="chip chip-send ${isSend ? 'on' : ''}" onclick="setView('send')">⏰ จะส่ง<small>บิล ${esc(sendLbl)}</small></button>`
+    + Object.keys(dates).sort().reverse().map(d =>
+      `<button class="chip ${!isSend && d === S.view ? 'on' : ''}" onclick="setView('${d}')">${thDateShort(d)}<small>${dates[d].size} ร้าน</small></button>`).join('');
   const whs = [...new Set(S.raw.filter(r => vds.includes(r.date)).map(r => r.wh).filter(Boolean))].sort();
   $('whChips').innerHTML = whs.map(w => `<button class="chip ${S.wh.has(w) ? 'on' : ''}" onclick="toggleWh('${w}')">${w}</button>`).join('') || '<span class="note">-</span>';
   const shows = [['all', 'ทั้งหมด'], ['uid', '🟢 มี UID'], ['nouid', '⚠ ไม่มี UID'], ['next', '⏰ จะส่งรอบถัดไป'], ['new', 'ยังไม่เข้าคิว']];
