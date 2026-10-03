@@ -9,7 +9,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="rattana-oos-line-icon-192.png">
 <link rel="apple-touch-icon" href="rattana-oos-line-icon-180.png">
 <link rel="manifest" href="rattana-oos-line.webmanifest">
-<title>Rattana แจ้งสินค้าขาด v1.44</title>
+<title>Rattana แจ้งสินค้าขาด v1.45</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -58,7 +58,7 @@ a{color:var(--accent)}
 /* ── เนื้อหา ── */
 .content{padding:0 24px 40px;margin:0 auto;width:100%}
 .page{display:none}.page.active{display:block;animation:fadeIn .2s}
-#page-queue,#page-sched{padding-top:18px}
+#page-queue,#page-sched,#page-sales{padding-top:18px}
 .kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:-38px;position:relative}
 .k{background:var(--card-bg);border-radius:16px;padding:12px 16px;display:flex;align-items:center;gap:12px;border:2px solid transparent;box-shadow:0 4px 14px rgba(19,35,58,.08);text-align:left;color:var(--text)}
 .k .ic{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;font-size:20px;flex-shrink:0}
@@ -140,6 +140,14 @@ body.dark .ln.short .q{color:#ff8080}body.dark .ln.add .q{color:#5ee0a0}
 .pane .pv-note{padding:10px 16px;font-size:12.5px;color:var(--muted)}
 .grab{display:none;width:44px;height:5px;border-radius:9px;background:var(--border);margin:8px auto 0;flex-shrink:0}
 .sheet-shade{display:none}
+/* v1.45 หน้าเซลล์ส่งเอง */
+.sales-head{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.sales-head h2{font-size:18px}
+.sl-pick{margin-left:auto}.sl-sel{height:40px;min-width:240px;font-size:14px}
+.sl-card{cursor:default}
+.sl-act{display:flex;gap:6px;padding:10px 14px 12px 18px;border-top:1px solid var(--border);flex-wrap:wrap}
+.sl-act .btn{flex:1;min-width:0;white-space:nowrap}
+.sl-pre{white-space:pre-wrap;font-family:inherit;font-size:14px;line-height:1.6;background:var(--row-alt);border:1px solid var(--border);border-radius:12px;padding:14px;max-height:60vh;overflow:auto;color:var(--text)}
 /* ── ส่วนกลาง ── */
 .card{background:var(--card-bg);border-radius:var(--radius-md);box-shadow:var(--shadow-md);margin-bottom:14px;border:1px solid var(--border)}
 .card-gold{border-top:1px solid var(--border)}
@@ -310,7 +318,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
   <div class="login-box">
     <img src="rattana-oos-line-icon-192.png" alt="" class="login-logo">
     <h1>Rattana <span style="color:var(--brand)">แจ้งสินค้าขาด</span></h1>
-    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.44</p>
+    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.45</p>
     <div id="g_id_onload" data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
     <div style="display:flex;justify-content:center"><div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div></div>
     <div class="login-err" id="loginErr"></div>
@@ -322,9 +330,10 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
 <header class="hero ext" id="hero">
   <div class="hero-top">
     <div class="lg"><img src="rattana-oos-line-icon.svg" alt=""></div>
-    <div class="brand"><b>แจ้งสินค้าขาด</b><small>Rattana · v1.44 · ส่ง LINE ถึงร้านอัตโนมัติ</small></div>
+    <div class="brand"><b>แจ้งสินค้าขาด</b><small>Rattana · v1.45 · ส่ง LINE ถึงร้านอัตโนมัติ</small></div>
     <nav class="tab-nav">
       <button class="tab-btn active" data-tab="prep" onclick="showTab('prep')">วันนี้</button>
+      <button class="tab-btn" data-tab="sales" onclick="showTab('sales')">ร้านที่ต้องส่งเอง <span class="cnt hidden" id="slCnt"></span></button>
       <button class="tab-btn" data-tab="queue" onclick="showTab('queue')">ประวัติการส่ง <span class="cnt hidden" id="qCnt"></span></button>
       <button class="tab-btn" data-tab="sched" onclick="showTab('sched')">ตั้งค่า</button>
     </nav>
@@ -376,6 +385,19 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
       <div id="storeList"></div>
       <aside class="pane" id="pvPane"></aside>
     </div>
+  </section>
+
+  <!-- ═════ v1.45 เซลล์ส่งเอง ═════ -->
+  <section class="page" id="page-sales">
+    <div class="sales-head">
+      <div>
+        <h2 id="slTitle">ร้านที่ต้องส่งเอง</h2>
+        <div class="note" id="slSub">ร้านที่ระบบส่ง LINE ให้ไม่ได้ — คัดลอกข้อความ หรือแชร์ส่งหาลูกค้าเอง</div>
+      </div>
+      <div class="sl-pick" id="slPick"></div>
+    </div>
+    <div class="tb-row dates" style="margin:10px 0 14px"><div class="chips" id="slDates"></div></div>
+    <div id="slList"></div>
   </section>
 
   <!-- ═════ คิว ═════ -->
@@ -449,6 +471,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
 
 <nav class="tabbar">
   <button class="tb-btn active" data-tab="prep" onclick="showTab('prep')"><i>📋</i>วันนี้</button>
+  <button class="tb-btn" data-tab="sales" onclick="showTab('sales')"><i>✍️</i>ส่งเอง<span class="cnt hidden" id="slCnt2"></span></button>
   <button class="tb-btn" data-tab="queue" onclick="showTab('queue')"><i>🕘</i>ประวัติ<span class="cnt hidden" id="qCnt2"></span></button>
   <button class="tb-btn" data-tab="sched" onclick="showTab('sched')"><i>⚙️</i>ตั้งค่า</button>
 </nav>
@@ -460,8 +483,8 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
 <!-- preview modal -->
 <div class="modal-overlay" id="pvModal" onclick="if(event.target===this)closeModal('pvModal')">
   <div class="modal">
-    <div class="modal-head"><h3>👁 ตัวอย่างข้อความ LINE</h3><button class="modal-close" onclick="closeModal('pvModal')">×</button></div>
-    <div class="modal-body"><div class="line-bg" id="pvBody"></div></div>
+    <div class="modal-head"><h3 id="pvTitle">👁 ตัวอย่างข้อความ LINE</h3><button class="modal-close" onclick="closeModal('pvModal')">×</button></div>
+    <div class="modal-body" id="pvBody"></div>
   </div>
 </div>
 <!-- ใส่รหัสแอป (ครั้งแรกของเครื่อง) -->
@@ -500,7 +523,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
 </div>
 
 <script>
-const APP_VERSION = '1.44';
+const APP_VERSION = '1.45';
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -1017,8 +1040,8 @@ function viewDates() {
   return sendDates();
 }
 function setView(v) { S.view = v; S.sel = null; renderPrep(); }
-function buildStores() {
-  const vd = new Set(viewDates());
+function buildStores(dates) {
+  const vd = new Set(dates || viewDates());
   const rows = S.raw.filter(r => vd.has(r.date) && (!r.wh || S.wh.has(r.wh)) && !EXCLUDE_CUS.has(r.cusId));
   const by = new Map();
   rows.forEach(r => {
@@ -1133,6 +1156,7 @@ function renderPrep() {
   $('storeList').innerHTML = html;
   updateSaveBar();
   renderPane();
+  renderSales();   // v1.45: อัปเดตหน้าเซลล์ + ตัวเลขบนแท็บ
 }
 function setGrp(g) { S.grp = S.grp === g ? null : g; renderPrep(); }
 /* v1.42: หัวแอป — รอบถัดไป + นับถอยหลัง + แถบความคืบหน้า */
@@ -1385,7 +1409,111 @@ function preview(key) {
 }
 function previewQ(id) {
   const o = S.gas.queue.find(x => x.id === id); if (!o) return;
-  $('pvBody').innerHTML = bubbleHtml(o); openModal('pvModal');
+  $('pvTitle').textContent = '👁 ตัวอย่างข้อความ LINE';
+  $('pvBody').innerHTML = `<div class="line-bg">${bubbleHtml(o)}</div>`; openModal('pvModal');
+}
+
+/* ───────── v1.45 หน้าเซลล์: ร้านที่ระบบส่งไม่ได้ (ไม่มี UID / บิลหลายวัน / ยกเลิกไว้ …) → คัดลอกข้อความ หรือแชร์ส่งหาลูกค้าเอง ─────────
+ * เห็นเฉพาะร้านของตัวเอง: จับชื่อเซลล์ในบิล (ตัด "คุณ" / "(ROO)") กับ "ชื่อ - สกุล" ของอีเมลที่ล็อกอิน (ชีท Rattana Users)
+ * อีเมลที่ไม่ใช่เซลล์ (แอดมิน / ธุรการ) = เลือกดูเซลล์คนไหนก็ได้ · ไม่บันทึกอะไรลงชีท */
+const saleKey = n => normName(String(n || '').replace(/^คุณ\s*/, '').replace(/\s*\(ROO\)\s*$/i, ''));
+let _myNames = null;
+async function myNames() {
+  if (_myNames) return _myNames;
+  const me = normalizeEmail(currentUser && currentUser.email);
+  try {
+    const users = rowsToObjs(await gviz(AUTH_CONFIG.usersSheetId, AUTH_CONFIG.usersSheetName));
+    _myNames = users.filter(u => normalizeEmail(u['E-mail']) === me).map(u => saleKey(u['ชื่อ - สกุล'])).filter(Boolean);   // อีเมลเดียวใช้ร่วมหลายคนได้
+  } catch { _myNames = currentUser && currentUser.name ? [saleKey(currentUser.name)] : []; }
+  return _myNames;
+}
+function salesDates() {
+  if (S.slDate && S.slDate !== 'send' && S.raw.some(r => r.date === S.slDate)) return [S.slDate];
+  return sendDates();
+}
+async function renderSales() {
+  if (!S.raw.length) { $('slList').innerHTML = `<div class="card"><div class="empty"><div class="big">⏳</div>กำลังดึงข้อมูล…</div></div>`; return; }
+  const mine = await myNames();
+  const dates = {}; S.raw.forEach(r => { (dates[r.date] = dates[r.date] || new Set()).add(r.cusId); });
+  const sds = sendDates(), isSend = !S.slDate || S.slDate === 'send' || !dates[S.slDate];
+  $('slDates').innerHTML = `<button class="chip ${isSend ? 'on' : ''}" onclick="S.slDate='send';renderSales()">⏰ บิลรอบนี้ · ${esc(sds.map(d => thDateShort(d).replace(/^(วันนี้|พรุ่งนี้) /, '')).join(' + '))}</button>`
+    + Object.keys(dates).sort().reverse().map(d => `<button class="chip ${!isSend && d === S.slDate ? 'on' : ''}" onclick="S.slDate='${d}';renderSales()">${thDateShort(d)}</button>`).join('');
+  // ร้านที่ระบบส่งให้ไม่ได้ = ไม่อยู่ในกลุ่ม รอส่ง / ส่งแล้ว
+  const all = buildStores(salesDates()).filter(s => {
+    const k = (autoPlan(s) || {}).k;
+    return S.gas ? k !== 'send' && k !== 'sent' : !s.uidN;
+  });
+  const salesIn = [...new Set(all.flatMap(s => String(s.sale || '').split(', ').map(saleKey)).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'th'));
+  const isSale = mine.some(n => S.raw.some(r => saleKey(r.sale) === n));   // อีเมลนี้เป็นเซลล์ที่มีบิลในไฟล์
+  let pick;
+  if (isSale) { pick = mine; $('slPick').innerHTML = `<span class="badge b-gold">👤 ${esc(mine.join(' · '))}</span>`; }
+  else {
+    if (S.slSale && !salesIn.includes(S.slSale)) S.slSale = '';
+    pick = S.slSale ? [S.slSale] : null;
+    $('slPick').innerHTML = `<select class="input sl-sel" onchange="S.slSale=this.value;renderSales()"><option value="">ทุกเซลล์ (${all.length} ร้าน)</option>${salesIn.map(n => `<option value="${esc(n)}" ${n === S.slSale ? 'selected' : ''}>${esc(n)} (${all.filter(s => String(s.sale).split(', ').map(saleKey).includes(n)).length})</option>`).join('')}</select>`;
+  }
+  const list = pick ? all.filter(s => String(s.sale || '').split(', ').map(saleKey).some(n => pick.includes(n))) : all;
+  $('slTitle').textContent = isSale ? `ร้านที่ต้องส่งเอง · ${list.length} ร้าน` : `ร้านที่ระบบส่งไม่ได้ · ${list.length} ร้าน`;
+  S.slStores = list;
+  $('slList').innerHTML = list.length ? `<div class="zone-grid">${list.map(salesCard).join('')}</div>`
+    : `<div class="card"><div class="empty"><div class="big">🎉</div>${isSale ? 'ไม่มีร้านที่ต้องส่งเอง — ระบบส่ง LINE ให้ครบแล้ว' : 'ไม่มีร้านที่ระบบส่งไม่ได้'}</div></div>`;
+  updateSalesCnt(isSale ? list.length : 0);
+}
+function updateSalesCnt(n) { ['slCnt', 'slCnt2'].forEach(i => { const e = $(i); if (e) { e.textContent = n; e.classList.toggle('hidden', !n); } }); }
+function salesCard(s) {
+  const p = autoPlan(s) || {}, a = avaOf(s), kid = esc(s.key);
+  const why = !s.uidN ? 'ยังไม่มี LINE (UID)' : (p.label || '').replace(/^⊘ /, '');
+  const open = S.expand && S.expand.has('sl|' + s.key), vis = open ? s.lines : s.lines.slice(0, CARD_LINES);
+  return `<div class="store pl-bad sl-card">
+    <div class="st-head">
+      <div class="ava" style="background:${a.c}">${esc(a.ch)}</div>
+      <div class="st-main"><div class="st-name">${esc(s.cusName)}</div>
+        <div class="st-meta">${esc(s.cusId)} · ${esc(saleShort(s.sale))}</div>
+        <div class="st-meta">บิล ${esc(thDateShort(s.date))} · ${esc(s.bills || '-')}</div></div>
+    </div>
+    <div class="st-badges"><span class="badge b-danger">${esc(why)}</span><span class="badge b-muted">${s.nShort ? `ขาด ${s.nShort}` : ''}${s.nShort && s.nAdd ? ' · ' : ''}${s.nAdd ? `ส่งแทน ${s.nAdd}` : ''}</span></div>
+    <div class="st-lines">${vis.map(l => `<div class="ln ${l.type}"><span class="d"></span><span class="p">${esc(l.prod)}</span><span class="q">${esc(l.qty)}</span></div>`).join('')}
+      ${s.lines.length > CARD_LINES ? `<button class="more" onclick="toggleSlMore('${kid}')">${open ? '▴ ย่อ' : `+ อีก ${s.lines.length - CARD_LINES} รายการ`}</button>` : ''}</div>
+    <div class="sl-act">
+      <button class="btn btn-outline btn-sm" onclick="slText('${kid}')">👁 ดูข้อความ</button>
+      <button class="btn btn-outline btn-sm" onclick="slCopy('${kid}')">📋 คัดลอก</button>
+      <button class="btn btn-line btn-sm" onclick="slShare('${kid}')">📤 แชร์</button>
+    </div>
+  </div>`;
+}
+function toggleSlMore(k) { S.expand = S.expand || new Set(); const x = 'sl|' + k; S.expand.has(x) ? S.expand.delete(x) : S.expand.add(x); renderSales(); }
+/* ข้อความตัวหนังสือ (หัวข้อ/หมายเหตุเดียวกับ LINE ที่ระบบส่ง) */
+function plainMsg(s) {
+  const L = t => flexLines(t).map(it => `• ${it.name}  ${it.qty || ''}`.trimEnd());
+  const sh = L(s.short), ad = L(s.add), sale = String(s.sale || '').replace(/\s*\(ROO\)\s*/g, '').trim();
+  const out = ['แจ้งสินค้าขาด / ส่งแทน', `วันที่ ${thDateLong(s.date)}`, '', `ร้าน ${s.cusName}`, `รหัสร้าน ${s.cusId}`];
+  if (s.orders) out.push(`เลขออเดอร์ ${s.orders}`);
+  if (sale && sale !== '-') out.push(`เซลล์ ${sale}`);
+  if (sh.length) out.push('', `🔴 สินค้าขาด (${sh.length} รายการ)`, ...sh, '* อาจมีสินค้าขาดเพิ่มเติมจากรายการนี้');
+  if (ad.length) out.push('', `🟢 อาจได้รับเพิ่ม / ส่งแทน (${ad.length} รายการ)`, ...ad, '* รายการส่งแทน / เพิ่ม อาจได้รับหรือไม่ได้รับ ขึ้นอยู่กับสินค้าที่มีในวันจัดส่ง');
+  out.push('', 'ขออภัยในความไม่สะดวก 🙏', 'สอบถามเพิ่มเติม ติดต่อเซลล์ผู้ดูแลได้เลย');
+  return out.join('\n');
+}
+const slStore = k => (S.slStores || []).find(x => x.key === k);
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); return true; }
+  catch {
+    const ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch { } ta.remove(); return ok;
+  }
+}
+async function slCopy(k) { const s = slStore(k); if (!s) return; showToast(await copyText(plainMsg(s)) ? `คัดลอกข้อความ ${s.cusName} แล้ว — วางในแชทลูกค้าได้เลย` : 'คัดลอกไม่ได้ — กด 👁 ดูข้อความ แล้วคัดลอกเอง', 'success'); }
+async function slShare(k) {
+  const s = slStore(k); if (!s) return;
+  const text = plainMsg(s);
+  if (navigator.share) { try { await navigator.share({ text }); } catch (e) { if (e.name !== 'AbortError') showToast('แชร์ไม่ได้ — ใช้ 📋 คัดลอก แทน', 'warning'); } return; }
+  showToast(await copyText(text) ? 'เครื่องนี้ไม่มีเมนูแชร์ — คัดลอกข้อความให้แล้ว วางในแชทลูกค้าได้เลย' : 'แชร์ไม่ได้ — กด 👁 ดูข้อความ', 'info');
+}
+function slText(k) {
+  const s = slStore(k); if (!s) return;
+  $('pvBody').innerHTML = `<pre class="sl-pre">${esc(plainMsg(s))}</pre>
+    <div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-outline" style="flex:1" onclick="slCopy('${esc(k)}')">📋 คัดลอก</button><button class="btn btn-line" style="flex:1" onclick="slShare('${esc(k)}')">📤 แชร์ส่งลูกค้า</button></div>`;
+  $('pvTitle').textContent = '📝 ข้อความสำหรับส่งเอง'; openModal('pvModal');
 }
 
 /* ───────── render: คิว ───────── */
@@ -1564,6 +1692,7 @@ function showTab(t) {
   document.querySelectorAll('.tab-btn,.tb-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
   $('hero').classList.toggle('ext', t === 'prep'); closeSheet();
   document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + t));
+  if (t === 'sales') renderSales();
   updateSaveBar(); window.scrollTo({ top: 0 });
 }
 function toggleDark() { document.body.classList.toggle('dark'); lsSet('oos_dark', document.body.classList.contains('dark')); }
