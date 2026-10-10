@@ -10,7 +10,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="rattana-oos-line-icon-192.png">
 <link rel="apple-touch-icon" href="rattana-oos-line-icon-180.png">
 <link rel="manifest" href="rattana-oos-line.webmanifest">
-<title>Rattana OOS Notify v1.46</title>
+<title>Rattana OOS Notify v1.47</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -127,6 +127,7 @@ body.dark .zone.wait{--zc:#8a6a1c;--zb:#1d1a12}body.dark .zone.bad{--zc:#7a2e2e;
 .ln.short .q{color:#dc2626}.ln.add .q{color:#059669}
 body.dark .ln.short .q{color:#ff8080}body.dark .ln.add .q{color:#5ee0a0}
 .ln .q small.was{display:block;font-size:11px;color:#d97706;font-weight:600}
+.tag-free{display:inline-block;font-size:11px;font-weight:700;padding:0 6px;border-radius:6px;background:var(--accent-b);color:var(--accent);margin-left:2px;vertical-align:1px}
 .ln .warn{color:var(--warning);font-size:11px}
 .more{padding:2px 14px 0 18px;font-size:12px;color:var(--accent);font-weight:600;background:none}
 .pane{position:sticky;top:70px;background:var(--card-bg);border-radius:18px;overflow:hidden;box-shadow:0 4px 18px rgba(19,35,58,.08);max-height:calc(100dvh - 84px);display:flex;flex-direction:column}
@@ -319,7 +320,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
   <div class="login-box">
     <img src="rattana-oos-line-icon-192.png" alt="" class="login-logo">
     <h1>Rattana <span style="color:var(--brand)">OOS Notify</span></h1>
-    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.46</p>
+    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.47</p>
     <div id="g_id_onload" data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
     <div style="display:flex;justify-content:center"><div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div></div>
     <div class="login-err" id="loginErr"></div>
@@ -331,7 +332,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
 <header class="hero ext" id="hero">
   <div class="hero-top">
     <div class="lg"><img src="rattana-oos-line-icon.svg" alt=""></div>
-    <div class="brand"><b>Rattana OOS Notify</b><small>v1.46 · แจ้งลูกค้าเรื่องสินค้าขาดทาง LINE</small></div>
+    <div class="brand"><b>Rattana OOS Notify</b><small>v1.47 · แจ้งลูกค้าเรื่องสินค้าขาดทาง LINE</small></div>
     <nav class="tab-nav">
       <button class="tab-btn active" data-tab="prep" onclick="showTab('prep')">วันนี้</button>
       <button class="tab-btn" data-tab="sales" onclick="showTab('sales')">ร้านที่ต้องส่งเอง <span class="cnt hidden" id="slCnt"></span></button>
@@ -524,7 +525,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
 </div>
 
 <script>
-const APP_VERSION = '1.46';
+const APP_VERSION = '1.47';
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -790,6 +791,7 @@ function clearPddtCache() { idbDel(LS_PDDT); S.pddt = null; showToast('ล้า
 // แปลงจำนวนชิ้น (EA) → "2 ลังx24(CS) 3 ชิ้นx1(EA)"
 function qtyText(name, ea) {
   // หน่วยจากใบจอง/บิลเอง (เช่น ลังx24(CS)) — แตกเป็นหน่วยใหญ่ก่อน เศษเป็นชิ้น
+  name = baseOf(name);
   const u = S.units && S.units[normName(name)];
   if (u) {
     const fs = Object.keys(u).map(Number).sort((a, b) => b - a);
@@ -832,6 +834,10 @@ function normalizeRows(rows) {
  * (แทน Query1 ของ "สินค้าขาด ส่งไลน์.xlsx" ที่นับขาดซ้ำ 2-3 เท่าเมื่อใบจองแตกหลายบิล) */
 const ORDER_FILE = 'Check Out.xlsx';
 let EXCLUDE_CUS = new Set(['7500000000']);   // ร้านที่ไม่ส่ง LINE — ค่าจริงมาจากหลังบ้าน (state.exclude · ตั้งในหน้า ⏰) ค่านี้ใช้ก่อนโหลดเสร็จ
+/* v1.47: ของแถมขาด = บรรทัดแยก ชื่อสินค้า + " (แถม)" (หลังบ้าน v1.23 ทำแบบเดียวกัน) */
+const FREE_TAG = ' (แถม)';
+const baseOf = p => String(p).endsWith(FREE_TAG) ? String(p).slice(0, -FREE_TAG.length) : String(p);
+const prodHtml = p => String(p).endsWith(FREE_TAG) ? `${esc(baseOf(p))} <span class="tag-free">แถม</span>` : esc(p);
 const unitFactor = u => { const m = String(u).match(/x(\d+)\(/); return m ? +m[1] : 1; };
 function computeFromOrder(bkTab, dsTab) {
   const idx = (head, k) => { const i = head.map(h => normName(h).toUpperCase()).indexOf(k); if (i < 0) throw new Error('ไม่พบคอลัมน์ ' + k); return i; };
@@ -845,7 +851,7 @@ function computeFromOrder(bkTab, dsTab) {
   const line = (r, c) => {
     const prod = normName(r[c.SKU_NAME]), u = normName(r[c.TRD_UTQNAME]), f = unitFactor(u);
     (units[prod] = units[prod] || {})[f] = u;
-    return { prod, ea: (num(r[c.TRD_QTY]) + num(r[c.TRD_Q_FREE])) * f };
+    return [{ prod, ea: num(r[c.TRD_QTY]) * f }, { prod: prod + FREE_TAG, ea: num(r[c.TRD_Q_FREE]) * f }];   // v1.47: ของซื้อ / ของแถม นับแยก
   };
   const ds = [];
   dsTab.slice(1).forEach(r => {
@@ -861,14 +867,14 @@ function computeFromOrder(bkTab, dsTab) {
   bkTab.slice(1).forEach(r => {
     const ref = normName(r[cb.DI_REF]); if (!P.has(ref)) return;
     bkHave.add(ref);
-    const g = grp(find(ref)); put(g.bk, line(r, cb));
+    const g = grp(find(ref)); line(r, cb).forEach(l => put(g.bk, l));
     g.cus = g.cus || normName(r[cb.AR_CODE]); g.name = g.name || normName(r[cb.AR_NAME]);
     if (/\(ROO\)/.test(r[cb.SLMN_NAME]))   // เฉพาะเซลล์ ROO — เลขออเดอร์จาก DI_REMARK "billIdORD1790047531402"
       (String(r[cb.DI_REMARK]).match(/ORD\d+/g) || []).forEach(x => g.orders.add(x));
     g.sale = g.sale || normName(r[cb.SLMN_NAME]); g.wh = g.wh || normName(r[cb.WL_CODE]);
   });
   ds.forEach(d => {
-    const g = grp(find(d.refs[0])); put(g.ds, line(d.r, cd));
+    const g = grp(find(d.refs[0])); line(d.r, cd).forEach(l => put(g.ds, l));
     (g.dates.get(d.date) || g.dates.set(d.date, new Set()).get(d.date)).add(d.ref);
     if (d.refs.some(x => !bkHave.has(x))) g.missing = true;
     g.cus = g.cus || normName(d.r[cd.AR_CODE]); g.name = g.name || normName(d.r[cd.AR_NAME]);
@@ -878,11 +884,14 @@ function computeFromOrder(bkTab, dsTab) {
   G.forEach(g => {
     if (!g.dates.size) return;
     if (g.missing || !g.bk.size) { skipped++; return; }   // ใบจองเก่ากว่าที่ไฟล์เก็บไว้ — เทียบไม่ได้ ไม่เดา
-    const prods = new Set([...g.bk.keys(), ...g.ds.keys()]);
+    const bases = new Set([...g.bk.keys(), ...g.ds.keys()].map(baseOf));
     const multi = g.dates.size > 1;
-    g.dates.forEach((refs, date) => prods.forEach(prod => {
-      const diff = (g.ds.get(prod) || 0) - (g.bk.get(prod) || 0);
-      if (diff) rows.push({ date, ds: [...refs].join(', '), wh: g.wh, sale: g.sale, cusId: g.cus, cusName: g.name, prod, diff, multi, orders: [...g.orders].join(', ') });
+    const d = (m, k) => m.get(k) || 0;
+    g.dates.forEach((refs, date) => bases.forEach(b => {
+      const dp = d(g.ds, b) - d(g.bk, b), df = d(g.ds, b + FREE_TAG) - d(g.bk, b + FREE_TAG);
+      // ซื้อขาดแต่แถมเกิน (หรือกลับกัน) = บิลย้ายจำนวนระหว่างซื้อ/แถม → นับรวมบรรทัดเดียวแบบเดิม (= oosCompute_)
+      const list = dp && df && (dp > 0) !== (df > 0) ? [[b, dp + df]] : [[b, dp], [b + FREE_TAG, df]];
+      list.forEach(([prod, diff]) => { if (diff) rows.push({ date, ds: [...refs].join(', '), wh: g.wh, sale: g.sale, cusId: g.cus, cusName: g.name, prod, diff, multi, orders: [...g.orders].join(', ') }); });
     }));
   });
   S.units = units;
@@ -1053,6 +1062,7 @@ function buildStores(dates) {
     if (r.orders) r.orders.split(', ').forEach(x => s.orders.add(x));
     if (r.wh) s.wh.add(r.wh); if (r.ds) s.bills.add(r.ds); if (r.sale) s.sale.add(r.sale);
     s.prods.set(r.prod, (s.prods.get(r.prod) || 0) + r.diff);
+    (s.prods0 = s.prods0 || new Map()).set(baseOf(r.prod), (s.prods0.get(baseOf(r.prod)) || 0) + r.diff);   // แบบเดิม (ซื้อ+แถมรวม) ไว้เทียบข้อความที่ส่งก่อน v1.47
   });
   const out = [];
   by.forEach(s => {
@@ -1066,7 +1076,10 @@ function buildStores(dates) {
     lines.sort((a, b) => (a.type === b.type ? a.prod.localeCompare(b.prod, 'th') : a.type === 'short' ? -1 : 1));
     const short = lines.filter(l => l.type === 'short').map(l => `🔴${l.prod} ${l.qty}`).join('\n');
     const add = lines.filter(l => l.type === 'add').map(l => `🟢${l.prod} ${l.qty}`).join('\n');
+    const l0 = []; s.prods0.forEach((ea, prod) => { if (ea) l0.push({ type: ea < 0 ? 'short' : 'add', prod, qty: qtyText(prod, Math.abs(ea)).text }); });
+    const t0 = (t, ic) => l0.filter(l => l.type === t).map(l => `${ic}${l.prod} ${l.qty}`).join('\n') || '-';
     out.push({
+      short0: t0('short', '🔴'), add0: t0('add', '🟢'),
       key: s.key, date: s.date, cusId: s.cusId, cusName: s.cusName, wh: [...s.wh].join(','), bills: [...s.bills].join(', '), orders: [...s.orders].sort().join(', '),
       sale: [...s.sale].join(', '), lines, short: short || '-', add: add || '-', multi: s.multi,
       uidN: S.uid[s.cusId] || 0, nShort: lines.filter(l => l.type === 'short').length, nAdd: lines.filter(l => l.type === 'add').length,
@@ -1192,11 +1205,13 @@ function nextRound() {
   const t = ts.find(x => x >= hm && !done[x]);
   return t ? { time: t, day: 'today' } : ts.length ? { time: ts[0], day: 'tomorrow' } : null;
 }
+// v1.47: รายการเหมือนที่ส่งไป — เทียบทั้งแบบใหม่ (แยกของแถม) และแบบเดิม (ซื้อ+แถมรวม) = oosSameItems_
+const sameItems = (q, s) => { const c = canonItems(q.short, q.add); return c === canonItems(s.short, s.add) || (s.short0 != null && c === canonItems(s.short0, s.add0)); };
 const canonItems = (a, b) => [a, b].map(t => String(t || '-').split('\n').map(x => x.trim()).filter(Boolean).sort().join('\n')).join('||');
 function autoPlan(s) {
   const g = S.gas; if (!g) return null;
   const q = queueOfS(s);
-  if (q && q.status === ST.SENT && canonItems(q.short, q.add) === canonItems(s.short, s.add)) return { k: 'sent' };
+  if (q && q.status === ST.SENT && sameItems(q, s)) return { k: 'sent' };
   const nr = nextRound(), at = nr ? `${nr.day === 'tomorrow' ? 'พรุ่งนี้ ' : ''}${nr.time}` : '';
   if (q && q.status === ST.CANCEL) return { k: 'skip', label: '⊘ ยกเลิกไว้ — ไม่ส่ง' };
   if (!nr) return { k: 'skip', label: 'ปิดส่งอัตโนมัติอยู่' };
@@ -1213,7 +1228,7 @@ function autoPlan(s) {
 /* v1.41: = oosDeltaObj_ ในหลังบ้าน — ร้านเคยได้รับแล้วและรายการเปลี่ยน → รอบหน้าส่งเฉพาะรายการที่เพิ่ม/เปลี่ยน (แสดงแบบที่จะส่งจริง) */
 function prevSentOf(s) {
   const q = queueOfS(s); if (!q) return null;
-  if (q.status === ST.SENT) return canonItems(q.short, q.add) === canonItems(s.short, s.add) ? null : { s: q.short, a: q.add };
+  if (q.status === ST.SENT) return sameItems(q, s) ? null : { s: q.short, a: q.add };
   if (q.prev) { try { return JSON.parse(q.prev); } catch { } }
   return null;
 }
@@ -1254,7 +1269,7 @@ function storeCard(s) {
   const showLines = dl ? s.lines.filter(l => dl.keep.has(`${l.type === 'short' ? '🔴' : '🟢'}${l.prod} ${l.qty}`)) : s.lines;
   const open = S.expand && S.expand.has(s.key), vis = open ? showLines : showLines.slice(0, CARD_LINES);
   const a = avaOf(s);
-  const lines = vis.map(l => `<div class="ln ${l.type}"><span class="d"></span><span class="p">${esc(l.prod)}${l.miss ? ' <span class="warn">(ไม่พบหน่วยใน PDDT)</span>' : ''}</span><span class="q">${esc(l.qty)}${dl && dl.was[l.prod] ? `<small class="was">เดิม ${esc(dl.was[l.prod])}</small>` : ''}</span></div>`).join('')
+  const lines = vis.map(l => `<div class="ln ${l.type}"><span class="d"></span><span class="p">${prodHtml(l.prod)}${l.miss ? ' <span class="warn">(ไม่พบหน่วยใน PDDT)</span>' : ''}</span><span class="q">${esc(l.qty)}${dl && dl.was[l.prod] ? `<small class="was">เดิม ${esc(dl.was[l.prod])}</small>` : ''}</span></div>`).join('')
     + (showLines.length > CARD_LINES ? `<button class="more" onclick="event.stopPropagation();toggleMore('${kid}')">${open ? '▴ ย่อ' : `+ อีก ${showLines.length - CARD_LINES} รายการ`}</button>` : '');
   const nS = showLines.filter(l => l.type === 'short').length, nA = showLines.length - nS;
   return `<div class="store ${pl} ${pk === 'sent' || on ? '' : 'off'} ${S.pv === s.key ? 'pv' : ''}" id="st-${kid}" onclick="openStore('${kid}')">
@@ -1308,7 +1323,7 @@ function renderPane() {
   else act = `<div class="da"><button class="btn btn-soft" onclick="storeAct('cancel','${kid}')">ไม่ส่งร้านนี้</button><button class="btn btn-line" onclick="storeAct('sendNow','${kid}')">📤 ส่งตอนนี้</button></div>`;
   const st = sent ? 'ข้อความที่ร้านได้รับ' : `ข้อความที่ร้านจะได้รับ${p.label ? ' · ' + p.label.replace(/^⏰ /, '') : ''}`;
   el.innerHTML = `<div class="grab"></div>
-    <div class="dh"><div><b>${esc(s.cusName)}</b><small>${esc(st)} · ${s.uidN ? `LINE ${s.uidN} บัญชี` : 'ไม่มี UID'}</small></div><button class="x" onclick="closeSheet()" title="ปิด">×</button></div>
+    <div class="dh"><div><b>${esc(s.cusName)}</b><small>${esc(st)}${s.uidN ? ` · LINE ${s.uidN} บัญชี` : /UID/.test(st) ? '' : ' · ไม่มี UID'}</small></div><button class="x" onclick="closeSheet()" title="ปิด">×</button></div>
     <div class="pv-body"><div class="line-bg">${bubbleHtml(o)}</div></div>${act}`;
 }
 /* ปุ่มในแผง: ส่งตอนนี้ / ไม่ส่งร้านนี้ / กลับมาส่ง — ร้านยังไม่อยู่ในคิว (ระบบเตรียมให้ตอนถึงรอบ) → บันทึกเข้าคิวก่อน */
@@ -1325,8 +1340,8 @@ async function storeAct(act, key) {
   try {
     const q = queueOfS(s);
     let id = q && q.status !== ST.SENT ? q.id : `${s.date}|${s.cusId}`;
-    if (act !== 'requeue' && !(q && q.id === id && q.status === ST.WAIT && canonItems(q.short, q.add) === canonItems(s.short, s.add))) {
-      await gas('save', { date: s.date, items: [{ cusId: s.cusId, cusName: s.cusName, wh: s.wh, bills: s.bills, sale: s.sale, short: s.short, add: s.add, orders: s.orders }] });
+    if (act !== 'requeue' && !(q && q.id === id && q.status === ST.WAIT && sameItems(q, s))) {
+      await gas('save', { date: s.date, items: [{ cusId: s.cusId, cusName: s.cusName, wh: s.wh, bills: s.bills, sale: s.sale, short: s.short, add: s.add, short0: s.short0, add0: s.add0, orders: s.orders }] });
       id = `${s.date}|${s.cusId}`;
     }
     const r = await gas(act, { ids: [id] });
@@ -1368,7 +1383,7 @@ async function saveQueue() {
     for (const d of [...new Set(items.map(s => s.date))]) {   // คิวแยกตามวันที่บิล
       const x = await gas('save', {
         date: d,
-        items: items.filter(s => s.date === d).map(s => ({ cusId: s.cusId, cusName: s.cusName, wh: s.wh, bills: s.bills, sale: s.sale, short: s.short, add: s.add, orders: s.orders })),
+        items: items.filter(s => s.date === d).map(s => ({ cusId: s.cusId, cusName: s.cusName, wh: s.wh, bills: s.bills, sale: s.sale, short: s.short, add: s.add, short0: s.short0, add0: s.add0, orders: s.orders })),
       });
       r.added += x.added; r.changed += x.changed; r.same += x.same;
     }
@@ -1473,7 +1488,7 @@ function salesCard(s) {
         <div class="st-meta">บิล ${esc(thDateShort(s.date))} · ${esc(s.bills || '-')}</div></div>
     </div>
     <div class="st-badges"><span class="badge b-danger">${esc(why)}</span><span class="badge b-muted">${s.nShort ? `ขาด ${s.nShort}` : ''}${s.nShort && s.nAdd ? ' · ' : ''}${s.nAdd ? `ส่งแทน ${s.nAdd}` : ''}</span></div>
-    <div class="st-lines">${vis.map(l => `<div class="ln ${l.type}"><span class="d"></span><span class="p">${esc(l.prod)}</span><span class="q">${esc(l.qty)}</span></div>`).join('')}
+    <div class="st-lines">${vis.map(l => `<div class="ln ${l.type}"><span class="d"></span><span class="p">${prodHtml(l.prod)}</span><span class="q">${esc(l.qty)}</span></div>`).join('')}
       ${s.lines.length > CARD_LINES ? `<button class="more" onclick="toggleSlMore('${kid}')">${open ? '▴ ย่อ' : `+ อีก ${s.lines.length - CARD_LINES} รายการ`}</button>` : ''}</div>
     <div class="sl-act">
       <button class="btn btn-outline btn-sm" onclick="slText('${kid}')">👁 ดูข้อความ</button>
@@ -1682,7 +1697,7 @@ async function testSend() {
   const s = S.stores.find(x => S.sel && S.sel.has(x.key));
   showSpinner('กำลังส่งทดสอบ...');
   try {
-    await gas('testSend', { uid, item: s ? { cusId: s.cusId, cusName: s.cusName, date: s.date, bills: s.bills, sale: s.sale, short: s.short, add: s.add, orders: s.orders } : null });
+    await gas('testSend', { uid, item: s ? { cusId: s.cusId, cusName: s.cusName, date: s.date, bills: s.bills, sale: s.sale, short: s.short, add: s.add, short0: s.short0, add0: s.add0, orders: s.orders } : null });
     showToast('ส่งทดสอบแล้ว — เช็คใน LINE', 'success');
   } catch (e) { showToast(e.message, 'error'); }
   finally { hideSpinner(); }

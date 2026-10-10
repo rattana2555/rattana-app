@@ -1,5 +1,5 @@
 /**
- * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.22
+ * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.23
  * อยู่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
  *
  * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.22';
+var OOS_VERSION = '1.23';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -340,7 +340,7 @@ function oosSave_(b) {
       if (!ex) {
         // v1.21: วันที่บิลถูกแก้ (คีย์วันที่เปลี่ยน) แต่เลขบิลเดิมเคยส่งแล้ว + สินค้าตรงกัน = ไม่ส่งซ้ำ · สินค้าไม่ตรง = ส่งใหม่
         var prev = oosSentByBill_(sentBy[cusId], it.bills);
-        if (prev && prev.canon === oosCanon_(it.short, it.add)) { same++; return; }
+        if (prev && oosSameItems_(prev.canon, it)) { same++; return; }
         // v1.22: เลขบิลเคยส่งแล้วแต่สินค้าเปลี่ยน → จำของที่ส่งไปแล้ว ไว้ส่งเฉพาะรายการที่เปลี่ยน
         appends.push(rowVals.concat([OOS_ST.WAIT, '', '', '', '', by, now, h, String(it.orders || ''),
           prev ? JSON.stringify({ s: prev.short, a: prev.add }) : '']));
@@ -350,7 +350,7 @@ function oosSave_(b) {
       var st = ex.v[OOS_C['สถานะ']];
       if (b.auto) {   // อัตโนมัติ: ไม่ทับร้านที่มีคนกดยกเลิก · เทียบเฉพาะรายการสินค้า (ไม่สนลำดับ/บิลที่เพิ่ม) กันส่งซ้ำ
         if (st === OOS_ST.CANCEL) { kept++; return; }
-        if (oosCanon_(ex.v[OOS_C['สินค้าขาด']], ex.v[OOS_C['สินค้าเพิ่ม']]) === oosCanon_(it.short, it.add)) { same++; return; }
+        if (oosSameItems_(oosCanon_(ex.v[OOS_C['สินค้าขาด']], ex.v[OOS_C['สินค้าเพิ่ม']]), it)) { same++; return; }
       }
       if (ex.v[OOS_C.hash] === h && st !== OOS_ST.CANCEL) { same++; return; }
       // v1.22: ส่งไปแล้ว → จำรายการที่ส่ง (ส่งก่อนหน้า) · ยังไม่ได้ส่ง → คงค่าเดิมไว้ (ของที่ร้านได้รับจริงครั้งล่าสุด)
@@ -368,6 +368,10 @@ function oosSave_(b) {
   } finally { lock.releaseLock(); }
 }
 
+/** v1.23: รายการเหมือนเดิม — เทียบทั้งแบบใหม่ (แยกของแถม) และแบบเดิม (short0/add0 = ซื้อ+แถมรวม) กันส่งซ้ำร้านที่ได้ข้อความแบบเดิมไปแล้ว */
+function oosSameItems_(canon, it) {
+  return canon === oosCanon_(it.short, it.add) || (it.short0 != null && canon === oosCanon_(it.short0, it.add0));
+}
 /** รายการสินค้าแบบไม่สนลำดับบรรทัด — "🔴A 1\n🔴B 2" กับ "🔴B 2\n🔴A 1" = เหมือนกัน */
 function oosCanon_(short, add) {
   var f = function (t) { return String(t || '-').split('\n').map(function (x) { return x.trim(); }).filter(String).sort().join('\n'); };
@@ -760,10 +764,11 @@ function oosCompute_(bkTab, dsTab) {
   var add = function (x) { if (!(x in P)) P[x] = x; };
   var uni = function (a, b) { a = find(a); b = find(b); if (a !== b) P[a] = b; };
   var units = {};
+  // v1.23: ของซื้อกับของแถมนับแยกกัน (ของแถม = ชื่อสินค้า + " (แถม)")
   var line = function (r, c) {
     var prod = oosNorm_(r[c.SKU_NAME]), u = oosNorm_(r[c.TRD_UTQNAME]), f = oosUnitFactor_(u);
     (units[prod] = units[prod] || {})[f] = u;
-    return { prod: prod, ea: (oosNum_(r[c.TRD_QTY]) + oosNum_(r[c.TRD_Q_FREE])) * f };
+    return [{ prod: prod, ea: oosNum_(r[c.TRD_QTY]) * f }, { prod: prod + OOS_FREE, ea: oosNum_(r[c.TRD_Q_FREE]) * f }];
   };
   var ds = [];
   dsTab.slice(1).forEach(function (r) {
@@ -785,14 +790,14 @@ function oosCompute_(bkTab, dsTab) {
   bkTab.slice(1).forEach(function (r) {
     var ref = oosNorm_(r[cb.DI_REF]); if (!(ref in P)) return;
     bkHave[ref] = 1;
-    var g = grp(find(ref)); put(g, 'bk', line(r, cb));
+    var g = grp(find(ref)); line(r, cb).forEach(function (l) { put(g, 'bk', l); });
     g.cus = g.cus || oosNorm_(r[cb.AR_CODE]); g.name = g.name || oosNorm_(r[cb.AR_NAME]);
     if (/\(ROO\)/.test(r[cb.SLMN_NAME]))   // เฉพาะเซลล์ ROO — เลขออเดอร์จาก DI_REMARK "billIdORD…"
       (String(r[cb.DI_REMARK]).match(/ORD\d+/g) || []).forEach(function (x) { if (g.orders.indexOf(x) < 0) g.orders.push(x); });
     g.sale = g.sale || oosNorm_(r[cb.SLMN_NAME]); g.wh = g.wh || oosNorm_(r[cb.WL_CODE]);
   });
   ds.forEach(function (d) {
-    var g = grp(find(d.refs[0])); put(g, 'ds', line(d.r, cd));
+    var g = grp(find(d.refs[0])); line(d.r, cd).forEach(function (l) { put(g, 'ds', l); });
     if (!g.dates[d.date]) { g.dates[d.date] = []; g.dateK.push(d.date); }
     if (g.dates[d.date].indexOf(d.ref) < 0) g.dates[d.date].push(d.ref);
     if (d.refs.some(function (x) { return !bkHave[x]; })) g.missing = true;
@@ -803,21 +808,28 @@ function oosCompute_(bkTab, dsTab) {
   order.forEach(function (k) {
     var g = G[k];
     if (!g.dateK.length || g.missing || !g.bkK.length) return;   // ใบจองเก่ากว่าที่ไฟล์เก็บไว้ — เทียบไม่ได้ ไม่เดา
-    var prods = g.bkK.concat(g.dsK.filter(function (p) { return !(p in g.bk); }));
+    var bases = [];
+    g.bkK.concat(g.dsK).forEach(function (p) { p = oosBase_(p); if (bases.indexOf(p) < 0) bases.push(p); });
     var multi = g.dateK.length > 1;
     g.dateK.forEach(function (date) {
-      prods.forEach(function (prod) {
-        var diff = (g.ds[prod] || 0) - (g.bk[prod] || 0);
-        if (diff) rows.push({ date: date, ds: g.dates[date].join(', '), wh: g.wh, sale: g.sale, cusId: g.cus, cusName: g.name,
-          prod: prod, diff: diff, multi: multi, orders: g.orders.join(', ') });
+      bases.forEach(function (b) {
+        var dp = (g.ds[b] || 0) - (g.bk[b] || 0), df = (g.ds[b + OOS_FREE] || 0) - (g.bk[b + OOS_FREE] || 0);
+        // ซื้อขาดแต่แถมเกิน (หรือกลับกัน) = บิลย้ายจำนวนระหว่างซื้อ/แถม → นับรวมบรรทัดเดียวแบบเดิม
+        var list = dp && df && (dp > 0) !== (df > 0) ? [[b, dp + df]] : [[b, dp], [b + OOS_FREE, df]];
+        list.forEach(function (x) {
+          if (x[1]) rows.push({ date: date, ds: g.dates[date].join(', '), wh: g.wh, sale: g.sale, cusId: g.cus, cusName: g.name,
+            prod: x[0], diff: x[1], multi: multi, orders: g.orders.join(', ') });
+        });
       });
     });
   });
   return { rows: rows, units: units };
 }
 /** = qtyText ของแอป (หน่วยจากใบจอง/บิล): ชิ้น → "2 ลังx24(CS) 3 ชิ้นx1(EA)" */
+var OOS_FREE = ' (แถม)';
+function oosBase_(p) { p = String(p); return p.slice(-OOS_FREE.length) === OOS_FREE ? p.slice(0, -OOS_FREE.length) : p; }
 function oosQtyText_(units, prod, ea) {
-  var u = units[prod];
+  var u = units[oosBase_(prod)];
   if (!u) return ea + ' ชิ้น';
   var fs = Object.keys(u).map(Number).sort(function (a, b) { return b - a; }), rem = ea, parts = [];
   fs.forEach(function (f) { if (f <= 1) return; var c = Math.floor(rem / f); if (c) { parts.push(c + ' ' + u[f]); rem -= c * f; } });
@@ -836,20 +848,28 @@ function oosBuildStores_(rows, units) {
     addU(s.wh, r.wh); addU(s.bills, r.ds); addU(s.sale, r.sale);
     if (!(r.prod in s.prods)) { s.prods[r.prod] = 0; s.prodK.push(r.prod); }
     s.prods[r.prod] += r.diff;
+    var b = oosBase_(r.prod);   // แบบเดิม (ซื้อ+แถมรวมกัน) — ไว้เทียบกับข้อความที่ส่งไปก่อน v1.23 กันส่งซ้ำ
+    s.prods0 = s.prods0 || {}; s.prodK0 = s.prodK0 || [];
+    if (!(b in s.prods0)) { s.prods0[b] = 0; s.prodK0.push(b); }
+    s.prods0[b] += r.diff;
   });
   var out = [];
-  keys.forEach(function (k) {
-    var s = by[k], lines = [];
-    s.prodK.forEach(function (prod) {
-      var ea = s.prods[prod]; if (!ea) return;
+  var mk = function (prods, keys) {
+    var lines = [];
+    keys.forEach(function (prod) {
+      var ea = prods[prod]; if (!ea) return;
       lines.push({ type: ea < 0 ? 'short' : 'add', prod: prod, qty: oosQtyText_(units, prod, Math.abs(ea)) });
     });
-    if (!lines.length) return;
     lines.sort(function (a, b) { return a.type === b.type ? a.prod.localeCompare(b.prod, 'th') : a.type === 'short' ? -1 : 1; });
     var txt = function (t, ic) { return lines.filter(function (l) { return l.type === t; }).map(function (l) { return ic + l.prod + ' ' + l.qty; }).join('\n'); };
+    return { n: lines.length, short: txt('short', '🔴') || '-', add: txt('add', '🟢') || '-' };
+  };
+  keys.forEach(function (k) {
+    var s = by[k], t = mk(s.prods, s.prodK), t0 = mk(s.prods0, s.prodK0);
+    if (!t.n) return;
     out.push({
       cusId: s.cusId, cusName: s.cusName, wh: s.wh.join(','), bills: s.bills.join(', '), orders: s.orders.slice().sort().join(', '),
-      sale: s.sale.join(', '), short: txt('short', '🔴') || '-', add: txt('add', '🟢') || '-', multi: s.multi
+      sale: s.sale.join(', '), short: t.short, add: t.add, short0: t0.short, add0: t0.add, multi: s.multi
     });
   });
   return out;
