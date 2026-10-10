@@ -10,7 +10,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="rattana-oos-line-icon-192.png">
 <link rel="apple-touch-icon" href="rattana-oos-line-icon-180.png">
 <link rel="manifest" href="rattana-oos-line.webmanifest">
-<title>Rattana OOS Notify v1.48</title>
+<title>Rattana OOS Notify v1.49</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -128,6 +128,11 @@ body.dark .zone.wait{--zc:#8a6a1c;--zb:#1d1a12}body.dark .zone.bad{--zc:#7a2e2e;
 body.dark .ln.short .q{color:#ff8080}body.dark .ln.add .q{color:#5ee0a0}
 .ln .q small.was{display:block;font-size:11px;color:#d97706;font-weight:600}
 .tag-free{display:inline-block;font-size:11px;font-weight:700;padding:0 6px;border-radius:6px;background:var(--accent-b);color:var(--accent);margin-left:2px;vertical-align:1px}
+/* v1.49: รายการที่ขาดเพราะ CN (ใบลดหนี้ IS) — เห็นเฉพาะในแอป */
+.ln.cn{background:#e8f1ff;border-radius:8px;margin:1px 8px 1px 10px;padding-left:8px;padding-right:6px}
+.tag-cn{display:inline-block;font-size:11px;font-weight:700;padding:0 6px;border-radius:6px;background:#2563eb;color:#fff;margin-left:2px;vertical-align:1px}
+.b-cn{background:#2563eb;color:#fff}
+body.dark .ln.cn{background:#16264a}
 .ln .warn{color:var(--warning);font-size:11px}
 .more{padding:2px 14px 0 18px;font-size:12px;color:var(--accent);font-weight:600;background:none}
 .pane{position:sticky;top:70px;background:var(--card-bg);border-radius:18px;overflow:hidden;box-shadow:0 4px 18px rgba(19,35,58,.08);max-height:calc(100dvh - 84px);display:flex;flex-direction:column}
@@ -320,7 +325,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
   <div class="login-box">
     <img src="rattana-oos-line-icon-192.png" alt="" class="login-logo">
     <h1>Rattana <span style="color:var(--brand)">OOS Notify</span></h1>
-    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.48</p>
+    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.49</p>
     <div id="g_id_onload" data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
     <div style="display:flex;justify-content:center"><div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div></div>
     <div class="login-err" id="loginErr"></div>
@@ -332,7 +337,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
 <header class="hero ext" id="hero">
   <div class="hero-top">
     <div class="lg"><img src="rattana-oos-line-icon.svg" alt=""></div>
-    <div class="brand"><b>Rattana OOS Notify</b><small>v1.48 · แจ้งลูกค้าเรื่องสินค้าขาดทาง LINE</small></div>
+    <div class="brand"><b>Rattana OOS Notify</b><small>v1.49 · แจ้งลูกค้าเรื่องสินค้าขาดทาง LINE</small></div>
     <nav class="tab-nav">
       <button class="tab-btn active" data-tab="prep" onclick="showTab('prep')">วันนี้</button>
       <button class="tab-btn" data-tab="sales" onclick="showTab('sales')">ร้านที่ต้องส่งเอง <span class="cnt hidden" id="slCnt"></span></button>
@@ -525,7 +530,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
 </div>
 
 <script>
-const APP_VERSION = '1.48';
+const APP_VERSION = '1.49';
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -837,6 +842,7 @@ let EXCLUDE_CUS = new Set(['7500000000']);   // ร้านที่ไม่�
 /* v1.47: ของแถมขาด = บรรทัดแยก ชื่อสินค้า + " (แถม)" (หลังบ้าน v1.23 ทำแบบเดียวกัน) */
 const FREE_TAG = ' (แถม)';
 const baseOf = p => String(p).endsWith(FREE_TAG) ? String(p).slice(0, -FREE_TAG.length) : String(p);
+const cnTag = l => !l.cn ? '' : ` <span class="tag-cn" title="ขาดเพราะใบลดหนี้ IS (สินค้าขาดจากสต็อก) — ลูกค้าเห็นเป็นสินค้าขาดปกติ">CN${l.cnQty ? ' ' + esc(l.cnQty) : ''}</span>`;
 const prodHtml = p => String(p).endsWith(FREE_TAG) ? `${esc(baseOf(p))} <span class="tag-free">แถม</span>` : esc(p);
 const unitFactor = u => { const m = String(u).match(/x(\d+)\(/); return m ? +m[1] : 1; };
 const IS_SHORT = 'สินค้าขาดจากสต็อก';   // v1.48: ใบลดหนี้ (แท็บ IS) เฉพาะหมายเหตุนี้ = ของที่ตัดออกจากบิล → ขาดเพิ่ม
@@ -891,7 +897,7 @@ function computeFromOrder(bkTab, dsTab, isTab) {
     if (Object.values(ci).every(i => i >= 0)) isTab.slice(1).forEach(r => {
       if (normName(r[ci.DI_REMARK]) !== IS_SHORT) return;
       const g = billG.get(normName(r[ci.TRD_REFER_REF])); if (!g) return;   // บิลเก่ากว่าที่ไฟล์เก็บ = ข้าม
-      line(r, ci).forEach(l => put(g.ds, { prod: l.prod, ea: -l.ea })); isN++;
+      line(r, ci).forEach(l => { put(g.ds, { prod: l.prod, ea: -l.ea }); if (l.ea) (g.cn = g.cn || new Map()).set(l.prod, (g.cn.get(l.prod) || 0) + l.ea); }); isN++;   // g.cn = จำนวนที่มาจาก CN (ไว้ทำสีในแอป)
     });
   }
   const rows = []; let skipped = 0;
@@ -904,8 +910,9 @@ function computeFromOrder(bkTab, dsTab, isTab) {
     g.dates.forEach((refs, date) => bases.forEach(b => {
       const dp = d(g.ds, b) - d(g.bk, b), df = d(g.ds, b + FREE_TAG) - d(g.bk, b + FREE_TAG);
       // ซื้อขาดแต่แถมเกิน (หรือกลับกัน) = บิลย้ายจำนวนระหว่างซื้อ/แถม → นับรวมบรรทัดเดียวแบบเดิม (= oosCompute_)
-      const list = dp && df && (dp > 0) !== (df > 0) ? [[b, dp + df]] : [[b, dp], [b + FREE_TAG, df]];
-      list.forEach(([prod, diff]) => { if (diff) rows.push({ date, ds: [...refs].join(', '), wh: g.wh, sale: g.sale, cusId: g.cus, cusName: g.name, prod, diff, multi, orders: [...g.orders].join(', ') }); });
+      const cnOf = k => (g.cn && g.cn.get(k)) || 0;
+      const list = dp && df && (dp > 0) !== (df > 0) ? [[b, dp + df, cnOf(b) + cnOf(b + FREE_TAG)]] : [[b, dp, cnOf(b)], [b + FREE_TAG, df, cnOf(b + FREE_TAG)]];
+      list.forEach(([prod, diff, cn]) => { if (diff) rows.push({ date, ds: [...refs].join(', '), wh: g.wh, sale: g.sale, cusId: g.cus, cusName: g.name, prod, diff, cn, multi, orders: [...g.orders].join(', ') }); });
     }));
   });
   S.units = units;
@@ -1076,6 +1083,7 @@ function buildStores(dates) {
     if (r.orders) r.orders.split(', ').forEach(x => s.orders.add(x));
     if (r.wh) s.wh.add(r.wh); if (r.ds) s.bills.add(r.ds); if (r.sale) s.sale.add(r.sale);
     s.prods.set(r.prod, (s.prods.get(r.prod) || 0) + r.diff);
+    if (r.cn) (s.cn = s.cn || new Map()).set(r.prod, (s.cn.get(r.prod) || 0) + r.cn);
     (s.prods0 = s.prods0 || new Map()).set(baseOf(r.prod), (s.prods0.get(baseOf(r.prod)) || 0) + r.diff);   // แบบเดิม (ซื้อ+แถมรวม) ไว้เทียบข้อความที่ส่งก่อน v1.47
   });
   const out = [];
@@ -1084,7 +1092,8 @@ function buildStores(dates) {
     s.prods.forEach((ea, prod) => {
       if (!ea) return;
       const q = qtyText(prod, Math.abs(ea));
-      lines.push({ type: ea < 0 ? 'short' : 'add', prod, ea, qty: q.text, miss: q.miss });
+      const cn = ea < 0 && s.cn ? Math.min(s.cn.get(prod) || 0, -ea) : 0;   // v1.49: ส่วนที่ขาดเพราะ CN (IS สินค้าขาดจากสต็อก) — ทำสีให้หลังบ้านเห็น ข้อความลูกค้าเหมือนเดิม
+      lines.push({ type: ea < 0 ? 'short' : 'add', prod, ea, qty: q.text, miss: q.miss, cn, cnQty: cn && cn < -ea ? qtyText(prod, cn).text : '' });
     });
     if (!lines.length) return;
     lines.sort((a, b) => (a.type === b.type ? a.prod.localeCompare(b.prod, 'th') : a.type === 'short' ? -1 : 1));
@@ -1283,7 +1292,7 @@ function storeCard(s) {
   const showLines = dl ? s.lines.filter(l => dl.keep.has(`${l.type === 'short' ? '🔴' : '🟢'}${l.prod} ${l.qty}`)) : s.lines;
   const open = S.expand && S.expand.has(s.key), vis = open ? showLines : showLines.slice(0, CARD_LINES);
   const a = avaOf(s);
-  const lines = vis.map(l => `<div class="ln ${l.type}"><span class="d"></span><span class="p">${prodHtml(l.prod)}${l.miss ? ' <span class="warn">(ไม่พบหน่วยใน PDDT)</span>' : ''}</span><span class="q">${esc(l.qty)}${dl && dl.was[l.prod] ? `<small class="was">เดิม ${esc(dl.was[l.prod])}</small>` : ''}</span></div>`).join('')
+  const lines = vis.map(l => `<div class="ln ${l.type}${l.cn ? ' cn' : ''}"><span class="d"></span><span class="p">${prodHtml(l.prod)}${cnTag(l)}${l.miss ? ' <span class="warn">(ไม่พบหน่วยใน PDDT)</span>' : ''}</span><span class="q">${esc(l.qty)}${dl && dl.was[l.prod] ? `<small class="was">เดิม ${esc(dl.was[l.prod])}</small>` : ''}</span></div>`).join('')
     + (showLines.length > CARD_LINES ? `<button class="more" onclick="event.stopPropagation();toggleMore('${kid}')">${open ? '▴ ย่อ' : `+ อีก ${showLines.length - CARD_LINES} รายการ`}</button>` : '');
   const nS = showLines.filter(l => l.type === 'short').length, nA = showLines.length - nS;
   return `<div class="store ${pl} ${pk === 'sent' || on ? '' : 'off'} ${S.pv === s.key ? 'pv' : ''}" id="st-${kid}" onclick="openStore('${kid}')">
@@ -1299,6 +1308,7 @@ function storeCard(s) {
     <div class="st-badges">
       ${s.uidN ? `<span class="badge b-line">LINE ${s.uidN} บัญชี</span>` : '<span class="badge b-danger">ยังไม่มี UID</span>'}
       ${pk === 'sent' ? `<span class="badge b-line">✓ ส่งแล้ว${q && q.sentAt ? ' ' + esc(thDateTime(q.sentAt)) : ''}</span>` : planBadge(p)}
+      ${s.lines.some(l => l.cn) ? `<span class="badge b-cn" title="มีรายการที่ขาดเพราะใบลดหนี้ (IS · สินค้าขาดจากสต็อก)">CN ${s.lines.filter(l => l.cn).length}</span>` : ''}
       ${s.multi ? '<span class="badge b-warn" title="ใบจองนี้เปิดบิลหลายวัน — ใบจองอาจถูกแก้หลังเปิดบิลไปบางส่วน ตัวเลขอาจไม่ตรง">⚠ บิลหลายวัน ตรวจก่อนส่ง</span>' : ''}
       <span class="badge b-muted">${nS ? `ขาด ${nS}` : ''}${nS && nA ? ' · ' : ''}${nA ? `ส่งแทน ${nA}` : ''}</span>
     </div>
@@ -1502,7 +1512,7 @@ function salesCard(s) {
         <div class="st-meta">บิล ${esc(thDateShort(s.date))} · ${esc(s.bills || '-')}</div></div>
     </div>
     <div class="st-badges"><span class="badge b-danger">${esc(why)}</span><span class="badge b-muted">${s.nShort ? `ขาด ${s.nShort}` : ''}${s.nShort && s.nAdd ? ' · ' : ''}${s.nAdd ? `ส่งแทน ${s.nAdd}` : ''}</span></div>
-    <div class="st-lines">${vis.map(l => `<div class="ln ${l.type}"><span class="d"></span><span class="p">${prodHtml(l.prod)}</span><span class="q">${esc(l.qty)}</span></div>`).join('')}
+    <div class="st-lines">${vis.map(l => `<div class="ln ${l.type}${l.cn ? ' cn' : ''}"><span class="d"></span><span class="p">${prodHtml(l.prod)}${cnTag(l)}</span><span class="q">${esc(l.qty)}</span></div>`).join('')}
       ${s.lines.length > CARD_LINES ? `<button class="more" onclick="toggleSlMore('${kid}')">${open ? '▴ ย่อ' : `+ อีก ${s.lines.length - CARD_LINES} รายการ`}</button>` : ''}</div>
     <div class="sl-act">
       <button class="btn btn-outline btn-sm" onclick="slText('${kid}')">👁 ดูข้อความ</button>
