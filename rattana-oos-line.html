@@ -10,7 +10,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="rattana-oos-line-icon-192.png">
 <link rel="apple-touch-icon" href="rattana-oos-line-icon-180.png">
 <link rel="manifest" href="rattana-oos-line.webmanifest">
-<title>Rattana OOS Notify v1.47</title>
+<title>Rattana OOS Notify v1.48</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -320,7 +320,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
   <div class="login-box">
     <img src="rattana-oos-line-icon-192.png" alt="" class="login-logo">
     <h1>Rattana <span style="color:var(--brand)">OOS Notify</span></h1>
-    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.47</p>
+    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.48</p>
     <div id="g_id_onload" data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
     <div style="display:flex;justify-content:center"><div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div></div>
     <div class="login-err" id="loginErr"></div>
@@ -332,7 +332,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
 <header class="hero ext" id="hero">
   <div class="hero-top">
     <div class="lg"><img src="rattana-oos-line-icon.svg" alt=""></div>
-    <div class="brand"><b>Rattana OOS Notify</b><small>v1.47 · แจ้งลูกค้าเรื่องสินค้าขาดทาง LINE</small></div>
+    <div class="brand"><b>Rattana OOS Notify</b><small>v1.48 · แจ้งลูกค้าเรื่องสินค้าขาดทาง LINE</small></div>
     <nav class="tab-nav">
       <button class="tab-btn active" data-tab="prep" onclick="showTab('prep')">วันนี้</button>
       <button class="tab-btn" data-tab="sales" onclick="showTab('sales')">ร้านที่ต้องส่งเอง <span class="cnt hidden" id="slCnt"></span></button>
@@ -525,7 +525,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
 </div>
 
 <script>
-const APP_VERSION = '1.47';
+const APP_VERSION = '1.48';
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -839,7 +839,8 @@ const FREE_TAG = ' (แถม)';
 const baseOf = p => String(p).endsWith(FREE_TAG) ? String(p).slice(0, -FREE_TAG.length) : String(p);
 const prodHtml = p => String(p).endsWith(FREE_TAG) ? `${esc(baseOf(p))} <span class="tag-free">แถม</span>` : esc(p);
 const unitFactor = u => { const m = String(u).match(/x(\d+)\(/); return m ? +m[1] : 1; };
-function computeFromOrder(bkTab, dsTab) {
+const IS_SHORT = 'สินค้าขาดจากสต็อก';   // v1.48: ใบลดหนี้ (แท็บ IS) เฉพาะหมายเหตุนี้ = ของที่ตัดออกจากบิล → ขาดเพิ่ม
+function computeFromOrder(bkTab, dsTab, isTab) {
   const idx = (head, k) => { const i = head.map(h => normName(h).toUpperCase()).indexOf(k); if (i < 0) throw new Error('ไม่พบคอลัมน์ ' + k); return i; };
   const cols = t => { const h = t[0]; const o = {}; ['DI_DATE', 'DI_REF', 'AR_CODE', 'AR_NAME', 'SLMN_NAME', 'WL_CODE', 'SKU_NAME', 'TRD_UTQNAME', 'TRD_QTY', 'TRD_Q_FREE', 'DI_REMARK'].forEach(k => o[k] = idx(h, k)); return o; };
   const cb = cols(bkTab), cd = cols(dsTab);
@@ -873,13 +874,26 @@ function computeFromOrder(bkTab, dsTab) {
       (String(r[cb.DI_REMARK]).match(/ORD\d+/g) || []).forEach(x => g.orders.add(x));
     g.sale = g.sale || normName(r[cb.SLMN_NAME]); g.wh = g.wh || normName(r[cb.WL_CODE]);
   });
+  const billG = new Map();   // เลขบิล → กลุ่ม (ไว้หักใบลดหนี้ IS)
   ds.forEach(d => {
     const g = grp(find(d.refs[0])); line(d.r, cd).forEach(l => put(g.ds, l));
+    billG.set(d.ref, g);
     (g.dates.get(d.date) || g.dates.set(d.date, new Set()).get(d.date)).add(d.ref);
     if (d.refs.some(x => !bkHave.has(x))) g.missing = true;
     g.cus = g.cus || normName(d.r[cd.AR_CODE]); g.name = g.name || normName(d.r[cd.AR_NAME]);
     g.sale = g.sale || normName(d.r[cd.SLMN_NAME]); g.wh = g.wh || normName(d.r[cd.WL_CODE]);
   });
+  // v1.48: ใบลดหนี้ IS "สินค้าขาดจากสต็อก" อ้างเลขบิลในคอลัมน์ TRD_REFER_REF → หักจำนวนออกจากบิลนั้น = ขาดเพิ่ม (= oosCompute_)
+  let isN = 0;
+  if (isTab && isTab.length > 1) {
+    const h = isTab[0].map(x => normName(x).toUpperCase()), ci = {};
+    ['SKU_NAME', 'TRD_UTQNAME', 'TRD_QTY', 'TRD_Q_FREE', 'DI_REMARK', 'TRD_REFER_REF'].forEach(k => ci[k] = h.indexOf(k));
+    if (Object.values(ci).every(i => i >= 0)) isTab.slice(1).forEach(r => {
+      if (normName(r[ci.DI_REMARK]) !== IS_SHORT) return;
+      const g = billG.get(normName(r[ci.TRD_REFER_REF])); if (!g) return;   // บิลเก่ากว่าที่ไฟล์เก็บ = ข้าม
+      line(r, ci).forEach(l => put(g.ds, { prod: l.prod, ea: -l.ea })); isN++;
+    });
+  }
   const rows = []; let skipped = 0;
   G.forEach(g => {
     if (!g.dates.size) return;
@@ -895,7 +909,7 @@ function computeFromOrder(bkTab, dsTab) {
     }));
   });
   S.units = units;
-  return { rows, info: { groups: G.size, skipped } };
+  return { rows, info: { groups: G.size, skipped, isN } };
 }
 
 // ไฟล์ Excel ในโฟลเดอร์ Order scanner — หลังบ้านส่งไฟล์มา แอปแกะเองด้วย SheetJS
@@ -990,8 +1004,8 @@ async function loadFromXlsx(auto) {
     const uid = S.uidLoaded ? null : loadUidDirect();
     let r, x;
     try {   // ทางหลัก: gviz ตรง (ราว 3 วิ)
-      const [bk, ds] = await Promise.all([gvizTab('BVBK'), gvizTab('DSDC')]);
-      r = computeFromOrder(bk, ds);
+      const [bk, ds, is] = await Promise.all([gvizTab('BVBK'), gvizTab('DSDC'), gvizTab('IS').catch(e => { console.warn('IS', e); return null; })]);   // IS อ่านไม่ได้ = ไม่หัก (ไม่ให้ทั้งหน้าพัง)
+      r = computeFromOrder(bk, ds, is);
       x = { name: ORDER_FILE, updated: nowStamp(), via: 'gviz' };
     } catch (ge) {   // สำรอง: ผ่านหลังบ้าน (ช้ากว่า)
       console.warn('gviz', ge);
@@ -1003,15 +1017,15 @@ async function loadFromXlsx(auto) {
     if (r) { /* ได้จาก gviz แล้ว */ }
     else if (x.pack) {   // หลังบ้านแกะให้แล้ว — ไม่ต้องโหลด SheetJS
       const d = await gunzipJson(x.b64);
-      r = computeFromOrder(d.bk, d.ds);
+      r = computeFromOrder(d.bk, d.ds, d.is);
     } else {
       await loadSheetJS();
-      const wb = XLSX.read(x.b64, { type: 'base64', sheets: ['BVBK', 'DSDC'] });
+      const wb = XLSX.read(x.b64, { type: 'base64', sheets: ['BVBK', 'DSDC', 'IS'] });
       const tab = n => {
         if (!wb.Sheets[n]) throw new Error(`ไม่พบแท็บ ${n} ในไฟล์ ${x.name}`);
         return XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' }).map(r => r.map(c => String(c)));
       };
-      r = computeFromOrder(tab('BVBK'), tab('DSDC'));
+      r = computeFromOrder(tab('BVBK'), tab('DSDC'), wb.Sheets.IS ? tab('IS') : null);
     }
     S.cmpInfo = r.info;
     S.srcUpdated = thDateTime(x.updated);   // gviz = เวลาที่ดึง (ไฟล์รีเฟรชทุก 1 ชม.)

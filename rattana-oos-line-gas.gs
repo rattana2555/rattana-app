@@ -1,5 +1,5 @@
 /**
- * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.23
+ * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.24
  * อยู่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
  *
  * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.23';
+var OOS_VERSION = '1.24';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -587,11 +587,13 @@ function oosXlsxFile_(name) {
 var OOS_PART = 90000;
 var OOS_ORDER_FILE = 'Check Out.xlsx';
 var OOS_ORDER_COLS = ['DI_DATE', 'DI_REF', 'AR_CODE', 'AR_NAME', 'SLMN_NAME', 'WL_CODE', 'SKU_NAME', 'TRD_UTQNAME', 'TRD_QTY', 'TRD_Q_FREE', 'DI_REMARK'];
+var OOS_IS_COLS = ['SKU_NAME', 'TRD_UTQNAME', 'TRD_QTY', 'TRD_Q_FREE', 'DI_REMARK', 'TRD_REFER_REF'];   // v1.24 แท็บ IS (ใบลดหนี้)
+var OOS_IS_SHORT = 'สินค้าขาดจากสต็อก';
 function oosXlsxMeta_(name, pack) {
   pack = !!pack && name === OOS_ORDER_FILE;
   var f = oosXlsxFile_(name);
   var upd = f.getLastUpdated();
-  var key = (pack ? 'p_' : 'x_') + f.getId().slice(-12) + '_' + upd.getTime();
+  var key = (pack ? 'q_' : 'x_') + f.getId().slice(-12) + '_' + upd.getTime();
   var cache = CacheService.getScriptCache();
   var n = +(cache.get(key + '_n') || 0);
   if (!n) {
@@ -611,7 +613,7 @@ function oosXlsxMeta_(name, pack) {
   return { name: f.getName(), updated: Utilities.formatDate(upd, OOS_TZ, 'yyyy-MM-dd HH:mm:ss'), key: key, n: n, pack: pack };
 }
 function oosXlsxPart_(key, from, to) {
-  if (!/^[xp]_[\w-]+_\d+$/.test(String(key || ''))) throw new Error('คีย์ไม่ถูกต้อง');
+  if (!/^[xpq]_[\w-]+_\d+$/.test(String(key || ''))) throw new Error('คีย์ไม่ถูกต้อง');
   from = Math.max(0, +from || 0); to = Math.max(from, +to || 0);
   var ks = []; for (var i = from; i < to; i++) ks.push(key + '_' + i);
   var got = CacheService.getScriptCache().getAll(ks);
@@ -655,8 +657,9 @@ function oosOrderPack_(blob) {
       S.push(oosXmlText_(t));
     }
   }
-  var sheet = function (name) {
-    if (!sheetPath[name]) throw new Error('ไม่พบแท็บ ' + name + ' ใน ' + OOS_ORDER_FILE);
+  var sheet = function (name, COLS, optional) {
+    COLS = COLS || OOS_ORDER_COLS;
+    if (!sheetPath[name]) { if (optional) return null; throw new Error('ไม่พบแท็บ ' + name + ' ใน ' + OOS_ORDER_FILE); }
     var x = txt(sheetPath[name]), rows = [], want = null;
     var rre = /<row\b[^>]*>([\s\S]*?)<\/row>/g, rm;
     while ((rm = rre.exec(x))) {
@@ -673,18 +676,20 @@ function oosOrderPack_(blob) {
         cells[col] = v;
       }
       if (!want) {   // แถวแรก = หัวคอลัมน์
-        want = OOS_ORDER_COLS.map(function (k) {
+        want = COLS.map(function (k) {
           for (var c in cells) if (String(cells[c]).replace(/\s+/g, ' ').trim().toUpperCase() === k) return c;
           throw new Error('ไม่พบคอลัมน์ ' + k + ' ในแท็บ ' + name);
         });
-        rows.push(OOS_ORDER_COLS.slice());
+        rows.push(COLS.slice());
         continue;
       }
       rows.push(want.map(function (c) { return cells[c] == null ? '' : cells[c]; }));
     }
     return rows;
   };
-  return { bk: sheet('BVBK'), ds: sheet('DSDC') };
+  var is = null;
+  try { is = sheet('IS', OOS_IS_COLS, true); } catch (e) { is = null; }   // IS ไม่มี/หัวคอลัมน์ไม่ครบ = ไม่หัก
+  return { bk: sheet('BVBK'), ds: sheet('DSDC'), is: is };
 }
 
 /** ส่งไฟล์ .xlsx ทั้งไฟล์ (base64) ให้แอปแกะเองด้วย SheetJS — ตัวเก่า (ไฟล์เล็ก) */
@@ -706,7 +711,7 @@ function oosXlsx_(name) {
 function oosAutoQueue_(dry) {
   var t0 = Date.now();
   var pk = oosOrderPack_(oosXlsxFile_(OOS_ORDER_FILE).getBlob());
-  var c = oosCompute_(pk.bk, pk.ds);
+  var c = oosCompute_(pk.bk, pk.ds, pk.is);
   var today = oosToday_(), tmr = Utilities.formatDate(new Date(Date.now() + 864e5), OOS_TZ, 'yyyy-MM-dd');
   var has = {}; c.rows.forEach(function (r) { has[r.date] = 1; });
   var want = oosDays_(), excl = oosExclude_();
@@ -746,7 +751,7 @@ function oosToIso_(s) {
   return '';
 }
 /** = computeFromOrder ของแอป: จับกลุ่มใบจอง↔บิล (DI_REMARK ของบิลอ้าง BK/BV) → ส่วนต่างเป็นชิ้น (EA) ต่อสินค้า */
-function oosCompute_(bkTab, dsTab) {
+function oosCompute_(bkTab, dsTab, isTab) {
   var idx = function (head, k) {
     var i = head.map(function (h) { return oosNorm_(h).toUpperCase(); }).indexOf(k);
     if (i < 0) throw new Error('ไม่พบคอลัมน์ ' + k);
@@ -777,7 +782,7 @@ function oosCompute_(bkTab, dsTab) {
     refs.forEach(add); refs.slice(1).forEach(function (x) { uni(refs[0], x); });
     ds.push({ r: r, refs: refs, date: oosToIso_(r[cd.DI_DATE]), ref: oosNorm_(r[cd.DI_REF]) });
   });
-  var bkHave = {}, G = {}, order = [];
+  var bkHave = {}, G = {}, order = [], billG = {};
   var grp = function (k) {
     if (!G[k]) { G[k] = { bk: {}, ds: {}, bkK: [], dsK: [], dates: {}, dateK: [], missing: false, cus: '', name: '', sale: '', wh: '', orders: [] }; order.push(k); }
     return G[k];
@@ -798,12 +803,25 @@ function oosCompute_(bkTab, dsTab) {
   });
   ds.forEach(function (d) {
     var g = grp(find(d.refs[0])); line(d.r, cd).forEach(function (l) { put(g, 'ds', l); });
+    billG[d.ref] = g;
     if (!g.dates[d.date]) { g.dates[d.date] = []; g.dateK.push(d.date); }
     if (g.dates[d.date].indexOf(d.ref) < 0) g.dates[d.date].push(d.ref);
     if (d.refs.some(function (x) { return !bkHave[x]; })) g.missing = true;
     g.cus = g.cus || oosNorm_(d.r[cd.AR_CODE]); g.name = g.name || oosNorm_(d.r[cd.AR_NAME]);
     g.sale = g.sale || oosNorm_(d.r[cd.SLMN_NAME]); g.wh = g.wh || oosNorm_(d.r[cd.WL_CODE]);
   });
+  // v1.24: ใบลดหนี้ IS "สินค้าขาดจากสต็อก" อ้างเลขบิล (TRD_REFER_REF) → หักออกจากบิลนั้น = ขาดเพิ่ม (= computeFromOrder ของแอป)
+  if (isTab && isTab.length > 1) {
+    var ci = {};
+    ['SKU_NAME', 'TRD_UTQNAME', 'TRD_QTY', 'TRD_Q_FREE', 'DI_REMARK', 'TRD_REFER_REF'].forEach(function (k) {
+      ci[k] = isTab[0].map(function (h) { return oosNorm_(h).toUpperCase(); }).indexOf(k);
+    });
+    if (Object.keys(ci).every(function (k) { return ci[k] >= 0; })) isTab.slice(1).forEach(function (r) {
+      if (oosNorm_(r[ci.DI_REMARK]) !== OOS_IS_SHORT) return;
+      var g = billG[oosNorm_(r[ci.TRD_REFER_REF])]; if (!g) return;
+      line(r, ci).forEach(function (l) { put(g, 'ds', { prod: l.prod, ea: -l.ea }); });
+    });
+  }
   var rows = [];
   order.forEach(function (k) {
     var g = G[k];
