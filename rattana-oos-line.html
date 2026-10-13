@@ -10,7 +10,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="rattana-oos-line-icon-192.png">
 <link rel="apple-touch-icon" href="rattana-oos-line-icon-180.png">
 <link rel="manifest" href="rattana-oos-line.webmanifest">
-<title>Rattana OOS Notify v1.64</title>
+<title>Rattana OOS Notify v1.65</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -326,6 +326,8 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
 .tabbar{display:none}
 .hidden{display:none!important}
 .m-only{display:none!important}
+body.sales-only .tab-nav,body.sales-only .tabbar{display:none!important}
+body.sales-only .content{padding-bottom:40px}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
 @keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
@@ -399,7 +401,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
   <div class="login-box">
     <img src="rattana-oos-line-icon-192.png" alt="" class="login-logo">
     <h1>Rattana <span style="color:var(--brand)">OOS Notify</span></h1>
-    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.64</p>
+    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.65</p>
     <div id="g_id_onload" data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
     <div style="display:flex;justify-content:center"><div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div></div>
     <div class="login-err" id="loginErr"></div>
@@ -411,7 +413,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
 <header class="hero ext" id="hero">
   <div class="hero-top">
     <div class="lg"><img src="rattana-oos-line-icon.svg" alt=""></div>
-    <div class="brand"><b>Rattana OOS Notify</b><small>v1.64 · แจ้งลูกค้าเรื่องสินค้าขาดทาง LINE</small></div>
+    <div class="brand"><b>Rattana OOS Notify</b><small>v1.65 · แจ้งลูกค้าเรื่องสินค้าขาดทาง LINE</small></div>
     <nav class="tab-nav">
       <button class="tab-btn active" data-tab="prep" onclick="showTab('prep')">วันนี้</button>
       <button class="tab-btn" data-tab="sales" onclick="showTab('sales')">ร้านของเซลล์ <span class="cnt hidden" id="slCnt"></span></button>
@@ -615,7 +617,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
 </div>
 
 <script>
-const APP_VERSION = '1.64';
+const APP_VERSION = '1.65';
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -735,7 +737,8 @@ async function handleGoogleLogin(r) {
     const u = users.find(x => normalizeEmail(x['E-mail']) === email);
     if (!u) { $('loginErr').textContent = 'ไม่พบอีเมลนี้ในระบบ — ติดต่อแอดมิน'; return; }
     if (String(u['Status'] || '').trim().toLowerCase() !== 'active') { $('loginErr').textContent = 'บัญชีถูกระงับ — ติดต่อแอดมิน'; return; }
-    currentUser = { email, name: u['ชื่อ - สกุล'], nickname: u['ชื่อเล่น'], role: parseInt(u['User Role']) || 1, warehouse: u['W'] };
+    currentUser = { email, name: u['ชื่อ - สกุล'], nickname: u['ชื่อเล่น'], role: parseInt(u['User Role']) || 1, warehouse: u['W'], dept: u['แผนก'],
+      admin: users.filter(x => normalizeEmail(x['E-mail']) === email).some(isAdminRow) };
     lsSet('rattanaUser', { data: currentUser, exp: Date.now() + 30 * 864e5 });
     if (!cfg().key) {   // v1.30: ได้รหัสแอปจากการล็อกอิน ไม่ต้องพิมพ์ · v1.60: ไม่ได้ = ลองอีกครั้ง (มือถือเน็ตช้า)
       let k = await keyFromLogin(r.credential);
@@ -764,7 +767,33 @@ const userName = () => currentUser ? (currentUser.nickname || currentUser.name |
 function enterApp() {
   $('loginScreen').classList.add('hidden'); $('appScreen').classList.remove('hidden');
   $('userChip').textContent = userName();
+  applyPerms();
   initApp();
+  refreshPerms();
+}
+/* v1.65: แท็บ วันนี้ / ประวัติการส่ง / ตั้งค่า เห็นเฉพาะ HQ ที่ User Role ≥ 3 และแผนกธุรการขาย — คนอื่น (เซลล์) เห็นแค่ "ร้านของเซลล์"
+ * (ซ่อนที่หน้าแอป · สิทธิ์อ่านจากชีท Rattana Users: คอลัมน์ W / User Role / แผนก — อีเมลใช้ร่วมหลายคน = มีแถวไหนผ่านก็ผ่าน) */
+function isAdminRow(r) {
+  return (String(r['W'] || '').trim().toUpperCase() === 'HQ' && (parseInt(r['User Role']) || 0) >= 3) || /ธุรการขาย/.test(String(r['แผนก'] || ''));
+}
+function applyPerms() {
+  const adm = !!(currentUser && currentUser.admin);
+  document.body.classList.toggle('sales-only', !adm);
+  document.querySelectorAll('.tab-btn,.tb-btn').forEach(b => { if (b.dataset.tab !== 'sales') b.classList.toggle('hidden', !adm); });
+  if (!adm && !$('page-sales').classList.contains('active')) showTab('sales');
+}
+async function refreshPerms() {   // สิทธิ์ล่าสุดจากชีท (เปลี่ยนแผนก/Role แล้วไม่ต้องล็อกอินใหม่)
+  try {
+    const users = rowsToObjs(await gviz(AUTH_CONFIG.usersSheetId, AUTH_CONFIG.usersSheetName));
+    const rows = users.filter(x => normalizeEmail(x['E-mail']) === normalizeEmail(currentUser.email));
+    if (!rows.length) return;
+    const adm = rows.some(isAdminRow);
+    if (adm !== !!currentUser.admin) {
+      currentUser.admin = adm; currentUser.dept = rows[0]['แผนก'];
+      const ss = lsGet('rattanaUser'); if (ss) lsSet('rattanaUser', { ...ss, data: currentUser });
+      applyPerms();
+    }
+  } catch { }
 }
 
 /* ───────── config / GAS ───────── */
