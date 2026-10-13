@@ -163,6 +163,27 @@ body.dark .ln.cn{background:#16264a}
 .sl-tools .sl-search{height:40px;font-size:14px}
 .sl-sel{height:40px;min-width:240px;font-size:14px}
 .sl-card{cursor:default}
+/* v1.53 ตารางร้านของเซลล์ */
+.sl-tbl{background:var(--card-bg);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.sl-tr{display:grid;grid-template-columns:minmax(200px,30%) 1fr 210px;gap:12px;padding:9px 14px;border-top:1px solid var(--border);align-items:start;font-size:13px;border-left:4px solid transparent}
+.sl-tr:first-child{border-top:0}
+.sl-th{background:var(--row-alt);color:var(--muted);font-weight:600;font-size:12px;padding-top:8px;padding-bottom:8px;position:static}
+.sl-tr.sl-self{border-left-color:var(--r)}.sl-tr.sl-wait{border-left-color:var(--y)}.sl-tr.sl-sent{border-left-color:var(--g)}
+.sl-tr.sl-sent .sl-shop b,.sl-tr.sl-sent .sl-items{opacity:.7}
+.sl-shop b{display:block;font-size:14px;font-weight:600;line-height:1.3}.sl-shop small{color:var(--muted);font-size:11.5px}
+.sl-uid{color:var(--gt);font-weight:600}
+.sl-items{display:flex;flex-wrap:wrap;gap:4px}
+.sl-tag{display:inline-block;font-size:12px;padding:1px 7px;border-radius:6px;background:#fdecec;color:#b42318;line-height:1.6;border:1px solid transparent}
+.sl-tag b{font-weight:700}.sl-tag i{font-style:normal;font-size:10px;font-weight:700;background:#2563eb;color:#fff;border-radius:4px;padding:0 4px;margin-left:2px}
+.sl-tag.g{background:#e7f8ee;color:#05803c}
+.sl-tag.cn{border-color:#93b4f5}
+.sl-tag.more{background:var(--row-alt);color:var(--accent);font-weight:600;cursor:pointer;font-family:inherit}
+body.dark .sl-tag{background:#3a1717;color:#ffb4b4}body.dark .sl-tag.g{background:#0f3321;color:#7be0a3}
+.sl-line{display:flex;align-items:center;gap:6px;justify-content:space-between;flex-wrap:wrap}
+.sl-btns{display:inline-flex;gap:4px}
+.sl-btns button{width:30px;height:28px;border-radius:8px;border:1px solid var(--border);background:var(--card-bg);font-size:13px;display:grid;place-items:center}
+.sl-btns button.p{background:var(--brand);border-color:var(--brand)}
+.sl-btns button:hover{border-color:var(--accent)}
 .sl-card.sl-sent{opacity:.75}
 .sl-bar{display:flex;flex-direction:column;gap:8px;margin:10px 0 14px}
 .sl-dr{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);font-weight:600;margin-left:4px;white-space:nowrap}
@@ -322,6 +343,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
   .tb-row.dates .chips{flex-wrap:nowrap}
   .pb-sel,.sec-head .note{display:none!important}
   .sales-head.stuck{margin-left:-14px;margin-right:-14px;padding-left:14px;padding-right:14px}
+  .sl-tr{grid-template-columns:1fr;gap:6px;padding:10px 12px}.sl-th{display:none}
   .sl-bar .tb-row.dates,.sl-bar .tb-row.dates .chips{flex-wrap:wrap;overflow:visible;margin:0;padding:0}
   .sl-tools{margin-left:0;width:100%}.sl-tools .search-wrap,.sl-pick,.sl-sel{width:100%;min-width:0}
   .tb-row.sub{gap:4px 8px}
@@ -1554,7 +1576,7 @@ async function renderSales() {
   $('slTitle').textContent = `ร้านของ${isSale || S.slSale ? ' ' + who : 'เซลล์'} · ` + (list.length === mineList.length ? `${list.length} ร้าน` : `${list.length} จาก ${mineList.length} ร้าน`);
   $('slSub').textContent = `บิล ${shortD(R.from)}${R.to !== R.from ? ' – ' + shortD(R.to) : ''} · ขาด ${list.reduce((a, s) => a + s.nShort, 0)} รายการ · ส่งแทน ${list.reduce((a, s) => a + s.nAdd, 0)} รายการ`;
   S.slStores = list; S.slWho = who; S.slR = R;
-  $('slList').innerHTML = list.length ? `<div class="zone-grid">${list.map(salesCard).join('')}</div>`
+  $('slList').innerHTML = list.length ? `<div class="sl-tbl"><div class="sl-tr sl-th"><div>ร้าน</div><div>สินค้าขาด / ส่งแทน</div><div>LINE</div></div>${list.map(salesRow).join('')}</div>`
     : qq ? `<div class="card"><div class="empty"><div class="big">🔍</div>ไม่พบร้านที่ค้นหา "${esc($('slSearch').value)}"</div></div>`
     : `<div class="card"><div class="empty"><div class="big">🎉</div>${S.slSt === 'self' ? 'ไม่มีร้านที่ต้องส่งเอง — ระบบส่ง LINE ให้ครบแล้ว' : 'ไม่มีร้านในช่วงนี้'}</div></div>`;
   // ตัวเลขบนแท็บ = ร้านของเซลล์ที่ต้องส่งเอง (บิลรอบนี้)
@@ -1581,6 +1603,28 @@ function salesCard(s) {
       ${st === 'self' ? `<button class="btn btn-line btn-sm" onclick="slShare('${kid}')">📤 แชร์</button>` : ''}
     </div>
   </div>`;
+}
+/* v1.53: ตาราง — 1 แถว = 1 ร้าน เรียงต่อกัน · สินค้าเป็นป้ายสี (แดง = ขาด · เขียว = ส่งแทน · ขอบฟ้า = CN) */
+const SL_TAGS = 8;
+const qtyShort = q => String(q || '').replace(/x\d+\([A-Z]+\)/g, '').replace(/\s+/g, ' ').trim();
+function salesRow(s) {
+  const st = slStatus(s), kid = esc(s.key);
+  const open = S.expand && S.expand.has('sl|' + s.key), vis = open ? s.lines : s.lines.slice(0, SL_TAGS);
+  const bc = { self: 'b-danger', wait: 'b-wait', sent: 'b-line' }[st];
+  const tags = vis.map(l => `<span class="sl-tag ${l.type === 'add' ? 'g' : ''} ${l.cn ? 'cn' : ''}" title="${esc(l.prod + ' ' + l.qty)}${l.cn ? ' · จาก CN' : ''}">${esc(baseOf(l.prod))}${l.prod.endsWith(FREE_TAG) ? ' <b>แถม</b>' : ''} <b>×${esc(qtyShort(l.qty))}</b>${l.cn ? ' <i>CN</i>' : ''}</span>`).join('')
+    + (s.lines.length > SL_TAGS ? `<button class="sl-tag more" onclick="toggleSlMore('${kid}')">${open ? '▴ ย่อ' : `+${s.lines.length - SL_TAGS} รายการ`}</button>` : '');
+  return `<div class="sl-tr sl-${st}">
+    <div class="sl-shop"><b>${esc(s.cusName)}</b><small>${esc(s.cusId)} · บิล ${esc(shortD(s.date))}${s.uidN ? ` · <span class="sl-uid">LINE ${s.uidN}</span>` : ''}</small></div>
+    <div class="sl-items">${tags}</div>
+    <div class="sl-line"><span class="badge ${bc}" title="${esc(slStatusText(s))}">${esc(slShortStatus(s))}</span>
+      <span class="sl-btns"><button title="ดูข้อความ" onclick="slText('${kid}')">👁</button><button title="คัดลอกข้อความ" onclick="slCopy('${kid}')">📋</button>${st === 'self' ? `<button class="p" title="แชร์ส่งลูกค้า" onclick="slShare('${kid}')">📤</button>` : ''}</span></div>
+  </div>`;
+}
+function slShortStatus(s) {
+  const st = slStatus(s), q = queueOfS(s), p = autoPlan(s) || {};
+  if (st === 'sent') { const m = String(q && q.sentAt || '').match(/^\d{4}-(\d{2})-(\d{2}) (\d{2}):(\d{2})/); return m ? `ส่งแล้ว ${+m[2]}/${+m[1]} ${m[3]}:${m[4]}` : 'ส่งแล้ว'; }
+  if (st === 'wait') { const t = (String(p.label || '').match(/\d{1,2}:\d{2}/) || [])[0]; return t ? `รอส่ง ${t}` : 'รอส่ง'; }
+  return !s.uidN ? 'ไม่มี LINE' : /รอบส่ง/.test(p.label || '') ? 'ไม่อยู่ในรอบ' : /บิลหลายวัน/.test(p.label || '') ? 'บิลหลายวัน' : /ยกเลิก/.test(p.label || '') ? 'ยกเลิกไว้' : 'ต้องส่งเอง';
 }
 function toggleSlMore(k) { S.expand = S.expand || new Set(); const x = 'sl|' + k; S.expand.has(x) ? S.expand.delete(x) : S.expand.add(x); renderSales(); }
 /* สรุปทั้งหน้า (ตามตัวกรองที่เลือกอยู่) → ตัวหนังสือ / Excel */
