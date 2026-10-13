@@ -10,7 +10,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="rattana-oos-line-icon-192.png">
 <link rel="apple-touch-icon" href="rattana-oos-line-icon-180.png">
 <link rel="manifest" href="rattana-oos-line.webmanifest">
-<title>Rattana OOS Notify v1.56</title>
+<title>Rattana OOS Notify v1.57</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -384,7 +384,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
   <div class="login-box">
     <img src="rattana-oos-line-icon-192.png" alt="" class="login-logo">
     <h1>Rattana <span style="color:var(--brand)">OOS Notify</span></h1>
-    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.56</p>
+    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.57</p>
     <div id="g_id_onload" data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
     <div style="display:flex;justify-content:center"><div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div></div>
     <div class="login-err" id="loginErr"></div>
@@ -396,7 +396,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
 <header class="hero ext" id="hero">
   <div class="hero-top">
     <div class="lg"><img src="rattana-oos-line-icon.svg" alt=""></div>
-    <div class="brand"><b>Rattana OOS Notify</b><small>v1.56 · แจ้งลูกค้าเรื่องสินค้าขาดทาง LINE</small></div>
+    <div class="brand"><b>Rattana OOS Notify</b><small>v1.57 · แจ้งลูกค้าเรื่องสินค้าขาดทาง LINE</small></div>
     <nav class="tab-nav">
       <button class="tab-btn active" data-tab="prep" onclick="showTab('prep')">วันนี้</button>
       <button class="tab-btn" data-tab="sales" onclick="showTab('sales')">ร้านของเซลล์ <span class="cnt hidden" id="slCnt"></span></button>
@@ -597,7 +597,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
 </div>
 
 <script>
-const APP_VERSION = '1.56';
+const APP_VERSION = '1.57';
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -1663,12 +1663,12 @@ function salesSummaryText() {
   const L = S.slStores || [], R = S.slR;
   // v1.54: ตัวหนังสือล้วน — ไม่มีอิโมจิ / วันที่บิลรายร้าน / สถานะ LINE (user สั่ง)
   const out = [`สรุปสินค้าขาด / ส่งแทน — ${S.slWho}`, `บิล ${shortD(R.from)}${R.to !== R.from ? ' – ' + shortD(R.to) : ''} · ${L.length} ร้าน`];
-  const one = s => { out.push('', `${s.cusName} (${s.cusId})`); s.lines.forEach(l => out.push(`  ${l.type === 'short' ? 'ขาด' : 'ส่งแทน'} ${l.prod}  ${l.qty}${l.cn ? '  [CN]' : ''}`)); };
+  const one = s => { out.push(`${s.cusName} (${s.cusId})`); s.lines.forEach(l => out.push(`- ${l.type === 'short' ? 'ขาด' : 'ส่งแทน'} ${l.prod} ${qtyShort(l.qty)}${l.cn ? ' [CN]' : ''}`)); };   // v1.57: ไม่เว้นบรรทัดระหว่างร้าน
   const bySale = new Map(); L.forEach(s => { const k = saleKey(String(s.sale || '').split(', ')[0]) || '-'; (bySale.get(k) || bySale.set(k, []).get(k)).push(s); });
   if (bySale.size > 1) [...bySale.keys()].sort((a, b) => a.localeCompare(b, 'th')).forEach(k => {   // v1.55: หลายเซลล์ = แยกหัวข้อตามเซลล์
-    out.push('', `===== ${k} · ${bySale.get(k).length} ร้าน =====`); bySale.get(k).forEach(one);
+    out.push('', `== ${k} · ${bySale.get(k).length} ร้าน ==`); bySale.get(k).forEach(one);
   });
-  else L.forEach(one);
+  else { out.push(''); L.forEach(one); }
   return out.join('\n');
 }
 async function slCopyAll() {
@@ -1694,14 +1694,17 @@ async function slExcel() {
 }
 /* ข้อความตัวหนังสือ (หัวข้อ/หมายเหตุเดียวกับ LINE ที่ระบบส่ง) */
 function plainMsg(s) {
-  const L = t => flexLines(t).map(it => `• ${it.name}  ${it.qty || ''}`.trimEnd());
+  // v1.57: แบบกระชับ — ไม่มีบรรทัดว่าง · เว้นวรรคเดียว (user ว่าช่องว่างเยอะ)
+  const L = t => flexLines(t).map(it => `- ${it.name} ${it.qty || ''}`.trim());
   const sh = L(s.short), ad = L(s.add), sale = String(s.sale || '').replace(/\s*\(ROO\)\s*/g, '').trim();
-  const out = ['แจ้งสินค้าขาด / ส่งแทน', `วันที่ ${thDateLong(s.date)}`, '', `ร้าน ${s.cusName}`, `รหัสร้าน ${s.cusId}`];
+  const out = [`แจ้งสินค้าขาด / ส่งแทน วันที่ ${thDateLong(s.date)}`, `ร้าน ${s.cusName} (${s.cusId})`];
   if (s.orders) out.push(`เลขออเดอร์ ${s.orders}`);
   if (sale && sale !== '-') out.push(`เซลล์ ${sale}`);
-  if (sh.length) out.push('', `🔴 สินค้าขาด (${sh.length} รายการ)`, ...sh, '* อาจมีสินค้าขาดเพิ่มเติมจากรายการนี้');
-  if (ad.length) out.push('', `🟢 อาจได้รับเพิ่ม / ส่งแทน (${ad.length} รายการ)`, ...ad, '* รายการส่งแทน / เพิ่ม อาจได้รับหรือไม่ได้รับ ขึ้นอยู่กับสินค้าที่มีในวันจัดส่ง');
-  out.push('', 'ขออภัยในความไม่สะดวก 🙏', 'สอบถามเพิ่มเติม ติดต่อเซลล์ผู้ดูแลได้เลย');
+  if (sh.length) out.push(`🔴 สินค้าขาด ${sh.length} รายการ`, ...sh);
+  if (ad.length) out.push(`🟢 อาจได้รับเพิ่ม / ส่งแทน ${ad.length} รายการ`, ...ad);
+  out.push(sh.length && ad.length ? '* อาจมีสินค้าขาดเพิ่มเติม · รายการส่งแทนขึ้นอยู่กับสินค้าที่มีในวันจัดส่ง'
+    : sh.length ? '* อาจมีสินค้าขาดเพิ่มเติมจากรายการนี้' : '* รายการส่งแทนขึ้นอยู่กับสินค้าที่มีในวันจัดส่ง');
+  out.push('ขออภัยในความไม่สะดวก 🙏 สอบถามเพิ่มเติมติดต่อเซลล์ผู้ดูแลได้เลย');
   return out.join('\n');
 }
 const slStore = k => (S.slStores || []).find(x => x.key === k);
