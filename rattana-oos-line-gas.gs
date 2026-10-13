@@ -1,5 +1,5 @@
 /**
- * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.24
+ * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.25
  * อยู่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
  *
  * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.24';
+var OOS_VERSION = '1.25';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -56,7 +56,15 @@ function oosLogin_(cred) {
   var t = JSON.parse(r.getContentText());
   if (t.aud !== OOS_CLIENT_ID || String(t.email_verified) !== 'true') throw new Error('ยืนยันตัวตนไม่ผ่าน');
   var email = String(t.email || '').trim().toLowerCase();
-  var v = SpreadsheetApp.openById(OOS_USERS_ID).getSheetByName(OOS_USERS_TAB).getDataRange().getDisplayValues();
+  // v1.25: ชื่อแท็บผู้ใช้อาจไม่ตรงเป๊ะ (เว้นวรรค/ตัวพิมพ์) — หาแท็บตามชื่อแบบหลวม ๆ ไม่เจอ = แท็บแรกที่มีหัว "E-mail"
+  var ssU = SpreadsheetApp.openById(OOS_USERS_ID), norm = function (x) { return String(x).replace(/\s+/g, ' ').trim().toLowerCase(); };
+  var shU = ssU.getSheetByName(OOS_USERS_TAB) || ssU.getSheets().filter(function (sh) { return norm(sh.getName()) === norm(OOS_USERS_TAB); })[0];
+  if (!shU) shU = ssU.getSheets().filter(function (sh) {
+    var top = sh.getRange(1, 1, Math.min(10, Math.max(1, sh.getLastRow())), Math.max(1, sh.getLastColumn())).getDisplayValues();
+    return top.some(function (r) { return r.some(function (c) { return String(c).trim() === 'E-mail'; }); });
+  })[0];
+  if (!shU) throw new Error('ไม่พบแท็บผู้ใช้ในชีท Rattana Users');
+  var v = shU.getDataRange().getDisplayValues();
   var hr = -1, ie = -1, is = -1;
   for (var i = 0; i < Math.min(v.length, 10) && hr < 0; i++) {
     var h = v[i].map(function (x) { return String(x).trim(); });
