@@ -10,7 +10,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="rattana-oos-line-icon-192.png">
 <link rel="apple-touch-icon" href="rattana-oos-line-icon-180.png">
 <link rel="manifest" href="rattana-oos-line.webmanifest">
-<title>Rattana OOS Notify v1.60</title>
+<title>Rattana OOS Notify v1.61</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -383,7 +383,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
   <div class="login-box">
     <img src="rattana-oos-line-icon-192.png" alt="" class="login-logo">
     <h1>Rattana <span style="color:var(--brand)">OOS Notify</span></h1>
-    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.60</p>
+    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.61</p>
     <div id="g_id_onload" data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
     <div style="display:flex;justify-content:center"><div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div></div>
     <div class="login-err" id="loginErr"></div>
@@ -395,7 +395,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
 <header class="hero ext" id="hero">
   <div class="hero-top">
     <div class="lg"><img src="rattana-oos-line-icon.svg" alt=""></div>
-    <div class="brand"><b>Rattana OOS Notify</b><small>v1.60 · แจ้งลูกค้าเรื่องสินค้าขาดทาง LINE</small></div>
+    <div class="brand"><b>Rattana OOS Notify</b><small>v1.61 · แจ้งลูกค้าเรื่องสินค้าขาดทาง LINE</small></div>
     <nav class="tab-nav">
       <button class="tab-btn active" data-tab="prep" onclick="showTab('prep')">วันนี้</button>
       <button class="tab-btn" data-tab="sales" onclick="showTab('sales')">ร้านของเซลล์ <span class="cnt hidden" id="slCnt"></span></button>
@@ -475,7 +475,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
 
   <!-- ═════ คิว ═════ -->
   <section class="page" id="page-queue">
-    <div id="queueNoCfg" class="card hidden"><div class="empty"><div class="big">🔌</div>ยังไม่ได้ใส่รหัสแอป<br><button class="btn btn-gold mt" style="margin-top:12px" onclick="openModal('keyModal')">🔑 ใส่รหัสแอป</button></div></div>
+    <div id="queueNoCfg" class="card hidden"><div class="empty"><div class="big">🔌</div>ยังไม่ได้ใส่รหัสแอป<br><button class="btn btn-gold mt" style="margin-top:12px" onclick="relogin()">🔄 เข้าสู่ระบบด้วย Google ใหม่</button></div></div>
     <div id="queueWrap">
       <div class="stat-grid" id="qStats"></div>
       <div class="card card-gold">
@@ -598,7 +598,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
 </div>
 
 <script>
-const APP_VERSION = '1.60';
+const APP_VERSION = '1.61';
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -636,7 +636,13 @@ function ask(title, html, yes = 'ตกลง') {
   });
 }
 const openModal = id => $(id).classList.add('open');
-const askKey = () => openModal('keyModal');
+const askKey = () => relogin();
+/* v1.61: เลิกใช้กล่องใส่รหัสแอป (user สั่ง) — ไม่มีรหัส = กลับไปหน้าเข้าสู่ระบบ Google แอปรับรหัสให้เอง */
+function relogin(msg) {
+  try { localStorage.removeItem('rattanaUser'); } catch { }
+  try { sessionStorage.setItem('oos_relogin', msg || 'กด ลงชื่อเข้าใช้ด้วย Google อีกครั้ง (ครั้งเดียว) แอปจะใส่รหัสให้เอง'); } catch { }
+  location.reload();
+}
 const closeModal = id => $(id).classList.remove('open');
 let _deb; const debouncedRenderPrep = () => { clearTimeout(_deb); _deb = setTimeout(renderPrep, 200); };
 const normName = s => String(s || '').replace(/[​-‍﻿]/g, '').replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
@@ -717,7 +723,7 @@ async function handleGoogleLogin(r) {
     if (!cfg().key) {   // v1.30: ได้รหัสแอปจากการล็อกอิน ไม่ต้องพิมพ์ · v1.60: ไม่ได้ = ลองอีกครั้ง (มือถือเน็ตช้า)
       let k = await keyFromLogin(r.credential);
       if (!k.ok) { await new Promise(res => setTimeout(res, 1500)); k = await keyFromLogin(r.credential); }
-      window._keyErr = k.ok ? '' : k.err;
+      if (!k.ok) { localStorage.removeItem('rattanaUser'); $('loginErr').textContent = `รับรหัสแอปไม่สำเร็จ: ${k.err} — กดลงชื่อเข้าใช้อีกครั้ง`; return; }
     }
     enterApp();
   } catch (e) { $('loginErr').textContent = 'เกิดข้อผิดพลาด ลองใหม่อีกครั้ง'; }
@@ -726,9 +732,11 @@ async function handleGoogleLogin(r) {
 /* v1.60: ล็อกอินค้างไว้แต่เครื่องนี้ไม่มีรหัสแอป (เช่น iPhone ล้างข้อมูล / ล็อกอินก่อนมีระบบรับรหัสอัตโนมัติ)
  * → ให้กดเข้าสู่ระบบ Google ใหม่ 1 ครั้ง แอปรับรหัสให้เอง แทนการเด้งกล่องให้พิมพ์รหัส */
 async function checkSession() {
+  let rl = ''; try { rl = sessionStorage.getItem('oos_relogin') || ''; sessionStorage.removeItem('oos_relogin'); } catch { }
+  if (rl) { $('loginErr').innerHTML = `<span style="color:var(--text)">${esc(rl)}</span>`; return; }   // มาจาก relogin()
   const s = lsGet('rattanaUser');
   if (!(s && s.data && Date.now() < s.exp)) return;
-  if (!(lsGet(LS_CFG) || {}).key && !((await idbGet(LS_CFG)) || {}).key) {
+  if (!(lsGet(LS_CFG) || {}).key && !(ssCfg() || {}).key && !((await idbGet(LS_CFG)) || {}).key) {
     $('loginErr').innerHTML = '<span style="color:var(--text)">เครื่องนี้ยังไม่มีรหัสแอป — กด <b>ลงชื่อเข้าใช้ด้วย Google</b> อีกครั้ง (ครั้งเดียว) แอปจะใส่รหัสให้เอง</span>';
     return;
   }
@@ -746,7 +754,8 @@ function enterApp() {
 // หลังบ้าน = Apps Script ของชีทส่ง (deployment เว็บแอป) · รหัสแอปไม่ฝังในไฟล์ ให้แต่ละเครื่องกรอกเองในกล่อง 🔑 (keyModal)
 const GAS_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbxTJ5hmoAow94ZyaTpneQxEORQQ5ttBLD7KU1O3X8xw3WajJaEvXUEhtHtp1-21mHo0/exec';
 let _cfgMem = null;   // สำรองในหน่วยความจำ เผื่อเบราว์เซอร์บล็อก localStorage
-const cfg = () => { const c = lsGet(LS_CFG) || _cfgMem || {}; return { url: c.url || GAS_URL_DEFAULT, key: c.key || '' }; };
+const ssCfg = () => { try { return JSON.parse(sessionStorage.getItem(LS_CFG)); } catch { return null; } };
+const cfg = () => { const c = lsGet(LS_CFG) || _cfgMem || ssCfg() || {}; return { url: c.url || GAS_URL_DEFAULT, key: c.key || '' }; };
 async function gas(action, data = {}, ms = 90e3) {
   const c = cfg();
   if (!c.key) throw new Error('ยังไม่ได้ใส่รหัสแอป');
@@ -759,8 +768,9 @@ async function gas(action, data = {}, ms = 90e3) {
   if (!j.ok) {
     if (/รหัสแอปไม่ถูกต้อง/.test(j.error || '')) {   // v1.31: รหัสถูกเปลี่ยนในชีท → ล้างรหัสเก่า ให้ล็อกอินใหม่/ใส่รหัสใหม่
       _cfgMem = null; try { localStorage.removeItem(LS_CFG); } catch { } idbSet(LS_CFG, null);
-      openModal('keyModal');
-      throw new Error('รหัสแอปถูกเปลี่ยน — ออกจากระบบแล้วเข้าใหม่ หรือใส่รหัสใหม่');
+      try { sessionStorage.removeItem(LS_CFG); } catch { }
+      relogin('รหัสแอปถูกเปลี่ยน — กด ลงชื่อเข้าใช้ด้วย Google อีกครั้ง');
+      throw new Error('รหัสแอปถูกเปลี่ยน — กำลังให้เข้าสู่ระบบใหม่');
     }
     throw new Error(j.error || 'หลังบ้านผิดพลาด');
   }
@@ -778,6 +788,7 @@ async function keyFromLogin(credential) {
     if (!j || !j.ok || !j.key) return { ok: false, err: (j && j.error) || 'หลังบ้านไม่ส่งรหัสกลับมา' };
     _cfgMem = { url: cfg().url, key: j.key };
     try { localStorage.setItem(LS_CFG, JSON.stringify(_cfgMem)); } catch { }
+    try { sessionStorage.setItem(LS_CFG, JSON.stringify(_cfgMem)); } catch { }
     await idbSet(LS_CFG, _cfgMem);
     return { ok: true };
   } catch (e) { return { ok: false, err: e.name === 'AbortError' ? 'หลังบ้านไม่ตอบ (เกิน 30 วิ)' : 'เชื่อมต่อหลังบ้านไม่ได้' }; }   // ไม่ได้ = ค่อยใส่รหัสเองแบบเดิม
@@ -1082,7 +1093,7 @@ const nowStamp = () => { const d = new Date(), p = x => String(x).padStart(2, '0
 let _xlsxBusy = false;
 async function loadFromXlsx(auto) {
   if (_xlsxBusy) return;
-  if (!cfg().key) { $('srcInfo').innerHTML = 'ยังไม่ได้ใส่รหัสแอป — <a href="#" onclick="askKey();return false">ใส่รหัส</a> แล้วแอปจะดึงข้อมูลให้เอง'; return; }
+  if (!cfg().key) { $('srcInfo').innerHTML = 'ยังไม่ได้ใส่รหัสแอป — <a href="#" onclick="askKey();return false">เข้าสู่ระบบใหม่</a> แล้วแอปจะดึงข้อมูลให้เอง'; return; }
   _xlsxBusy = true;
   if (auto) $('srcInfo').innerHTML = '⏳ กำลังดึงข้อมูลจาก Excel ต้นฉบับ…';
   else showSpinner('กำลังดึงไฟล์ Excel ต้นฉบับ...');
@@ -1476,7 +1487,7 @@ function updateSaveBar() {
 async function saveQueue() {
   const items = S.stores.filter(s => S.sel.has(s.key));
   if (!items.length) return showToast('ยังไม่ได้เลือกร้าน', 'warning');
-  if (!cfg().key) return openModal('keyModal');
+  if (!cfg().key) return relogin();
   const sched = S.gas ? (S.gas.enabled ? `ส่งอัตโนมัติรอบถัดไป (${(S.gas.times || []).join(' / ')})` : '<b style="color:var(--danger)">ปิดส่งอัตโนมัติอยู่</b> — ต้องกดส่งเองในหน้าคิว') : '';
   const nu = items.filter(s => !s.uidN).length;
   if (!await ask('บันทึกเข้าคิว', `บันทึก <b>${items.length}</b> ร้าน (บิล ${[...new Set(items.map(s => thDateShort(s.date)))].join(' + ')}) เข้าคิว<br>${sched}${nu ? `<br><br>⚠ ไม่มี UID ${nu} ร้าน — จะค้างไว้จนกว่าจะเพิ่ม UID` : ''}<br><br><span class="note">ร้านที่ส่งไปแล้วและรายการไม่เปลี่ยน จะไม่ส่งซ้ำ</span>`, '💾 บันทึก')) return;
@@ -1814,7 +1825,7 @@ let _schedDirty = false;
 function schedDirty() { _schedDirty = true; $('btnSaveSched').classList.add('btn-gold'); }
 function renderSched() {
   if (!S.gas) {
-    $('timeList').innerHTML = '<div class="note">ยังไม่ได้ใส่รหัสแอป — <a href="#" onclick="askKey();return false">ใส่รหัส</a></div>';
+    $('timeList').innerHTML = '<div class="note">ยังไม่ได้ใส่รหัสแอป — <a href="#" onclick="askKey();return false">เข้าสู่ระบบใหม่</a></div>';
     $('schedInfo').innerHTML = ''; return;
   }
   if (_schedDirty) return;
@@ -1946,12 +1957,12 @@ async function initApp() {
   addSearchClear();
   try { localStorage.removeItem(LS_PDDT); } catch { }   // แคช PDDT รุ่นเก่า (≤v1.2) ที่ทำ localStorage เต็ม
   if (lsGet('oos_dark')) document.body.classList.add('dark');
-  if (!(lsGet(LS_CFG) || {}).key) _cfgMem = (await idbGet(LS_CFG)) || null;   // localStorage เก็บไม่ได้ → ใช้ค่าจาก IndexedDB
+  if (!(lsGet(LS_CFG) || {}).key && !(_cfgMem && _cfgMem.key)) _cfgMem = (await idbGet(LS_CFG)) || _cfgMem;   // localStorage เก็บไม่ได้ → ใช้ค่าจาก IndexedDB · v1.61: ห้ามล้างรหัสที่มีอยู่แล้วในหน่วยความจำ
   const c = cfg(); $('cfgUrl').value = c.url || ''; $('cfgKey').value = c.key || '';
   $('testUid').value = lsGet('oos_test_uid') || '';
   renderQueue(); renderSched();
   loadState(true);
-  if (!cfg().key) { $('keyErr').textContent = window._keyErr ? 'รับรหัสอัตโนมัติไม่สำเร็จ: ' + window._keyErr : ''; openModal('keyModal'); }   // เครื่องใหม่ — ขอรหัสครั้งเดียว
+  if (!cfg().key) return relogin();   // v1.61: ไม่มีกล่องใส่รหัสแล้ว
   loadFromXlsx(true);   // ดึงจาก Excel ต้นฉบับให้เลย ไม่ต้องกด
   setInterval(() => { if (!document.hidden && cfg().key) loadState(true); }, 60e3);
 }
