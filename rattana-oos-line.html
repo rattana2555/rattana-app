@@ -10,7 +10,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="rattana-oos-line-icon-192.png">
 <link rel="apple-touch-icon" href="rattana-oos-line-icon-180.png">
 <link rel="manifest" href="rattana-oos-line.webmanifest">
-<title>Rattana OOS Notify v1.52</title>
+<title>Rattana OOS Notify v1.53</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -163,6 +163,13 @@ body.dark .ln.cn{background:#16264a}
 .sl-tools .sl-search{height:40px;font-size:14px}
 .sl-sel{height:40px;min-width:240px;font-size:14px}
 .sl-card{cursor:default}
+.sl-card.sl-sent{opacity:.75}
+.sl-bar{display:flex;flex-direction:column;gap:8px;margin:10px 0 14px}
+.sl-dr{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);font-weight:600;margin-left:4px;white-space:nowrap}
+.sl-dr select{height:34px;width:auto;padding:0 8px;font-size:13px;border-radius:10px}
+.sl-exp{margin-left:auto;display:inline-flex;gap:6px}
+.chip.sl-st-self small{color:var(--rt);opacity:1;font-weight:700}.chip.sl-st-wait small{color:var(--yt);opacity:1;font-weight:700}.chip.sl-st-sent small{color:var(--gt);opacity:1;font-weight:700}
+.chip.on small{color:inherit!important}
 .sl-act{display:flex;gap:6px;padding:10px 14px 12px 18px;border-top:1px solid var(--border);flex-wrap:wrap}
 .sl-act .btn{flex:1;min-width:0;white-space:nowrap}
 .sl-pre{white-space:pre-wrap;font-family:inherit;font-size:14px;line-height:1.6;background:var(--row-alt);border:1px solid var(--border);border-radius:12px;padding:14px;max-height:60vh;overflow:auto;color:var(--text)}
@@ -315,6 +322,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
   .tb-row.dates .chips{flex-wrap:nowrap}
   .pb-sel,.sec-head .note{display:none!important}
   .sales-head.stuck{margin-left:-14px;margin-right:-14px;padding-left:14px;padding-right:14px}
+  .sl-bar .tb-row.dates,.sl-bar .tb-row.dates .chips{flex-wrap:wrap;overflow:visible;margin:0;padding:0}
   .sl-tools{margin-left:0;width:100%}.sl-tools .search-wrap,.sl-pick,.sl-sel{width:100%;min-width:0}
   .tb-row.sub{gap:4px 8px}
   .zone-grid{grid-template-columns:1fr}
@@ -338,7 +346,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
   <div class="login-box">
     <img src="rattana-oos-line-icon-192.png" alt="" class="login-logo">
     <h1>Rattana <span style="color:var(--brand)">OOS Notify</span></h1>
-    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.52</p>
+    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.53</p>
     <div id="g_id_onload" data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
     <div style="display:flex;justify-content:center"><div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div></div>
     <div class="login-err" id="loginErr"></div>
@@ -350,10 +358,10 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
 <header class="hero ext" id="hero">
   <div class="hero-top">
     <div class="lg"><img src="rattana-oos-line-icon.svg" alt=""></div>
-    <div class="brand"><b>Rattana OOS Notify</b><small>v1.52 · แจ้งลูกค้าเรื่องสินค้าขาดทาง LINE</small></div>
+    <div class="brand"><b>Rattana OOS Notify</b><small>v1.53 · แจ้งลูกค้าเรื่องสินค้าขาดทาง LINE</small></div>
     <nav class="tab-nav">
       <button class="tab-btn active" data-tab="prep" onclick="showTab('prep')">วันนี้</button>
-      <button class="tab-btn" data-tab="sales" onclick="showTab('sales')">ร้านที่ต้องส่งเอง <span class="cnt hidden" id="slCnt"></span></button>
+      <button class="tab-btn" data-tab="sales" onclick="showTab('sales')">ร้านของเซลล์ <span class="cnt hidden" id="slCnt"></span></button>
       <button class="tab-btn" data-tab="queue" onclick="showTab('queue')">ประวัติการส่ง <span class="cnt hidden" id="qCnt"></span></button>
       <button class="tab-btn" data-tab="sched" onclick="showTab('sched')">ตั้งค่า</button>
     </nav>
@@ -411,15 +419,20 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
   <section class="page" id="page-sales">
     <div class="sales-head">
       <div>
-        <h2 id="slTitle">ร้านที่ต้องส่งเอง</h2>
-        <div class="note" id="slSub">ร้านที่ระบบส่ง LINE ให้ไม่ได้ — คัดลอกข้อความ หรือแชร์ส่งหาลูกค้าเอง</div>
+        <h2 id="slTitle">ร้านของเซลล์</h2>
+        <div class="note" id="slSub">แต่ละร้านขาด / ส่งแทนอะไร · ร้านที่ระบบส่งไม่ได้ คัดลอกหรือแชร์ส่งเองได้</div>
       </div>
       <div class="sl-tools">
         <input class="input search sl-search" id="slSearch" placeholder="ค้นหาชื่อร้าน / รหัส / บิล / สินค้า" oninput="clearTimeout(window._slDeb);window._slDeb=setTimeout(renderSales,200)">
         <div class="sl-pick" id="slPick"></div>
       </div>
     </div>
-    <div class="tb-row dates" style="margin:10px 0 14px"><div class="chips" id="slDates"></div></div>
+    <!-- v1.53: ช่วงวันที่บิล · ตัวกรองสถานะ · คัดลอกสรุป / Excel -->
+    <div class="sl-bar">
+      <div class="tb-row dates"><div class="chips" id="slRange"></div></div>
+      <div class="tb-row"><div class="chips" id="slStat"></div>
+        <span class="sl-exp"><button class="btn btn-outline btn-sm" onclick="slCopyAll()">📋 คัดลอกสรุป</button><button class="btn btn-outline btn-sm" onclick="slExcel()">⬇ Excel</button></span></div>
+    </div>
     <div id="slList"></div>
   </section>
 
@@ -494,7 +507,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
 
 <nav class="tabbar">
   <button class="tb-btn active" data-tab="prep" onclick="showTab('prep')"><i>📋</i>วันนี้</button>
-  <button class="tb-btn" data-tab="sales" onclick="showTab('sales')"><i>✍️</i>ส่งเอง<span class="cnt hidden" id="slCnt2"></span></button>
+  <button class="tb-btn" data-tab="sales" onclick="showTab('sales')"><i>👤</i>ร้านเซลล์<span class="cnt hidden" id="slCnt2"></span></button>
   <button class="tb-btn" data-tab="queue" onclick="showTab('queue')"><i>🕘</i>ประวัติ<span class="cnt hidden" id="qCnt2"></span></button>
   <button class="tb-btn" data-tab="sched" onclick="showTab('sched')"><i>⚙️</i>ตั้งค่า</button>
 </nav>
@@ -546,7 +559,7 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;font-size:13px;font
 </div>
 
 <script>
-const APP_VERSION = '1.52';
+const APP_VERSION = '1.53';
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -1469,9 +1482,10 @@ function previewQ(id) {
   $('pvBody').innerHTML = `<div class="line-bg">${bubbleHtml(o)}</div>`; openModal('pvModal');
 }
 
-/* ───────── v1.45 หน้าเซลล์: ร้านที่ระบบส่งไม่ได้ (ไม่มี UID / บิลหลายวัน / ยกเลิกไว้ …) → คัดลอกข้อความ หรือแชร์ส่งหาลูกค้าเอง ─────────
+/* ───────── v1.53 หน้า "ร้านของเซลล์": สรุปรายเซลล์ ว่าแต่ละร้านขาด / ส่งแทนอะไร + สถานะ LINE (ส่งแล้ว / รอส่ง / ต้องส่งเอง) ─────────
+ * (เดิม v1.45 = เฉพาะร้านที่ระบบส่งไม่ได้ → ตอนนี้เป็นตัวกรอง "ต้องส่งเอง")
  * เห็นเฉพาะร้านของตัวเอง: จับชื่อเซลล์ในบิล (ตัด "คุณ" / "(ROO)") กับ "ชื่อ - สกุล" ของอีเมลที่ล็อกอิน (ชีท Rattana Users)
- * อีเมลที่ไม่ใช่เซลล์ (แอดมิน / ธุรการ) = เลือกดูเซลล์คนไหนก็ได้ · ไม่บันทึกอะไรลงชีท */
+ * อีเมลที่ไม่ใช่เซลล์ (แอดมิน / ธุรการ) = เลือกดูเซลล์คนไหนก็ได้ · เลือกช่วงวันที่บิลได้ · คัดลอกสรุป / ดาวน์โหลด Excel · ไม่บันทึกอะไรลงชีท */
 const saleKey = n => normName(String(n || '').replace(/^คุณ\s*/, '').replace(/\s*\(ROO\)\s*$/i, ''));
 let _myNames = null;
 async function myNames() {
@@ -1483,64 +1497,124 @@ async function myNames() {
   } catch { _myNames = currentUser && currentUser.name ? [saleKey(currentUser.name)] : []; }
   return _myNames;
 }
-function salesDates() {
-  if (S.slDate && S.slDate !== 'send' && S.raw.some(r => r.date === S.slDate)) return [S.slDate];
-  return sendDates();
+const shortD = d => thDateShort(d).replace(/^(วันนี้|พรุ่งนี้) /, '');
+/* ช่วงวันที่บิล: ค่าเริ่ม = บิลรอบนี้ (sendDates) · เลือก ตั้งแต่–ถึง เองได้ */
+function salesRange() {
+  const all = [...new Set(S.raw.map(r => r.date))].sort(), sds = sendDates().slice().sort();
+  let from = S.slFrom && all.includes(S.slFrom) ? S.slFrom : sds[0], to = S.slTo && all.includes(S.slTo) ? S.slTo : sds[sds.length - 1];
+  if (from > to) [from, to] = [to, from];
+  return { all, from, to, dates: all.filter(d => d >= from && d <= to), isSend: from === sds[0] && to === sds[sds.length - 1] };
+}
+function setSlRange(from, to) { S.slFrom = from; S.slTo = to; renderSales(); }
+/* สถานะต่อร้าน: sent = ส่ง LINE แล้ว · wait = ระบบจะส่งให้ · self = ระบบส่งไม่ได้ ต้องส่งเอง */
+function slStatus(s) {
+  const k = (autoPlan(s) || {}).k;
+  if (!S.gas) return s.uidN ? 'wait' : 'self';
+  return k === 'sent' ? 'sent' : k === 'send' ? 'wait' : 'self';
+}
+const SL_ST = { self: '⚠️ ต้องส่งเอง', wait: '⏳ รอระบบส่ง', sent: '✅ ส่ง LINE แล้ว' };
+function slStatusText(s) {
+  const st = slStatus(s), p = autoPlan(s) || {}, q = queueOfS(s);
+  if (st === 'sent') return `ส่ง LINE แล้ว${q && q.sentAt ? ' ' + thDateTime(q.sentAt) : ''}`;
+  if (st === 'wait') return (p.label || 'รอระบบส่ง').replace(/^⏰ /, 'รอส่ง ');
+  return !s.uidN ? 'ต้องส่งเอง · ยังไม่มี LINE (UID)' : 'ต้องส่งเอง · ' + (p.label || '').replace(/^⊘ /, '');
 }
 async function renderSales() {
   if (!S.raw.length) { $('slList').innerHTML = `<div class="card"><div class="empty"><div class="big">⏳</div>กำลังดึงข้อมูล…</div></div>`; return; }
   const mine = await myNames();
-  const dates = {}; S.raw.forEach(r => { (dates[r.date] = dates[r.date] || new Set()).add(r.cusId); });
-  const sds = sendDates(), isSend = !S.slDate || S.slDate === 'send' || !dates[S.slDate];
-  $('slDates').innerHTML = `<button class="chip ${isSend ? 'on' : ''}" onclick="S.slDate='send';renderSales()">⏰ บิลรอบนี้ · ${esc(sds.map(d => thDateShort(d).replace(/^(วันนี้|พรุ่งนี้) /, '')).join(' + '))}</button>`
-    + Object.keys(dates).sort().reverse().map(d => `<button class="chip ${!isSend && d === S.slDate ? 'on' : ''}" onclick="S.slDate='${d}';renderSales()">${thDateShort(d)}</button>`).join('');
-  // ร้านที่ระบบส่งให้ไม่ได้ = ไม่อยู่ในกลุ่ม รอส่ง / ส่งแล้ว
-  const all = buildStores(salesDates()).filter(s => {
-    const k = (autoPlan(s) || {}).k;
-    return S.gas ? k !== 'send' && k !== 'sent' : !s.uidN;
-  });
+  const R = salesRange();
+  const opt = sel => R.all.slice().reverse().map(d => `<option value="${d}" ${d === sel ? 'selected' : ''}>${esc(thDateShort(d))}</option>`).join('');
+  const sds = sendDates().slice().sort();
+  $('slRange').innerHTML = `<button class="chip ${R.isSend ? 'on' : ''}" onclick="setSlRange('','')">⏰ บิลรอบนี้</button>`
+    + `<button class="chip ${R.from === R.all[0] && R.to === R.all[R.all.length - 1] && !R.isSend ? 'on' : ''}" onclick="setSlRange('${R.all[0]}','${R.all[R.all.length - 1]}')">ทุกวันในไฟล์ (${R.all.length} วัน)</button>`
+    + `<span class="sl-dr">บิล <select class="input" onchange="setSlRange(this.value,'${R.to}')">${opt(R.from)}</select> ถึง <select class="input" onchange="setSlRange('${R.from}',this.value)">${opt(R.to)}</select></span>`;
+  const all = buildStores(R.dates);
   const salesIn = [...new Set(all.flatMap(s => String(s.sale || '').split(', ').map(saleKey)).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'th'));
   const isSale = mine.some(n => S.raw.some(r => saleKey(r.sale) === n));   // อีเมลนี้เป็นเซลล์ที่มีบิลในไฟล์
+  const ofSale = (s, names) => String(s.sale || '').split(', ').map(saleKey).some(n => names.includes(n));
   let pick;
   if (isSale) { pick = mine; $('slPick').innerHTML = `<span class="badge b-gold">👤 ${esc(mine.join(' · '))}</span>`; }
   else {
     if (S.slSale && !salesIn.includes(S.slSale)) S.slSale = '';
     pick = S.slSale ? [S.slSale] : null;
-    $('slPick').innerHTML = `<select class="input sl-sel" onchange="S.slSale=this.value;renderSales()"><option value="">ทุกเซลล์ (${all.length} ร้าน)</option>${salesIn.map(n => `<option value="${esc(n)}" ${n === S.slSale ? 'selected' : ''}>${esc(n)} (${all.filter(s => String(s.sale).split(', ').map(saleKey).includes(n)).length})</option>`).join('')}</select>`;
+    $('slPick').innerHTML = `<select class="input sl-sel" onchange="S.slSale=this.value;renderSales()"><option value="">ทุกเซลล์ (${all.length} ร้าน)</option>${salesIn.map(n => `<option value="${esc(n)}" ${n === S.slSale ? 'selected' : ''}>${esc(n)} (${all.filter(s => ofSale(s, [n])).length})</option>`).join('')}</select>`;
   }
-  const mineList = pick ? all.filter(s => String(s.sale || '').split(', ').map(saleKey).some(n => pick.includes(n))) : all;
-  const qq = normName($('slSearch').value).toLowerCase();   // v1.50: ค้นหาชื่อร้าน
-  const list = qq ? mineList.filter(s => (s.cusName + ' ' + s.cusId + ' ' + s.bills + ' ' + s.lines.map(l => l.prod).join(' ')).toLowerCase().includes(qq)) : mineList;
-  $('slTitle').textContent = (isSale ? 'ร้านที่ต้องส่งเอง · ' : 'ร้านที่ระบบส่งไม่ได้ · ') + (qq ? `พบ ${list.length} จาก ${mineList.length} ร้าน` : `${list.length} ร้าน`);
-  S.slStores = list;
+  const mineList = pick ? all.filter(s => ofSale(s, pick)) : all;
+  const cnt = { all: mineList.length, self: 0, wait: 0, sent: 0 };
+  mineList.forEach(s => cnt[slStatus(s)]++);
+  if (!['all', 'self', 'wait', 'sent'].includes(S.slSt)) S.slSt = 'all';
+  $('slStat').innerHTML = [['all', 'ทุกร้าน'], ['self', SL_ST.self], ['wait', SL_ST.wait], ['sent', SL_ST.sent]]
+    .map(([k, l]) => `<button class="chip sl-st-${k} ${S.slSt === k ? 'on' : ''}" onclick="S.slSt='${k}';renderSales()">${l}<small>${cnt[k]}</small></button>`).join('');
+  const qq = normName($('slSearch').value).toLowerCase();
+  const ORD = { self: 0, wait: 1, sent: 2 };
+  const list = mineList.filter(s => (S.slSt === 'all' || slStatus(s) === S.slSt)
+    && (!qq || (s.cusName + ' ' + s.cusId + ' ' + s.bills + ' ' + s.lines.map(l => l.prod).join(' ')).toLowerCase().includes(qq)))
+    .sort((a, b) => ORD[slStatus(a)] - ORD[slStatus(b)] || b.date.localeCompare(a.date) || a.cusName.localeCompare(b.cusName, 'th'));
+  const who = isSale ? mine.join(' · ') : (S.slSale || 'ทุกเซลล์');
+  $('slTitle').textContent = `ร้านของ${isSale || S.slSale ? ' ' + who : 'เซลล์'} · ` + (list.length === mineList.length ? `${list.length} ร้าน` : `${list.length} จาก ${mineList.length} ร้าน`);
+  $('slSub').textContent = `บิล ${shortD(R.from)}${R.to !== R.from ? ' – ' + shortD(R.to) : ''} · ขาด ${list.reduce((a, s) => a + s.nShort, 0)} รายการ · ส่งแทน ${list.reduce((a, s) => a + s.nAdd, 0)} รายการ`;
+  S.slStores = list; S.slWho = who; S.slR = R;
   $('slList').innerHTML = list.length ? `<div class="zone-grid">${list.map(salesCard).join('')}</div>`
     : qq ? `<div class="card"><div class="empty"><div class="big">🔍</div>ไม่พบร้านที่ค้นหา "${esc($('slSearch').value)}"</div></div>`
-    : `<div class="card"><div class="empty"><div class="big">🎉</div>${isSale ? 'ไม่มีร้านที่ต้องส่งเอง — ระบบส่ง LINE ให้ครบแล้ว' : 'ไม่มีร้านที่ระบบส่งไม่ได้'}</div></div>`;
-  updateSalesCnt(isSale ? mineList.length : 0);
+    : `<div class="card"><div class="empty"><div class="big">🎉</div>${S.slSt === 'self' ? 'ไม่มีร้านที่ต้องส่งเอง — ระบบส่ง LINE ให้ครบแล้ว' : 'ไม่มีร้านในช่วงนี้'}</div></div>`;
+  // ตัวเลขบนแท็บ = ร้านของเซลล์ที่ต้องส่งเอง (บิลรอบนี้)
+  updateSalesCnt(isSale ? buildStores(sendDates()).filter(s => ofSale(s, mine) && slStatus(s) === 'self').length : 0);
 }
 function updateSalesCnt(n) { ['slCnt', 'slCnt2'].forEach(i => { const e = $(i); if (e) { e.textContent = n; e.classList.toggle('hidden', !n); } }); }
 function salesCard(s) {
-  const p = autoPlan(s) || {}, a = avaOf(s), kid = esc(s.key);
-  const why = !s.uidN ? 'ยังไม่มี LINE (UID)' : (p.label || '').replace(/^⊘ /, '');
+  const st = slStatus(s), a = avaOf(s), kid = esc(s.key);
   const open = S.expand && S.expand.has('sl|' + s.key), vis = open ? s.lines : s.lines.slice(0, CARD_LINES);
-  return `<div class="store pl-bad sl-card">
+  const pl = { self: 'pl-bad', wait: 'pl-wait', sent: 'pl-done' }[st], bc = { self: 'b-danger', wait: 'b-wait', sent: 'b-line' }[st];
+  return `<div class="store ${pl} sl-card ${st === 'sent' ? 'sl-sent' : ''}">
     <div class="st-head">
       <div class="ava" style="background:${a.c}">${esc(a.ch)}</div>
       <div class="st-main"><div class="st-name">${esc(s.cusName)}</div>
         <div class="st-meta">${esc(s.cusId)} · ${esc(saleShort(s.sale))}</div>
         <div class="st-meta">บิล ${esc(thDateShort(s.date))} · ${esc(s.bills || '-')}</div></div>
     </div>
-    <div class="st-badges"><span class="badge b-danger">${esc(why)}</span><span class="badge b-muted">${s.nShort ? `ขาด ${s.nShort}` : ''}${s.nShort && s.nAdd ? ' · ' : ''}${s.nAdd ? `ส่งแทน ${s.nAdd}` : ''}</span></div>
+    <div class="st-badges"><span class="badge ${bc}">${esc(slStatusText(s))}</span><span class="badge b-muted">${s.nShort ? `ขาด ${s.nShort}` : ''}${s.nShort && s.nAdd ? ' · ' : ''}${s.nAdd ? `ส่งแทน ${s.nAdd}` : ''}</span></div>
     <div class="st-lines">${vis.map(l => `<div class="ln ${l.type}${l.cn ? ' cn' : ''}"><span class="d"></span><span class="p">${prodHtml(l.prod)}${cnTag(l)}</span><span class="q">${esc(l.qty)}</span></div>`).join('')}
       ${s.lines.length > CARD_LINES ? `<button class="more" onclick="toggleSlMore('${kid}')">${open ? '▴ ย่อ' : `+ อีก ${s.lines.length - CARD_LINES} รายการ`}</button>` : ''}</div>
     <div class="sl-act">
       <button class="btn btn-outline btn-sm" onclick="slText('${kid}')">👁 ดูข้อความ</button>
       <button class="btn btn-outline btn-sm" onclick="slCopy('${kid}')">📋 คัดลอก</button>
-      <button class="btn btn-line btn-sm" onclick="slShare('${kid}')">📤 แชร์</button>
+      ${st === 'self' ? `<button class="btn btn-line btn-sm" onclick="slShare('${kid}')">📤 แชร์</button>` : ''}
     </div>
   </div>`;
 }
 function toggleSlMore(k) { S.expand = S.expand || new Set(); const x = 'sl|' + k; S.expand.has(x) ? S.expand.delete(x) : S.expand.add(x); renderSales(); }
+/* สรุปทั้งหน้า (ตามตัวกรองที่เลือกอยู่) → ตัวหนังสือ / Excel */
+function salesSummaryText() {
+  const L = S.slStores || [], R = S.slR;
+  const n = k => L.filter(s => slStatus(s) === k).length;
+  const out = [`สรุปสินค้าขาด / ส่งแทน — ${S.slWho}`, `บิล ${shortD(R.from)}${R.to !== R.from ? ' – ' + shortD(R.to) : ''} · ${L.length} ร้าน (ต้องส่งเอง ${n('self')} · รอระบบส่ง ${n('wait')} · ส่งแล้ว ${n('sent')})`];
+  L.forEach(s => {
+    out.push('', `▪ [${shortD(s.date)}] ${s.cusName} (${s.cusId}) — ${slStatusText(s)}`);
+    s.lines.forEach(l => out.push(`  ${l.type === 'short' ? '🔴 ขาด' : '🟢 ส่งแทน'} ${l.prod}  ${l.qty}${l.cn ? '  [CN]' : ''}`));
+  });
+  return out.join('\n');
+}
+async function slCopyAll() {
+  if (!(S.slStores || []).length) return showToast('ไม่มีร้านให้คัดลอก', 'warning');
+  showToast(await copyText(salesSummaryText()) ? `คัดลอกสรุป ${S.slStores.length} ร้านแล้ว` : 'คัดลอกไม่ได้', 'success');
+}
+async function slExcel() {
+  const L = S.slStores || [], R = S.slR;
+  if (!L.length) return showToast('ไม่มีร้านให้ดาวน์โหลด', 'warning');
+  showSpinner('กำลังทำไฟล์ Excel...');
+  try {
+    await loadSheetJS();
+    const rows = [['วันที่บิล', 'รหัสร้าน', 'ชื่อร้าน', 'เซลล์', 'เลขบิล', 'ประเภท', 'สินค้า', 'จำนวน', 'จาก CN', 'สถานะ LINE']];
+    L.forEach(s => s.lines.forEach(l => rows.push([thDate(s.date), s.cusId, s.cusName, saleShort(s.sale), s.bills, l.type === 'short' ? 'ขาด' : 'ส่งแทน',
+      l.prod, l.qty, l.cn ? (l.cnQty || 'ทั้งหมด') : '', slStatusText(s)])));
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [10, 12, 30, 22, 24, 8, 42, 22, 10, 30].map(w => ({ wch: w }));
+    ws['!autofilter'] = { ref: `A1:J${rows.length}` };
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'สินค้าขาด');
+    XLSX.writeFile(wb, `สินค้าขาด_${String(S.slWho).replace(/[\\/:*?"<>|\s]+/g, '_')}_${R.from}${R.to !== R.from ? '_' + R.to : ''}.xlsx`);
+  } catch (e) { showToast(e.message, 'error'); }
+  finally { hideSpinner(); }
+}
 /* ข้อความตัวหนังสือ (หัวข้อ/หมายเหตุเดียวกับ LINE ที่ระบบส่ง) */
 function plainMsg(s) {
   const L = t => flexLines(t).map(it => `• ${it.name}  ${it.qty || ''}`.trimEnd());
@@ -1570,9 +1644,10 @@ async function slShare(k) {
 }
 function slText(k) {
   const s = slStore(k); if (!s) return;
-  $('pvBody').innerHTML = `<pre class="sl-pre">${esc(plainMsg(s))}</pre>
-    <div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-outline" style="flex:1" onclick="slCopy('${esc(k)}')">📋 คัดลอก</button><button class="btn btn-line" style="flex:1" onclick="slShare('${esc(k)}')">📤 แชร์ส่งลูกค้า</button></div>`;
-  $('pvTitle').textContent = '📝 ข้อความสำหรับส่งเอง'; openModal('pvModal');
+  const self = slStatus(s) === 'self';
+  $('pvBody').innerHTML = `${self ? '' : `<div class="note" style="margin-bottom:8px">${esc(slStatusText(s))} — ระบบส่ง LINE ให้ร้านนี้เอง ไม่ต้องส่งซ้ำ</div>`}<pre class="sl-pre">${esc(plainMsg(s))}</pre>
+    <div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-outline" style="flex:1" onclick="slCopy('${esc(k)}')">📋 คัดลอก</button>${self ? `<button class="btn btn-line" style="flex:1" onclick="slShare('${esc(k)}')">📤 แชร์ส่งลูกค้า</button>` : ''}</div>`;
+  $('pvTitle').textContent = '📝 ข้อความแจ้งสินค้าขาด'; openModal('pvModal');
 }
 
 /* ───────── render: คิว ───────── */
