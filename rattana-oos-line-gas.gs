@@ -1,5 +1,5 @@
 /**
- * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.25
+ * Rattana แจ้งสินค้าขาด → LINE  (OOSApp — ต่อท้าย auto.gs)  v1.26
  * อยู่ในโปรเจกต์ Apps Script ที่ผูกกับชีทส่ง (E-Slip / UID / Keep Send / FlexMessage)
  *
  * - แอปเรียกผ่าน doPost เดิม (ต้องเพิ่มบรรทัดแยกทางไว้บนสุดของ doPost — ดูไฟล์ webhook)
@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.25';
+var OOS_VERSION = '1.26';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -1001,8 +1001,10 @@ function oosFlexBuild_(o, maxRows) {
   if (o.was) shortItems.concat(addItems).forEach(function (it) { if (o.was[it.name]) it.was = o.was[it.name]; });
   var body = [
     { type: 'text', text: String(o.cusName || '-'), size: 'lg', weight: 'bold', color: OOS_NAVY, wrap: true },
-    { type: 'text', text: 'รหัสร้าน ' + (o.cusId || '-'), size: 'xs', color: '#8a8a8a' }
   ];
+  // v1.26: แสดงเลขที่บิลแทนรหัสร้าน (user สั่ง)
+  var bills = String(o.bills || '').trim();
+  if (bills && bills !== '-') body.push({ type: 'text', text: 'เลขที่บิล ' + bills, size: 'xs', color: '#8a8a8a', wrap: true });
   var kv = function (k, v) {
     return {
       type: 'box', layout: 'horizontal', spacing: 'md', contents: [
