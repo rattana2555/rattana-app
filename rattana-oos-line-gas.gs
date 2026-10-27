@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.26';
+var OOS_VERSION = '1.27';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -361,6 +361,8 @@ function oosSave_(b) {
         if (oosSameItems_(oosCanon_(ex.v[OOS_C['สินค้าขาด']], ex.v[OOS_C['สินค้าเพิ่ม']]), it)) { same++; return; }
       }
       if (ex.v[OOS_C.hash] === h && st !== OOS_ST.CANCEL) { same++; return; }
+      // v1.27: ส่งแล้ว + สินค้าเหมือนเดิม (ต่างแค่เลขออเดอร์/บิล/เซลล์) = ไม่ดึงกลับเป็นรอส่ง
+      if (st === OOS_ST.SENT && oosSameItems_(oosCanon_(ex.v[OOS_C['สินค้าขาด']], ex.v[OOS_C['สินค้าเพิ่ม']]), it)) { same++; return; }
       // v1.22: ส่งไปแล้ว → จำรายการที่ส่ง (ส่งก่อนหน้า) · ยังไม่ได้ส่ง → คงค่าเดิมไว้ (ของที่ร้านได้รับจริงครั้งล่าสุด)
       var prevSent = st === OOS_ST.SENT ? JSON.stringify({ s: ex.v[OOS_C['สินค้าขาด']], a: ex.v[OOS_C['สินค้าเพิ่ม']] }) : (ex.v[OOS_C['ส่งก่อนหน้า']] || '');
       var full = rowVals.concat([OOS_ST.WAIT, ex.v[OOS_C['UID ที่ส่ง']], ex.v[OOS_C['เวลาส่ง']],
@@ -759,6 +761,12 @@ function oosToIso_(s) {
   return '';
 }
 /** = computeFromOrder ของแอป: จับกลุ่มใบจอง↔บิล (DI_REMARK ของบิลอ้าง BK/BV) → ส่วนต่างเป็นชิ้น (EA) ต่อสินค้า */
+/** v1.27: เลขออเดอร์ ROO จาก DI_REMARK — แบบเดิม "billIdORD1791601606585-1" · ตั้งแต่ 12/10 "billId29965-1" / "billId34030-1,87836-1" · ตัดเลขท้าย -1 */
+function oosOrderNos_(rm) {
+  var m = String(rm || '').match(/billId\s*([0-9A-Za-z,\-\s]+?)(?:[\r\n]|$)/);
+  var ids = m ? m[1].split(',').map(function (x) { return x.trim().replace(/-\d+$/, ''); }).filter(function (x) { return /^(ORD)?\d{3,}$/.test(x); }) : [];
+  return ids.length ? ids : (String(rm || '').match(/ORD\d+/g) || []);
+}
 function oosCompute_(bkTab, dsTab, isTab) {
   var idx = function (head, k) {
     var i = head.map(function (h) { return oosNorm_(h).toUpperCase(); }).indexOf(k);
@@ -805,8 +813,8 @@ function oosCompute_(bkTab, dsTab, isTab) {
     bkHave[ref] = 1;
     var g = grp(find(ref)); line(r, cb).forEach(function (l) { put(g, 'bk', l); });
     g.cus = g.cus || oosNorm_(r[cb.AR_CODE]); g.name = g.name || oosNorm_(r[cb.AR_NAME]);
-    if (/\(ROO\)/.test(r[cb.SLMN_NAME]))   // เฉพาะเซลล์ ROO — เลขออเดอร์จาก DI_REMARK "billIdORD…"
-      (String(r[cb.DI_REMARK]).match(/ORD\d+/g) || []).forEach(function (x) { if (g.orders.indexOf(x) < 0) g.orders.push(x); });
+    if (/\(ROO\)/.test(r[cb.SLMN_NAME]))   // เฉพาะเซลล์ ROO
+      oosOrderNos_(r[cb.DI_REMARK]).forEach(function (x) { if (g.orders.indexOf(x) < 0) g.orders.push(x); });
     g.sale = g.sale || oosNorm_(r[cb.SLMN_NAME]); g.wh = g.wh || oosNorm_(r[cb.WL_CODE]);
   });
   ds.forEach(function (d) {

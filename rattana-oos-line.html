@@ -10,7 +10,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="rattana-oos-line-icon-192.png">
 <link rel="apple-touch-icon" href="rattana-oos-line-icon-180.png">
 <link rel="manifest" href="rattana-oos-line.webmanifest">
-<title>Rattana OOS Notify v1.69</title>
+<title>Rattana OOS Notify v1.70</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -403,7 +403,7 @@ body.sales-only .content{padding-bottom:40px}
   <div class="login-box">
     <img src="rattana-oos-line-icon-192.png" alt="" class="login-logo">
     <h1>Rattana <span style="color:var(--brand)">OOS Notify</span></h1>
-    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.69</p>
+    <p class="note" style="margin:6px 0 18px">ส่ง LINE แจ้งร้านเรื่องสินค้าขาด / ส่งเพิ่ม · v1.70</p>
     <div id="g_id_onload" data-client_id="615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
     <div style="display:flex;justify-content:center"><div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with"></div></div>
     <div class="login-err" id="loginErr"></div>
@@ -415,7 +415,7 @@ body.sales-only .content{padding-bottom:40px}
 <header class="hero ext" id="hero">
   <div class="hero-top">
     <div class="lg"><img src="rattana-oos-line-icon.svg" alt=""></div>
-    <div class="brand"><b>Rattana OOS Notify</b><small>v1.69 · แจ้งลูกค้าเรื่องสินค้าขาดทาง LINE</small></div>
+    <div class="brand"><b>Rattana OOS Notify</b><small>v1.70 · แจ้งลูกค้าเรื่องสินค้าขาดทาง LINE</small></div>
     <nav class="tab-nav">
       <button class="tab-btn active" data-tab="prep" onclick="showTab('prep')">วันนี้</button>
       <button class="tab-btn" data-tab="sales" onclick="showTab('sales')">ร้านของเซลล์ <span class="cnt hidden" id="slCnt"></span></button>
@@ -619,7 +619,7 @@ body.sales-only .content{padding-bottom:40px}
 </div>
 
 <script>
-const APP_VERSION = '1.69';
+const APP_VERSION = '1.70';
 const AUTH_CONFIG = {
   clientId: '615875645128-gasjjvkt6lu8g449cbnhl40k1pu25r0b.apps.googleusercontent.com',
   usersSheetId: '1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',
@@ -986,6 +986,12 @@ const cnTag = l => !l.cn ? '' : ` <span class="tag-cn" title="ขาดเพร
 const prodHtml = p => String(p).endsWith(FREE_TAG) ? `${esc(baseOf(p))} <span class="tag-free">แถม</span>` : esc(p);
 const unitFactor = u => { const m = String(u).match(/x(\d+)\(/); return m ? +m[1] : 1; };
 const IS_SHORT = 'สินค้าขาดจากสต็อก';   // v1.48: ใบลดหนี้ (แท็บ IS) เฉพาะหมายเหตุนี้ = ของที่ตัดออกจากบิล → ขาดเพิ่ม
+/* เลขออเดอร์ ROO จาก DI_REMARK — แบบเดิม "billIdORD1791601606585-1" · ตั้งแต่ 12/10 "billId29965-1" หรือ "billId34030-1,87836-1" · ตัดเลขท้าย -1 */
+function orderNos(rm) {
+  const m = String(rm || '').match(/billId\s*([0-9A-Za-z,\-\s]+?)(?:[\r\n]|$)/);
+  const ids = m ? m[1].split(',').map(x => x.trim().replace(/-\d+$/, '')).filter(x => /^(ORD)?\d{3,}$/.test(x)) : [];
+  return ids.length ? ids : (String(rm || '').match(/ORD\d+/g) || []);
+}
 function computeFromOrder(bkTab, dsTab, isTab) {
   const idx = (head, k) => { const i = head.map(h => normName(h).toUpperCase()).indexOf(k); if (i < 0) throw new Error('ไม่พบคอลัมน์ ' + k); return i; };
   const cols = t => { const h = t[0]; const o = {}; ['DI_DATE', 'DI_REF', 'AR_CODE', 'AR_NAME', 'SLMN_NAME', 'WL_CODE', 'SKU_NAME', 'TRD_UTQNAME', 'TRD_QTY', 'TRD_Q_FREE', 'DI_REMARK'].forEach(k => o[k] = idx(h, k)); return o; };
@@ -1016,8 +1022,7 @@ function computeFromOrder(bkTab, dsTab, isTab) {
     bkHave.add(ref);
     const g = grp(find(ref)); line(r, cb).forEach(l => put(g.bk, l));
     g.cus = g.cus || normName(r[cb.AR_CODE]); g.name = g.name || normName(r[cb.AR_NAME]);
-    if (/\(ROO\)/.test(r[cb.SLMN_NAME]))   // เฉพาะเซลล์ ROO — เลขออเดอร์จาก DI_REMARK "billIdORD1790047531402"
-      (String(r[cb.DI_REMARK]).match(/ORD\d+/g) || []).forEach(x => g.orders.add(x));
+    if (/\(ROO\)/.test(r[cb.SLMN_NAME])) orderNos(r[cb.DI_REMARK]).forEach(x => g.orders.add(x));   // เฉพาะเซลล์ ROO
     g.sale = g.sale || normName(r[cb.SLMN_NAME]); g.wh = g.wh || normName(r[cb.WL_CODE]);
   });
   const billG = new Map();   // เลขบิล → กลุ่ม (ไว้หักใบลดหนี้ IS)
