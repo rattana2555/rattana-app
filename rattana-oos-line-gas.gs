@@ -13,7 +13,7 @@
  * ครั้งแรก: เลือกฟังก์ชัน oosSetup → Run → อนุญาตสิทธิ์ → ดู Log จะได้ "รหัสแอป" ไปใส่ในแอป
  */
 
-var OOS_VERSION = '1.27';
+var OOS_VERSION = '1.28';
 var OOS_TZ = 'Asia/Bangkok';
 var OOS_QUEUE = 'คิวส่งแอป';
 var OOS_HEAD = ['id', 'วันส่ง', 'รหัสร้านค้า', 'ชื่อร้านค้า', 'คลัง', 'บิล', 'เซลล์ผู้ดูแล',
@@ -1022,7 +1022,7 @@ function oosFlexBuild_(o, maxRows) {
     };
   };
   var info = [];
-  if (o.orders && String(o.orders).trim()) info.push(kv('เลขออเดอร์', String(o.orders).split(/\s*,\s*/).join('\n')));   // ออเดอร์ ROO (billIdORD…)
+  if (o.orders && String(o.orders).trim()) info.push(kv('เลขออเดอร์', String(o.orders).split(/\s*,\s*/).join(', ')));   // ออเดอร์ ROO · v1.28 เรียงต่อแถวเดียว (ยาวเกินขึ้นบรรทัดเอง)
   if (o.sale && String(o.sale).trim() && String(o.sale).trim() !== '-') info.push(kv('เซลล์', String(o.sale).replace(/\s*\(ROO\)\s*$/, '')));
   if (info.length) {
     body.push({ type: 'box', layout: 'vertical', margin: 'md', backgroundColor: '#f5f7fb', cornerRadius: '10px', paddingAll: '10px', spacing: 'xs', contents: info });
