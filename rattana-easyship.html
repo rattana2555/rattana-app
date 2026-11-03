@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#011d3d">
-<title>Rattana EasyShip v5.1</title>
+<title>Rattana EasyShip v5.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -305,6 +305,17 @@ html,body{font-family:'Sarabun',-apple-system,system-ui,sans-serif;background:#0
 .qm-btn,.qm-inp{border-radius:16px}
 .qm-quick-btn,.qm-cancel{border-radius:14px}
 .qm-ok{border-radius:14px;background:linear-gradient(145deg,#ffb824,#f59e00);box-shadow:0 8px 18px rgba(245,158,0,.34)}
+/* ของขาด (เช็คสินค้าออก) + ออเดอร์รอบก่อน */
+#s-check .stats{grid-template-columns:repeat(4,1fr);gap:7px}
+#s-check .stat-n{font-size:21px}
+.kept-tag{font-size:9px;font-weight:600;color:#6b4e00;background:rgba(249,166,2,.18);padding:2px 7px;border-radius:10px;vertical-align:middle}
+.chk-side{display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0}
+.chk-sbtn{border:1px solid rgba(220,38,38,.35);background:rgba(254,226,226,.7);color:#b91c1c;font-size:10px;font-weight:700;padding:5px 8px;border-radius:10px;font-family:inherit;cursor:pointer;white-space:nowrap}
+.chk-sbtn:active{transform:scale(.94)}
+.chk-pcard.short{background:rgba(254,242,242,.88);border-color:rgba(252,165,165,.75)}
+.chk-bf.short{background:#f87171}
+.chk-ico.short{background:#fee2e2;color:#b91c1c}
+.chk-st-short{color:#b91c1c}
 /* toast */
 #toast{background:rgba(1,29,61,.9);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);border-radius:22px;padding:11px 20px;bottom:84px;box-shadow:0 10px 30px rgba(0,0,0,.3);transform:translateX(-50%) translateY(20px) scale(.96);transition:all .28s var(--spring)}
 #toast.on{transform:translateX(-50%) translateY(0) scale(1)}
@@ -351,7 +362,7 @@ html,body{font-family:'Sarabun',-apple-system,system-ui,sans-serif;background:#0
     <div class="bni" onclick="openScan('order')"><div style="font-size:18px">📷</div><div class="bni-l">สแกน</div></div>
     <div class="bni" onclick="goOrders()"><div style="font-size:18px">📋</div><div class="bni-l">ออเดอร์</div></div>
   </div>
-  <div class="ver">Rattana EasyShip v5.1 · 2026-11-02</div>
+  <div class="ver">Rattana EasyShip v5.2 · 2026-11-03</div>
 </div>
 
 <!-- SCAN -->
@@ -394,7 +405,7 @@ html,body{font-family:'Sarabun',-apple-system,system-ui,sans-serif;background:#0
   </div>
   <div class="mzone">
     <div class="mzone-l" id="m-lbl">ป้อนหมายเลขออเดอร์</div>
-    <div class="mrow"><input class="minp" id="minp" placeholder="เลขออเดอร์ / บาร์โคด" type="text"><button class="mgo" onclick="doManual()">ค้นหา</button></div>
+    <div class="mrow"><input class="minp" id="minp" placeholder="เลขออเดอร์ / บาร์โคด" type="text" inputmode="none" autocomplete="off"><button class="mgo" onclick="doManual()">ค้นหา</button></div>
   </div>
 </div>
 
@@ -479,7 +490,8 @@ html,body{font-family:'Sarabun',-apple-system,system-ui,sans-serif;background:#0
   </div>
   <div class="stats">
     <div class="stat"><div class="stat-n" id="chk-done" style="color:var(--gr)">0</div><div class="stat-l">ครบแล้ว</div></div>
-    <div class="stat"><div class="stat-n" id="chk-pend" style="color:var(--gd)">0</div><div class="stat-l">ยังขาด</div></div>
+    <div class="stat"><div class="stat-n" id="chk-pend" style="color:var(--gd)">0</div><div class="stat-l">ยังไม่ครบ</div></div>
+    <div class="stat"><div class="stat-n" id="chk-short" style="color:#dc2626">0</div><div class="stat-l">ของขาด</div></div>
     <div class="stat"><div class="stat-n" id="chk-over" style="color:var(--or)">0</div><div class="stat-l">เกิน</div></div>
   </div>
   <div class="cta" onclick="openScan('check')">
@@ -533,13 +545,13 @@ html,body{font-family:'Sarabun',-apple-system,system-ui,sans-serif;background:#0
 <div id="qm" class="qm-bg" onclick="if(event.target===this)qmCancel()">
   <div class="qm-box">
     <div class="qm-hdr">
-      <div class="qm-ic">✓</div>
+      <div class="qm-ic" id="qm-ic">✓</div>
       <div class="qm-name" id="qm-name">-</div>
       <div class="qm-bc" id="qm-bc">-</div>
     </div>
     <div class="qm-cur" id="qm-cur">-</div>
     <div class="qm-body">
-      <div class="qm-lbl">เพิ่มจำนวน</div>
+      <div class="qm-lbl" id="qm-lbl">เพิ่มจำนวน</div>
       <div class="qm-row">
         <button class="qm-btn" onclick="qmAdj(-1)">−</button>
         <input type="number" class="qm-inp" id="qm-inp" value="1" min="1" inputmode="numeric">
@@ -572,6 +584,9 @@ var CR=null, SS=null, SA=false, DT=null, ID=false, SC=null;
 var LCODE='', LMS=0, LSCANNED=null, OCRVAL=null, TTM=null;
 var PHS=null; // photo camera stream
 var _pcBcs=[], _moBcs=[];
+var IS_TOUCH=('ontouchstart' in window)||navigator.maxTouchPoints>0;
+var _shortCounts={};  // {bc: จำนวนที่แจ้งขาด} ต่อวัน
+var _keptN=0;         // ออเดอร์รอบก่อนที่จำไว้ (ไม่อยู่ใน Sheet แล้ว)
 var _checkCounts={};  // {bc: scannedCount} // index arrays for card clicks
 
 // ═══ UTILS ════════════════════════════════════════════════
@@ -600,8 +615,8 @@ function openScan(m){
   var l='ป้อนหมายเลขออเดอร์';if(m==='product')l='ป้อนบาร์โคดสินค้า';else if(m==='check')l='ป้อนบาร์โคดสินค้า (เช็ค)';
   TXT('sc-t',t); TXT('m-lbl',l);
   show('s-scan'); setMode('bc');
-  // Auto-focus input สำหรับ hardware scanner (handheld)
-  setTimeout(function(){var mi=$('minp');if(mi){mi.focus();mi.value='';}},250);
+  // Auto-focus input สำหรับ hardware scanner (handheld) — inputmode=none กันแป้นพิมพ์มือถือเด้ง
+  setTimeout(function(){var mi=$('minp');if(mi){mi.setAttribute('inputmode','none');mi.focus();mi.value='';}},250);
 }
 
 // ═══ DATA LOADING ══════════════════════════════════════════
@@ -669,11 +684,34 @@ function parseGviz(j){
       nDB[oNum].items.push({bc:bc,name:s(idx('ชื่อสินค้า',7)),unit:ul,ucode:ucode,qty:cases,pieces:rq,pcs:pcs,price:n(idx('ราคา',10)),pack:s(idx('วิธีแพ็คสินค้า',12)),img1:s(idx('รูปภาพสินค้า 1',13)),img2:s(idx('รูปภาพสินค้า 2',14)),sc:(oi&&oi.sc)||0,status:(oi&&oi.status)||'pending'});
     }
   });
+  _keptN=_mergeDayOrders(nDB);
   DB=nDB;
   var f=Object.values(DB)[0];
   if(f&&f.wh){TXT('d-loc','📍 คลัง '+f.wh);TXT('d-sub','คลัง '+f.wh);}
   _hasData=true;
   loadStatus();
+}
+
+// ═══ จำออเดอร์ทั้งวัน (Sheet วาง 2 รอบ เช้า/บ่าย — รอบบ่ายลบรอบเช้าออก) ══
+// เก็บทุกออเดอร์ที่เคยเห็นวันนี้ไว้ในเครื่อง แล้วรวมกลับเข้าไปทุกครั้งที่โหลด · เปลี่ยนวัน = ล้าง
+function _odKey(){return 're_orders_'+_ckDate();}
+function _mergeDayOrders(nDB){
+  var arc={},kept=0;
+  try{arc=JSON.parse(localStorage.getItem(_odKey())||'{}');}catch(e){arc={};}
+  Object.keys(arc).forEach(function(k){
+    if(nDB[k])return;                       // ยังอยู่ใน Sheet → ใช้ของใหม่
+    var o=DB[k]||arc[k];                    // ใช้สถานะล่าสุดในเครื่องถ้ามี
+    o.status=lsGet(k)||o.status||'pending';
+    o.kept=true;nDB[k]=o;kept++;
+  });
+  try{
+    localStorage.setItem(_odKey(),JSON.stringify(nDB));
+    for(var i=localStorage.length-1;i>=0;i--){
+      var key=localStorage.key(i);
+      if(key&&key.indexOf('re_orders_')===0&&key!==_odKey())localStorage.removeItem(key);
+    }
+  }catch(e){}
+  return kept;
 }
 
 // ═══ STATUS SYNC ═══════════════════════════════════════════
@@ -682,7 +720,7 @@ function loadStatus(){
   function done(){
     if(called)return; called=true;
     updateStats(); renderDash(); renderOList(); renderOStats();
-    toast('✅ โหลดสำเร็จ ('+Object.keys(DB).length+' ออเดอร์)','ok');
+    toast('✅ โหลดสำเร็จ ('+Object.keys(DB).length+' ออเดอร์'+(_keptN?' · รวมรอบก่อน '+_keptN:'')+')','ok');
   }
   var tmr=setTimeout(done,5000);
   var url='https://docs.google.com/spreadsheets/d/'+SHEET+'/gviz/tq?tqx=out:json&sheet='+encodeURIComponent(STAB)+'&t='+Date.now();
@@ -851,7 +889,7 @@ function renderOList(){
     var bc=st==='complete'?'background:var(--gr)':'';
     var nm=o.items.slice(0,3).map(function(x){var n=x.name||'';return n.length>16?n.substr(0,16)+'…':n;}).join(' · ');
     return'<div class="ocard" style="border-left-color:'+clr+'" onclick="openOrder(this.dataset.k)" data-k="'+k+'">'
-      +'<div class="oc-n">#'+k+'</div>'
+      +'<div class="oc-n">#'+k+(o.kept?' <span class="kept-tag">🕘 รอบก่อน</span>':'')+'</div>'
       +'<div class="oc-s">'+o.store+' · '+o.code+'</div>'
       +'<div class="oc-items">'+nm+'</div>'
       +'<div class="oc-r"><span class="oc-m">📦 '+o.items.length+' รายการ · ฿'+sp.toLocaleString()+'</span><span class="bdg '+(sB[st]||'bdg-p')+'">'+(sL[st]||'-')+'</span></div>'
@@ -952,8 +990,8 @@ function doManual(){
   if(SMODE==='product')hdProd(v);
   else if(SMODE==='check')hdCheck(v);
   else{hdOrder(v);if(LSCANNED)setTimeout(useLast,300);}
-  // re-focus เพื่อพร้อมรับการยิงครั้งถัดไปจาก hardware scanner
-  setTimeout(function(){var mi=$('minp');if(mi&&$('s-scan').classList.contains('on'))mi.focus();},150);
+  // re-focus เพื่อพร้อมรับการยิงครั้งถัดไปจาก hardware scanner (ซ่อนแป้นพิมพ์กลับ)
+  setTimeout(function(){var mi=$('minp');if(mi&&$('s-scan').classList.contains('on')){mi.setAttribute('inputmode','none');mi.blur();mi.focus();}},150);
 }
 
 // ═══ COMPLETE ════════════════════════════════════════════════
@@ -1161,44 +1199,58 @@ function stopCam(){
 
 function imgErr(el){el.style.display='none';}
 // ═══ QTY MODAL (เช็คสินค้าออก) ═════════════════════════════
-var _qmBc=null;
-function qmOpen(bc,prod,curCount){
-  _qmBc=bc;
+var _qmBc=null,_qmMode='add';
+function qmOpen(bc,prod,curCount,mode){
+  _qmBc=bc;_qmMode=mode||'add';
   TXT('qm-name',prod.name);
   TXT('qm-bc',bc);
-  $('qm-cur').innerHTML='ปัจจุบัน <b>'+curCount+'/'+prod.qty+'</b> '+prod.unit;
-  var inp=$('qm-inp');inp.value=1;
+  var inp=$('qm-inp');
+  if(_qmMode==='short'){
+    var sh=_shortCounts[bc]||0,left=Math.max(0,prod.qty-curCount);
+    TXT('qm-ic','⚠');$('qm-ic').style.background='#fee2e2';$('qm-ic').style.color='#b91c1c';
+    TXT('qm-lbl','จำนวนที่ขาด ('+prod.unit+') · ใส่ 0 = ยกเลิกแจ้งขาด');
+    $('qm-cur').innerHTML='เช็คได้ <b>'+curCount+'/'+prod.qty+'</b> '+prod.unit+(sh?' · แจ้งขาดไว้ <b style="color:#b91c1c">'+sh+'</b>':'');
+    inp.min=0;inp.value=sh||left||1;
+  }else{
+    TXT('qm-ic','✓');$('qm-ic').style.background='';$('qm-ic').style.color='';
+    TXT('qm-lbl','เพิ่มจำนวน');
+    $('qm-cur').innerHTML='ปัจจุบัน <b>'+curCount+'/'+prod.qty+'</b> '+prod.unit;
+    inp.min=1;inp.value=1;
+  }
   qmUpdateBtn();
   inp.oninput=qmUpdateBtn;
   $('qm').classList.add('on');
-  setTimeout(function(){inp.focus();inp.select();},150);
+  // มือถือ: ไม่โฟกัสอัตโนมัติ (กันแป้นพิมพ์เด้ง) ใช้ปุ่ม −/+ หรือแตะช่องเพื่อพิมพ์
+  if(!IS_TOUCH)setTimeout(function(){inp.focus();inp.select();},150);
 }
 function qmAdj(delta){
   var inp=$('qm-inp');
+  var lo=_qmMode==='short'?0:1;
   var v=(parseInt(inp.value)||0)+delta;
-  if(v<1)v=1;
+  if(v<lo)v=lo;
   if(v>999)v=999;
   inp.value=v;
   qmUpdateBtn();
 }
 function qmUpdateBtn(){
-  var v=parseInt($('qm-inp').value)||1;
-  TXT('qm-ok','ยืนยัน +'+v);
+  var v=parseInt($('qm-inp').value);
+  if(_qmMode==='short'){v=v>0?v:0;TXT('qm-ok',v?'บันทึกขาด '+v:'ยกเลิกแจ้งขาด');return;}
+  TXT('qm-ok','ยืนยัน +'+(v>0?v:1));
 }
 function qmCancel(){
   $('qm').classList.remove('on');
   _qmBc=null;
   // Re-focus for next scan
-  setTimeout(function(){var mi=$('minp');if(mi&&$('s-scan').classList.contains('on'))mi.focus();},150);
+  setTimeout(function(){var mi=$('minp');if(mi&&$('s-scan').classList.contains('on')){mi.setAttribute('inputmode','none');mi.focus();}},150);
 }
 function qmOk(){
-  var n=parseInt($('qm-inp').value)||1;
-  if(n<1)n=1;
-  var bc=_qmBc;
+  var n=parseInt($('qm-inp').value)||0;
+  var bc=_qmBc,mode=_qmMode;
   $('qm').classList.remove('on');
   _qmBc=null;
   if(!bc)return;
-  hdCheckAdd(bc,n);
+  if(mode==='short'){setShort(bc,Math.max(0,n));return;}
+  hdCheckAdd(bc,Math.max(1,n));
 }
 
 // ═══ CHECK PRODUCTS ════════════════════════════════════════
@@ -1260,8 +1312,65 @@ function _saveCheckRemote(bc,count){
   }).catch(function(){});
 }
 
+// ── ของขาด (แจ้งจำนวนที่ขาด ต่อวัน) ──
+function _shKey(){return 're_short_'+_ckDate();}
+function _loadShortLocal(){
+  try{_shortCounts=JSON.parse(localStorage.getItem(_shKey())||'{}');}catch(e){_shortCounts={};}
+}
+function _saveShortLocal(){
+  try{
+    localStorage.setItem(_shKey(),JSON.stringify(_shortCounts));
+    for(var i=localStorage.length-1;i>=0;i--){var k=localStorage.key(i);if(k&&k.indexOf('re_short_')===0&&k!==_shKey())localStorage.removeItem(k);}
+  }catch(e){}
+}
+// อ่านแท็บ "ของขาด" (ถ้ามี) — Google จะส่งแท็บแรกมาแทนถ้าไม่มีแท็บนี้ จึงต้องเช็คหัวคอลัมน์ก่อน
+function _loadShortRemote(cb){
+  var today=_ckDate(),called=false;
+  function done(){if(called)return;called=true;if(cb)cb();}
+  var tmr=setTimeout(done,4000);
+  var url='https://docs.google.com/spreadsheets/d/'+SHEET+'/gviz/tq?tqx=out:json&headers=1&sheet='+encodeURIComponent('ของขาด')+'&t='+Date.now();
+  fetch(url).then(function(r){return r.text();}).then(function(txt){
+    clearTimeout(tmr);
+    try{
+      var s=txt.indexOf('{'),e=txt.lastIndexOf('}');
+      var tb=JSON.parse(txt.substring(s,e+1)).table||{};
+      var cols=tb.cols||[];
+      if(cols.length>=3&&String(cols[2].label||'').trim()==='ขาด'){
+        var remote={};
+        (tb.rows||[]).forEach(function(row){
+          var c=row.c||[];
+          var dt=c[0]&&c[0].v?String(c[0].f||c[0].v).trim():'';
+          var m=dt.match(/Date\((\d+),(\d+),(\d+)/);
+          if(m)dt=m[1]+'-'+String(parseInt(m[2])+1).padStart(2,'0')+'-'+String(m[3]).padStart(2,'0');
+          var bc=c[1]&&c[1].v!=null?String(c[1].v).trim():'';
+          var n=c[2]&&c[2].v!=null?(parseInt(c[2].v)||0):0;
+          if(dt===today&&bc)remote[bc]=n;   // แถวล่าสุดชนะ
+        });
+        Object.keys(remote).forEach(function(bc){if(remote[bc]>0)_shortCounts[bc]=remote[bc];else delete _shortCounts[bc];});
+        _saveShortLocal();
+      }
+    }catch(e){}
+    done();
+  }).catch(function(){clearTimeout(tmr);done();});
+}
+function openShort(bc){
+  _loadCheckLocal();_loadShortLocal();
+  var prods=_buildProds();if(!prods[bc])return;
+  qmOpen(bc,prods[bc],_checkCounts[bc]||0,'short');
+}
+function setShort(bc,n){
+  var prods=_buildProds(),p=prods[bc];if(!p)return;
+  if(n>0)_shortCounts[bc]=n;else delete _shortCounts[bc];
+  _saveShortLocal();
+  if(GAS)fetch(GAS,{method:'POST',mode:'no-cors',body:JSON.stringify({action:'saveShort',date:_ckDate(),bc:bc,short:n})}).catch(function(){});
+  if(n>0){toast('⚠ แจ้งขาด '+p.name+' '+n+' '+p.unit,'err');vibr([60]);}
+  else toast('ยกเลิกแจ้งขาด '+p.name,'ok');
+  renderCheck();
+}
+
 function openCheck(){
   _loadCheckLocal();    // show last known immediately
+  _loadShortLocal();
   show('s-check');
   var d=new Date();
   var dy=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
@@ -1270,7 +1379,7 @@ function openCheck(){
   TXT('chk-s','สแกนเพื่อเช็คสินค้าทั้งหมดของวัน');
   renderCheck();
   // sync จาก Sheet เพื่อดูข้อมูลจากเครื่องอื่น
-  _loadCheckRemote(function(){renderCheck();});
+  _loadCheckRemote(function(){renderCheck();_loadShortRemote(renderCheck);});
 }
 
 function _buildProds(){
@@ -1304,15 +1413,21 @@ function renderCheck(){
     if(ra!==rb)return ra-rb;
     return prods[b].qty-prods[a].qty;
   });
-  var nDone=0,nPend=0,nOver=0;
+  var nDone=0,nPend=0,nOver=0,nShort=0;
   var h='';
   keys.forEach(function(bc){
-    var p=prods[bc],sc=_checkCounts[bc]||0;
+    var p=prods[bc],sc=_checkCounts[bc]||0,sh=_shortCounts[bc]||0;
     var pct=p.qty>0?Math.min(100,Math.round(sc/p.qty*100)):0;
-    var st='pend',ic='○',cls='chk-st-pend',stxt='ยังขาด '+(p.qty-sc);
+    var st='pend',ic='○',cls='chk-st-pend',stxt='เหลือ '+(p.qty-sc);
     if(sc>=p.qty&&sc<=p.qty){st='ok';ic='✓';cls='chk-st-ok';stxt='✓ ครบ';nDone++;}
     else if(sc>p.qty){st='over';ic='!';cls='chk-st-over';stxt='⚠ เกิน '+(sc-p.qty);nOver++;}
+    else if(sh>0){
+      st='short';ic='✕';cls='chk-st-short';nShort++;
+      var rest=p.qty-sc-sh;
+      stxt='⚠ ขาด '+sh+' '+p.unit+(rest>0?' · ยังไม่เช็ค '+rest:'');
+    }
     else nPend++;
+    var sbtn=(st==='pend'||st==='short')?'<button class="chk-sbtn" onclick="event.stopPropagation();openShort(this.dataset.bc)" data-bc="'+bc+'">'+(st==='short'?'แก้ไขขาด':'⚠ แจ้งขาด')+'</button>':'';
     var iu=dimg(p.img1)||dimg(p.img2);
     var ih=iu?('<img src="'+iu+'" onerror=imgErr(this) style="width:100%;height:100%;object-fit:contain">'):'📦';
     h+='<div class="chk-pcard '+st+'">'
@@ -1323,11 +1438,12 @@ function renderCheck(){
       +'<div class="chk-status '+cls+'">'+stxt+'</div>'
       +'<div class="chk-bar"><div class="chk-bf '+st+'" style="width:'+pct+'%"></div></div>'
       +'</div>'
-      +'<div class="chk-ico '+st+'">'+ic+'</div>'
+      +'<div class="chk-side"><div class="chk-ico '+st+'">'+ic+'</div>'+sbtn+'</div>'
       +'</div>';
   });
   $('chk-list').innerHTML=h;
-  TXT('chk-done',nDone);TXT('chk-pend',nPend);TXT('chk-over',nOver);
+  TXT('chk-done',nDone);TXT('chk-pend',nPend);TXT('chk-over',nOver);TXT('chk-short',nShort);
+  if(nShort)TXT('chk-sub','แจ้งของขาด '+nShort+' รายการ');else TXT('chk-sub','วันนี้');
   TXT('chk-s','สินค้า '+keys.length+' รายการ · ครบ '+nDone+'/'+keys.length);
 }
 
@@ -1349,6 +1465,13 @@ function hdCheckAdd(bc,n){
   _checkCounts[bc]=(_checkCounts[bc]||0)+n;
   _saveCheckLocal();
   _saveCheckRemote(bc,_checkCounts[bc]);
+  _loadShortLocal();
+  var sh0=_shortCounts[bc]||0,maxSh=Math.max(0,prods[bc].qty-_checkCounts[bc]);
+  if(sh0>maxSh){
+    if(maxSh>0)_shortCounts[bc]=maxSh;else delete _shortCounts[bc];
+    _saveShortLocal();
+    if(GAS)fetch(GAS,{method:'POST',mode:'no-cors',body:JSON.stringify({action:'saveShort',date:_ckDate(),bc:bc,short:maxSh})}).catch(function(){});
+  }
   var p=prods[bc],sc=_checkCounts[bc];
   if(sc===p.qty){toast('✓ '+p.name+' ครบ ('+sc+'/'+p.qty+')','ok');playOk();vibr([100]);}
   else if(sc>p.qty){toast('⚠ '+p.name+' เกิน ('+sc+'/'+p.qty+')','err');playE();vibr([100,50,200]);}
@@ -1359,9 +1482,11 @@ function hdCheckAdd(bc,n){
 function resetCheck(){
   if(!confirm('รีเซ็ตการเช็คทั้งหมดของวันนี้ (ทุกเครื่อง)?'))return;
   _checkCounts={};_saveCheckLocal();
+  _shortCounts={};_saveShortLocal();
   // รีเซ็ตบน Sheet ด้วย (ทุกเครื่องจะ sync)
   if(GAS){
     fetch(GAS,{method:'POST',mode:'no-cors',body:JSON.stringify({action:'resetCheck',date:_ckDate()})}).catch(function(){});
+    fetch(GAS,{method:'POST',mode:'no-cors',body:JSON.stringify({action:'resetShort',date:_ckDate()})}).catch(function(){});
   }
   renderCheck();
   toast('รีเซ็ตเรียบร้อย','ok');
@@ -1396,9 +1521,16 @@ $('minp').addEventListener('keydown',function(e){
     doManual();
   }
 });
-// re-focus input หลัง doManual เพื่อพร้อมรับการยิงครั้งถัดไป
+// แตะช่องเอง = ต้องการพิมพ์ → เปิดแป้นพิมพ์
+$('minp').addEventListener('pointerdown',function(){
+  if(this.getAttribute('inputmode')==='none'){
+    this.setAttribute('inputmode','text');
+    if(document.activeElement===this){var t=this;t.blur();setTimeout(function(){t.focus();},0);}
+  }
+});
+// re-focus input หลัง doManual เพื่อพร้อมรับการยิงครั้งถัดไป (เฉพาะโหมดเครื่องยิง ไม่ใช่ตอนพิมพ์เอง)
 $('minp').addEventListener('blur',function(){
-  if($('s-scan').classList.contains('on')){
+  if($('s-scan').classList.contains('on')&&this.getAttribute('inputmode')==='none'&&!$('qm').classList.contains('on')){
     setTimeout(function(){var mi=$('minp');if(mi&&$('s-scan').classList.contains('on'))mi.focus();},100);
   }
 });
