@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#011d3d">
-<title>Rattana EasyShip v5.2</title>
+<title>Rattana EasyShip v5.3</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -362,7 +362,7 @@ html,body{font-family:'Sarabun',-apple-system,system-ui,sans-serif;background:#0
     <div class="bni" onclick="openScan('order')"><div style="font-size:18px">📷</div><div class="bni-l">สแกน</div></div>
     <div class="bni" onclick="goOrders()"><div style="font-size:18px">📋</div><div class="bni-l">ออเดอร์</div></div>
   </div>
-  <div class="ver">Rattana EasyShip v5.2 · 2026-11-03</div>
+  <div class="ver">Rattana EasyShip v5.3 · 2026-11-04</div>
 </div>
 
 <!-- SCAN -->
@@ -586,7 +586,8 @@ var PHS=null; // photo camera stream
 var _pcBcs=[], _moBcs=[];
 var IS_TOUCH=('ontouchstart' in window)||navigator.maxTouchPoints>0;
 var _shortCounts={};  // {bc: จำนวนที่แจ้งขาด} ต่อวัน
-var _keptN=0;         // ออเดอร์รอบก่อนที่จำไว้ (ไม่อยู่ใน Sheet แล้ว)
+var _keptN=0;
+var _arcSet={};       // ออเดอร์ที่มาจากแท็บ "สะสมทั้งวัน" (ไม่อยู่ในใบเช็คแล้ว)         // ออเดอร์รอบก่อนที่จำไว้ (ไม่อยู่ใน Sheet แล้ว)
 var _checkCounts={};  // {bc: scannedCount} // index arrays for card clicks
 
 // ═══ UTILS ════════════════════════════════════════════════
@@ -641,7 +642,8 @@ function doRefresh(){
       clearTimeout(tmr);
       var s=txt.indexOf('{'),e=txt.lastIndexOf('}');
       if(s<0){showErr('Sheet ต้องตั้งเป็น Anyone with link');return;}
-      parseGviz(JSON.parse(txt.substring(s,e+1)));
+      var j=JSON.parse(txt.substring(s,e+1));
+      _loadArchive(function(arc){parseGviz(_withArchive(j,arc));_pingArchive();});
     })
     .catch(function(err){
       clearTimeout(tmr);
@@ -672,7 +674,7 @@ function parseGviz(j){
       nDB[oNum]={num:oNum,date:s(idx('วันที่ใบจอง',0)),store:s(idx('ชื่อร้านค้า',3)),code:s(idx('รหัสร้านค้า',2)),wh:s(idx('คลัง',5)),items:[],status:sv||(DB[oNum]&&DB[oNum].status)||'pending'};
     }
     var ex=nDB[oNum].items.find(function(x){return x.bc===bc;});
-    if(ex){ex.qty+=n(idx('จำนวนชิ้น',9));}
+    if(ex){var rq2=n(idx('จำนวนชิ้น',9));ex.pieces+=rq2;ex.qty+=ex.pcs>1?Math.round(rq2/ex.pcs):rq2;}
     else{
       var rq=n(idx('จำนวนชิ้น',9)),us=s(idx('หน่วยนับ',8));
       var um=us.match(/[xX×](\d+)/)||us.match(/(\d+)/);
@@ -684,12 +686,62 @@ function parseGviz(j){
       nDB[oNum].items.push({bc:bc,name:s(idx('ชื่อสินค้า',7)),unit:ul,ucode:ucode,qty:cases,pieces:rq,pcs:pcs,price:n(idx('ราคา',10)),pack:s(idx('วิธีแพ็คสินค้า',12)),img1:s(idx('รูปภาพสินค้า 1',13)),img2:s(idx('รูปภาพสินค้า 2',14)),sc:(oi&&oi.sc)||0,status:(oi&&oi.status)||'pending'});
     }
   });
-  _keptN=_mergeDayOrders(nDB);
+  var nArc=0;
+  Object.keys(_arcSet).forEach(function(k){if(nDB[k]){nDB[k].kept=true;nArc++;}});
+  _keptN=nArc+_mergeDayOrders(nDB);
   DB=nDB;
   var f=Object.values(DB)[0];
   if(f&&f.wh){TXT('d-loc','📍 คลัง '+f.wh);TXT('d-sub','คลัง '+f.wh);}
   _hasData=true;
   loadStatus();
+}
+
+// ═══ แท็บ "สะสมทั้งวัน" (Apps Script เก็บทุกรอบที่วาง — ทุกเครื่องเห็นเหมือนกัน) ══
+var ATAB='สะสมทั้งวัน';
+function _loadArchive(cb){
+  var today=_ckDate(),called=false;
+  function done(v){if(called)return;called=true;cb(v);}
+  var tmr=setTimeout(function(){done(null);},5000);
+  var url='https://docs.google.com/spreadsheets/d/'+SHEET+'/gviz/tq?tqx=out:json&headers=1&sheet='+encodeURIComponent(ATAB)+'&t='+Date.now();
+  fetch(url).then(function(r){return r.text();}).then(function(txt){
+    clearTimeout(tmr);
+    try{
+      var s=txt.indexOf('{'),e=txt.lastIndexOf('}');
+      var tb=JSON.parse(txt.substring(s,e+1)).table||{};
+      var cols=tb.cols||[];
+      // ถ้ายังไม่มีแท็บนี้ Google จะส่งแท็บแรกมาแทน → เช็คหัวคอลัมน์ก่อน
+      if(!cols.length||String(cols[0].label||'').trim()!=='วันที่เก็บ'){done(null);return;}
+      var rows=(tb.rows||[]).filter(function(r){var c=(r.c||[])[0];return c&&String(c.f||c.v||'').trim()===today;});
+      done({cols:cols,rows:rows});
+    }catch(err){done(null);}
+  }).catch(function(){clearTimeout(tmr);done(null);});
+}
+// เติมออเดอร์จากแท็บสะสมที่ไม่มีในใบเช็คแล้ว (ใบเช็คเป็นหลักเสมอ — กันจำนวนซ้ำ)
+function _withArchive(j,arc){
+  _arcSet={};
+  if(!arc||!arc.rows.length)return j;
+  var cols=j.table.cols||[];j.table.rows=j.table.rows||[];
+  var alab={};arc.cols.forEach(function(c,i){if(i>0&&c.label)alab[String(c.label).trim()]=i;});
+  var map=cols.map(function(c,i){var l=String(c.label||'').trim();return(l&&alab[l]!==undefined)?alab[l]:i+1;});
+  var oi=-1;cols.forEach(function(c,i){if(String(c.label||'').trim()==='หมายเลขคำสั่งซื้อ')oi=i;});
+  if(oi<0)oi=11;
+  function cv(x){return x&&x.v!=null?String(x.f||x.v).trim():'';}
+  var have={};j.table.rows.forEach(function(r){var k=cv((r.c||[])[oi]);if(k)have[k]=1;});
+  arc.rows.forEach(function(r){
+    var c=r.c||[];
+    var nc=map.map(function(k){return c[k]||null;});
+    var on=cv(nc[oi]);
+    if(!on||have[on])return;
+    _arcSet[on]=1;
+    j.table.rows.push({c:nc});
+  });
+  return j;
+}
+// สะกิด Apps Script ให้เก็บใบเช็คตอนนี้ลงแท็บสะสม (ไม่เกินทุก 3 นาที/เครื่อง)
+function _pingArchive(){
+  if(!GAS)return;
+  try{var t=parseInt(localStorage.getItem('re_arc_ping')||'0');if(Date.now()-t<180000)return;localStorage.setItem('re_arc_ping',String(Date.now()));}catch(e){}
+  fetch(GAS,{method:'POST',mode:'no-cors',body:JSON.stringify({action:'archiveOrders'})}).catch(function(){});
 }
 
 // ═══ จำออเดอร์ทั้งวัน (Sheet วาง 2 รอบ เช้า/บ่าย — รอบบ่ายลบรอบเช้าออก) ══
