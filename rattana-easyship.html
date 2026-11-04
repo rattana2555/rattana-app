@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#011d3d">
-<title>Rattana EasyShip v5.3</title>
+<title>Rattana EasyShip v5.4</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -362,7 +362,7 @@ html,body{font-family:'Sarabun',-apple-system,system-ui,sans-serif;background:#0
     <div class="bni" onclick="openScan('order')"><div style="font-size:18px">📷</div><div class="bni-l">สแกน</div></div>
     <div class="bni" onclick="goOrders()"><div style="font-size:18px">📋</div><div class="bni-l">ออเดอร์</div></div>
   </div>
-  <div class="ver">Rattana EasyShip v5.3 · 2026-11-04</div>
+  <div class="ver">Rattana EasyShip v5.4 · 2026-11-04</div>
 </div>
 
 <!-- SCAN -->
@@ -716,6 +716,17 @@ function _loadArchive(cb){
     }catch(err){done(null);}
   }).catch(function(){clearTimeout(tmr);done(null);});
 }
+// วันที่ใบจอง (dd/mm/yyyy ค.ศ./พ.ศ., yyyy-mm-dd, Date(y,m,d)) ตรงกับวันนี้ไหม · อ่านไม่ออก = ถือว่าใช่ (ไม่ทิ้งข้อมูล)
+function _isTodayDoc(s){
+  s=String(s||'').trim();if(!s)return true;
+  var y,m,d,a;
+  if((a=s.match(/^Date\((\d+),(\d+),(\d+)/))){y=+a[1];m=+a[2]+1;d=+a[3];}
+  else if((a=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))){y=+a[1];m=+a[2];d=+a[3];}
+  else if((a=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/))){d=+a[1];m=+a[2];y=+a[3];}
+  else return true;
+  if(y>2400)y-=543;
+  return y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0')===_ckDate();
+}
 // เติมออเดอร์จากแท็บสะสมที่ไม่มีในใบเช็คแล้ว (ใบเช็คเป็นหลักเสมอ — กันจำนวนซ้ำ)
 function _withArchive(j,arc){
   _arcSet={};
@@ -723,8 +734,8 @@ function _withArchive(j,arc){
   var cols=j.table.cols||[];j.table.rows=j.table.rows||[];
   var alab={};arc.cols.forEach(function(c,i){if(i>0&&c.label)alab[String(c.label).trim()]=i;});
   var map=cols.map(function(c,i){var l=String(c.label||'').trim();return(l&&alab[l]!==undefined)?alab[l]:i+1;});
-  var oi=-1;cols.forEach(function(c,i){if(String(c.label||'').trim()==='หมายเลขคำสั่งซื้อ')oi=i;});
-  if(oi<0)oi=11;
+  var oi=-1,di=-1;cols.forEach(function(c,i){var l=String(c.label||'').trim();if(l==='หมายเลขคำสั่งซื้อ')oi=i;if(l==='วันที่ใบจอง')di=i;});
+  if(oi<0)oi=11;if(di<0)di=0;
   function cv(x){return x&&x.v!=null?String(x.f||x.v).trim():'';}
   var have={};j.table.rows.forEach(function(r){var k=cv((r.c||[])[oi]);if(k)have[k]=1;});
   arc.rows.forEach(function(r){
@@ -732,6 +743,7 @@ function _withArchive(j,arc){
     var nc=map.map(function(k){return c[k]||null;});
     var on=cv(nc[oi]);
     if(!on||have[on])return;
+    if(!_isTodayDoc(cv(nc[di])))return;     // วันที่ใบจองไม่ใช่วันนี้ = ของค้างวันก่อน
     _arcSet[on]=1;
     j.table.rows.push({c:nc});
   });
@@ -752,6 +764,7 @@ function _mergeDayOrders(nDB){
   try{arc=JSON.parse(localStorage.getItem(_odKey())||'{}');}catch(e){arc={};}
   Object.keys(arc).forEach(function(k){
     if(nDB[k])return;                       // ยังอยู่ใน Sheet → ใช้ของใหม่
+    if(!_isTodayDoc(arc[k]&&arc[k].date))return; // ของค้างวันก่อนที่เคยเห็นตอนเช้า → ไม่นับ
     var o=DB[k]||arc[k];                    // ใช้สถานะล่าสุดในเครื่องถ้ามี
     o.status=lsGet(k)||o.status||'pending';
     o.kept=true;nDB[k]=o;kept++;
