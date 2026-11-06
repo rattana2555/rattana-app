@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#011d3d">
-<title>Rattana EasyShip v5.5</title>
+<title>Rattana EasyShip v5.6</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -362,7 +362,7 @@ html,body{font-family:'Sarabun',-apple-system,system-ui,sans-serif;background:#0
     <div class="bni" onclick="openScan('order')"><div style="font-size:18px">📷</div><div class="bni-l">สแกน</div></div>
     <div class="bni" onclick="goOrders()"><div style="font-size:18px">📋</div><div class="bni-l">ออเดอร์</div></div>
   </div>
-  <div class="ver">Rattana EasyShip v5.5 · 2026-11-06</div>
+  <div class="ver">Rattana EasyShip v5.6 · 2026-11-06</div>
 </div>
 
 <!-- SCAN -->
@@ -586,8 +586,9 @@ var PHS=null; // photo camera stream
 var _pcBcs=[], _moBcs=[];
 var IS_TOUCH=('ontouchstart' in window)||navigator.maxTouchPoints>0;
 var _shortCounts={};  // {bc: จำนวนที่แจ้งขาด} ต่อวัน
-var _keptN=0;
-var _arcSet={};       // ออเดอร์ที่มาจากแท็บ "สะสมทั้งวัน" (ไม่อยู่ในใบเช็คแล้ว)         // ออเดอร์รอบก่อนที่จำไว้ (ไม่อยู่ใน Sheet แล้ว)
+var _keptN=0;         // ออเดอร์รอบก่อน (ไม่อยู่ในใบเช็คแล้ว)
+var _arcSet={};       // ออเดอร์ที่มาจากแท็บ "สะสมทั้งวัน" (ไม่อยู่ในใบเช็คแล้ว)
+var _arcOK=false;     // อ่านแท็บ "สะสมทั้งวัน" ได้ → Sheet เป็นตัวตัดสิน ไม่ใช้ความจำในเครื่อง
 var _checkCounts={};  // {bc: scannedCount} // index arrays for card clicks
 
 // ═══ UTILS ════════════════════════════════════════════════
@@ -718,7 +719,7 @@ function _loadArchive(cb){
 }
 // เติมออเดอร์จากแท็บสะสมที่ไม่มีในใบเช็คแล้ว (ใบเช็คเป็นหลักเสมอ — กันจำนวนซ้ำ)
 function _withArchive(j,arc){
-  _arcSet={};
+  _arcSet={};_arcOK=!!arc;
   if(!arc||!arc.rows.length)return j;
   var cols=j.table.cols||[];j.table.rows=j.table.rows||[];
   var alab={};arc.cols.forEach(function(c,i){if(i>0&&c.label)alab[String(c.label).trim()]=i;});
@@ -757,6 +758,9 @@ function _mergeDayOrders(nDB){
   var arc={},prev={},kept=0,pk=_prevDayKey();
   try{arc=JSON.parse(localStorage.getItem(_odKey())||'{}');}catch(e){arc={};}
   try{if(pk)prev=JSON.parse(localStorage.getItem(pk)||'{}');}catch(e){prev={};}
+  // มีแท็บสะสมใน Sheet แล้ว → ไม่เติมจากความจำในเครื่อง (ล้าง/แก้ที่ชีท = ทุกเครื่องตรงกัน)
+  // แต่ยังบันทึกรายการล่าสุดไว้ใช้สำรองตอนอ่านแท็บสะสมไม่ได้
+  if(_arcOK)arc={};
   Object.keys(arc).forEach(function(k){
     if(nDB[k])return;                       // ยังอยู่ใน Sheet → ใช้ของใหม่
     if(prev[k])return;                      // เคยเห็นวันทำงานก่อน = ของค้างในชีทหลังเที่ยงคืน → ไม่นับ
