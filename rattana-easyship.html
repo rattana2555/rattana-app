@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#011d3d">
-<title>Rattana EasyShip v5.6</title>
+<title>Rattana EasyShip v5.7</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -305,6 +305,10 @@ html,body{font-family:'Sarabun',-apple-system,system-ui,sans-serif;background:#0
 .qm-btn,.qm-inp{border-radius:16px}
 .qm-quick-btn,.qm-cancel{border-radius:14px}
 .qm-ok{border-radius:14px;background:linear-gradient(145deg,#ffb824,#f59e00);box-shadow:0 8px 18px rgba(245,158,0,.34)}
+/* โหมดเครื่องยิง */
+.hwp{width:100%;max-width:370px;aspect-ratio:4/3;border-radius:24px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer}
+.hwp-t{font-size:20px;font-weight:700;color:#fff}
+.hwp-s{font-size:12px;color:rgba(255,255,255,.45)}
 /* ของขาด (เช็คสินค้าออก) + ออเดอร์รอบก่อน */
 #s-check .stats{grid-template-columns:repeat(4,1fr);gap:7px}
 #s-check .stat-n{font-size:21px}
@@ -362,7 +366,7 @@ html,body{font-family:'Sarabun',-apple-system,system-ui,sans-serif;background:#0
     <div class="bni" onclick="openScan('order')"><div style="font-size:18px">📷</div><div class="bni-l">สแกน</div></div>
     <div class="bni" onclick="goOrders()"><div style="font-size:18px">📋</div><div class="bni-l">ออเดอร์</div></div>
   </div>
-  <div class="ver">Rattana EasyShip v5.6 · 2026-11-06</div>
+  <div class="ver">Rattana EasyShip v5.7 · 2026-11-09</div>
 </div>
 
 <!-- SCAN -->
@@ -377,13 +381,19 @@ html,body{font-family:'Sarabun',-apple-system,system-ui,sans-serif;background:#0
     </div>
   </div>
   <div class="mtog">
-    <button class="mbtn on" id="m-bc" onclick="setMode('bc')">📷 สแกนบาร์โค้ด</button>
-    <button class="mbtn" id="m-ocr" onclick="setMode('ocr')">🔍 OCR อ่านตัวอักษร</button>
+    <button class="mbtn on" id="m-bc" onclick="setMode('bc')">📷 กล้อง</button>
+    <button class="mbtn" id="m-hw" onclick="setMode('hw')">🔫 เครื่องยิง</button>
+    <button class="mbtn" id="m-ocr" onclick="setMode('ocr')">🔍 OCR</button>
   </div>
   <div id="ui-bc" class="sbody">
     <div class="vf">
       <video id="camvid" autoplay playsinline muted></video>
       <div class="vfov"><div class="beam"></div><div class="cor tl"></div><div class="cor tr"></div><div class="cor bl"></div><div class="cor br"></div></div>
+    </div>
+    <div class="hwp" id="hw-panel" style="display:none" onclick="hwFocus()">
+      <div style="font-size:44px">🔫</div>
+      <div class="hwp-t" id="hw-st">🟢 พร้อมยิง</div>
+      <div class="hwp-s">กดปุ่มยิงที่ตัวเครื่องได้เลย · กล้องปิดอยู่</div>
     </div>
     <div class="rdout">
       <div><div class="rd-l" id="rd-l">รอสแกน...</div><div class="rd-v" id="rd-v">-</div></div>
@@ -616,7 +626,7 @@ function openScan(m){
   var t='สแกนออเดอร์';if(m==='product')t='สแกนสินค้า';else if(m==='check')t='เช็คสินค้าออก';
   var l='ป้อนหมายเลขออเดอร์';if(m==='product')l='ป้อนบาร์โคดสินค้า';else if(m==='check')l='ป้อนบาร์โคดสินค้า (เช็ค)';
   TXT('sc-t',t); TXT('m-lbl',l);
-  show('s-scan'); setMode('bc');
+  show('s-scan'); setMode(_scanPref());
   // Auto-focus input สำหรับ hardware scanner (handheld) — inputmode=none กันแป้นพิมพ์มือถือเด้ง
   setTimeout(function(){var mi=$('minp');if(mi){mi.setAttribute('inputmode','none');mi.focus();mi.value='';}},250);
 }
@@ -1012,15 +1022,30 @@ var cMode='bc';
 function setMode(m){
   cMode=m;
   $('m-bc').classList.toggle('on',m==='bc');
+  $('m-hw').classList.toggle('on',m==='hw');
   $('m-ocr').classList.toggle('on',m==='ocr');
-  $('ui-bc').style.display=m==='bc'?'flex':'none';
+  $('ui-bc').style.display=(m==='bc'||m==='hw')?'flex':'none';
   $('ui-ocr').style.display=m==='ocr'?'flex':'none';
+  var vf=document.querySelector('.vf');if(vf)vf.style.display=m==='bc'?'':'none';
+  $('hw-panel').style.display=m==='hw'?'flex':'none';
   $('ldot').style.display=m==='bc'?'':'none';
   $('llbl').style.display=m==='bc'?'':'none';
-  if(m==='bc')startCam();else{stopCam();loadTess();}
+  var ce=$('cam-eng');if(ce&&m!=='bc')ce.textContent='';
+  try{if(m!=='ocr')localStorage.setItem('re_scan_mode',m);}catch(e){}
+  if(m==='bc')startCam();
+  else if(m==='hw'){stopCam();hwFocus();}   // ปิดกล้อง: หัวยิงของแฮนด์เฮลด์หลายรุ่นใช้เซนเซอร์ร่วมกับกล้อง
+  else{stopCam();loadTess();}
 }
+// แต่ละเครื่องจำโหมดที่เลือกไว้ (กล้อง / เครื่องยิง)
+function _scanPref(){try{return localStorage.getItem('re_scan_mode')==='hw'?'hw':'bc';}catch(e){return 'bc';}}
+function hwStatus(){
+  var e=$('hw-st');if(!e)return;
+  e.textContent=document.activeElement===$('minp')?'🟢 พร้อมยิง':'🔴 แตะตรงนี้ก่อนยิง';
+}
+function hwFocus(){var mi=$('minp');if(!mi)return;mi.setAttribute('inputmode','none');mi.focus();hwStatus();}
 
 var LLC='',LLT=0;
+var _hwTmr=null,_hwT0=0,_hwPrev=0;   // จับการยิงจากเครื่องที่ไม่ส่ง Enter ปิดท้าย
 function onScan(t){
   var now=Date.now();if(t===LLC&&now-LLT<1400)return;LLC=t;LLT=now;
   var vf=document.querySelector('.vf');if(vf){vf.classList.add('hit');setTimeout(function(){vf.classList.remove('hit');},350);}
@@ -1046,14 +1071,18 @@ function hdProd(t){
   item.sc++;
   if(item.sc>=item.qty){item.status='ok';toast('✓ '+item.name+' ครบ!','ok');playOk();vibr([100]);}
   else{toast(item.name+': '+item.sc+'/'+item.qty,'ok');playB();vibr([50]);}
+  if(cMode==='hw'&&o.items.some(function(x){return x.status!=='ok';})){   // โหมดเครื่องยิง: อยู่หน้ายิงต่อจนครบ
+    renderDetail(o);TXT('rd-l','ยิงแล้ว');TXT('rd-v',item.name+' '+item.sc+'/'+item.qty);$('rd-btn').style.display='none';return;
+  }
   stopCam();show('s-order');renderDetail(o);
 }
 function useLast(){if(LSCANNED){stopCam();openOrder(LSCANNED);}}
 function doManual(){
+  clearTimeout(_hwTmr);_hwPrev=0;
   var v=$('minp').value.trim();if(!v)return;$('minp').value='';
   if(SMODE==='product')hdProd(v);
   else if(SMODE==='check')hdCheck(v);
-  else{hdOrder(v);if(LSCANNED)setTimeout(useLast,300);}
+  else{LSCANNED=null;hdOrder(v);if(LSCANNED)setTimeout(useLast,300);}
   // re-focus เพื่อพร้อมรับการยิงครั้งถัดไปจาก hardware scanner (ซ่อนแป้นพิมพ์กลับ)
   setTimeout(function(){var mi=$('minp');if(mi&&$('s-scan').classList.contains('on')){mi.setAttribute('inputmode','none');mi.blur();mi.focus();}},150);
 }
@@ -1198,6 +1227,7 @@ function startCam(){
     if(i>=opts.length){toast('เปิดกล้องไม่ได้','err');SA=false;return;}
     navigator.mediaDevices.getUserMedia(opts[i])
       .then(function(s){
+        if(!SA){s.getTracks().forEach(function(t){t.stop();});return;}
         SS=s;vid.srcObject=s;vid.muted=true;vid.setAttribute('playsinline','true');
         var p=vid.play();
         if(p&&p.then)p.then(function(){waitZ(vid);}).catch(function(){next(i+1);});
@@ -1304,6 +1334,7 @@ function qmUpdateBtn(){
 function qmCancel(){
   $('qm').classList.remove('on');
   _qmBc=null;
+  if(_qmMode==='add'&&cMode==='hw'&&SMODE==='check'){openScan('check');return;}
   // Re-focus for next scan
   setTimeout(function(){var mi=$('minp');if(mi&&$('s-scan').classList.contains('on')){mi.setAttribute('inputmode','none');mi.focus();}},150);
 }
@@ -1315,6 +1346,7 @@ function qmOk(){
   if(!bc)return;
   if(mode==='short'){setShort(bc,Math.max(0,n));return;}
   hdCheckAdd(bc,Math.max(1,n));
+  if(cMode==='hw'&&SMODE==='check')openScan('check');   // โหมดเครื่องยิง: กลับไปรอยิงตัวถัดไป
 }
 
 // ═══ CHECK PRODUCTS ════════════════════════════════════════
@@ -1585,6 +1617,20 @@ $('minp').addEventListener('keydown',function(e){
     doManual();
   }
 });
+// เครื่องยิงบางรุ่นไม่ส่ง Enter: ข้อความหยุดเข้า 150ms แล้วถือว่ายิงจบ
+// ตอนแตะช่องพิมพ์เอง (inputmode=text) จะส่งเองเฉพาะข้อความที่เข้ามาเร็วแบบเครื่องยิง
+$('minp').addEventListener('input',function(){
+  var mi=this,L=mi.value.length,now=Date.now();
+  if(_hwPrev===0||L<=_hwPrev)_hwT0=now;
+  _hwPrev=L;
+  clearTimeout(_hwTmr);
+  _hwTmr=setTimeout(function(){
+    var len=mi.value.trim().length;
+    if(len>=5&&(mi.getAttribute('inputmode')==='none'||now-_hwT0<=len*40))doManual();
+  },150);
+});
+$('minp').addEventListener('focus',hwStatus);
+window.addEventListener('focus',function(){if(cMode==='hw'&&$('s-scan').classList.contains('on'))hwFocus();});
 // แตะช่องเอง = ต้องการพิมพ์ → เปิดแป้นพิมพ์
 $('minp').addEventListener('pointerdown',function(){
   if(this.getAttribute('inputmode')==='none'){
@@ -1594,6 +1640,7 @@ $('minp').addEventListener('pointerdown',function(){
 });
 // re-focus input หลัง doManual เพื่อพร้อมรับการยิงครั้งถัดไป (เฉพาะโหมดเครื่องยิง ไม่ใช่ตอนพิมพ์เอง)
 $('minp').addEventListener('blur',function(){
+  hwStatus();
   if($('s-scan').classList.contains('on')&&this.getAttribute('inputmode')==='none'&&!$('qm').classList.contains('on')){
     setTimeout(function(){var mi=$('minp');if(mi&&$('s-scan').classList.contains('on'))mi.focus();},100);
   }
