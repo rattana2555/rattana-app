@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#011d3d">
-<title>Rattana EasyShip v5.7</title>
+<title>Rattana EasyShip v5.8</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -366,7 +366,7 @@ html,body{font-family:'Sarabun',-apple-system,system-ui,sans-serif;background:#0
     <div class="bni" onclick="openScan('order')"><div style="font-size:18px">📷</div><div class="bni-l">สแกน</div></div>
     <div class="bni" onclick="goOrders()"><div style="font-size:18px">📋</div><div class="bni-l">ออเดอร์</div></div>
   </div>
-  <div class="ver">Rattana EasyShip v5.7 · 2026-11-09</div>
+  <div class="ver">Rattana EasyShip v5.8 · 2026-11-09</div>
 </div>
 
 <!-- SCAN -->
@@ -668,6 +668,13 @@ function showErr(m){
   var ol=$('olist');if(ol)ol.innerHTML=eh;
 }
 
+// เลขออเดอร์จริงจากข้อความแบบ "billIdONL-SHP-261107N5TQGKW2\nหมายเหตุ: ..."
+function _normOrder(t){
+  t=String(t||'').trim();
+  var m=t.match(/billId\s*ONL-[A-Za-z]+-(\S+)/i);
+  return m?m[1]:t;
+}
+
 // ═══ PARSE GVIZ ════════════════════════════════════════════
 function parseGviz(j){
   var cols=j.table.cols||[],rows=j.table.rows||[];
@@ -678,10 +685,11 @@ function parseGviz(j){
     var c=row.c||[];
     function s(i){var x=c[i];if(!x||x.v==null)return'';return String(x.f||x.v).trim();}
     function n(i){var x=c[i];if(!x||x.v==null)return 0;return typeof x.v==='number'?x.v:parseFloat(String(x.v).replace(/,/g,''))||0;}
-    var oNum=s(idx('หมายเลขคำสั่งซื้อ',11)),bc=s(idx('บาร์โคดสินค้า',6));
+    var oRaw=s(idx('หมายเลขคำสั่งซื้อ',11)),oNum=_normOrder(oRaw),bc=s(idx('บาร์โคดสินค้า',6));
     if(!oNum||!bc)return;
+    if(oNum.length<6||bc.length<6)return;   // แถวที่วางผิดรูปแบบ (คอลัมน์เลื่อน) ไม่ใช่ออเดอร์จริง
     if(!nDB[oNum]){
-      var sv=lsGet(oNum);
+      var sv=lsGet(oNum)||lsGet(oRaw);
       nDB[oNum]={num:oNum,date:s(idx('วันที่ใบจอง',0)),store:s(idx('ชื่อร้านค้า',3)),code:s(idx('รหัสร้านค้า',2)),wh:s(idx('คลัง',5)),items:[],status:sv||(DB[oNum]&&DB[oNum].status)||'pending'};
     }
     var ex=nDB[oNum].items.find(function(x){return x.bc===bc;});
@@ -737,11 +745,11 @@ function _withArchive(j,arc){
   var oi=-1;cols.forEach(function(c,i){if(String(c.label||'').trim()==='หมายเลขคำสั่งซื้อ')oi=i;});
   if(oi<0)oi=11;
   function cv(x){return x&&x.v!=null?String(x.f||x.v).trim():'';}
-  var have={};j.table.rows.forEach(function(r){var k=cv((r.c||[])[oi]);if(k)have[k]=1;});
+  var have={};j.table.rows.forEach(function(r){var k=_normOrder(cv((r.c||[])[oi]));if(k)have[k]=1;});
   arc.rows.forEach(function(r){
     var c=r.c||[];
     var nc=map.map(function(k){return c[k]||null;});
-    var on=cv(nc[oi]);
+    var on=_normOrder(cv(nc[oi]));
     if(!on||have[on])return;
     _arcSet[on]=1;
     j.table.rows.push({c:nc});
@@ -808,7 +816,7 @@ function loadStatus(){
           var rows=(JSON.parse(txt.substring(s,e+1)).table||{}).rows||[];
           rows.forEach(function(row){
             var c=row.c||[];
-            var num=c[0]&&c[0].v?String(c[0].v).trim():'';
+            var num=c[0]&&c[0].v?_normOrder(c[0].v):'';
             var st=c[1]&&c[1].v?String(c[1].v).trim():'';
             if(num&&st&&DB[num]){
               DB[num].status=st;
@@ -1054,7 +1062,7 @@ function onScan(t){
   else hdProd(t);
 }
 function hdOrder(t){
-  if(/^(TH|SF|EF|JT|KERRY|EMS|CJ|NIM|BEST|DHL)\d/i.test(t)){
+  if(!DB[t]&&/^(TH|SF|EF|JT|KERRY|EMS|CJ|NIM|BEST|DHL)\d/i.test(t)){
     TXT('rd-l','เลขขนส่ง');TXT('rd-v',t);
     toast('เลข Tracking ขนส่ง — สแกน Shopee/TikTok Order No.','err');playE();return;
   }
