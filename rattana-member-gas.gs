@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════
-//  Rattana Member System — GAS v1.26
+//  Rattana Member System — GAS v1.27
 // ════════════════════════════════════════════════════════
 
 const SHEET_ID        = '1gbBrJtE36fX8TM7KC0RbXgPZI6AyNpbC3XhJ6uiLsOE';
@@ -231,6 +231,22 @@ function sendWelcomeLine_(userId, data) {
   }
 }
 
+// v1.27: ตรวจว่า token ใช้ได้ไหม + ผูกกับ OA ตัวไหน — ไม่ส่งข้อความหาใคร
+function checkLineToken() {
+  const props = PropertiesService.getScriptProperties();
+  const token = props.getProperty('LINE_CHANNEL_TOKEN') || '';
+  Logger.log('LINE_WELCOME_ON = ' + (props.getProperty('LINE_WELCOME_ON') || '(ยังไม่ได้ตั้ง)'));
+  Logger.log('LINE_CHANNEL_TOKEN = ' + (token ? 'ตั้งแล้ว (' + token.length + ' ตัวอักษร)' : '❌ ยังไม่ได้ตั้ง'));
+  if (!token) return;
+  const res = UrlFetchApp.fetch('https://api.line.me/v2/bot/info', {
+    method: 'get',
+    headers: { Authorization: 'Bearer ' + token },
+    muteHttpExceptions: true,
+  });
+  Logger.log('สถานะ: ' + res.getResponseCode());
+  Logger.log('OA: ' + res.getContentText());   // 200 = token ใช้ได้ · 401 = token ผิด/หมดอายุ
+}
+
 // ทดสอบส่งข้อความต้อนรับหา "ตัวเอง" — ใส่ User ID ของคนทดสอบก่อนกดรัน
 function testWelcomeLine() {
   const MY_USER_ID = '';   // ← ใส่ LINE User ID ของคนที่จะทดสอบ
@@ -345,7 +361,7 @@ function doGet(e) {
     }
 
     if (!p.idToken && !p.userId && !p.phone) {
-      return json_({ status: 'ok', msg: 'GAS v1.26 running' });
+      return json_({ status: 'ok', msg: 'GAS v1.27 running' });
     }
 
     const sheet = getSheet();
