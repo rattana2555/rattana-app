@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════
-//  Rattana Member System — GAS v1.25
+//  Rattana Member System — GAS v1.26
 // ════════════════════════════════════════════════════════
 
 const SHEET_ID        = '1gbBrJtE36fX8TM7KC0RbXgPZI6AyNpbC3XhJ6uiLsOE';
@@ -188,6 +188,58 @@ function notifyDiscord(data, isNew) {
   } catch(e) { Logger.log('Discord failed: ' + e.message); }
 }
 
+// ─── v1.26: ข้อความต้อนรับถึงลูกค้าทาง LINE ───────────
+//  ⚠️ ปิดอยู่โดยปริยาย — จะส่งก็ต่อเมื่อตั้ง Script Property ครบทั้ง 2 ตัว
+//     LINE_CHANNEL_TOKEN = Channel access token ของ Messaging API channel
+//     LINE_WELCOME_ON    = ON   (สวิตช์เปิด/ปิด เปลี่ยนเป็นค่าอื่นเมื่อไรก็หยุดส่งทันที)
+//  ★ Messaging API channel ต้องอยู่ใน provider เดียวกับ LINE Login channel
+//    ที่ LIFF ใช้ ไม่งั้น User ID คนละชุด ส่งไม่ถึง
+function sendWelcomeLine_(userId, data) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    if (String(props.getProperty('LINE_WELCOME_ON') || '').toUpperCase() !== 'ON') return;
+    const token = props.getProperty('LINE_CHANNEL_TOKEN') || '';
+    if (!token || !userId) return;
+
+    // กันส่งซ้ำคนเดิมภายใน 1 ชั่วโมง
+    const cache = CacheService.getScriptCache();
+    const key = 'wl_' + userId;
+    if (cache.get(key)) { Logger.log('Welcome skipped (duplicate): ' + userId); return; }
+    cache.put(key, '1', 3600);
+
+    const fullName = (String(data.firstName || '') + ' ' + String(data.lastName || '')).trim();
+    const text =
+      '🎉 ยินดีต้อนรับสู่สมาชิก Rattana Mart\n\n' +
+      '👤 คุณ ' + (fullName || '-') + '\n' +
+      '🆔 รหัสสมาชิก ' + (data.phone || '-') + '\n\n' +
+      'เปิดบัตรสมาชิกเพื่อดูแต้มสะสม ระดับสมาชิก\n' +
+      'และบาร์โค้ดสำหรับยิงสะสมแต้มที่หน้าร้าน\n' +
+      'https://liff.line.me/2010284376-lUrrNKUU';
+
+    const res = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { Authorization: 'Bearer ' + token },
+      payload: JSON.stringify({ to: userId, messages: [{ type: 'text', text: text }] }),
+      muteHttpExceptions: true,
+    });
+    const code = res.getResponseCode();
+    // 403/400 = ลูกค้ายังไม่ได้เพิ่ม OA เป็นเพื่อน หรือ token/provider ไม่ตรง — ไม่ให้ล้มการสมัคร
+    if (code !== 200) Logger.log('Welcome LINE failed ' + code + ': ' + res.getContentText());
+  } catch (e) {
+    Logger.log('sendWelcomeLine_ error: ' + e.message);
+  }
+}
+
+// ทดสอบส่งข้อความต้อนรับหา "ตัวเอง" — ใส่ User ID ของคนทดสอบก่อนกดรัน
+function testWelcomeLine() {
+  const MY_USER_ID = '';   // ← ใส่ LINE User ID ของคนที่จะทดสอบ
+  if (!MY_USER_ID) { Logger.log('ยังไม่ได้ใส่ MY_USER_ID'); return; }
+  CacheService.getScriptCache().remove('wl_' + MY_USER_ID);
+  sendWelcomeLine_(MY_USER_ID, { firstName: 'ทดสอบ', lastName: 'ระบบ', phone: '0800000000' });
+  Logger.log('ส่งแล้ว — ถ้าไม่เข้า ดูบรรทัด Welcome LINE failed ข้างบน');
+}
+
 function testDiscord() {
   const res = UrlFetchApp.fetch(getDiscordWebhook_(), {
     method: 'POST',
@@ -293,7 +345,7 @@ function doGet(e) {
     }
 
     if (!p.idToken && !p.userId && !p.phone) {
-      return json_({ status: 'ok', msg: 'GAS v1.25 running' });
+      return json_({ status: 'ok', msg: 'GAS v1.26 running' });
     }
 
     const sheet = getSheet();
@@ -457,6 +509,11 @@ function doPost_(e) {
 
     // v1.20: consent-update (กดยอมรับย้อนหลัง) ไม่ต้องแจ้ง Discord
     if (data.mode !== 'consent-update') notifyDiscord(data, isNew);
+
+    // v1.26: สมาชิกใหม่ที่ผูก LINE แล้ว → ส่งข้อความต้อนรับกลับหาลูกค้า
+    if (isNew && bindLine && lineUidToWrite) {
+      sendWelcomeLine_(lineUidToWrite, data);
+    }
 
     return ContentService.createTextOutput(JSON.stringify({status:'ok'})).setMimeType(ContentService.MimeType.JSON);
   } catch(err) {
