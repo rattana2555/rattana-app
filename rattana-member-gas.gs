@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════
-//  Rattana Member System — GAS v1.27
+//  Rattana Member System — GAS v1.28
 // ════════════════════════════════════════════════════════
 
 const SHEET_ID        = '1gbBrJtE36fX8TM7KC0RbXgPZI6AyNpbC3XhJ6uiLsOE';
@@ -194,6 +194,56 @@ function notifyDiscord(data, isNew) {
 //     LINE_WELCOME_ON    = ON   (สวิตช์เปิด/ปิด เปลี่ยนเป็นค่าอื่นเมื่อไรก็หยุดส่งทันที)
 //  ★ Messaging API channel ต้องอยู่ใน provider เดียวกับ LINE Login channel
 //    ที่ LIFF ใช้ ไม่งั้น User ID คนละชุด ส่งไม่ถึง
+// v1.28: การ์ดต้อนรับ (Flex) — แก้หน้าตาที่นี่ที่เดียว
+//   ดูผลก่อนส่งได้ที่ developers.line.biz/flex-simulator/ โดยวาง JSON ที่ฟังก์ชันนี้คืน
+function welcomeFlex_(fullName, phone, pt) {
+  const TIER_EMOJI = { 'ทั่วไป':'💙', 'Silver':'🤍', 'Gold':'💛', 'Platinum':'💜' };
+  const tier   = String((pt && pt.tier) || 'ทั่วไป').trim();
+  const points = Number((pt && pt.points) || 0);
+  const row = (label, value) => ({
+    type: 'box', layout: 'horizontal',
+    contents: [
+      { type:'text', text:label, size:'sm', color:'#64748B', flex:0 },
+      { type:'text', text:value, size:'sm', color:'#0F172A', weight:'bold', align:'end' },
+    ],
+  });
+  return {
+    type: 'bubble', size: 'mega',
+    header: {
+      type:'box', layout:'vertical', backgroundColor:'#0D1B3E', paddingAll:'20px',
+      contents: [
+        { type:'box', layout:'horizontal', contents:[
+          { type:'text', text:'RATTANA', color:'#FFFFFF', size:'lg', weight:'bold', flex:0 },
+          { type:'text', text:'MART',    color:'#C8A02E', size:'lg', weight:'bold', flex:0, margin:'sm' },
+        ]},
+        { type:'text', text:'บัตรสมาชิก', color:'#8FA3C8', size:'xs', margin:'xs' },
+      ],
+    },
+    body: {
+      type:'box', layout:'vertical', paddingAll:'20px',
+      contents: [
+        { type:'text', text:'🎉 ยินดีต้อนรับ', size:'sm', color:'#64748B' },
+        { type:'text', text:'คุณ' + (fullName || '-'), size:'xl', weight:'bold', color:'#0F172A', margin:'sm', wrap:true },
+        { type:'separator', margin:'lg', color:'#E2E8F0' },
+        { type:'box', layout:'vertical', margin:'lg', spacing:'md', contents:[
+          row('รหัสสมาชิก', String(phone || '-')),
+          row('ระดับสมาชิก', (TIER_EMOJI[tier] || '💙') + ' ' + tier),
+          row('แต้มสะสม', points.toLocaleString() + ' คะแนน'),
+        ]},
+        { type:'box', layout:'vertical', margin:'lg', backgroundColor:'#FFF8E1', cornerRadius:'8px', paddingAll:'12px',
+          contents:[{ type:'text', text:'📌 ยื่นบาร์โค้ดในบัตรให้แคชเชียร์สแกน เพื่อสะสมแต้มทุกครั้งที่ซื้อสินค้า', size:'xs', color:'#78350F', wrap:true }] },
+      ],
+    },
+    footer: {
+      type:'box', layout:'vertical', paddingAll:'16px', paddingTop:'0px',
+      contents: [{
+        type:'button', style:'primary', height:'sm', color:'#C8A02E',
+        action: { type:'uri', label:'เปิดบัตรสมาชิก', uri:'https://liff.line.me/2010284376-lUrrNKUU' },
+      }],
+    },
+  };
+}
+
 function sendWelcomeLine_(userId, data) {
   try {
     const props = PropertiesService.getScriptProperties();
@@ -208,19 +258,21 @@ function sendWelcomeLine_(userId, data) {
     cache.put(key, '1', 3600);
 
     const fullName = (String(data.firstName || '') + ' ' + String(data.lastName || '')).trim();
-    const text =
-      '🎉 ยินดีต้อนรับสู่สมาชิก Rattana Mart\n\n' +
-      '👤 คุณ ' + (fullName || '-') + '\n' +
-      '🆔 รหัสสมาชิก ' + (data.phone || '-') + '\n\n' +
-      'เปิดบัตรสมาชิกเพื่อดูแต้มสะสม ระดับสมาชิก\n' +
-      'และบาร์โค้ดสำหรับยิงสะสมแต้มที่หน้าร้าน\n' +
-      'https://liff.line.me/2010284376-lUrrNKUU';
+    // v1.28: ระดับ/แต้มดึงจากแท็บ Member Point (ลูกค้าเก่าจะเห็นแต้มจริงตั้งแต่ข้อความแรก)
+    const pt = lookupPointByPhone(data.phone);
 
     const res = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
       method: 'post',
       contentType: 'application/json',
       headers: { Authorization: 'Bearer ' + token },
-      payload: JSON.stringify({ to: userId, messages: [{ type: 'text', text: text }] }),
+      payload: JSON.stringify({
+        to: userId,
+        messages: [{
+          type: 'flex',
+          altText: '🎉 ยินดีต้อนรับสู่สมาชิก Rattana Mart',
+          contents: welcomeFlex_(fullName, data.phone, pt),
+        }],
+      }),
       muteHttpExceptions: true,
     });
     const code = res.getResponseCode();
@@ -361,7 +413,7 @@ function doGet(e) {
     }
 
     if (!p.idToken && !p.userId && !p.phone) {
-      return json_({ status: 'ok', msg: 'GAS v1.27 running' });
+      return json_({ status: 'ok', msg: 'GAS v1.28 running' });
     }
 
     const sheet = getSheet();
