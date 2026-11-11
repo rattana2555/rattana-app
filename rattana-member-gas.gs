@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════
-//  Rattana Member System — GAS v1.28
+//  Rattana Member System — GAS v1.29
 // ════════════════════════════════════════════════════════
 
 const SHEET_ID        = '1gbBrJtE36fX8TM7KC0RbXgPZI6AyNpbC3XhJ6uiLsOE';
@@ -269,7 +269,7 @@ function sendWelcomeLine_(userId, data) {
         to: userId,
         messages: [{
           type: 'flex',
-          altText: '🎉 ยินดีต้อนรับสู่สมาชิก Rattana Mart',
+          altText: ONECHAT_WELCOME_ALT,
           contents: welcomeFlex_(fullName, data.phone, pt),
         }],
       }),
@@ -277,10 +277,64 @@ function sendWelcomeLine_(userId, data) {
     });
     const code = res.getResponseCode();
     // 403/400 = ลูกค้ายังไม่ได้เพิ่ม OA เป็นเพื่อน หรือ token/provider ไม่ตรง — ไม่ให้ล้มการสมัคร
-    if (code !== 200) Logger.log('Welcome LINE failed ' + code + ': ' + res.getContentText());
+    if (code !== 200) { Logger.log('Welcome LINE failed ' + code + ': ' + res.getContentText()); return; }
+
+    // v1.29: ส่งก้อนการ์ดเดิมเข้า One Chat ห้อง rattanamart ให้ทีมงานเห็นการ์ดจริง
+    let sent = [];
+    try { sent = (JSON.parse(res.getContentText()) || {}).sentMessages || []; } catch (e) {}
+    copyCardToOneChat_(
+      userId,
+      ONECHAT_WELCOME_ALT,
+      welcomeFlex_(fullName, data.phone, pt),
+      sent[0] ? sent[0].id : ''
+    );
   } catch (e) {
     Logger.log('sendWelcomeLine_ error: ' + e.message);
   }
+}
+
+// ─── v1.29: สำเนาการ์ดเข้า One Chat (ห้อง rattanamart) ───────────
+//  ⚠️ ปิดอยู่โดยปริยาย — จะส่งก็ต่อเมื่อตั้ง Script Property นี้
+//     ONECHAT_CARD_KEY = รหัสลับของห้อง (ขอจากผู้ดูแล One Chat)
+//  ★ ห้ามเขียนรหัสลับลงในไฟล์โค้ด — repo นี้เป็น public
+//  One Chat อ่านข้อความจาก LINE OA Manager ซึ่งย่อการ์ด Flex เหลือแค่ altText
+//  ทีมงานจึงเห็นแต่ข้อความธรรมดา การยิงซ้ำรอบนี้ทำให้เห็นการ์ดเหมือนลูกค้า
+//  ล้มเหลวก็ไม่กระทบการสมัครและการ์ดฝั่งลูกค้า (เงียบ + log ไว้)
+const ONECHAT_CARD_URL     = 'https://tousunszpxvdotgunoae.supabase.co/functions/v1/pur-card?a=rattanamart';
+const ONECHAT_WELCOME_ALT  = '🎉 ยินดีต้อนรับสู่สมาชิก Rattana Mart';
+
+function copyCardToOneChat_(userId, altText, flexContents, messageId) {
+  try {
+    const key = PropertiesService.getScriptProperties().getProperty('ONECHAT_CARD_KEY') || '';
+    if (!key || !userId) return;   // ยังไม่ได้รหัสลับ = ไม่ส่ง
+    const body = {
+      to: userId,
+      altText: altText,            // ต้องตรงกับ altText ที่ส่งเข้า LINE — ใช้จับคู่แถว
+      contents: flexContents,
+      sentAt: new Date().toISOString(),
+      senderName: 'ระบบบัตรสมาชิก',
+    };
+    if (messageId) body.messageId = messageId;   // ใส่แล้วกันแถวซ้ำ
+    const res = UrlFetchApp.fetch(ONECHAT_CARD_URL, {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'x-card-secret': key },
+      payload: JSON.stringify(body),
+      muteHttpExceptions: true,
+    });
+    const code = res.getResponseCode();
+    // 401 = รหัสลับไม่ถูกต้อง · mode pending/upgraded/inserted = สำเร็จทั้งนั้น
+    if (code !== 200) Logger.log('One Chat card failed ' + code + ': ' + res.getContentText());
+  } catch (e) {
+    Logger.log('copyCardToOneChat_ error: ' + e.message);
+  }
+}
+
+// v1.29: ตรวจว่าตั้งรหัสลับ One Chat แล้วหรือยัง — ไม่ส่งข้อความหาใคร
+function checkOneChatCard() {
+  const key = PropertiesService.getScriptProperties().getProperty('ONECHAT_CARD_KEY') || '';
+  Logger.log('ONECHAT_CARD_KEY = ' + (key ? 'ตั้งแล้ว (' + key.length + ' ตัวอักษร)' : '❌ ยังไม่ได้ตั้ง — การ์ดจะไม่ถูกส่งเข้า One Chat'));
+  Logger.log('ปลายทาง: ' + ONECHAT_CARD_URL);
 }
 
 // v1.27: ตรวจว่า token ใช้ได้ไหม + ผูกกับ OA ตัวไหน — ไม่ส่งข้อความหาใคร
@@ -413,7 +467,7 @@ function doGet(e) {
     }
 
     if (!p.idToken && !p.userId && !p.phone) {
-      return json_({ status: 'ok', msg: 'GAS v1.28 running' });
+      return json_({ status: 'ok', msg: 'GAS v1.29 running' });
     }
 
     const sheet = getSheet();
