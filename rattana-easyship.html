@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#FAD4E0">
-<title>Rattana EasyShip v6.1</title>
+<title>Rattana EasyShip v6.2</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -444,6 +444,11 @@ button,input,textarea,select{font-family:inherit}
 .fi:focus{border-color:var(--pk2)}
 textarea.fi{height:auto;padding:11px 14px;resize:vertical;min-height:70px}
 .fcard{padding:14px;margin-bottom:12px}
+.rgrp{padding:9px 0;border-top:1px solid #F6EEF3}.fl+.rgrp{border-top:none;padding-top:0}
+.rgrp-t{display:inline-block;font-size:11px;font-weight:800;color:#5A4560;padding:3px 10px;border-radius:10px;margin-bottom:7px}
+.sug{display:flex;align-items:baseline;gap:8px;padding:10px 12px;border-radius:14px;cursor:pointer;margin-top:6px;background:var(--cr);border:1px solid var(--line)}
+.sug:active{background:var(--pk)}
+.sug b{font-size:14px;color:var(--plum);white-space:nowrap}.sug span{font-size:11px;color:var(--g4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .seg{display:flex;background:var(--g1);border-radius:16px;padding:4px;gap:4px}
 .seg button{flex:1;border:none;background:transparent;border-radius:13px;padding:10px 6px;font-size:13px;font-weight:800;color:var(--g6);cursor:pointer}
 .seg button.on{background:#fff;color:var(--gd);box-shadow:var(--sh2)}
@@ -538,7 +543,7 @@ textarea.fi{height:auto;padding:11px 14px;resize:vertical;min-height:70px}
     <div style="padding:16px 16px 4px" id="d-sum">
       <div class="empty"><div class="spin" style="width:28px;height:28px;margin:0 auto 10px"></div><div class="empty-t" style="color:var(--g6)">กำลังโหลด...</div></div>
     </div>
-    <div class="ver">Rattana EasyShip v6.1 · 2026-11-16</div>
+    <div class="ver">Rattana EasyShip v6.2 · 2026-11-16</div>
   </div>
   <div class="bnav" data-nav="home"></div>
 </div>
@@ -2153,7 +2158,56 @@ function shipCopy(){
 // ═══ CN ใบรับคืน ════════════════════════════════════════════
 var BILL_SHEET='1p13cjc1Bo9zsQitaAZhRosg1-oegyc6MM8eM3IIpKZk',BILL_GID='358986833',CNTAB='CN';
 var CNLIST=[],CNF=null,_cnBusy=false;
-var CN_REASONS=['ลูกค้าไม่รับสินค้า','ติดต่อลูกค้าไม่ได้ / ที่อยู่ไม่ถูก','สินค้าเสียหาย','ส่งผิด / ไม่ครบ','ลูกค้ายกเลิก','อื่นๆ'];
+// เหตุผล CN แยกตามที่มา — บันทึกเป็น "ที่มา · เหตุผล" (บางเหตุผลซ้ำกันคนละกลุ่ม)
+var CN_REASONS=[
+  ['จากเซลล์',['รับออเดอร์ผิด/ลูกค้าสั่งผิด','ลูกค้าขายไม่ได้','ปิดร้าน','ลูกค้าไม่จ่ายเงิน']],
+  ['แอดมิน',['คีย์สินค้าผิด','เปิดบิลซ้ำ']],
+  ['จากคลัง',['จัดสินค้าผิด','จัดสินค้าใกล้หมดอายุให้ลูกค้า','สินค้าชำรุด(จากคลัง)','คลังเช็คสินค้าพลาด','สินค้าขาดจากสต็อก','ปรับสต็อก']],
+  ['จากขนส่ง',['ทำสินค้าแตกก่อนส่ง','ได้รับสินค้าช้า','สินค้าชำรุด(จากขนส่ง)','ขนส่งขึ้นสินค้าผิด','ลงสินค้าให้ลูกค้าผิด']],
+  ['จากร้านค้า',['สินค้าชำรุด(จากร้านค้า)','ลังน้ำ/ขวดแก้ว','สินค้าหมดอายุ','รับออเดอร์ผิด/ลูกค้าสั่งผิด']],
+  ['จากผู้ผลิต',['สินค้าเสียหายก่อนเปิดใช้']]
+];
+var CN_RCOL={'จากเซลล์':'#FFD9DE','แอดมิน':'#E9DEFA','จากคลัง':'#FFDCCB','จากขนส่ง':'#D9E6FF','จากร้านค้า':'#D9F0E2','จากผู้ผลิต':'#FFF0B8'};
+// รายชื่อผู้บันทึก จากชีทพนักงาน (ดึงเฉพาะ คลัง / ชื่อ-สกุล / ชื่อเล่น)
+var STAFF_SHEET='1M6HdISsLN684qRWyQ73CA4AmUzmYtZaOlffDJXZZIXQ',STAFF=null,_staffState='';
+function loadStaff(cb){
+  if(STAFF||_staffState==='loading'){if(cb&&STAFF)cb();return;}
+  _staffState='loading';
+  var url='https://docs.google.com/spreadsheets/d/'+STAFF_SHEET+'/gviz/tq?tqx=out:json&headers=1&gid=0&tq='+encodeURIComponent('select B,E,G where E is not null')+'&t='+Date.now();
+  fetch(url).then(function(r){return r.text();}).then(function(txt){
+    var rows=(JSON.parse(txt.substring(txt.indexOf('{'),txt.lastIndexOf('}')+1)).table||{}).rows||[];
+    var wh='';var k0=Object.keys(DB)[0];if(k0)wh=String(DB[k0].wh||'').trim();
+    var list=[],seen={};
+    rows.forEach(function(row){
+      var c=row.c||[];
+      function g(i){var x=c[i];return x&&x.v!=null?String(x.v).trim():'';}
+      var w=g(0),nm=g(1).replace(/\s+/g,' '),nk=g(2);
+      if(!nm)return;
+      var val=nm+(nk?' ('+nk+')':'');
+      if(seen[val])return;seen[val]=1;
+      list.push({w:w,name:nm,nick:nk,val:val,key:(nk+' '+nm).toLowerCase()});
+    });
+    list.sort(function(a,b){
+      var ra=a.w===wh?0:1,rb=b.w===wh?0:1;if(ra!==rb)return ra-rb;   // คลังเดียวกับออเดอร์วันนี้ขึ้นก่อน
+      return (a.nick||a.name).localeCompare(b.nick||b.name,'th');
+    });
+    STAFF=list;_staffState='ok';if(cb)cb();
+  }).catch(function(){_staffState='fail';if(cb)cb();});
+}
+function _staffValid(v){return !!(STAFF&&STAFF.some(function(x){return x.val===v;}));}
+function cnBySug(){
+  var inp=$('cn-by'),box=$('cn-by-sug');if(!inp||!box)return;
+  CNF.by=inp.value;
+  inp.style.borderColor=_staffValid(inp.value)?'#9ADBB9':'';
+  if(!STAFF){box.innerHTML=_staffState==='fail'?'<div class="slot-s" style="margin-top:6px">โหลดรายชื่อไม่ได้ — พิมพ์ชื่อเองได้</div>':'<div class="slot-s" style="margin-top:6px">⏳ กำลังโหลดรายชื่อ...</div>';return;}
+  if(_staffValid(inp.value)){box.innerHTML='';return;}
+  var q=inp.value.trim().toLowerCase();
+  var m=STAFF.filter(function(x){return !q||x.key.indexOf(q)>=0;}).slice(0,8);
+  box.innerHTML=m.length?m.map(function(x){
+    return '<div class="sug" onmousedown="event.preventDefault()" onclick="cnByPick(this.getAttribute(\'data-v\'))" data-v="'+esc(x.val)+'"><b>'+esc(x.nick||x.name)+'</b><span>'+esc(x.name)+(x.w?' · '+esc(x.w):'')+'</span></div>';
+  }).join(''):'<div class="slot-s" style="margin-top:6px">ไม่พบชื่อนี้ในรายชื่อพนักงาน</div>';
+}
+function cnByPick(v){var inp=$('cn-by');if(!inp)return;inp.value=v;CNF.by=v;inp.blur();cnBySug();}
 var CN_SLOTS=[
   [1,'กล่องพัสดุ เห็นใบปะหน้า','ถ่ายให้เห็นใบปะหน้าชัดเจน ไม่ปิดบังข้อมูล',3],
   [2,'กล่องด้านนอก ครบ 4 ด้าน','ด้านหน้า · ด้านหลัง · ด้านซ้าย · ด้านขวา',4],
@@ -2221,6 +2275,7 @@ function newCN(){
   var by='';try{by=localStorage.getItem('re_cn_by')||'';}catch(e){}
   CNF={q:'',order:'',platform:'',bill:'',bdate:'',lines:null,type:'full',reason:'',note:'',by:by,photos:{1:[],2:[],3:[],4:[]},msg:'',cn:''};
   show('s-cnf');renderCNF();showGuide(true);
+  loadStaff(cnBySug);
 }
 function cnBack(){
   var has=CNF&&(CNF.lines||CNF.photos[1].length||CNF.photos[2].length||CNF.photos[3].length||CNF.photos[4].length);
@@ -2317,7 +2372,12 @@ function renderCNF(keepScroll){
         +'<div class="stp"><button onclick="cnQty('+i+',-1)"'+(dis||l.ret<=0?' disabled':'')+'>−</button><span>'+l.ret+'</span><button onclick="cnQty('+i+',1)"'+(dis||l.ret>=l.units?' disabled':'')+'>+</button></div></div>';
     });
     h+='<div class="tot"><span style="font-weight:800">มูลค่ารับคืนรวม</span><b>'+baht(cnTotal())+'</b></div></div>';
-    h+='<div class="card fcard"><div class="fl"><i>4</i>เหตุผล</div><div class="chips">'+CN_REASONS.map(function(r){return '<span class="chip'+(F.reason===r?' on':'')+'" onclick="cnReason(\''+esc(r)+'\')">'+esc(r)+'</span>';}).join('')+'</div>'
+    h+='<div class="card fcard"><div class="fl"><i>4</i>เหตุผล</div>'+CN_REASONS.map(function(g){
+        return '<div class="rgrp"><span class="rgrp-t" style="background:'+CN_RCOL[g[0]]+'">'+esc(g[0])+'</span><div class="chips">'+g[1].map(function(r){
+          var v=g[0]+' · '+r;
+          return '<span class="chip'+(F.reason===v?' on':'')+'" onclick="cnReason(this.getAttribute(\'data-v\'))" data-v="'+esc(v)+'">'+esc(r)+'</span>';
+        }).join('')+'</div></div>';
+      }).join('')
       +'<textarea class="fi" id="cn-note" style="margin-top:10px" placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)">'+esc(F.note)+'</textarea></div>';
     h+='<div class="card fcard"><div class="fl"><i>5</i>รูปหลักฐานสินค้าตีกลับ <span style="margin-left:auto;color:var(--gd);cursor:pointer" onclick="showGuide()">ดูตัวอย่าง →</span></div>';
     CN_SLOTS.forEach(function(s){
@@ -2328,11 +2388,12 @@ function renderCNF(keepScroll){
         +'</div></div>';
     });
     h+='</div>';
-    h+='<div class="card fcard"><div class="fl">ผู้บันทึก</div><input class="fi" id="cn-by" placeholder="ชื่อผู้ทำรายการ" value="'+esc(F.by)+'" autocomplete="off"></div>';
+    h+='<div class="card fcard"><div class="fl">ผู้บันทึก</div><input class="fi" id="cn-by" placeholder="พิมพ์ชื่อเล่นหรือชื่อ แล้วเลือกจากรายชื่อ" value="'+esc(F.by)+'" autocomplete="off" oninput="cnBySug()" onfocus="cnBySug()"><div id="cn-by-sug"></div></div>';
     h+='<div class="note info">ขั้นที่ 5 ตามโปสเตอร์: หลังบันทึก ตรวจเลขบิลสินค้าตีกลับได้ที่แท็บ <b>CN</b> ใน Google Sheet</div>';
   }
   $('cnf-body').innerHTML=h;
   var b=$('cn-save');b.disabled=!F.lines||_cnBusy;b.textContent=_cnBusy?'⏳ กำลังบันทึก...':(F.lines?'บันทึก CN · '+baht(cnTotal()):'ค้นหาบิลก่อน');
+  if(F.lines)cnBySug();
   if(keepScroll)sc.scrollTop=top;
 }
 function _cnId(){
@@ -2345,6 +2406,8 @@ function cnSave(){
   var items=F.lines.filter(function(l){return l.ret>0;});
   if(!items.length){toast('ยังไม่ได้ใส่จำนวนสินค้าที่คืน','err');return;}
   if(!F.reason){toast('เลือกเหตุผลการคืนก่อน','err');return;}
+  if(!String(F.by||'').trim()){toast('ใส่ชื่อผู้บันทึกก่อน','err');return;}
+  if(STAFF&&!_staffValid(F.by)){toast('เลือกชื่อผู้บันทึกจากรายชื่อพนักงาน','err');return;}
   var miss=CN_SLOTS.filter(function(s){return !F.photos[s[0]].length;}).map(function(s){return s[0]+'. '+s[1];});
   if(miss.length&&!confirm('ยังไม่มีรูปหลักฐาน:\n'+miss.join('\n')+'\n\nบันทึกโดยไม่มีรูปเหล่านี้?'))return;
   if(!GAS){toast('ยังไม่ได้ตั้งค่า Apps Script','err');return;}
