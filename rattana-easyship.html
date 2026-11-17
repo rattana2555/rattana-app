@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#FAD4E0">
-<title>Rattana EasyShip v6.3</title>
+<title>Rattana EasyShip v6.4</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -543,7 +543,7 @@ textarea.fi{height:auto;padding:11px 14px;resize:vertical;min-height:70px}
     <div style="padding:16px 16px 4px" id="d-sum">
       <div class="empty"><div class="spin" style="width:28px;height:28px;margin:0 auto 10px"></div><div class="empty-t" style="color:var(--g6)">กำลังโหลด...</div></div>
     </div>
-    <div class="ver">Rattana EasyShip v6.3 · 2026-11-17</div>
+    <div class="ver">Rattana EasyShip v6.4 · 2026-11-17</div>
   </div>
   <div class="bnav" data-nav="home"></div>
 </div>
@@ -805,9 +805,15 @@ textarea.fi{height:auto;padding:11px 14px;resize:vertical;min-height:70px}
   <div class="scroll">
     <div class="pad">
       <div class="row2">
-        <button class="btn2" onclick="newCN()">＋ สร้าง CN ใหม่</button>
-        <button class="btn2 lv" onclick="showGuide()">📖 ขั้นตอนเก็บหลักฐาน</button>
+        <button class="btn2" onclick="newNotice()">📮 แจ้งตีกลับ</button>
+        <button class="btn2 lv" onclick="cnScan()">📷 ยิงใบปะบนกล่อง</button>
       </div>
+      <div class="row2" style="margin-top:9px">
+        <button class="btn2 gh" onclick="newCN()">＋ สร้าง CN เอง</button>
+        <button class="btn2 gh" onclick="showGuide()">📖 ขั้นตอนเก็บหลักฐาน</button>
+      </div>
+      <div class="sum-h" style="margin-top:16px">📮 รอรับคืน <span id="rt-cnt"></span></div>
+      <div id="rt-list"></div>
       <div class="sum-h" style="margin-top:16px">รายการ CN ล่าสุด <span id="cn-cnt"></span></div>
       <div id="cn-list"><div class="empty"><div class="spin" style="width:28px;height:28px;margin:0 auto 10px"></div><div class="empty-t">กำลังโหลด...</div></div></div>
     </div>
@@ -821,7 +827,7 @@ textarea.fi{height:auto;padding:11px 14px;resize:vertical;min-height:70px}
     <div class="hdr-r" style="margin-bottom:0">
       <div style="display:flex;align-items:center;gap:10px">
         <button class="bk" onclick="cnBack()">←</button>
-        <div><div class="brand">สร้าง CN ใบรับคืน</div><div class="brand-s" id="cnf-sub">กรอกตามขั้นตอน 1–5</div></div>
+        <div><div class="brand" id="cnf-t">สร้าง CN ใบรับคืน</div><div class="brand-s" id="cnf-sub">กรอกตามขั้นตอน 1–5</div></div>
       </div>
       <button class="rbtn" onclick="showGuide()">📖 ขั้นตอน</button>
     </div>
@@ -877,6 +883,7 @@ function goBack(){
   stopCam();
   if(SMODE==='product'){SMODE='order';show('s-order');}
   else if(SMODE==='check'){SMODE='order';show('s-check');renderCheck();}
+  else if(SMODE==='return'){SMODE='order';openCN();}
   else show('s-dash');
 }
 function closeOrder(){CUR=null;TSTART=null;show('s-dash');}
@@ -884,8 +891,9 @@ function goOrders(){renderOList();renderOStats();show('s-orders');}
 
 function openScan(m){
   SMODE=m;
-  var t='สแกนออเดอร์';if(m==='product')t='สแกนสินค้า';else if(m==='check')t='เช็คสินค้าออก';
-  var l='ป้อนหมายเลขออเดอร์';if(m==='product')l='ป้อนบาร์โคดสินค้า';else if(m==='check')l='ป้อนบาร์โคดสินค้า (เช็ค)';
+  var t='สแกนออเดอร์';if(m==='product')t='สแกนสินค้า';else if(m==='check')t='เช็คสินค้าออก';else if(m==='return')t='ยิงใบปะกล่องตีกลับ';
+  var l='ป้อนหมายเลขออเดอร์';if(m==='product')l='ป้อนบาร์โคดสินค้า';else if(m==='check')l='ป้อนบาร์โคดสินค้า (เช็ค)';else if(m==='return')l='ป้อนเลขคำสั่งซื้อของกล่องที่ตีกลับ';
+  $('rd-btn').style.display='none';TXT('rd-l','รอสแกน...');TXT('rd-v','-');
   TXT('sc-t',t); TXT('m-lbl',l);
   show('s-scan'); setMode(_scanPref());
   // Auto-focus input สำหรับ hardware scanner (handheld) — inputmode=none กันแป้นพิมพ์มือถือเด้ง
@@ -907,6 +915,10 @@ function doRefresh(){
   _ac=new AbortController();
   var sig=_ac.signal;
   var url='https://docs.google.com/spreadsheets/d/'+SHEET+'/gviz/tq?tqx=out:json&sheet='+encodeURIComponent(TAB)+'&t='+Date.now();
+  // ขอ "ใบเช็ค" กับ "สะสมทั้งวัน" พร้อมกัน (เดิมต่อคิวกัน) — ได้ครบสองอย่างค่อยประมวลผล
+  var mainJ=null,arcRes=null,arcDone=false,fired=false;
+  function go(){if(fired||!mainJ||!arcDone)return;fired=true;parseGviz(_withArchive(mainJ,arcRes));_pingArchive();}
+  _loadArchive(function(a){arcRes=a;arcDone=true;go();});
   var tmr=setTimeout(function(){try{_ac.abort();}catch(e){}if(!_hasData){var ds=$('d-sum');if(ds)ds.innerHTML='<div class="empty"><div class="empty-ic">⏰</div><div class="empty-t">หมดเวลา — กดรีเฟรช</div></div>';}},12000);
   fetch(url,{signal:sig})
     .then(function(r){return r.text();})
@@ -915,7 +927,7 @@ function doRefresh(){
       var s=txt.indexOf('{'),e=txt.lastIndexOf('}');
       if(s<0){showErr('Sheet ต้องตั้งเป็น Anyone with link');return;}
       var j=JSON.parse(txt.substring(s,e+1));
-      _loadArchive(function(arc){parseGviz(_withArchive(j,arc));_pingArchive();});
+      mainJ=j;go();
     })
     .catch(function(err){
       clearTimeout(tmr);
@@ -1119,12 +1131,27 @@ function _mergeDayOrders(nDB){
   return kept;
 }
 
+// เปิดแอปแล้วแสดงรายการล่าสุดของวันนี้ที่เครื่องจำไว้ทันที — ข้อมูลจริงจากชีทตามมาทับในไม่กี่วินาที
+function _paintCache(){
+  try{
+    var c=JSON.parse(localStorage.getItem(_odKey())||'null');
+    if(!c||typeof c!=='object'||!Object.keys(c).length)return;
+    DB=c;_hasData=true;
+    var f=DB[Object.keys(DB)[0]];
+    if(f&&f.wh){TXT('d-loc','📍 คลัง '+f.wh);}
+    TXT('d-sub','กำลังอัปเดตข้อมูลล่าสุด...');
+    updateStats();renderDash();renderOList();renderOStats();
+  }catch(e){}
+}
+
 // ═══ STATUS SYNC ═══════════════════════════════════════════
 function loadStatus(){
   var called=false;
+  function paint(){updateStats(); renderDash(); renderOList(); renderOStats();}
+  paint();   // แสดงออเดอร์ทันที — สถานะจากชีทตามมาอัปเดตทีหลัง
   function done(){
     if(called)return; called=true;
-    updateStats(); renderDash(); renderOList(); renderOStats();
+    paint();
     toast('✅ โหลดสำเร็จ ('+Object.keys(DB).length+' ออเดอร์'+(_keptN?' · รวมรอบก่อน '+_keptN:'')+')','ok');
   }
   var tmr=setTimeout(done,5000);
@@ -1383,6 +1410,7 @@ function onScan(t){
   var vf=document.querySelector('.vf');if(vf){vf.classList.add('hit');setTimeout(function(){vf.classList.remove('hit');},350);}
   if(SMODE==='order')hdOrder(t);
   else if(SMODE==='check')hdCheck(t);
+  else if(SMODE==='return')hdReturn(t);
   else hdProd(t);
 }
 function hdOrder(t){
@@ -1414,6 +1442,7 @@ function doManual(){
   var v=$('minp').value.trim();if(!v)return;$('minp').value='';
   if(SMODE==='product')hdProd(v);
   else if(SMODE==='check')hdCheck(v);
+  else if(SMODE==='return')hdReturn(v);
   else{LSCANNED=null;hdOrder(v);if(LSCANNED)setTimeout(useLast,300);}
   // re-focus เพื่อพร้อมรับการยิงครั้งถัดไปจาก hardware scanner (ซ่อนแป้นพิมพ์กลับ)
   setTimeout(function(){var mi=$('minp');if(mi&&$('s-scan').classList.contains('on')){mi.setAttribute('inputmode','none');mi.blur();mi.focus();}},150);
@@ -2220,6 +2249,9 @@ function shipCopy(){
 // ═══ CN ใบรับคืน ════════════════════════════════════════════
 var BILL_SHEET='1p13cjc1Bo9zsQitaAZhRosg1-oegyc6MM8eM3IIpKZk',BILL_GID='358986833',CNTAB='CN';
 var CNLIST=[],CNF=null,_cnBusy=false;
+var RTAB='ตีกลับ',RTLIST=[];        // ใบแจ้งตีกลับ: ผู้ดูแลแจ้ง (เลขคำสั่งซื้อ + ภาพจากขนส่ง) → คลังรับของแล้วทำ CN
+function rtImg(id,w){return 'https://lh3.googleusercontent.com/d/'+id+'=w'+(w||400);}
+function rtPending(){return RTLIST.filter(function(r){return r.status==='รอรับคืน';});}
 // เหตุผล CN แยกตามที่มา — บันทึกเป็น "ที่มา · เหตุผล" (บางเหตุผลซ้ำกันคนละกลุ่ม)
 var CN_REASONS=[
   ['จากเซลล์',['รับออเดอร์ผิด/ลูกค้าสั่งผิด','ลูกค้าขายไม่ได้','ปิดร้าน','ลูกค้าไม่จ่ายเงิน']],
@@ -2287,7 +2319,35 @@ function hideGuide(){
   $('gd').classList.remove('on');
 }
 function viewImg(src){$('iv-img').src=src;$('iv').classList.add('on');}
-function openCN(){show('s-cn');renderCNList();loadCNList(renderCNList);}
+function openCN(){
+  show('s-cn');renderCNList();
+  loadRTList(renderCNList);loadCNList(renderCNList);
+}
+function loadRTList(cb){
+  var called=false;function done(){if(called)return;called=true;if(cb)cb();}
+  var tmr=setTimeout(done,6000);
+  var url='https://docs.google.com/spreadsheets/d/'+SHEET+'/gviz/tq?tqx=out:json&headers=1&sheet='+encodeURIComponent(RTAB)+'&t='+Date.now();
+  fetch(url).then(function(r){return r.text();}).then(function(txt){
+    clearTimeout(tmr);
+    try{
+      var tb=JSON.parse(txt.substring(txt.indexOf('{'),txt.lastIndexOf('}')+1)).table||{};
+      var cols=tb.cols||[];
+      if(cols.length>=13&&String(cols[1].label||'').trim()==='เลขแจ้ง'){   // ไม่มีแท็บนี้ Google จะส่งแท็บแรกมาแทน
+        var list=[];
+        (tb.rows||[]).forEach(function(row){
+          var c=row.c||[];
+          function g(i){var x=c[i];return x&&x.v!=null?String(x.f||x.v).trim():'';}
+          function n(i){var x=c[i];return x&&x.v!=null?(typeof x.v==='number'?x.v:parseFloat(String(x.v).replace(/,/g,''))||0):0;}
+          if(!g(1))return;
+          list.push({date:g(0),id:g(1),order:g(2),platform:g(3),bill:g(4),items:g(5),total:n(6),reason:g(7),note:g(8),by:g(9),
+            imgs:g(10)?g(10).split(',').map(function(x){return x.trim();}).filter(function(x){return x;}):[],folder:g(11),status:g(12)||'รอรับคืน',cn:g(13)});
+        });
+        RTLIST=list.reverse();
+      }
+    }catch(e){}
+    done();
+  }).catch(function(){clearTimeout(tmr);done();});
+}
 function loadCNList(cb){
   var called=false;function done(){if(called)return;called=true;if(cb)cb();}
   var tmr=setTimeout(done,6000);
@@ -2314,9 +2374,19 @@ function loadCNList(cb){
   }).catch(function(){clearTimeout(tmr);done();});
 }
 function renderCNList(){
+  var P=rtPending(),rl=$('rt-list');
+  TXT('rt-cnt',P.length?P.length+' กล่อง':'');
+  rl.innerHTML=P.length?P.map(function(r){
+    var th=r.imgs.length?'<div class="pcard-img"><img src="'+rtImg(r.imgs[0],200)+'" onerror=imgErr(this) alt=""></div>':'<div class="pcard-img">📮</div>';
+    return '<div class="card lrow" onclick="rtOpen(this.getAttribute(\'data-id\'))" data-id="'+esc(r.id)+'" style="cursor:pointer">'+th
+      +'<div class="lrow-m"><div class="lrow-t">'+esc(r.platform)+' #'+esc(r.order)+'</div>'
+      +'<div class="lrow-s">'+esc(r.items)+'</div>'
+      +'<div class="lrow-s">'+esc(r.date)+(r.reason?' · '+esc(r.reason):'')+'</div></div>'
+      +'<span class="cbdg" style="background:#FFF0B8">รอรับคืน</span></div>';
+  }).join(''):'<div class="note info" style="margin-bottom:0">ยังไม่มีกล่องรอรับคืน — เมื่อผู้ดูแลกด “แจ้งตีกลับ” รายการจะขึ้นตรงนี้</div>';
   var el=$('cn-list');
   TXT('cn-cnt',CNLIST.length?CNLIST.length+' ใบ':'');
-  if(!CNLIST.length){el.innerHTML='<div class="empty"><div class="empty-ic">↩️</div><div class="empty-t">ยังไม่มี CN</div><div style="font-size:12px;color:var(--g4);margin-top:4px">กด “สร้าง CN ใหม่” เมื่อมีสินค้าตีกลับ</div></div>';return;}
+  if(!CNLIST.length){el.innerHTML='<div class="empty"><div class="empty-ic">↩️</div><div class="empty-t">ยังไม่มี CN</div></div>';return;}
   el.innerHTML=CNLIST.slice(0,60).map(function(c,i){
     var full=c.type.indexOf('เต็ม')>=0;
     return '<div class="card lrow" onclick="cnDetail('+i+')" style="cursor:pointer"><div class="lrow-m"><div class="lrow-t">'+esc(c.cn)+' · '+baht(c.total)+'</div>'
@@ -2333,14 +2403,51 @@ function cnDetail(i){
   if(c.folder)h+='<a class="btn2 lv" style="display:block;text-align:center;text-decoration:none;margin-top:6px" href="'+esc(c.folder)+'" target="_blank" rel="noopener">📷 เปิดโฟลเดอร์รูปหลักฐาน ('+c.photos+')</a>';
   $('bs-body').innerHTML=h;$('bs').style.display='flex';
 }
+function _cnNew(mode){
+  var by='';try{by=localStorage.getItem(mode==='notice'?'re_rt_by':'re_cn_by')||'';}catch(e){}
+  return {mode:mode,rt:null,q:'',order:'',platform:'',bill:'',bdate:'',lines:null,type:'full',reason:'',note:'',by:by,photos:{0:[],1:[],2:[],3:[],4:[]},msg:'',cn:''};
+}
+// สร้าง CN เองโดยไม่มีใบแจ้ง (รู้เลขคำสั่งซื้ออยู่แล้ว)
 function newCN(){
-  var by='';try{by=localStorage.getItem('re_cn_by')||'';}catch(e){}
-  CNF={q:'',order:'',platform:'',bill:'',bdate:'',lines:null,type:'full',reason:'',note:'',by:by,photos:{1:[],2:[],3:[],4:[]},msg:'',cn:''};
+  CNF=_cnNew('cn');
   show('s-cnf');renderCNF();showGuide(true);
   loadStaff(cnBySug);
 }
+// ผู้ดูแลแจ้งตีกลับ: เลขคำสั่งซื้อ + ภาพที่ขนส่งแนบมา → ขึ้นเป็นงาน "รอรับคืน" ให้คลัง
+function newNotice(){
+  CNF=_cnNew('notice');
+  show('s-cnf');renderCNF();
+  loadStaff(cnBySug);
+}
+// คลังรับของ: เปิดจากรายการรอรับคืน หรือยิงใบปะบนกล่อง
+function rtOpen(id){
+  var r=null;RTLIST.forEach(function(x){if(x.id===id)r=x;});
+  if(!r){toast('ไม่พบใบแจ้งนี้','err');return;}
+  if(r.status!=='รอรับคืน'){toast('ใบแจ้งนี้'+r.status+'แล้ว','');return;}
+  CNF=_cnNew('receive');CNF.rt=r;CNF.reason=r.reason;CNF.q=r.order;
+  show('s-cnf');renderCNF();showGuide(true);
+  loadStaff(cnBySug);
+  cnSearch();
+}
+function rtCancel(){
+  var F=CNF;if(!F||!F.rt)return;
+  if(!confirm('ยกเลิกใบแจ้งตีกลับ '+F.rt.id+' ?\n(ใช้เมื่อแจ้งผิด หรือกล่องไม่ได้ตีกลับจริง)'))return;
+  if(GAS)fetch(GAS,{method:'POST',mode:'no-cors',body:JSON.stringify({action:'cancelReturn',id:F.rt.id})}).catch(function(){});
+  F.rt.status='ยกเลิก';CNF=null;show('s-cn');renderCNList();toast('ยกเลิกใบแจ้งแล้ว','ok');
+}
+function cnScan(){
+  if(!rtPending().length){toast('ยังไม่มีกล่องรอรับคืน','');return;}
+  openScan('return');
+}
+function hdReturn(t){
+  var code=_normOrder(t).toUpperCase(),hit=null;
+  rtPending().forEach(function(r){if(!hit&&String(r.order).toUpperCase()===code)hit=r;});
+  TXT('rd-l',hit?'พบใบแจ้งตีกลับ':'ไม่พบ');TXT('rd-v',t);
+  if(hit){toast('พบใบแจ้งตีกลับ — '+hit.platform+' #'+hit.order,'ok');playOk();vibr([100]);stopCam();SMODE='order';rtOpen(hit.id);}
+  else{toast('ไม่พบใบแจ้งตีกลับของเลขนี้ — ลองเลือกจากรายการรอรับคืน','err');playE();vibr([100,50,100]);}
+}
 function cnBack(){
-  var has=CNF&&(CNF.lines||CNF.photos[1].length||CNF.photos[2].length||CNF.photos[3].length||CNF.photos[4].length);
+  var has=CNF&&((CNF.lines&&CNF.mode!=='receive')||CNF.photos[0].length||CNF.photos[1].length||CNF.photos[2].length||CNF.photos[3].length||CNF.photos[4].length);
   if(has&&!confirm('ออกจากหน้านี้? ข้อมูลที่กรอกจะหาย'))return;
   CNF=null;openCN();
 }
@@ -2392,7 +2499,7 @@ function cnQty(i,d){var l=CNF.lines[i];l.ret=Math.max(0,Math.min(l.units,l.ret+d
 function cnReason(r){CNF.reason=r;renderCNF(true);}
 function cnPick(ev,slot){
   var files=[].slice.call(ev.target.files||[]);ev.target.value='';
-  var max=0;CN_SLOTS.forEach(function(s){if(s[0]===slot)max=s[3];});
+  var max=slot===0?4:0;CN_SLOTS.forEach(function(s){if(s[0]===slot)max=s[3];});
   files.slice(0,Math.max(0,max-CNF.photos[slot].length)).forEach(function(f){
     var fr=new FileReader();
     fr.onload=function(e){
@@ -2414,19 +2521,55 @@ function _cnKeep(){   // เก็บค่าที่พิมพ์ค้า�
   var a=$('cn-note'),b=$('cn-by'),q=$('cn-q');
   if(a)CNF.note=a.value;if(b)CNF.by=b.value;if(q&&!CNF.lines)CNF.q=q.value;
 }
+function _phBlock(slot,max){
+  var ph=CNF.photos[slot];
+  return '<div class="phs">'
+    +ph.map(function(src,i){return '<div class="ph-t"><img src="'+src+'" onclick="viewImg(this.src)" alt=""><button onclick="cnDelPhoto('+slot+','+i+')">✕</button></div>';}).join('')
+    +(ph.length<max?'<label class="ph-add">＋<small>เพิ่มรูป</small><input type="file" accept="image/*" multiple onchange="cnPick(event,'+slot+')"></label>':'')
+    +'</div>';
+}
+function _reasonBlock(F){
+  return CN_REASONS.map(function(g){
+    return '<div class="rgrp"><span class="rgrp-t" style="background:'+CN_RCOL[g[0]]+'">'+esc(g[0])+'</span><div class="chips">'+g[1].map(function(r){
+      var v=g[0]+' · '+r;
+      return '<span class="chip'+(F.reason===v?' on':'')+'" onclick="cnReason(this.getAttribute(\'data-v\'))" data-v="'+esc(v)+'">'+esc(r)+'</span>';
+    }).join('')+'</div></div>';
+  }).join('')+'<textarea class="fi" id="cn-note" style="margin-top:10px" placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)">'+esc(F.note)+'</textarea>';
+}
 function renderCNF(keepScroll){
   var F=CNF;if(!F)return;
+  var N=F.mode==='notice',R=F.mode==='receive';
   var sc=$('cnf-body').parentNode,top=keepScroll?sc.scrollTop:0;
   if(keepScroll)_cnKeep();
-  var h='';
-  h+='<div class="card fcard"><div class="fl"><i>1</i>หมายเลขคำสั่งซื้อ</div>'
+  TXT('cnf-t',N?'แจ้งสินค้าตีกลับ':R?'รับคืนสินค้าตีกลับ':'สร้าง CN ใบรับคืน');
+  TXT('cnf-sub',N?'ผู้ดูแลระบบ → ส่งงานให้คลัง':R?('ใบแจ้ง '+F.rt.id):'กรอกตามขั้นตอน 1–5');
+  var h='',st=0;
+  function step(t){st++;return '<div class="fl"><i>'+st+'</i>'+t+'</div>';}
+  if(R){
+    var r=F.rt;
+    h+='<div class="card fcard" style="background:#FFFBEA;border-color:#F4E3A1"><div class="fl">📮 ข้อมูลจากผู้ดูแล</div>'
+      +(r.imgs.length?'<div class="slot-s" style="margin-bottom:2px">ภาพจากขนส่ง — เทียบกับกล่องที่ได้รับ (แตะเพื่อขยาย)</div><div class="phs">'
+        +r.imgs.map(function(id){return '<div class="ph-t"><img src="'+rtImg(id,400)+'" data-big="'+rtImg(id,1600)+'" onclick="viewImg(this.getAttribute(\'data-big\'))" onerror=imgErr(this) alt=""></div>';}).join('')+'</div>'
+        :'<div class="slot-s">ไม่มีภาพจากขนส่ง</div>')
+      +'<div class="slot-s" style="margin-top:8px">แจ้งเมื่อ '+esc(r.date)+(r.by?' · โดย '+esc(r.by):'')+(r.note?'<br>หมายเหตุ: '+esc(r.note):'')+'</div>'
+      +'<div style="margin-top:8px"><span style="font-size:11px;color:#B4233A;font-weight:700;cursor:pointer" onclick="rtCancel()">ยกเลิกใบแจ้งนี้</span></div></div>';
+  }
+  h+='<div class="card fcard">'+step('หมายเลขคำสั่งซื้อ')
     +'<div class="row2" style="align-items:stretch"><input class="fi" id="cn-q" style="flex:3" placeholder="พิมพ์หรือยิงเลขคำสั่งซื้อ" value="'+esc(F.lines?F.order:F.q)+'" autocomplete="off" onkeydown="if(event.key===\'Enter\'){event.preventDefault();cnSearch();}"><button class="btn2" style="flex:1" onclick="cnSearch()">ค้นหา</button></div>'
     +(F.msg?'<div style="margin-top:10px">'+F.msg+'</div>':'');
   if(F.lines)h+='<div class="note ok" style="margin:10px 0 0">✓ พบบิล <b>'+esc(F.bill)+'</b> · '+esc(F.platform)+' · '+esc(F.bdate)+'<br>ยอดบิล '+baht(F.lines.reduce(function(s,l){return s+l.amt;},0))+' · '+F.lines.length+' รายการ</div>';
   h+='</div>';
-  if(F.lines){
-    h+='<div class="card fcard"><div class="fl"><i>2</i>ประเภทการคืน</div><div class="seg"><button class="'+(F.type==='full'?'on':'')+'" onclick="cnType(\'full\')">คืนเต็มบิล</button><button class="'+(F.type==='part'?'on':'')+'" onclick="cnType(\'part\')">คืนบางส่วน</button></div></div>';
-    h+='<div class="card fcard"><div class="fl"><i>3</i>สินค้าที่รับคืน <span style="font-weight:600;color:var(--g4)">(ราคาจากบิล)</span></div>';
+  if(F.lines&&N){
+    h+='<div class="card fcard"><div class="fl">สินค้าในบิลนี้</div>'
+      +F.lines.map(function(l){return '<div class="cnl"><div style="flex:1;min-width:0"><div class="slot-t" style="font-size:12.5px">'+esc(l.name)+'</div><div class="slot-s">'+esc(l.bc)+'</div></div><span class="cbdg" style="background:var(--pc)">'+l.units+' '+esc(l.unit)+'</span></div>';}).join('')
+      +'<div class="slot-s" style="margin-top:6px">คลังจะเป็นคนนับจำนวนที่ได้คืนจริงตอนรับของ</div></div>';
+    h+='<div class="card fcard">'+step('ภาพที่ขนส่งแนบมา <span style="font-weight:600;color:var(--g4)">(สูงสุด 4 ภาพ)</span>')
+      +'<div class="slot-s">คลังจะใช้ภาพนี้เทียบกับกล่องที่ได้รับ</div>'+_phBlock(0,4)+'</div>';
+    h+='<div class="card fcard">'+step('เหตุผล')+_reasonBlock(F)+'</div>';
+    h+='<div class="card fcard"><div class="fl">ผู้แจ้ง</div><input class="fi" id="cn-by" placeholder="พิมพ์ชื่อเล่นหรือชื่อ แล้วเลือกจากรายชื่อ" value="'+esc(F.by)+'" autocomplete="off" oninput="cnBySug()" onfocus="cnBySug()"><div id="cn-by-sug"></div></div>';
+  }else if(F.lines){
+    h+='<div class="card fcard">'+step('ประเภทการคืน <span style="font-weight:600;color:var(--g4)">(นับจากของจริง)</span>')+'<div class="seg"><button class="'+(F.type==='full'?'on':'')+'" onclick="cnType(\'full\')">คืนเต็มบิล</button><button class="'+(F.type==='part'?'on':'')+'" onclick="cnType(\'part\')">คืนบางส่วน</button></div></div>';
+    h+='<div class="card fcard">'+step('สินค้าที่รับคืน <span style="font-weight:600;color:var(--g4)">(ราคาจากบิล)</span>');
     F.lines.forEach(function(l,i){
       var dis=F.type==='full';
       h+='<div class="cnl"><div style="flex:1;min-width:0"><div class="slot-t" style="font-size:12.5px">'+esc(l.name)+'</div><div class="slot-s">'+esc(l.bc)+' · ในบิล '+l.units+' '+esc(l.unit)+' · '+baht(l.price)+'/'+esc(l.unit)+'</div>'
@@ -2434,37 +2577,61 @@ function renderCNF(keepScroll){
         +'<div class="stp"><button onclick="cnQty('+i+',-1)"'+(dis||l.ret<=0?' disabled':'')+'>−</button><span>'+l.ret+'</span><button onclick="cnQty('+i+',1)"'+(dis||l.ret>=l.units?' disabled':'')+'>+</button></div></div>';
     });
     h+='<div class="tot"><span style="font-weight:800">มูลค่ารับคืนรวม</span><b>'+baht(cnTotal())+'</b></div></div>';
-    h+='<div class="card fcard"><div class="fl"><i>4</i>เหตุผล</div>'+CN_REASONS.map(function(g){
-        return '<div class="rgrp"><span class="rgrp-t" style="background:'+CN_RCOL[g[0]]+'">'+esc(g[0])+'</span><div class="chips">'+g[1].map(function(r){
-          var v=g[0]+' · '+r;
-          return '<span class="chip'+(F.reason===v?' on':'')+'" onclick="cnReason(this.getAttribute(\'data-v\'))" data-v="'+esc(v)+'">'+esc(r)+'</span>';
-        }).join('')+'</div></div>';
-      }).join('')
-      +'<textarea class="fi" id="cn-note" style="margin-top:10px" placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)">'+esc(F.note)+'</textarea></div>';
-    h+='<div class="card fcard"><div class="fl"><i>5</i>รูปหลักฐานสินค้าตีกลับ <span style="margin-left:auto;color:var(--gd);cursor:pointer" onclick="showGuide()">ดูตัวอย่าง →</span></div>';
+    h+='<div class="card fcard">'+step('เหตุผล'+(R?' <span style="font-weight:600;color:var(--g4)">(จากผู้ดูแล — แก้ได้)</span>':''))+_reasonBlock(F)+'</div>';
+    h+='<div class="card fcard">'+step('รูปหลักฐานสินค้าตีกลับ <span style="margin-left:auto;color:var(--gd);cursor:pointer" onclick="showGuide()">ดูตัวอย่าง →</span>');
     CN_SLOTS.forEach(function(s){
-      var ph=F.photos[s[0]];
-      h+='<div class="slot"><div class="slot-t">'+s[0]+'. '+s[1]+' '+(ph.length?'<span style="color:var(--gr)">✓</span>':'')+'</div><div class="slot-s">'+s[2]+'</div><div class="phs">'
-        +ph.map(function(src,i){return '<div class="ph-t"><img src="'+src+'" onclick="viewImg(this.src)" alt=""><button onclick="cnDelPhoto('+s[0]+','+i+')">✕</button></div>';}).join('')
-        +(ph.length<s[3]?'<label class="ph-add">＋<small>เพิ่มรูป</small><input type="file" accept="image/*" multiple onchange="cnPick(event,'+s[0]+')"></label>':'')
-        +'</div></div>';
+      h+='<div class="slot"><div class="slot-t">'+s[0]+'. '+s[1]+' '+(F.photos[s[0]].length?'<span style="color:var(--gr)">✓</span>':'')+'</div><div class="slot-s">'+s[2]+'</div>'+_phBlock(s[0],s[3])+'</div>';
     });
     h+='</div>';
-    h+='<div class="card fcard"><div class="fl">ผู้บันทึก</div><input class="fi" id="cn-by" placeholder="พิมพ์ชื่อเล่นหรือชื่อ แล้วเลือกจากรายชื่อ" value="'+esc(F.by)+'" autocomplete="off" oninput="cnBySug()" onfocus="cnBySug()"><div id="cn-by-sug"></div></div>';
-    h+='<div class="note info">ขั้นที่ 5 ตามโปสเตอร์: หลังบันทึก ตรวจเลขบิลสินค้าตีกลับได้ที่แท็บ <b>CN</b> ใน Google Sheet</div>';
+    h+='<div class="card fcard"><div class="fl">'+(R?'ผู้รับคืน':'ผู้บันทึก')+'</div><input class="fi" id="cn-by" placeholder="พิมพ์ชื่อเล่นหรือชื่อ แล้วเลือกจากรายชื่อ" value="'+esc(F.by)+'" autocomplete="off" oninput="cnBySug()" onfocus="cnBySug()"><div id="cn-by-sug"></div></div>';
+    h+='<div class="note info">หลังบันทึก ตรวจเลขบิลสินค้าตีกลับได้ที่แท็บ <b>CN</b> ใน Google Sheet</div>';
   }
   $('cnf-body').innerHTML=h;
-  var b=$('cn-save');b.disabled=!F.lines||_cnBusy;b.textContent=_cnBusy?'⏳ กำลังบันทึก...':(F.lines?'บันทึก CN · '+baht(cnTotal()):'ค้นหาบิลก่อน');
+  var b=$('cn-save');b.disabled=!F.lines||_cnBusy;
+  b.textContent=_cnBusy?'⏳ กำลังบันทึก...':!F.lines?'ค้นหาบิลก่อน':N?'📮 ส่งแจ้งตีกลับให้คลัง':'บันทึก CN · '+baht(cnTotal());
   if(F.lines)cnBySug();
   if(keepScroll)sc.scrollTop=top;
 }
-function _cnId(){
+function _cnId(pre){
   var d=new Date();function p(n){return String(n).padStart(2,'0');}
-  return 'CN'+String(d.getFullYear()).slice(2)+p(d.getMonth()+1)+p(d.getDate())+'-'+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds());
+  return (pre||'CN')+String(d.getFullYear()).slice(2)+p(d.getMonth()+1)+p(d.getDate())+'-'+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds());
+}
+// รอ Apps Script เขียนลงชีท แล้วอ่านกลับมายืนยัน
+function _cnConfirm(F,load,found,okMsg){
+  var tries=[4000,5000,7000,9000],ti=0;
+  function check(){
+    load(function(){
+      if(found()){_cnBusy=false;CNF=null;show('s-cn');renderCNList();loadRTList(renderCNList);toast(okMsg,'ok');return;}
+      if(ti<tries.length){setTimeout(check,tries[ti++]);return;}
+      _cnBusy=false;
+      if(CNF===F){F.msg='<div class="note warn">ส่งข้อมูลแล้ว แต่ยังไม่เห็นในชีท — อาจเพราะเน็ตช้า หรือ Apps Script ยังไม่ได้อัปเดตเป็น v3.4<br>กดปุ่มบันทึกอีกครั้งเพื่อส่งซ้ำได้ (ไม่บันทึกซ้ำ)</div>';renderCNF();$('cnf-body').parentNode.scrollTop=0;}
+    });
+  }
+  setTimeout(check,tries[ti++]);
+}
+function noticeSave(){
+  var F=CNF;
+  if(!F.reason){toast('เลือกเหตุผลก่อน','err');return;}
+  if(!String(F.by||'').trim()){toast('ใส่ชื่อผู้แจ้งก่อน','err');return;}
+  if(STAFF&&!_staffValid(F.by)){toast('เลือกชื่อผู้แจ้งจากรายชื่อพนักงาน','err');return;}
+  var dup=rtPending().some(function(r){return String(r.order).toUpperCase()===String(F.order).toUpperCase();});
+  if(dup&&!F.cn&&!confirm('คำสั่งซื้อนี้มีใบแจ้งรอรับคืนอยู่แล้ว\nแจ้งซ้ำอีกใบ?'))return;
+  if(!F.photos[0].length&&!confirm('ยังไม่ได้แนบภาพจากขนส่ง\nส่งแจ้งโดยไม่มีภาพ?'))return;
+  if(!GAS){toast('ยังไม่ได้ตั้งค่า Apps Script','err');return;}
+  try{localStorage.setItem('re_rt_by',F.by||'');}catch(e){}
+  if(!F.cn)F.cn=_cnId('RT');
+  var payload={action:'saveReturn',id:F.cn,date:_ckDate(),order:F.order,platform:F.platform,bill:F.bill,
+    items:F.lines.map(function(l){return l.name+' ×'+l.units+' '+l.unit;}).join(' ; '),
+    total:Math.round(F.lines.reduce(function(s,l){return s+l.amt;},0)*100)/100,
+    reason:F.reason,note:F.note||'',by:F.by||'',photos:F.photos[0]};
+  _cnBusy=true;F.msg='';renderCNF(true);
+  fetch(GAS,{method:'POST',mode:'no-cors',body:JSON.stringify(payload)}).catch(function(){});
+  _cnConfirm(F,loadRTList,function(){return RTLIST.some(function(r){return r.id===F.cn;});},'✓ ส่งแจ้งตีกลับ '+F.cn+' ให้คลังแล้ว');
 }
 function cnSave(){
   var F=CNF;if(!F||!F.lines||_cnBusy)return;
   _cnKeep();
+  if(F.mode==='notice'){noticeSave();return;}
   var items=F.lines.filter(function(l){return l.ret>0;});
   if(!items.length){toast('ยังไม่ได้ใส่จำนวนสินค้าที่คืน','err');return;}
   if(!F.reason){toast('เลือกเหตุผลการคืนก่อน','err');return;}
@@ -2477,24 +2644,14 @@ function cnSave(){
   if(!F.cn)F.cn=_cnId();       // ส่งซ้ำใช้เลขเดิม — Apps Script ไม่บันทึกซ้ำ
   var photos=[];CN_SLOTS.forEach(function(s){F.photos[s[0]].forEach(function(b64){photos.push({slot:s[0],b64:b64});});});
   var allFull=F.lines.every(function(l){return l.ret===l.units;});
-  var payload={action:'saveCN',cn:F.cn,date:_ckDate(),order:F.order,platform:F.platform,bill:F.bill,
+  var payload={action:'saveCN',cn:F.cn,rt:F.rt?F.rt.id:'',date:_ckDate(),order:F.order,platform:F.platform,bill:F.bill,
     type:allFull?'คืนเต็มบิล':'คืนบางส่วน',reason:F.reason,note:F.note||'',by:F.by||'',
     items:items.map(function(l){return {bc:l.bc,name:l.name,unit:l.unit,qty:l.ret,amt:Math.round(l.price*l.ret*100)/100};}),photos:photos};
   _cnBusy=true;F.msg='';renderCNF(true);
   fetch(GAS,{method:'POST',mode:'no-cors',body:JSON.stringify(payload)}).catch(function(){});
-  var tries=[4000,5000,7000,9000],ti=0;      // รอ Apps Script เขียนลงชีท แล้วอ่านกลับมายืนยัน
-  function check(){
-    loadCNList(function(){
-      var ok=CNLIST.some(function(c){return c.cn===F.cn;});
-      if(ok){_cnBusy=false;CNF=null;show('s-cn');renderCNList();toast('✓ บันทึก '+F.cn+' แล้ว','ok');return;}
-      if(ti<tries.length){setTimeout(check,tries[ti++]);return;}
-      _cnBusy=false;
-      if(CNF===F){F.msg='<div class="note warn">ส่งข้อมูลแล้ว แต่ยังไม่เห็นในชีท — อาจเพราะเน็ตช้า หรือ Apps Script ยังไม่ได้อัปเดตเป็น v3.3<br>กด “บันทึก CN” อีกครั้งเพื่อส่งซ้ำได้ (ไม่บันทึกซ้ำ)</div>';renderCNF();$('cnf-body').parentNode.scrollTop=0;}
-    });
-  }
-  setTimeout(check,tries[ti++]);
+  if(F.rt)F.rt.status='รับคืนแล้ว';
+  _cnConfirm(F,loadCNList,function(){return CNLIST.some(function(c){return c.cn===F.cn;});},'✓ บันทึก '+F.cn+' แล้ว');
 }
-
 // ═══ HELPERS ═════════════════════════════════════════════════
 function dimg(url){
   if(!url)return'';
@@ -2557,6 +2714,7 @@ buildNav();
 _shipLoadLocal();
 initDash();
 dashExtra();
+_paintCache();
 doRefresh();
 _shipLoadRemote(renderShipPreview);
 </script>
