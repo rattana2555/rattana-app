@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#FAD4E0">
-<title>Rattana EasyShip v6.5</title>
+<title>Rattana EasyShip v6.6</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -543,7 +543,7 @@ textarea.fi{height:auto;padding:11px 14px;resize:vertical;min-height:70px}
     <div style="padding:16px 16px 4px" id="d-sum">
       <div class="empty"><div class="spin" style="width:28px;height:28px;margin:0 auto 10px"></div><div class="empty-t" style="color:var(--g6)">กำลังโหลด...</div></div>
     </div>
-    <div class="ver">Rattana EasyShip v6.5 · 2026-11-17</div>
+    <div class="ver">Rattana EasyShip v6.6 · 2026-11-17</div>
   </div>
   <div class="bnav" data-nav="home"></div>
 </div>
@@ -2056,7 +2056,24 @@ function _shipGroups(){
   });
   names.sort(function(a,b){return by[b].length-by[a].length;});
   var noLabel=Object.keys(DB).filter(function(k){return !have[k];});
-  return {by:by,names:names,total:total,notInSheet:notInSheet,noOrder:noOrder,noLabel:noLabel};
+  // Amaze: ใบปะมีแต่เลขแพ็กเกจ (PNP-ORD…) ไม่มีเลขคำสั่งซื้อแบบใบเช็ค → จับคู่ "ตามจำนวน"
+  // ถ้าใบปะ Amaze = ออเดอร์ Amaze ในใบเช็คที่ยังไม่มีใบปะ และไปค่ายเดียวกันหมด ถือว่าออเดอร์เหล่านั้นไปค่ายนั้น
+  var amzL=[];Object.keys(SHIP).forEach(function(k){var r=SHIP[k];if(!r.o&&/amaze/i.test(r.p||''))amzL.push(r);});
+  var amzO=noLabel.filter(function(k){return /amaze/i.test(DB[k].store||'');});
+  var amz={labels:amzL.length,orders:amzO.length,ok:false,carrier:''};
+  if(amzL.length&&amzL.length===amzO.length){
+    amz.ok=true;
+    var cs={};amzL.forEach(function(r){cs[r.c||'ไม่ระบุ']=1;});
+    var cl=Object.keys(cs);
+    noLabel=noLabel.filter(function(k){return amzO.indexOf(k)<0;});
+    if(cl.length===1){
+      amz.carrier=cl[0];
+      by[cl[0]]=by[cl[0]].filter(function(r){return amzL.indexOf(r)<0;})
+        .concat(amzO.map(function(k){return {o:k,p:'Amaze',c:cl[0],t:'',f:'',inf:1};}));
+      noOrder-=amzL.length;
+    }
+  }
+  return {by:by,names:names,total:total,notInSheet:notInSheet,noOrder:noOrder,noLabel:noLabel,amz:amz};
 }
 function openShip(filter){
   _shipFilter=filter||'all';
@@ -2074,7 +2091,12 @@ function renderShip(){
     n+='<div class="note ok">✓ ใบปะตรงกับใบเช็ค <b>'+matched+'</b> ออเดอร์'+(nOrd?' (ใบเช็คมี '+nOrd+' ออเดอร์)':'')+'</div>';
     if(g.notInSheet.length)n+='<div class="note bad" onclick="shipFilter(\'__notin\')" style="cursor:pointer">⚠ มีใบปะ <b>'+g.notInSheet.length+'</b> ใบที่ไม่มีในใบเช็ค — แตะเพื่อดู</div>';
     if(g.noLabel.length&&nOrd)n+='<div class="note warn" onclick="shipFilter(\'__nolabel\')" style="cursor:pointer">📭 ออเดอร์ในใบเช็คที่ยังไม่มีใบปะ <b>'+g.noLabel.length+'</b> ออเดอร์ — แตะเพื่อดู</div>';
-    if(g.noOrder)n+='<div class="note info">ℹ️ ใบปะ <b>'+g.noOrder+'</b> ใบ (Amaze) ไม่มีเลขคำสั่งซื้อแบบเดียวกับใบเช็ค จึงนับตามค่ายได้ แต่จับคู่รายออเดอร์ไม่ได้</div>';
+    var A=g.amz;
+    if(A.ok&&A.carrier)n+='<div class="note ok">✓ Amaze: ใบปะ <b>'+A.labels+'</b> ใบ = ออเดอร์ Amaze ในใบเช็ค <b>'+A.orders+'</b> ออเดอร์ · ส่ง <b>'+esc(A.carrier)+'</b> ทั้งหมด<br><span style="opacity:.75">จับคู่ตามจำนวน เพราะใบปะ Amaze ไม่มีเลขคำสั่งซื้อ</span></div>';
+    else if(A.ok)n+='<div class="note info">ℹ️ Amaze: ใบปะ <b>'+A.labels+'</b> ใบ = ออเดอร์ Amaze ในใบเช็ค <b>'+A.orders+'</b> ออเดอร์ (จำนวนตรงกัน) แต่ไปหลายค่าย จึงบอกไม่ได้ว่าออเดอร์ไหนไปค่ายไหน</div>';
+    else if(A.labels)n+='<div class="note bad">⚠ Amaze จำนวนไม่ตรง: ใบปะ <b>'+A.labels+'</b> ใบ แต่ออเดอร์ Amaze ในใบเช็คที่ยังไม่มีใบปะ <b>'+A.orders+'</b> ออเดอร์</div>';
+    var other=g.noOrder-(A.ok&&A.carrier?0:A.labels);
+    if(other>0)n+='<div class="note info">ℹ️ ใบปะ <b>'+other+'</b> ใบอ่านเลขคำสั่งซื้อไม่ได้ จึงนับตามค่ายได้ แต่จับคู่รายออเดอร์ไม่ได้</div>';
   }
   $('sh-notes').innerHTML=n;
   $('sh-cards').innerHTML=g.total?g.names.map(function(c){
@@ -2090,8 +2112,8 @@ function renderShip(){
     else if(_shipFilter!=='all'&&g.by[_shipFilter]){title=_shipFilter;list=g.by[_shipFilter];}
     else g.names.forEach(function(c){list=list.concat(g.by[c]);});
     rows=list.map(function(r){
-      var st=!r.o?'':(DB[r.o]?'✓ ':'⚠ ');
-      return _shipRow(st+(r.o||r.ref||r.t||'-'),r.p,r.t,(r.o&&!DB[r.o]?'ไม่มีในใบเช็ค · ':'')+(r.f||''),r.c||'ไม่ระบุ',carrierColor(r.c));
+      var st=!r.o?'':(r.inf?'≈ ':DB[r.o]?'✓ ':'⚠ ');
+      return _shipRow(st+(r.o||r.ref||r.t||'-'),r.p,r.t,r.inf?'จับคู่ตามจำนวน':(r.o&&!DB[r.o]?'ไม่มีในใบเช็ค · ':'')+(r.f||''),r.c||'ไม่ระบุ',carrierColor(r.c));
     });
   }
   TXT('sh-lh',title+' ('+rows.length+')');
@@ -2235,6 +2257,8 @@ function shipSummaryText(){
     var ids=g.by[c].map(function(r){return r.o||r.t||r.ref;}).filter(function(x){return x;});
     if(ids.length)L.push('   '+ids.join(', '));
   });
+  if(g.amz.ok&&g.amz.carrier)L.push('(Amaze '+g.amz.orders+' ออเดอร์ จับคู่ตามจำนวน → '+g.amz.carrier+')');
+  else if(g.amz.labels&&!g.amz.ok){L.push('');L.push('⚠ Amaze จำนวนไม่ตรง: ใบปะ '+g.amz.labels+' ใบ · ออเดอร์ที่ยังไม่มีใบปะ '+g.amz.orders);}
   if(g.noLabel.length){L.push('');L.push('📭 ยังไม่มีใบปะ '+g.noLabel.length+' ออเดอร์');L.push('   '+g.noLabel.join(', '));}
   if(g.notInSheet.length){L.push('');L.push('⚠ ใบปะที่ไม่มีในใบเช็ค '+g.notInSheet.length+' ใบ');L.push('   '+g.notInSheet.map(function(r){return r.o;}).join(', '));}
   return L.join('\n');
