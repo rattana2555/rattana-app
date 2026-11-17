@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#FAD4E0">
-<title>Rattana EasyShip v6.2</title>
+<title>Rattana EasyShip v6.3</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -543,7 +543,7 @@ textarea.fi{height:auto;padding:11px 14px;resize:vertical;min-height:70px}
     <div style="padding:16px 16px 4px" id="d-sum">
       <div class="empty"><div class="spin" style="width:28px;height:28px;margin:0 auto 10px"></div><div class="empty-t" style="color:var(--g6)">กำลังโหลด...</div></div>
     </div>
-    <div class="ver">Rattana EasyShip v6.2 · 2026-11-16</div>
+    <div class="ver">Rattana EasyShip v6.3 · 2026-11-17</div>
   </div>
   <div class="bnav" data-nav="home"></div>
 </div>
@@ -936,6 +936,66 @@ function _normOrder(t){
   return m?m[1]:t;
 }
 
+// ค่า error ของชีท (#REF! #N/A ...) = ไม่มีข้อมูล
+function _cell(v){return /^#(REF|N\/A|ERROR|VALUE|NAME|DIV|NULL|NUM)/i.test(String(v||'').trim())?'':v;}
+// ── วิธีแพ็คสำรอง: อ่านจากไฟล์ต้นทางโดยตรง เมื่อสูตร IMPORTRANGE ในใบเช็คว่าง/ล่ม
+//    (ลำดับเดียวกับสูตรในชีท: SHP CS ก่อน แล้ว SHP PA · จับคู่ด้วยชื่อสินค้า)
+var PACK_SHEET='1tSvHAENib_W5e0efrMKRq4oRcZXCaLtw6znxNidIfio',PACK_TABS=['SHP CS','SHP PA'],PACKMAP=null,_packState='';
+function _packMissing(){
+  return Object.keys(DB).some(function(k){return DB[k].items.some(function(it){return !it.pack;});});
+}
+function _fillPacks(){
+  if(!PACKMAP)return false;
+  var ch=false;
+  Object.keys(DB).forEach(function(k){
+    DB[k].items.forEach(function(it){
+      if(it.pack)return;
+      var pk=PACKMAP[String(it.name||'').trim()];
+      if(pk){it.pack=pk;ch=true;}
+    });
+  });
+  return ch;
+}
+function loadPackMap(){
+  if(PACKMAP||_packState==='loading')return;
+  _packState='loading';
+  var maps=[],left=PACK_TABS.length;
+  function fin(){
+    if(--left>0)return;
+    var M={},any=false;
+    for(var i=PACK_TABS.length-1;i>=0;i--){   // แท็บแรก (SHP CS) ทับแท็บหลัง
+      if(!maps[i])continue;any=true;
+      for(var k in maps[i])M[k]=maps[i][k];
+    }
+    if(!any){_packState='';return;}           // โหลดไม่ได้ — ลองใหม่รอบรีเฟรชหน้า
+    PACKMAP=M;_packState='ok';
+    if(_fillPacks()){
+      try{renderDash();}catch(e){}
+      try{if(CUR&&DB[CUR]&&$('s-order').classList.contains('on'))renderDetail(DB[CUR]);}catch(e){}
+    }
+  }
+  PACK_TABS.forEach(function(t,i){
+    var url='https://docs.google.com/spreadsheets/d/'+PACK_SHEET+'/gviz/tq?tqx=out:json&headers=1&sheet='+encodeURIComponent(t)
+      +'&tq='+encodeURIComponent('select B,AB where AB is not null')+'&t='+Date.now();
+    fetch(url).then(function(r){return r.text();}).then(function(txt){
+      try{
+        var tb=JSON.parse(txt.substring(txt.indexOf('{'),txt.lastIndexOf('}')+1)).table||{};
+        var cols=tb.cols||[];
+        if(cols.length>=2&&String(cols[1].label||'').indexOf('แพ็ค')>=0){   // หัวคอลัมน์ต้องเป็น "ขั้นตอนการแพ็ค"
+          var m={};
+          (tb.rows||[]).forEach(function(row){
+            var c=row.c||[];
+            var nm=c[0]&&c[0].v!=null?String(c[0].v).trim():'',pk=c[1]&&c[1].v!=null?_cell(String(c[1].v).trim()):'';
+            if(nm&&pk&&!m[nm])m[nm]=pk;
+          });
+          maps[i]=m;
+        }
+      }catch(e){}
+      fin();
+    }).catch(fin);
+  });
+}
+
 // ═══ PARSE GVIZ ════════════════════════════════════════════
 function parseGviz(j){
   var cols=j.table.cols||[],rows=j.table.rows||[];
@@ -963,7 +1023,7 @@ function parseGviz(j){
       var lm=us.match(/^([^\dxX×]+)/);var ul=(lm?lm[1]:'').trim()||'ลัง';
       var ucm=us.match(/(CS|PA|EA|BP)/i);var ucode=ucm?ucm[1].toUpperCase():'';
       var oi=DB[oNum]&&DB[oNum].items&&DB[oNum].items.find(function(x){return x.bc===bc;});
-      nDB[oNum].items.push({bc:bc,name:s(idx('ชื่อสินค้า',7)),unit:ul,ucode:ucode,qty:cases,pieces:rq,pcs:pcs,price:n(idx('ราคา',10)),pack:s(idx('วิธีแพ็คสินค้า',12)),img1:s(idx('รูปภาพสินค้า 1',13)),img2:s(idx('รูปภาพสินค้า 2',14)),sc:(oi&&oi.sc)||0,status:(oi&&oi.status)||'pending'});
+      nDB[oNum].items.push({bc:bc,name:s(idx('ชื่อสินค้า',7)),unit:ul,ucode:ucode,qty:cases,pieces:rq,pcs:pcs,price:n(idx('ราคา',10)),pack:_cell(s(idx('วิธีแพ็คสินค้า',12))),img1:_cell(s(idx('รูปภาพสินค้า 1',13))),img2:_cell(s(idx('รูปภาพสินค้า 2',14))),sc:(oi&&oi.sc)||0,status:(oi&&oi.status)||'pending'});
     }
   });
   var nArc=0;
@@ -973,6 +1033,8 @@ function parseGviz(j){
   var f=Object.values(DB)[0];
   if(f&&f.wh){TXT('d-loc','📍 คลัง '+f.wh);TXT('d-sub','คลัง '+f.wh);}
   _hasData=true;
+  _fillPacks();
+  if(_packMissing())loadPackMap();
   loadStatus();
 }
 
