@@ -10,7 +10,7 @@
 <link rel="icon" type="image/png" sizes="64x64" href="assets/easyship-icon-64.png">
 <link rel="apple-touch-icon" href="assets/easyship-icon-180.png">
 <link rel="manifest" href="rattana-easyship.webmanifest">
-<title>Rattana EasyShip v6.7</title>
+<title>Rattana EasyShip v6.8</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -549,7 +549,7 @@ textarea.fi{height:auto;padding:11px 14px;resize:vertical;min-height:70px}
     <div style="padding:16px 16px 4px" id="d-sum">
       <div class="empty"><div class="spin" style="width:28px;height:28px;margin:0 auto 10px"></div><div class="empty-t" style="color:var(--g6)">กำลังโหลด...</div></div>
     </div>
-    <div class="ver">Rattana EasyShip v6.7 · 2026-11-23</div>
+    <div class="ver">Rattana EasyShip v6.8 · 2026-11-25</div>
   </div>
   <div class="bnav" data-nav="home"></div>
 </div>
@@ -2130,7 +2130,7 @@ function _shipRow(t,p,trk,sub,badge,col){
 }
 
 // ── อ่านข้อความจากใบปะ 1 หน้า → ช่องทาง / เลขคำสั่งซื้อ / เลขพัสดุ / ค่ายขนส่ง
-function parseLabel(tx,fn){
+function parseLabel(tx,fn,noFile){
   var T=String(tx||'').replace(/\s+/g,' '),r={p:'',o:'',t:'',c:'',ref:''},m;
   if((m=T.match(/Shopee Order No\.?\s*(2\d{5}[0-9A-Z]{8})/))||(m=T.match(/(2\d{5}[0-9A-Z]{8})\s*Shopee Order No/))){r.p='Shopee';r.o=m[1];}
   else if((m=T.match(/Amaze order\s*:\s*([\w-]+)/i))){r.p='Amaze';r.ref=m[1];}
@@ -2153,11 +2153,11 @@ function parseLabel(tx,fn){
     else if((m=T.match(/\bLEX\w{6,}/))){r.t=m[0];r.c='LEX';}
     else if((m=T.match(/\b[678]\d{11}\b/))){r.t=m[0];r.c='J&T';}
   }
-  if(!r.c){   // เดาจากชื่อไฟล์ (เช่น "Seller Center 0904 Shopee DHL.pdf")
+  if(!r.c&&!noFile){   // เดาจากชื่อไฟล์ (เช่น "Seller Center 0904 Shopee DHL.pdf")
     var f=String(fn||'').toLowerCase();
     if(/fla?sh|falsh/.test(f))r.c='Flash';else if(/best/.test(f))r.c='Best';else if(/dhl/.test(f))r.c='DHL';
     else if(/spx/.test(f))r.c='SPX';else if(/j&?t|jnt/.test(f))r.c='J&T';else if(/kerry|kex/.test(f))r.c='Kerry';
-    else if(/ninja/.test(f))r.c='Ninja Van';else if(/lex/.test(f)||r.p==='Lazada')r.c='LEX';
+    else if(/ninja/.test(f))r.c='Ninja Van';else if(/lex/.test(f))r.c='LEX';
   }
   return r;
 }
@@ -2176,6 +2176,43 @@ function onPdf(ev){
   loadPdfJs(function(){readPdfs(files);});
 }
 function _readBuf(file){return new Promise(function(res,rej){var fr=new FileReader();fr.onload=function(){res(fr.result);};fr.onerror=rej;fr.readAsArrayBuffer(file);});}
+// อ่าน QR + บาร์โค้ดบนหน้าใบปะ (ใช้ ZXing ที่แอปโหลดไว้สำหรับกล้องอยู่แล้ว)
+function _waitZX(cb,n){if(window.ZXing){cb(true);return;}if((n||0)>40){cb(false);return;}setTimeout(function(){_waitZX(cb,(n||0)+1);},250);}
+function _labelCodes(page){
+  // คืนข้อความจากทุกบาร์โค้ด/QR บนหน้า (หน้าหนึ่งมีหลายอัน: เลขพัสดุ, รหัสคัดแยก, เลขคำสั่งซื้อ)
+  return new Promise(function(res){
+    _waitZX(function(ok){
+      if(!ok){res([]);return;}
+      var vp=page.getViewport({scale:2}),cv=document.createElement('canvas');
+      cv.width=Math.round(vp.width);cv.height=Math.round(vp.height);
+      var ctx=cv.getContext('2d');
+      ctx.fillStyle='#fff';ctx.fillRect(0,0,cv.width,cv.height);   // พื้นโปร่งใส = ZXing เห็นเป็นสีดำทั้งหน้า
+      page.render({canvasContext:ctx,viewport:vp}).promise.then(function(){
+        var out=[],seen={};
+        var rd=new ZXing.MultiFormatReader(),h=new Map();
+        h.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.QR_CODE,ZXing.BarcodeFormat.CODE_128,ZXing.BarcodeFormat.CODE_39]);
+        rd.setHints(h);
+        function dec(x,y,w,hh){
+          var c2=document.createElement('canvas');c2.width=w;c2.height=hh;
+          c2.getContext('2d').drawImage(cv,x,y,w,hh,0,0,w,hh);
+          try{var t=rd.decode(new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.HTMLCanvasElementLuminanceSource(c2)))).getText();
+            t=String(t||'').split(/\s+/)[0];if(t&&!seen[t]){seen[t]=1;out.push(t);}}catch(e){}
+          c2.width=c2.height=0;
+        }
+        function found(){return parseLabel(out.join(' '),'',true).t;}
+        var W=cv.width,H=cv.height,W2=Math.round(W/2),H2=Math.round(H/2);
+        // ZXing อ่านได้ครั้งละ 1 อัน → อ่านทั้งหน้า แล้วครึ่งซ้าย/ขวา/บน/ล่าง แล้วสี่มุม จนเจอเลขพัสดุ
+        // (ไม่ตัดเป็นช่องเล็ก เพราะบาร์โค้ดยาวจะถูกตัดขาด)
+        var R=[[0,0,Math.round(W*0.43),Math.round(H*0.15)],                               // Lazada: บาร์โค้ดเลขพัสดุ (บนสุดของกรอบขนส่ง)
+          [Math.round(W*0.27),Math.round(H*0.27),Math.round(W*0.16),Math.round(H*0.13)],    // Lazada: QR เลขพัสดุ
+          [0,0,W,H],[0,0,W2,H],[W2,0,W-W2,H],[0,0,W,H2],[0,H2,W,H-H2],[0,0,W2,H2],[W2,0,W-W2,H2],[0,H2,W2,H-H2],[W2,H2,W-W2,H-H2]];
+        for(var i=0;i<R.length&&!found();i++)dec(R[i][0],R[i][1],R[i][2],R[i][3]);
+        cv.width=cv.height=0;
+        res(out);
+      }).catch(function(){res([]);});
+    });
+  });
+}
 function readPdfs(files){
   var recs=[],fails=[],pages=0,fi=0;
   function nextFile(){
@@ -2187,10 +2224,21 @@ function readPdfs(files){
       function nextPage(){
         if(pn>pdf.numPages){nextFile();return;}
         var cur=pn++;
-        pdf.getPage(cur).then(function(pg){return pg.getTextContent();}).then(function(tc){
+        var page=null;
+        pdf.getPage(cur).then(function(pg){page=pg;return pg.getTextContent();}).then(function(tc){
           var tx=tc.items.map(function(i){return i.str;}).join(' ');
-          var r=parseLabel(tx,file.name);r.f=file.name;r.pg=cur;r.empty=tx.replace(/\s/g,'').length<20;
-          recs.push(r);pages++;nextPage();
+          var r=parseLabel(tx,file.name,true);r.f=file.name;r.pg=cur;r.empty=tx.replace(/\s/g,'').length<20;
+          function keep(){
+            if(!r.c){var fb=parseLabel('',file.name);r.c=fb.c;if(r.c)r.byFile=1;}   // ชื่อไฟล์ = ทางสุดท้าย
+            recs.push(r);pages++;nextPage();
+          }
+          if(r.t||!page){keep();return;}
+          // ไม่มีเลขพัสดุในข้อความ (เช่น Lazada — ส่วนขนส่งเป็นรูป) → อ่าน QR/บาร์โค้ดจากหน้ากระดาษ (~3 วิ/หน้า)
+          $('sh-prog').innerHTML='<div class="note info">⏳ กำลังอ่านบาร์โค้ดขนส่ง '+esc(file.name)+' · หน้า '+cur+'/'+pdf.numPages+'</div>';
+          _labelCodes(page).then(function(codes){
+            if(codes.length){var r2=parseLabel(codes.join(' '),'',true);if(r2.t){r.t=r2.t;r.c=r2.c;r.byCode=1;}}
+            keep();
+          });
         }).catch(function(){recs.push({p:'',o:'',t:'',c:'',f:file.name,pg:cur,empty:true});pages++;nextPage();});
       }
       nextPage();
@@ -2207,7 +2255,9 @@ function renderPend(){
   var P=_shipPend,el=$('sh-pend');
   if(!P){el.innerHTML='';return;}
   var by={},ok=0,notin=[],noord=0,unread=0,nocar={};
+  var byFile=0;
   P.recs.forEach(function(r){
+    if(r.byFile)byFile++;
     if(r.empty&&!r.o&&!r.t){unread++;return;}
     var c=r.c||'ไม่ระบุ';by[c]=(by[c]||0)+1;
     if(!r.c)nocar[r.f]=1;
@@ -2218,6 +2268,7 @@ function renderPend(){
   h+='<div class="note ok">✓ ตรงกับใบเช็ค <b>'+ok+'</b> ออเดอร์</div>';
   if(notin.length)h+='<div class="note bad">⚠ ไม่มีในใบเช็ค <b>'+notin.length+'</b> ออเดอร์: '+esc(notin.slice(0,12).join(', '))+(notin.length>12?' …':'')+'</div>';
   if(noord)h+='<div class="note info">ℹ️ อ่านเลขคำสั่งซื้อแบบใบเช็คไม่ได้ <b>'+noord+'</b> ใบ (เช่น Amaze) — นับตามค่ายให้</div>';
+  if(byFile)h+='<div class="note warn">ค่ายขนส่งของ <b>'+byFile+'</b> หน้า เดาจากชื่อไฟล์ (อ่านเลขพัสดุไม่ได้) — ตรวจให้แน่ใจก่อนบันทึก</div>';
   if(unread)h+='<div class="note warn">หน้าที่ไม่มีข้อความให้อ่าน (เป็นรูปสแกน) <b>'+unread+'</b> หน้า — ข้ามไป</div>';
   Object.keys(nocar).forEach(function(f,i){
     h+='<div class="note warn">ไฟล์ <b>'+esc(f)+'</b> ระบุค่ายไม่ได้ — เลือกค่าย: <select class="fi" style="height:40px;margin-top:6px" onchange="pendCarrier('+i+',this.value)" data-f="'+esc(f)+'"><option value="">ไม่ระบุ</option>'+CARRIERS.slice(0,-1).map(function(c){return '<option>'+esc(c)+'</option>';}).join('')+'</select></div>';
